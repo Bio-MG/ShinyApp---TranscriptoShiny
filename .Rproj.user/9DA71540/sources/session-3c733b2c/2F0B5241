@@ -1,0 +1,26 @@
+{
+    "id": "2F0B5241",
+    "path": "D:/Data science/SHINYAPP test/app.R",
+    "project_path": "app.R",
+    "type": "r_source",
+    "hash": "1425996861",
+    "contents": "",
+    "dirty": false,
+    "created": 1778544828384.0,
+    "source_on_save": false,
+    "relative_order": 1,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "216,2",
+        "scrollLine": "213"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1778782666,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1778782666281,
+    "read_only": false,
+    "read_only_alternatives": []
+}

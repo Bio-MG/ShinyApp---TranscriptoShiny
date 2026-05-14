@@ -1,0 +1,26 @@
+{
+    "id": "418FFC4A",
+    "path": "D:/Data science/SHINYAPP test/modules/mod_sc_corr.r",
+    "project_path": "modules/mod_sc_corr.r",
+    "type": "r_source",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1778545089204.0,
+    "source_on_save": false,
+    "relative_order": 3,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "365,5",
+        "scrollLine": "0"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1778756975,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1778756975700,
+    "read_only": false,
+    "read_only_alternatives": []
+}

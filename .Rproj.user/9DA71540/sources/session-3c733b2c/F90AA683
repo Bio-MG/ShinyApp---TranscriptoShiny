@@ -1,0 +1,26 @@
+{
+    "id": "F90AA683",
+    "path": "D:/Data science/SHINYAPP test/modules/mod_sc.r",
+    "project_path": "modules/mod_sc.r",
+    "type": "r_source",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1778544960434.0,
+    "source_on_save": false,
+    "relative_order": 2,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "192,21",
+        "scrollLine": "0"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1778756974,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1778756974268,
+    "read_only": false,
+    "read_only_alternatives": []
+}
