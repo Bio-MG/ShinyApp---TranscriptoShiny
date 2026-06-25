@@ -1,0 +1,166 @@
+---
+title: "`r params$report_title`"
+subtitle: "`r params$report_subtitle`"
+date: "`r format(Sys.time(), '%d %B %Y, %H:%M')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+    df_print: paged
+  pdf_document:
+    toc: true
+    latex_engine: xelatex
+params:
+  sc_obj: NULL
+  markers_data: NULL
+  pathway_results: NULL
+  pathway_db: NULL
+  correlated_genes: NULL
+  corr_target_gene: NULL
+  sections: NULL
+  reduction: "umap"
+  group_by: "seurat_clusters"
+  report_title: "Analyse Single-Cell"
+  report_subtitle: ""
+  report_notes: ""
+  interactive: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, fig.width = 9, fig.height = 6)
+sections <- params$sections
+obj <- params$sc_obj
+`%||%` <- function(a, b) if (is.null(a)) b else a
+
+render_plot <- function(p, allow_interactive = TRUE) {
+  if (allow_interactive && isTRUE(params$interactive) && knitr::is_html_output() &&
+      requireNamespace("plotly", quietly = TRUE)) {
+    return(plotly::ggplotly(p))
+  }
+  p
+}
+```
+
+```{r notes_section, eval=nzchar(params$report_notes), results='asis'}
+cat("> ", gsub("\n", "\n> ", params$report_notes), "\n\n", sep = "")
+```
+
+# Résumé
+
+```{r}
+if (!is.null(obj)) {
+  n_samples <- length(unique(obj$orig.ident))
+  cat(sprintf(
+    "Cellules : %s  |  Gènes : %s  |  Échantillon(s) : %d\n",
+    format(ncol(obj), big.mark = ","), format(nrow(obj), big.mark = ","), n_samples
+  ))
+} else {
+  cat("Aucun objet Single-Cell disponible au moment de l'export.")
+}
+```
+
+---
+
+```{r qc_section, eval="qc" %in% sections && !is.null(obj), results='asis'}
+cat("# QC — Contrôle Qualité\n\n")
+```
+```{r qc_plot, eval="qc" %in% sections && !is.null(obj)}
+VlnPlot(obj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3, pt.size = 0)
+```
+
+---
+
+```{r dim_section, eval="dim" %in% sections && !is.null(obj), results='asis'}
+cat("# Réduction Dimensionnelle —", toupper(params$reduction), "\n\n")
+```
+```{r dim_plot, eval="dim" %in% sections && !is.null(obj)}
+red <- if (params$reduction %in% names(obj@reductions)) params$reduction else names(obj@reductions)[1]
+if (!is.null(red)) {
+  p <- DimPlot(obj, reduction = red, group.by = params$group_by, label = TRUE, pt.size = 0.5) +
+    ggtitle(paste(toupper(red), "-", params$group_by))
+  render_plot(p)
+} else {
+  cat("Aucune réduction dimensionnelle calculée — lancez le Pipeline (étape 1).")
+}
+```
+
+---
+
+```{r annot_section, eval="annotation" %in% sections && !is.null(obj), results='asis'}
+singler_cols <- grep("^SingleR_", colnames(obj@meta.data), value = TRUE)
+cat(if (length(singler_cols) > 0) "# Annotation Automatique (SingleR)\n\n" else "")
+```
+```{r annot_plot, eval="annotation" %in% sections && !is.null(obj)}
+singler_cols <- grep("^SingleR_", colnames(obj@meta.data), value = TRUE)
+if (length(singler_cols) > 0 && "umap" %in% names(obj@reductions)) {
+  col_use <- tail(singler_cols, 1)
+  p <- DimPlot(obj, reduction = "umap", group.by = col_use, label = TRUE, repel = TRUE, pt.size = 0.5) +
+    ggtitle(paste("Annotation SingleR:", col_use))
+  render_plot(p)
+} else {
+  cat("Aucune annotation SingleR disponible — lancez l'étape 2 (Annotation).")
+}
+```
+
+---
+
+```{r markers_section, eval="markers" %in% sections && !is.null(params$markers_data), results='asis'}
+cat("# Marqueurs Différentiels\n\n")
+```
+```{r markers_table, eval="markers" %in% sections && !is.null(params$markers_data) && knitr::is_html_output()}
+build_markers_dt(params$markers_data)
+```
+```{r markers_table_pdf, eval="markers" %in% sections && !is.null(params$markers_data) && !knitr::is_html_output()}
+df <- params$markers_data
+df_display <- data.frame(Gene = df$gene, Cluster = df$cluster, Log2FC = round(df$avg_log2FC, 3),
+                         P_adj = format(df$p_val_adj, scientific = TRUE, digits = 3))
+knitr::kable(head(df_display[order(df_display$P_adj), ], 50),
+            caption = "Top 50 marqueurs (table complète disponible en export CSV depuis l'application)")
+```
+
+---
+
+```{r corr_section, eval="correlation" %in% sections && !is.null(params$correlated_genes), results='asis'}
+cat("# Réseau de Corrélation —", params$corr_target_gene %||% "", "\n\n")
+```
+```{r corr_plot, eval="correlation" %in% sections && !is.null(params$correlated_genes)}
+plot_gene_correlation_network(params$correlated_genes, params$corr_target_gene, top_n = 20)
+```
+
+---
+
+```{r pathway_section, eval="pathway" %in% sections && !is.null(params$pathway_results), results='asis'}
+cat("# Pathway Enrichment —", params$pathway_db %||% "", "\n\n")
+```
+```{r pathway_barplot, eval="pathway" %in% sections && !is.null(params$pathway_results)}
+plot_pathway_barplot(params$pathway_results, db_label = params$pathway_db %||% "", top_n = 15)
+```
+```{r pathway_table, eval="pathway" %in% sections && !is.null(params$pathway_results) && knitr::is_html_output()}
+build_pathway_dt(params$pathway_results)
+```
+```{r pathway_table_pdf, eval="pathway" %in% sections && !is.null(params$pathway_results) && !knitr::is_html_output()}
+cols <- intersect(c("ID", "Description", "p.adjust", "Count", "GeneRatio"), colnames(params$pathway_results))
+knitr::kable(head(params$pathway_results[, cols, drop = FALSE], 20))
+```
+
+---
+
+```{r traj_section, eval="trajectory" %in% sections && !is.null(obj) && "pseudotime" %in% colnames(obj@meta.data), results='asis'}
+cat("# Trajectory Analysis — Pseudotemps\n\n")
+```
+```{r traj_plot, eval="trajectory" %in% sections && !is.null(obj) && "pseudotime" %in% colnames(obj@meta.data)}
+red_traj <- if ("umap" %in% names(obj@reductions)) "umap" else names(obj@reductions)[1]
+render_plot(plot_trajectory(seurat_obj = obj, reduction = red_traj, color_by = "pseudotime"))
+```
+```{r traj_dist, eval="trajectory" %in% sections && !is.null(obj) && "pseudotime" %in% colnames(obj@meta.data)}
+df <- data.frame(pseudotime = obj@meta.data$pseudotime, cluster = as.character(obj@meta.data$seurat_clusters))
+ggplot(df, aes(x = pseudotime, fill = cluster)) +
+  geom_density(alpha = 0.6) + scale_fill_viridis_d(option = "turbo") +
+  labs(title = "Distribution du Pseudotemps par Cluster", x = "Pseudotemps", y = "Densité") +
+  theme_minimal()
+```
+
+---
+
+<small>Rapport généré automatiquement par TranscriptoShiny — module Single-Cell.</small>

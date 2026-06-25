@@ -1,0 +1,20 @@
+# --- R (Fichiers temporaires et sessions) ---
+.Rhistory
+.RData
+.RDataTmp
+.Rds
+
+# --- RStudio (Utilisateur et projet) ---
+*.Rproj
+.Rproj.user/
+
+# --- Shiny & Fichiers de test locaux ---
+/test new features.R
+/Tests/
+# --- Système d'exploitation ---
+.DS_Store
+Thumbs.db
+
+# Git
+.gitignore
+.Rproj.user
