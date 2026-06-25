@@ -17,4 +17,5 @@ Thumbs.db
 
 # Git
 .gitignore
-.Rproj.user
+.Rproj.userTests/
+test_new_features.R
