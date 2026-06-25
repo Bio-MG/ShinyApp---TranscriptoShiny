@@ -1,0 +1,159 @@
+---
+title: "`r params$report_title`"
+subtitle: "`r params$report_subtitle`"
+date: "`r format(Sys.time(), '%d %B %Y, %H:%M')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+    df_print: paged
+  pdf_document:
+    toc: true
+    latex_engine: xelatex
+params:
+  vst_mat: NULL
+  metadata: NULL
+  de_results: NULL
+  contrast_name: NULL
+  pathway_results: NULL
+  pathway_db: NULL
+  sections: NULL
+  pca_color_by: NULL
+  heatmap_top_n: 30
+  lfc_thresh: 1
+  padj_thresh: 0.05
+  report_title: "Analyse RNA-seq Bulk"
+  report_subtitle: ""
+  report_notes: ""
+  interactive: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, fig.width = 9, fig.height = 6)
+sections <- params$sections
+`%||%` <- function(a, b) if (is.null(a)) b else a
+
+# Renders a ggplot as an interactive plotly widget in HTML output (when
+# params$interactive is TRUE), or leaves it as a static ggplot otherwise.
+# PDF can never embed JS widgets, so it always falls back to static —
+# this guard makes the same Rmd source safely produce both formats.
+render_plot <- function(p, allow_interactive = TRUE) {
+  if (allow_interactive && isTRUE(params$interactive) && knitr::is_html_output() &&
+      requireNamespace("plotly", quietly = TRUE)) {
+    return(plotly::ggplotly(p))
+  }
+  p
+}
+```
+
+```{r notes_section, eval=nzchar(params$report_notes), results='asis'}
+cat("> ", gsub("\n", "\n> ", params$report_notes), "\n\n", sep = "")
+```
+
+# Résumé
+
+```{r}
+if (!is.null(params$de_results)) {
+  n_sig <- sum(params$de_results$padj < params$padj_thresh &
+               abs(params$de_results$log2FoldChange) > params$lfc_thresh, na.rm = TRUE)
+  cat(sprintf(
+    "Contraste analysé : **%s**\n\nÉchantillons : %d  |  Gènes testés : %d  |  Gènes significatifs : %d\n",
+    params$contrast_name %||% "-", ncol(params$vst_mat), nrow(params$de_results), n_sig
+  ))
+} else {
+  cat("Aucune analyse différentielle disponible au moment de l'export.")
+}
+```
+
+---
+
+```{r pca_section, eval="pca" %in% sections, results='asis'}
+cat("# PCA — Échantillons\n\n")
+```
+```{r pca_plot, eval="pca" %in% sections}
+render_plot(plot_bulk_pca(params$vst_mat, params$metadata, color_by = params$pca_color_by))
+```
+
+---
+
+```{r qc_section, eval="qc" %in% sections, results='asis'}
+cat("# QC — Corrélation Inter-Échantillons\n\n")
+cat("Détecte les échantillons mal étiquetés ou les outliers avant interprétation du contraste.\n\n")
+```
+```{r qc_plot, eval="qc" %in% sections}
+print(plot_sample_correlation_heatmap(params$vst_mat, params$metadata))
+```
+
+---
+
+```{r volcano_section, eval="volcano" %in% sections && !is.null(params$de_results), results='asis'}
+cat("# Volcano Plot & MA-Plot\n\n")
+```
+```{r volcano_plot, eval="volcano" %in% sections && !is.null(params$de_results)}
+render_plot(plot_volcano_bulk(params$de_results, lfc_thresh = params$lfc_thresh, padj_thresh = params$padj_thresh))
+```
+```{r ma_plot, eval="volcano" %in% sections && !is.null(params$de_results)}
+# MA-plot stays static regardless of the interactivity toggle — low marginal
+# value for hover exploration, and keeps the report lighter.
+plot_ma_bulk(params$de_results, lfc_thresh = params$lfc_thresh, padj_thresh = params$padj_thresh)
+```
+
+---
+
+```{r heatmap_section, eval="heatmap" %in% sections && !is.null(params$de_results), results='asis'}
+cat("# Heatmap — Top Gènes Différentiels\n\n")
+```
+```{r heatmap_plot, eval="heatmap" %in% sections && !is.null(params$de_results)}
+res <- params$de_results
+res <- res[!is.na(res$padj), ]
+valid_genes <- intersect(res$gene[order(res$padj)], rownames(params$vst_mat))
+genes <- head(valid_genes, params$heatmap_top_n)
+if (length(genes) >= 2) {
+  plot_heatmap_bulk(params$vst_mat, genes, params$metadata)
+} else {
+  cat("Pas assez de gènes communs pour générer la heatmap.")
+}
+```
+
+---
+
+```{r table_section, eval="table" %in% sections && !is.null(params$de_results), results='asis'}
+cat("# Table Complète — Expression Différentielle\n\n")
+```
+```{r table_render, eval="table" %in% sections && !is.null(params$de_results) && knitr::is_html_output()}
+# NOTE: interactive DT widgets cannot render in PDF — for PDF output we fall
+# back to a plain, paginated-by-page static table further below.
+build_de_results_dt(params$de_results)
+```
+```{r table_render_pdf, eval="table" %in% sections && !is.null(params$de_results) && !knitr::is_html_output()}
+res_pdf <- params$de_results
+res_pdf <- res_pdf[order(res_pdf$padj), ]
+res_pdf_display <- data.frame(
+  Gene = res_pdf$gene, BaseMean = round(res_pdf$baseMean, 1),
+  Log2FC = round(res_pdf$log2FoldChange, 3),
+  PValue = format(res_pdf$pvalue, scientific = TRUE, digits = 3),
+  Padj   = format(res_pdf$padj,   scientific = TRUE, digits = 3)
+)
+knitr::kable(head(res_pdf_display, 100), caption = "Top 100 gènes (table complète disponible en export CSV depuis l'application)")
+```
+
+---
+
+```{r pathway_section, eval="pathway" %in% sections && !is.null(params$pathway_results), results='asis'}
+cat("# Pathway Enrichment —", params$pathway_db, "\n\n")
+```
+```{r pathway_barplot, eval="pathway" %in% sections && !is.null(params$pathway_results)}
+plot_pathway_barplot(params$pathway_results, db_label = params$pathway_db, top_n = 15)
+```
+```{r pathway_table, eval="pathway" %in% sections && !is.null(params$pathway_results) && knitr::is_html_output()}
+build_pathway_dt(params$pathway_results)
+```
+```{r pathway_table_pdf, eval="pathway" %in% sections && !is.null(params$pathway_results) && !knitr::is_html_output()}
+cols <- intersect(c("ID", "Description", "p.adjust", "Count", "GeneRatio"), colnames(params$pathway_results))
+knitr::kable(head(params$pathway_results[, cols, drop = FALSE], 20))
+```
+
+---
+
+<small>Rapport généré automatiquement par TranscriptoShiny — module Bulk RNA-seq.</small>
