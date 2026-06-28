@@ -1,4 +1,4 @@
-# TranscriptoShiny v1.0
+# TranscriptoShiny v1.1
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![R](https://img.shields.io/badge/language-R-blue.svg)](https://www.r-project.org/)
@@ -32,11 +32,19 @@ L'application s'appuie sur :
 - une approche **local-first**, adaptée à une utilisation sur station de travail R/RStudio ;
 - une interface pensée pour guider l'utilisateur avec des contrôles progressifs et des sorties interactives.
 
+## Nouveautés de la v1.1 (Step-2)
+
+- **Refactoring `global.R`** : le fichier monolithique (>3000 lignes) est désormais découpé en 5 fichiers distincts (`global.R` + 4 `helpers_*.R`) pour une meilleure maintenabilité.
+- **Import GEO hors-ligne** : `parse_geo_series_matrix()` — parsing direct d'un fichier `*_series_matrix.txt` GEO sans `GEOquery`, sans accès réseau.
+- **Onglet Venn / UpSet multi-contrastes** : comparaison visuelle des ensembles de gènes DEG entre contrastes, avec table des intersections et export CSV/PNG.
+- **Rapport multi-contrastes enrichi** : tableau récapitulatif de tous les contrastes + diagramme UpSet intégré dans le rapport HTML/PDF exporté.
+- **Garde-fous design expérimental** : hard-block sur n=1 après NA d'une covariable et sur covariable à une seule modalité observée — couvre les modes single-pair ET pairwise-auto.
+- **Infrastructure de test** : scripts `shiny::testServer()` dans `tests/manual/` pour validation sans navigateur.
+
 ## Nouveautés de la v1.0
 
 - **Refonte architecturale** : le dossier `modules/` est désormais organisé par domaines fonctionnels (`import/`, `sc/`, `bulk/`, `spatial/`) pour simplifier la maintenance et l'évolution du code.
 - **Bulk RNA-seq renforcé** : import plus robuste des matrices de counts bruts, meilleur alignement counts/métadonnées, et intégration de workflows différentiels plus propres.
-- **Intégration GEO** : possibilité de récupérer plus facilement des jeux de données Bulk et leurs métadonnées à partir d'identifiants GEO.
 - **UI Single-Cell améliorée** : meilleure organisation des panneaux, navigation plus lisible et espace graphique optimisé.
 - **Base v1.0 plus modulaire** : meilleure séparation des responsabilités entre modules d'import, pipeline, visualisation, annotation et analyses avancées.
 
@@ -54,12 +62,14 @@ L'application s'appuie sur :
 
 ### Bulk RNA-seq
 
-- **Import intelligent** : lecture de matrices de counts et appariement des métadonnées.
-- **Prise en charge GEO** : préparation facilitée de jeux de données Bulk provenant de GEO.
-- **Analyse différentielle** : workflows basés sur **DESeq2** et **edgeR**.
+- **Import intelligent** : lecture de matrices de counts, gestion des doublons de gènes (fusion par somme), appariement des métadonnées.
+- **Import GEO hors-ligne** : parsing direct d'un fichier `*_series_matrix.txt` via `parse_geo_series_matrix()` — aucun accès réseau requis, aucune dépendance à `GEOquery`.
+- **Analyse différentielle** : workflows basés sur **DESeq2**, **edgeR** et **limma** avec garde-fous sur le design expérimental (n=1, covariable single-level).
 - **Filtrage et transformation** : pré-filtrage des gènes faiblement exprimés et transformation VST pour l'exploration.
 - **Visualisations** : PCA, QC échantillons, volcano plot, MA-plot, heatmap et tableaux de résultats.
+- **Venn / UpSet multi-contrastes** : comparaison des gènes DEG entre contrastes, table des intersections exportable (CSV), export PNG.
 - **Enrichissement fonctionnel** : ORA/GSEA selon le jeu de résultats disponible.
+- **Rapport HTML/PDF** : export complet avec tous les contrastes, tableau récapitulatif n_sig/n_up/n_down et diagramme UpSet si ≥ 2 contrastes.
 
 ### Transcriptomique spatiale
 
@@ -74,22 +84,31 @@ L'application repose sur un cœur Shiny modulaire. Le point d'entrée initialise
 ```text
 ShinyApp---TranscriptoShiny/
 ├── app.R                   # Point d'entrée de l'application
-├── global.R                # Packages, options globales, helpers utilitaires
+├── global.R                # Packages et options globales uniquement (~100 lignes)
+├── helpers_io.R            # I/O multi-format, mapping IDs, parse_geo_series_matrix()
+├── helpers_bulk.R          # DESeq2/edgeR/limma, plots bulk, Venn/UpSet, validate_bulk_design()
+├── helpers_sc.R            # Seurat : scatter/violin/corrélation/trajectoire
+├── helpers_pathway.R       # ORA/GSEA partagé sc/bulk
 ├── README.md
+├── tests/
+│   └── manual/             # Scripts shiny::testServer() — validation sans navigateur
+│       ├── test_mod_bulk_de.R
+│       └── test_mod_import_bulk.R
 ├── modules/
 │   ├── import/             # Import single-cell, bulk, spatial, GEO, helpers d'entrée
 │   ├── sc/                 # Pipeline scRNA-seq, annotation, visualisation, marqueurs
-│   ├── bulk/               # Import, DE, visualisation, pathway, reporting bulk
+│   ├── bulk/               # Import, DE, Venn/UpSet, pathway, reporting bulk
 │   └── spatial/            # Modules transcriptomique spatiale
 └── www/                    # CSS, JS et ressources statiques
 ```
 
 ### Principes d'organisation
 
-- **`app.R`** assemble l'interface globale et les modules.
-- **`global.R`** centralise les dépendances, options, fonctions utilitaires et helpers partagés.
+- **`app.R`** assemble l'interface globale et les modules, source les 4 `helpers_*.R`.
+- **`global.R`** centralise uniquement les dépendances et options (~100 lignes).
+- **`helpers_*.R`** contiennent toutes les fonctions utilitaires, séparées par domaine.
 - **`modules/`** contient les modules Shiny organisés par domaine fonctionnel.
-- **`Tests/`** regroupe les tests de non-régression et validations ciblées.
+- **`tests/manual/`** regroupe les scripts de validation via `shiny::testServer()`.
 
 ## Prérequis
 
@@ -137,6 +156,7 @@ BiocManager::install(c(
   "SingleCellExperiment",
   "DESeq2",
   "edgeR",
+  "limma",
   "ComplexHeatmap",
   "ReactomePA",
   "KEGGREST",
@@ -148,7 +168,17 @@ BiocManager::install(c(
 ))
 ```
 
-### 3. Lancer l'application
+### 3. Dépendances optionnelles
+
+```r
+# Onglet Venn bulk (2–4 contrastes) — requis uniquement si VennDiagram souhaité
+# L'UpSet (ComplexHeatmap) fonctionne sans cette dépendance
+install.packages(c("VennDiagram", "futile.logger"))
+```
+
+> **Note** : si `VennDiagram` est installé mais que le diagramme Venn ne s'affiche pas, vérifier que `futile.logger` est bien installé — c'est une dépendance directe de `VennDiagram` qui peut manquer silencieusement.
+
+### 4. Lancer l'application
 
 ```r
 source("global.R")
@@ -174,28 +204,35 @@ Ou ouvrez `app.R` dans RStudio puis cliquez sur **Run App**.
 3. Appliquer le filtrage et la transformation VST.
 4. Définir le design expérimental et lancer l'analyse différentielle.
 5. Explorer les résultats via PCA, volcano, heatmap, tables et enrichissement.
+6. Comparer les contrastes via l'onglet **Venn / UpSet** si plusieurs contrastes ont été calculés.
+7. Exporter le rapport HTML/PDF multi-contrastes.
 
-### GEO Bulk
+### GEO Bulk — import hors-ligne
 
-1. Identifier un accession GEO de type `GSEXXXXX`.
-2. Télécharger ou reconstruire les métadonnées associées.
-3. Charger la matrice de counts bruts dans l'application.
-4. Utiliser le module Bulk comme pour un import local standard.
+1. Télécharger le fichier `GSExxxxxx_series_matrix.txt` depuis la page GEO du jeu de données.
+2. Dans l'onglet Import Bulk, charger ce fichier dans le slot "Fichier de Métadonnées".
+3. `parse_geo_series_matrix()` détecte automatiquement le format et extrait les caractéristiques échantillons.
+4. Charger ensuite la matrice de counts bruts normalement.
+5. Utiliser le module Bulk comme pour un import local standard.
 
 ## Jeu de test recommandé
 
-Pour tester rapidement le module Bulk RNA-seq, un jeu GEO simple et pédagogique comme **GSE52778** est une bonne option : il permet de récupérer une matrice de counts bruts et des métadonnées exploitables pour valider l'import, le design, la PCA et l'analyse différentielle.
+Pour tester rapidement le module Bulk RNA-seq, un jeu GEO simple et pédagogique comme **GSE52778** (Himes et al.) est une bonne option : 23 532 gènes × 16 échantillons, matrice de counts bruts disponible sur NCBI GEO, métadonnées extractibles via `parse_geo_series_matrix()`.
 
 En pratique, il est recommandé de partir d'une **matrice de counts bruts** et d'un **fichier de métadonnées**, plutôt que de matrices déjà normalisées de type FPKM/TPM.
 
 ## Feuille de route
 
-- [ ] Garde-fous supplémentaires sur le design expérimental avant DESeq2/edgeR.
-- [ ] Comparaison multi-contrastes avec visualisations dédiées (Venn / UpSet).
+- [x] Garde-fous design expérimental (n=1 post-NA, covariable single-level) — *v1.1*
+- [x] Comparaison multi-contrastes : onglet Venn / UpSet avec table des intersections et export CSV/PNG — *v1.1*
+- [x] Rapport multi-contrastes avec tableau récapitulatif et UpSet intégré — *v1.1*
+- [x] Import GEO hors-ligne via `parse_geo_series_matrix()` — *v1.1*
+- [x] Refactoring `global.R` → `helpers_io/bulk/sc/pathway.R` — *v1.1*
+- [ ] Import multi-fichiers per-sample (un fichier par échantillon, merge interne).
 - [ ] Export reproductible d'un script R dérivé des actions réalisées dans l'interface.
 - [ ] Internationalisation FR / EN.
 - [ ] Renforcement du module spatial.
-- [ ] Amélioration continue des modules Bulk : mapping d'identifiants, pairwise automatique, exports enrichis et reporting.
+- [ ] Module GEO en ligne (`mod_geo.R` — import direct via accession GEO).
 
 ## Contribution
 
@@ -237,11 +274,19 @@ The application relies on:
 - a **local-first** approach suitable for workstation-based use in R/RStudio;
 - an interface designed to guide users through progressive controls and interactive outputs.
 
+## What's new in v1.1 (Step-2)
+
+- **`global.R` refactoring**: the monolithic file (>3000 lines) is now split into 5 files (`global.R` + 4 `helpers_*.R`) for better maintainability.
+- **Offline GEO import**: `parse_geo_series_matrix()` — direct parsing of a `*_series_matrix.txt` GEO file without `GEOquery`, no network access required.
+- **Venn / UpSet multi-contrast tab**: visual comparison of DEG gene sets across contrasts, with intersection table and CSV/PNG export.
+- **Enriched multi-contrast report**: summary table for all contrasts + integrated UpSet diagram in the exported HTML/PDF report.
+- **Experimental design safeguards**: hard-block on n=1 after covariate NA and on single-level covariates — covers both single-pair AND pairwise-auto modes.
+- **Test infrastructure**: `shiny::testServer()` scripts in `tests/manual/` for browser-free validation.
+
 ## What's new in v1.0
 
 - **Architectural refactor**: the `modules/` directory is now organized by functional domains (`import/`, `sc/`, `bulk/`, `spatial/`) for easier maintenance and future extension.
 - **Stronger Bulk RNA-seq support**: more robust raw count import, better count/metadata alignment, and cleaner differential expression workflows.
-- **GEO integration**: easier retrieval and preparation of Bulk datasets and related metadata from GEO accessions.
 - **Improved Single-Cell UI**: clearer panel organization, better navigation, and more space dedicated to graphics.
 - **More modular v1.0 base**: better separation of responsibilities across import, pipeline, visualization, annotation, and advanced analysis modules.
 
@@ -259,12 +304,14 @@ The application relies on:
 
 ### Bulk RNA-seq
 
-- **Smart import**: count matrix loading and metadata matching.
-- **GEO support**: easier preparation of Bulk RNA-seq datasets from GEO.
-- **Differential analysis**: workflows based on **DESeq2** and **edgeR**.
+- **Smart import**: count matrix loading with duplicate gene handling (sum merge), metadata matching.
+- **Offline GEO import**: direct parsing of a `*_series_matrix.txt` file via `parse_geo_series_matrix()` — no network access, no `GEOquery` dependency.
+- **Differential analysis**: workflows based on **DESeq2**, **edgeR**, and **limma**, with experimental design safeguards (n=1, single-level covariate).
 - **Filtering and transformation**: pre-filtering of lowly expressed genes and VST transformation for exploratory analysis.
 - **Visualizations**: PCA, sample QC, volcano plot, MA-plot, heatmap, and result tables.
+- **Venn / UpSet multi-contrast**: comparison of DEG gene sets across contrasts, exportable intersection table (CSV), PNG export.
 - **Functional enrichment**: ORA/GSEA depending on the available result set.
+- **HTML/PDF report**: full export with all contrasts, n_sig/n_up/n_down summary table, and UpSet diagram if ≥ 2 contrasts.
 
 ### Spatial transcriptomics
 
@@ -279,23 +326,31 @@ The application is built around a modular Shiny core. The entry point initialize
 ```text
 ShinyApp---TranscriptoShiny/
 ├── app.R                   # Application entry point
-├── global.R                # Packages, global options, shared helpers
+├── global.R                # Packages and global options only (~100 lines)
+├── helpers_io.R            # Multi-format I/O, ID mapping, parse_geo_series_matrix()
+├── helpers_bulk.R          # DESeq2/edgeR/limma, bulk plots, Venn/UpSet, validate_bulk_design()
+├── helpers_sc.R            # Seurat: scatter/violin/correlation/trajectory
+├── helpers_pathway.R       # ORA/GSEA shared across sc/bulk
 ├── README.md
-├── Tests/                  # Validation scripts and regression tests
+├── tests/
+│   └── manual/             # shiny::testServer() scripts — browser-free validation
+│       ├── test_mod_bulk_de.R
+│       └── test_mod_import_bulk.R
 ├── modules/
 │   ├── import/             # Single-cell, bulk, spatial, GEO import helpers
 │   ├── sc/                 # scRNA-seq pipeline, annotation, visualization, markers
-│   ├── bulk/               # Bulk import, DE, visualization, pathways, reporting
+│   ├── bulk/               # Bulk import, DE, Venn/UpSet, pathways, reporting
 │   └── spatial/            # Spatial transcriptomics modules
 └── www/                    # CSS, JS, and static assets
 ```
 
 ### Organization principles
 
-- **`app.R`** assembles the global interface and loads the modules.
-- **`global.R`** centralizes dependencies, options, utility functions, and shared helpers.
+- **`app.R`** assembles the global interface, loads modules, and sources the 4 `helpers_*.R` files.
+- **`global.R`** centralizes dependencies and options only (~100 lines).
+- **`helpers_*.R`** contain all utility functions, separated by domain.
 - **`modules/`** stores domain-specific Shiny modules.
-- **`Tests/`** contains non-regression checks and targeted validation scripts.
+- **`tests/manual/`** contains validation scripts using `shiny::testServer()`.
 
 ## Requirements
 
@@ -343,6 +398,7 @@ BiocManager::install(c(
   "SingleCellExperiment",
   "DESeq2",
   "edgeR",
+  "limma",
   "ComplexHeatmap",
   "ReactomePA",
   "KEGGREST",
@@ -354,7 +410,17 @@ BiocManager::install(c(
 ))
 ```
 
-### 3. Launch the application
+### 3. Optional dependencies
+
+```r
+# Venn diagram in bulk tab (2–4 contrasts) — optional
+# UpSet (ComplexHeatmap) works without this dependency
+install.packages(c("VennDiagram", "futile.logger"))
+```
+
+> **Note**: if `VennDiagram` is installed but the Venn diagram does not render, check that `futile.logger` is installed — it is a direct dependency that may be silently missing.
+
+### 4. Launch the application
 
 ```r
 source("global.R")
@@ -380,28 +446,35 @@ Or open `app.R` in RStudio and click **Run App**.
 3. Apply filtering and VST transformation.
 4. Define the experimental design and run differential expression.
 5. Explore PCA, volcano, heatmap, tables, and enrichment results.
+6. Compare contrasts via the **Venn / UpSet** tab if multiple contrasts were computed.
+7. Export the multi-contrast HTML/PDF report.
 
-### GEO Bulk
+### GEO Bulk — offline import
 
-1. Identify a GEO accession such as `GSEXXXXX`.
-2. Download or reconstruct the corresponding metadata.
-3. Load the raw count matrix into the application.
-4. Use the Bulk module exactly as with a local dataset.
+1. Download the `GSExxxxxx_series_matrix.txt` file from the GEO dataset page.
+2. In the Bulk Import tab, load this file in the "Metadata File" slot.
+3. `parse_geo_series_matrix()` automatically detects the format and extracts sample characteristics.
+4. Load the raw count matrix normally.
+5. Use the Bulk module exactly as with a local dataset.
 
 ## Recommended test dataset
 
-To quickly test the Bulk RNA-seq module, a simple and pedagogical GEO dataset such as **GSE52778** is a good starting point: it provides a raw count matrix and usable metadata to validate import, design handling, PCA, and differential expression.
+To quickly test the Bulk RNA-seq module, a simple and pedagogical GEO dataset such as **GSE52778** (Himes et al.) is a good starting point: 23,532 genes × 16 samples, raw count matrix available on NCBI GEO, metadata extractable via `parse_geo_series_matrix()`.
 
 In practice, it is recommended to start from a **raw count matrix** and a **metadata file**, rather than already normalized matrices such as FPKM or TPM.
 
 ## Roadmap
 
-- [ ] Additional safeguards for experimental design before DESeq2/edgeR execution.
-- [ ] Multi-contrast comparison with dedicated visualization layers (Venn / UpSet).
+- [x] Experimental design safeguards (n=1 post-NA, single-level covariate) — *v1.1*
+- [x] Multi-contrast comparison: Venn / UpSet tab with intersection table and CSV/PNG export — *v1.1*
+- [x] Multi-contrast report with summary table and integrated UpSet diagram — *v1.1*
+- [x] Offline GEO import via `parse_geo_series_matrix()` — *v1.1*
+- [x] `global.R` refactoring → `helpers_io/bulk/sc/pathway.R` — *v1.1*
+- [ ] Multi-file per-sample import (one file per sample, internal merge).
 - [ ] Reproducible R script export derived from UI actions.
 - [ ] Native FR / EN internationalization.
 - [ ] Further reinforcement of the spatial module.
-- [ ] Continuous Bulk module improvements: ID mapping, automatic pairwise contrasts, richer exports, and reporting.
+- [ ] Online GEO module (`mod_geo.R` — direct import via GEO accession).
 
 ## Contributing
 
