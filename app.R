@@ -2,6 +2,13 @@
 
 source("global.R")
 
+# Helpers (refactor : extraits de global.R — l'ordre entre eux n'a pas
+# d'importance, R ne résout les appels de fonction qu'à l'exécution).
+source("helpers_io.R")
+source("helpers_sc.R")
+source("helpers_bulk.R")
+source("helpers_pathway.R")
+
 source("modules/import/mod_import_sc.R")
 source("modules/import/mod_import_bulk.R")
 source("modules/import/mod_import_spatial.R")
