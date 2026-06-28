@@ -105,26 +105,57 @@ mod_bulk_report_server <- function(id, global_data, shared_rv) {
           de_results <- shared_rv$contrasts[[ac]]
         }
 
+        padj_thresh_now <- shared_rv$padj_thresh %||% 0.05
+        lfc_thresh_now  <- shared_rv$lfc_thresh  %||% 1
+
+        # ── FIX (Bug #2) : the report used to only ever see the single
+        #    "active" contrast — when pairwise-auto produces several, the
+        #    rest were silently invisible in the exported report. Build a
+        #    n_sig/n_up/n_down summary for EVERY contrast in
+        #    shared_rv$contrasts, filtered with the CURRENT thresholds (not
+        #    whatever they were at the moment each contrast was computed —
+        #    stays consistent if the user changes the threshold afterwards).
+        all_contrasts <- shared_rv$contrasts %||% list()
+        all_contrasts_summary <- if (length(all_contrasts) == 0) {
+          NULL
+        } else {
+          do.call(rbind, lapply(names(all_contrasts), function(nm) {
+            r <- all_contrasts[[nm]]
+            sig <- !is.na(r$padj) & r$padj < padj_thresh_now & abs(r$log2FoldChange) > lfc_thresh_now
+            data.frame(
+              Contraste = nm,
+              n_testes  = nrow(r),
+              n_sig     = sum(sig),
+              n_up      = sum(sig & r$log2FoldChange > 0),
+              n_down    = sum(sig & r$log2FoldChange < 0),
+              actif     = identical(nm, ac),
+              stringsAsFactors = FALSE
+            )
+          }))
+        }
+
         template_path <- file.path("modules", "bulk", "bulk_report_template.Rmd")  # était file.path("modules", ...)
         tmp_rmd <- file.path(tempdir(), "bulk_report_template.Rmd")
         file.copy(template_path, tmp_rmd, overwrite = TRUE)
 
         render_params <- list(
-          vst_mat         = shared_rv$vst_mat,
-          metadata        = global_data$bulk_obj$metadata,
-          de_results      = de_results,
-          contrast_name   = shared_rv$active_contrast,
-          pathway_results = shared_rv$pathway_results,
-          pathway_db      = shared_rv$pathway_db %||% "GOBP",
-          sections        = input$report_sections %||% character(0),
-          pca_color_by    = if (nzchar(shared_rv$pca_color_by %||% "")) shared_rv$pca_color_by else NULL,
-          heatmap_top_n   = shared_rv$heatmap_top_n %||% 30,
-          lfc_thresh      = shared_rv$lfc_thresh %||% 1,
-          padj_thresh     = shared_rv$padj_thresh %||% 0.05,
-          report_title    = input$report_title %||% "Analyse RNA-seq Bulk",
-          report_subtitle = input$report_subtitle %||% "",
-          report_notes    = input$report_notes %||% "",
-          interactive     = isTRUE(input$report_interactive) && input$report_format != "pdf"
+          vst_mat               = shared_rv$vst_mat,
+          metadata              = global_data$bulk_obj$metadata,
+          de_results            = de_results,
+          contrast_name         = shared_rv$active_contrast,
+          all_contrasts_summary = all_contrasts_summary,
+          all_contrasts         = all_contrasts,
+          pathway_results       = shared_rv$pathway_results,
+          pathway_db            = shared_rv$pathway_db %||% "GOBP",
+          sections              = input$report_sections %||% character(0),
+          pca_color_by          = if (nzchar(shared_rv$pca_color_by %||% "")) shared_rv$pca_color_by else NULL,
+          heatmap_top_n         = shared_rv$heatmap_top_n %||% 30,
+          lfc_thresh            = lfc_thresh_now,
+          padj_thresh           = padj_thresh_now,
+          report_title          = input$report_title %||% "Analyse RNA-seq Bulk",
+          report_subtitle       = input$report_subtitle %||% "",
+          report_notes          = input$report_notes %||% "",
+          interactive           = isTRUE(input$report_interactive) && input$report_format != "pdf"
         )
 
         withProgress(message = "Génération du rapport...", value = 0.2, {

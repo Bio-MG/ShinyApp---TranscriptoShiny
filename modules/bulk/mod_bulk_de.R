@@ -126,7 +126,7 @@ mod_bulk_de_heatmap_ui <- function(id) {
       column(4, numericInput(ns("heatmap_top_n"), "Top N gènes (par p-adj)", value = 30, min = 2, max = 200)),
       column(4, selectInput(ns("heatmap_annot"), "Annotation colonnes", choices = NULL))
     ),
-    plotOutput(ns("plot_heatmap"), height = "600px"),
+    div(style = "min-height:600px;", plotOutput(ns("plot_heatmap"), height = "600px")),
     fluidRow(
       column(6, selectInput(ns("heatmap_export_fmt"), "Format export", choices = c("PNG" = "png", "PDF" = "pdf"))),
       column(6, div(style = "margin-top:25px;", downloadButton(ns("dl_heatmap"), "📥 Export Heatmap", class = "btn-sm btn-secondary w-100")))
@@ -146,6 +146,46 @@ mod_bulk_de_table_ui <- function(id) {
       downloadButton(ns("dl_de_excel"), "Excel", class = "btn-sm btn-success")
     ),
     DTOutput(ns("table_de"))
+  )
+}
+
+
+# ── UI: Venn/UpSet tab (compare gene sets across contrasts) ──────────────────
+
+mod_bulk_de_venn_ui <- function(id) {
+  ns <- NS(id)
+  tagList(
+    div(class = "alert alert-light", style = "font-size:0.85em;border-left:3px solid #9B59B6;",
+       bsicons::bs_icon("info-circle"),
+       " Compare les gènes significatifs ENTRE plusieurs contrastes (utile après un run ",
+       tags$em("Pairwise auto"), "). Seuils utilisés : ceux du panneau Step 2 (|Log2FC| / p-adj) ",
+       "— se mettent à jour en direct si vous les changez, sans recalcul DE."),
+
+    uiOutput(ns("venn_gate_message")),
+
+    fluidRow(
+      column(7, selectizeInput(ns("venn_contrasts"), "Contrastes à comparer",
+                               choices = NULL, multiple = TRUE,
+                               options = list(maxItems = 6, placeholder = "2 à 6 contrastes"))),
+      column(5, radioButtons(ns("venn_type"), "Type de diagramme",
+                             choices = c("UpSet (recommandé)" = "upset", "Venn (2-4 contrastes)" = "venn"),
+                             selected = "upset"))
+    ),
+    checkboxInput(ns("venn_direction_aware"),
+                 "Distinguer Up / Down (chaque contraste devient 2 ensembles)", value = FALSE),
+
+    div(style = "min-height:500px;min-width:600px;overflow-x:auto;",
+       plotOutput(ns("venn_plot"), height = "500px")),
+
+    fluidRow(
+      column(6, downloadButton(ns("dl_venn_png"), "Export PNG", class = "btn-sm btn-secondary w-100")),
+      column(6, downloadButton(ns("dl_venn_genes_csv"), "Export gènes par intersection (CSV)",
+                               class = "btn-sm btn-info w-100"))
+    ),
+
+    hr(),
+    h6("Table des intersections", style = "font-weight:bold;"),
+    DTOutput(ns("venn_intersection_table"))
   )
 }
 
@@ -284,6 +324,25 @@ mod_bulk_de_server <- function(id, global_data, shared_rv) {
         return()
       }
 
+      # HARD BLOCK: a single-level covariate contributes nothing to the
+      # model — R's contrast coding produces zero columns for it, so DESeq2
+      # would silently fit ~ condition_col alone while the user believes
+      # they are also correcting for this covariate. No crash, no warning
+      # from DESeq2 itself — catch it explicitly instead of letting the
+      # analysis "succeed" on the wrong design.
+      single_level <- Filter(
+        function(cov) length(unique(na.omit(meta[[cov]]))) < 2,
+        covariates_in_use
+      )
+      if (length(single_level) > 0) {
+        showNotification(
+          sprintf("❌ Covariable(s) à une seule modalité : %s. Elle(s) n'apporterai(en)t aucune information — retirez-la(les) du design.",
+                  paste(single_level, collapse = ", ")),
+          type = "error", duration = 10
+        )
+        return()
+      }
+
       p <- shiny::Progress$new(); on.exit(p$close())
       p$set(message = "Analyse différentielle...", value = 0.2)
 
@@ -400,6 +459,33 @@ mod_bulk_de_server <- function(id, global_data, shared_rv) {
       meta <- global_data$bulk_obj$metadata
       lvls <- unique(na.omit(as.character(meta[[input$condition_col]])))
       validate(need(length(lvls) > 2, "Au moins 3 niveaux requis pour le mode pairwise."))
+
+      # Same two hard blocks as the single-pair path (confounding, single-
+      # level covariate) — the pairwise path fits ONE shared dds_full reused
+      # for every pair, so a bad design here silently corrupts ALL contrasts
+      # at once rather than just one. Was previously missing here entirely.
+      covariates_in_use <- input$covariates %||% character(0)
+      confounded <- Filter(function(cov) check_design_confounding(meta, input$condition_col, cov),
+                           covariates_in_use)
+      if (length(confounded) > 0) {
+        showNotification(
+          sprintf("❌ Covariable(s) confondue(s) avec '%s' : %s. Retirez-la(les) du design ou revoyez votre plan d'expérience.",
+                  input$condition_col, paste(confounded, collapse = ", ")),
+          type = "error", duration = 10
+        )
+        return()
+      }
+      single_level <- Filter(function(cov) length(unique(na.omit(meta[[cov]]))) < 2,
+                             covariates_in_use)
+      if (length(single_level) > 0) {
+        showNotification(
+          sprintf("❌ Covariable(s) à une seule modalité : %s. Elle(s) n'apporterai(en)t aucune information — retirez-la(les) du design.",
+                  paste(single_level, collapse = ", ")),
+          type = "error", duration = 10
+        )
+        return()
+      }
+
       pairs   <- utils::combn(lvls, 2, simplify = FALSE)
       n_pairs <- length(pairs)
 
@@ -610,13 +696,12 @@ mod_bulk_de_server <- function(id, global_data, shared_rv) {
     output$dl_heatmap <- downloadHandler(
       filename = function() paste0("heatmap_", shared_rv$active_contrast, "_", Sys.Date(), ".", input$heatmap_export_fmt),
       content  = function(file) {
-        ht <- .heatmap_obj()
         if (input$heatmap_export_fmt == "pdf") {
           pdf(file, width = 9, height = 8)
         } else {
           png(file, width = 9, height = 8, units = "in", res = 300)
         }
-        print(ht)
+        .heatmap_obj()  # draws as a side effect on the device just opened above
         dev.off()
       }
     )
@@ -640,6 +725,109 @@ mod_bulk_de_server <- function(id, global_data, shared_rv) {
         } else {
           write.csv(active_de_results(), file, row.names = FALSE)
         }
+      }
+    )
+
+    # ── Venn / UpSet — multi-contrast comparison ────────────────────────────
+    # Populate the contrast picker whenever shared_rv$contrasts changes
+    # (new single-pair run, pairwise-auto batch, etc.) — default selection:
+    # all of them, capped at 6 for readability.
+    observeEvent(shared_rv$contrasts, {
+      nm <- names(shared_rv$contrasts)
+      updateSelectizeInput(session, "venn_contrasts", choices = nm, selected = head(nm, 6), server = TRUE)
+    })
+
+    output$venn_gate_message <- renderUI({
+      n <- length(input$venn_contrasts)
+      if (length(shared_rv$contrasts) < 2) {
+        div(class = "alert alert-warning", style = "font-size:0.85em;",
+            "Lancez au moins 2 contrastes (Step 2 simple répété, ou ", tags$em("Pairwise auto"),
+            ") pour pouvoir les comparer ici.")
+      } else if (n < 2) {
+        div(class = "alert alert-info", style = "font-size:0.85em;", "Sélectionnez au moins 2 contrastes ci-dessus.")
+      } else if (input$venn_type == "venn" && (n < 2 || n > 4)) {
+        div(class = "alert alert-warning", style = "font-size:0.85em;",
+            "Le diagramme de Venn n'est lisible que pour 2 à 4 contrastes (vous en avez ", n,
+            ") — passez en UpSet ou réduisez la sélection.")
+      } else {
+        NULL
+      }
+    })
+
+    # LIVE recompute: re-runs whenever input$lfc_thresh / input$padj_thresh
+    # change, even with NO new DE calculation — this is the fix for the
+    # exact desync Gemini flagged (sets must reflect the CURRENT threshold,
+    # not whatever it was when each contrast was originally fitted).
+    venn_gene_sets <- reactive({
+      req(length(input$venn_contrasts) >= 2)
+      contrasts_sel <- shared_rv$contrasts[input$venn_contrasts]
+      contrasts_sel <- contrasts_sel[!vapply(contrasts_sel, is.null, logical(1))]
+      req(length(contrasts_sel) >= 2)
+      build_contrast_gene_sets(
+        contrasts_sel,
+        lfc_thresh      = input$lfc_thresh,
+        padj_thresh     = input$padj_thresh,
+        direction_aware = isTRUE(input$venn_direction_aware)
+      )
+    })
+
+    output$venn_plot <- renderPlot({
+      # Soft pre-check only — if the clientData width/height ever resolves to
+      # something genuinely tiny, show the friendly message proactively
+      # instead of attempting to plot. isTRUE() makes this safe: if the key
+      # doesn't resolve the way we expect (NULL), the comparison is simply
+      # not TRUE and we fall through to the normal flow below — this can
+      # never block rendering, only skip straight to a message early.
+      w <- session$clientData[[paste0("output_", "venn_plot", "_width")]]
+      h <- session$clientData[[paste0("output_", "venn_plot", "_height")]]
+      if (isTRUE(w < 30) || isTRUE(h < 30)) {
+        grid::grid.newpage()
+        grid::grid.text("Conteneur trop petit pour afficher le diagramme.\nAgrandissez la fenêtre ou l'onglet.",
+                        gp = grid::gpar(col = "grey40", fontsize = 12))
+        return(invisible(NULL))
+      }
+
+      sets <- tryCatch(venn_gene_sets(), error = function(e) NULL)
+      validate(need(!is.null(sets), "Sélectionnez au moins 2 contrastes."))
+      tryCatch({
+        if (input$venn_type == "venn") {
+          plot_venn_contrasts(sets)
+        } else {
+          plot_upset_contrasts(sets)
+        }
+      }, error = function(e) {
+        # grid-based, NOT plot.new() — survives even a near-zero device, so
+        # this fallback itself can no longer fail the way it used to (was
+        # the actual source of the duplicate "figure margins too large").
+        grid::grid.newpage()
+        grid::grid.text(paste("Conteneur trop petit, ou erreur :", conditionMessage(e)),
+                        gp = grid::gpar(col = "firebrick", fontsize = 11))
+      })
+    })
+
+    output$venn_intersection_table <- renderDT({
+      sets <- tryCatch(venn_gene_sets(), error = function(e) NULL)
+      req(sets)
+      dt <- tryCatch(build_contrast_intersection_dt(sets), error = function(e) NULL)
+      req(dt)
+      datatable(dt, filter = "top", rownames = FALSE,
+               options = list(pageLength = 15, scrollX = TRUE))
+    })
+
+    output$dl_venn_png <- downloadHandler(
+      filename = function() paste0("venn_upset_", Sys.Date(), ".png"),
+      content  = function(file) {
+        sets <- venn_gene_sets()
+        png(file, width = 9, height = 7, units = "in", res = 300)
+        if (input$venn_type == "venn") plot_venn_contrasts(sets) else plot_upset_contrasts(sets)
+        dev.off()
+      }
+    )
+
+    output$dl_venn_genes_csv <- downloadHandler(
+      filename = function() paste0("genes_par_intersection_", Sys.Date(), ".csv"),
+      content  = function(file) {
+        write.csv(build_contrast_intersection_dt(venn_gene_sets()), file, row.names = FALSE)
       }
     )
 

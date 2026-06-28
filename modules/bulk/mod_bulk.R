@@ -109,6 +109,7 @@ mod_bulk_ui <- function(id) {
         nav_panel("MA-Plot",         value = "tab_ma",      mod_bulk_de_ma_ui(ns("de"))),
         nav_panel("Heatmap",         value = "tab_heatmap", mod_bulk_de_heatmap_ui(ns("de"))),
         nav_panel("Table DE",        value = "tab_table",   mod_bulk_de_table_ui(ns("de"))),
+        nav_panel("Venn / UpSet",    value = "tab_venn",    mod_bulk_de_venn_ui(ns("de"))),
         nav_panel("Pathway",         value = "tab_pathway", mod_bulk_pathways_output_ui(ns("pathways")))
       )
     )
