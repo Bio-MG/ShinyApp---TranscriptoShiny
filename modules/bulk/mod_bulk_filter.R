@@ -5,9 +5,10 @@
 # DESeqDataSet(design = ~1) -> VST matrix. Everything downstream (DE, heatmap,
 # pathways, report) reads shared_rv$vst_mat / shared_rv$filtered_counts.
 #
-# Depends on global.R:
+# Depends on helpers_bulk.R (sourced by global.R, not defined there):
 #   filter_bulk_counts(), build_dds(), get_vst_matrix(),
-#   plot_bulk_pca(), plot_sample_correlation_heatmap()
+#   plot_bulk_pca(), plot_sample_correlation_heatmap(),
+#   bulk_color_scale(), manual_color_picker_ui(), plot_scree_bulk()
 #
 # State contract (shared_rv):
 #   READ  : shared_rv$counts_mapped    — written by mod_bulk_mapping (Step 0,
@@ -50,7 +51,19 @@ mod_bulk_filter_ui <- function(id) {
     actionButton(ns("run_filter_norm"), "🚀 Lancer Filtrage & VST",
                  class = "btn-danger w-100", icon = icon("play")),
 
-    div(class = "small text-muted mt-2", textOutput(ns("filter_status")))
+    div(class = "small text-muted mt-2", textOutput(ns("filter_status"))),
+
+    hr(),
+    div(style = "display:flex;align-items:center;gap:6px;",
+        tags$label("🎨 Palette de couleurs (PCA)", class = "control-label", style = "margin-bottom:0;"),
+        tooltip(bsicons::bs_icon("info-circle"),
+               "Couleurs utilisées pour les groupes sur la PCA. Okabe-Ito = sûre pour daltoniens.")),
+    selectInput(ns("palette_choice"), NULL,
+               choices = c("Défaut (ggplot)" = "default",
+                           "Okabe-Ito (daltonien)" = "okabeito",
+                           "Viridis" = "viridis",
+                           "Set2 (ColorBrewer)" = "set2",
+                           "Manuel (choisir chaque couleur)" = "manual"))
   )
 }
 
@@ -59,14 +72,27 @@ mod_bulk_filter_ui <- function(id) {
 
 mod_bulk_filter_pca_ui <- function(id) {
   ns <- NS(id)
-  tagList(
+  card(
+    full_screen = TRUE,
+    max_height  = "850px",
+    card_header("PCA"),
     fluidRow(
-      column(4, selectInput(ns("pca_color_by"), "Colorer par", choices = NULL)),
-      column(4, selectInput(ns("pca_shape_by"), "Forme par (optionnel)", choices = NULL))
+      column(4, selectizeInput(ns("pca_color_by"), "Colorer par", choices = NULL,
+                               options = list(placeholder = "Aucun", allowEmptyOption = TRUE))),
+      column(4, selectizeInput(ns("pca_shape_by"), "Forme par (optionnel)", choices = NULL,
+                               options = list(placeholder = "Aucun", allowEmptyOption = TRUE)))
     ),
+    uiOutput(ns("manual_palette_ui")),   # only shown when palette == "manual" AND pca_color_by active
     checkboxInput(ns("pca_interactive"), "📊 Interactif (Plotly — survol pour identifier l'échantillon)", value = FALSE),
     uiOutput(ns("pca_container")),
-    downloadButton(ns("dl_pca_png"), "Export PNG (statique)", class = "btn-sm btn-secondary mt-2")
+    downloadButton(ns("dl_pca_png"), "Export PNG (statique)", class = "btn-sm btn-secondary mt-2"),
+
+    hr(),
+    h6("Scree Plot — Variance Expliquée", style = "font-weight:bold;"),
+    helpText("Combien de composantes principales faut-il regarder ? Une chute nette (\"coude\") ",
+             "indique où le signal biologique s'arrête et où le bruit commence."),
+    plotOutput(ns("plot_scree"), height = "380px"),
+    downloadButton(ns("dl_scree_png"), "Export PNG", class = "btn-sm btn-secondary mt-2")
   )
 }
 
@@ -75,18 +101,23 @@ mod_bulk_filter_pca_ui <- function(id) {
 
 mod_bulk_filter_qc_ui <- function(id) {
   ns <- NS(id)
-  tagList(
+  card(
+    full_screen = TRUE,
+    max_height  = "850px",
+    card_header("QC Échantillons"),
     div(class = "alert alert-light", style = "font-size:0.85em;",
         bsicons::bs_icon("info-circle"),
         " Détecte les échantillons mal étiquetés, les outliers ou doublons inattendus ",
         "AVANT de lancer l'analyse différentielle. Des échantillons d'un même groupe ",
         "devraient corréler fortement entre eux (cellules sombres groupées)."),
     fluidRow(
-      column(4, selectInput(ns("qc_corr_annot"), "Annotation", choices = NULL)),
+      column(4, selectizeInput(ns("qc_corr_annot"), "Annotation", choices = NULL,
+                               options = list(placeholder = "Aucun", allowEmptyOption = TRUE))),
       column(4, selectInput(ns("qc_corr_method"), "Méthode",
                             choices = c("Pearson" = "pearson", "Spearman" = "spearman")))
     ),
-    plotOutput(ns("plot_sample_corr"), height = "550px"),
+    uiOutput(ns("qc_manual_palette_ui")),
+    plotOutput(ns("plot_sample_corr"), height = "620px"),
     downloadButton(ns("dl_sample_corr_png"), "Export PNG", class = "btn-sm btn-secondary mt-2")
   )
 }
@@ -105,15 +136,16 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
       cat_cols <- names(meta)[sapply(meta, function(x) is.character(x) || is.factor(x))]
       cat_cols <- if (length(cat_cols) == 0) names(meta) else cat_cols
 
-      updateSelectInput(session, "pca_color_by",  choices = c("Aucun" = "", cat_cols))
-      updateSelectInput(session, "pca_shape_by",  choices = c("Aucun" = "", cat_cols))
-      updateSelectInput(session, "qc_corr_annot", choices = c("Aucun" = "", cat_cols))
+      updateSelectizeInput(session, "pca_color_by",  choices = cat_cols, server = FALSE)
+      updateSelectizeInput(session, "pca_shape_by",  choices = cat_cols, server = FALSE)
+      updateSelectizeInput(session, "qc_corr_annot", choices = cat_cols, server = FALSE)
     }, ignoreNULL = TRUE)
 
-    # ── Mirror PCA inputs to shared_rv (read by mod_bulk_report) ─────────────
+    # ── Mirror PCA inputs + palette choice to shared_rv (read by mod_bulk_report) ─
     observe({
       shared_rv$pca_color_by <- input$pca_color_by
       shared_rv$pca_shape_by <- input$pca_shape_by
+      shared_rv$bulk_palette <- input$palette_choice
     })
 
     # ── Polish UI: disable the run button until an import actually exists ───
@@ -185,17 +217,60 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
     # =========================================================================
     # PCA
     # =========================================================================
+    # ── Manual palette: dynamic color pickers for the active PCA grouping ───
+    # Re-evaluates whenever pca_color_by changes (new set of levels) — the
+    # picker UI itself is rebuilt by output$manual_palette_ui below.
+    manual_pca_levels <- reactive({
+      req(global_data$bulk_obj$metadata, input$pca_color_by)
+      req(nzchar(input$pca_color_by))
+      lvls <- sort(unique(stats::na.omit(as.character(global_data$bulk_obj$metadata[[input$pca_color_by]]))))
+      req(length(lvls) > 0)
+      lvls
+    })
+
+    output$manual_palette_ui <- renderUI({
+      if (!identical(input$palette_choice, "manual")) return(NULL)
+      if (!nzchar(input$pca_color_by %||% "")) {
+        return(div(class = "alert alert-warning", style = "font-size:0.8em;",
+                   "Sélectionnez d'abord une variable \"Colorer par\" pour personnaliser ses couleurs."))
+      }
+      lvls <- tryCatch(manual_pca_levels(), error = function(e) character(0))
+      if (length(lvls) == 0) return(NULL)
+      ids <- paste0("manual_color_", seq_along(lvls))
+      div(
+        class = "border rounded p-2 mb-2", style = "background:#f8f9fa;",
+        h6(paste("Couleurs manuelles —", input$pca_color_by),
+           style = "font-size:0.85em;font-weight:bold;margin-bottom:6px;"),
+        manual_color_picker_ui(ns, ids, lvls, .default_manual_colors(length(lvls)))
+      )
+    })
+
+    manual_palette_vec <- reactive({
+      if (!identical(input$palette_choice, "manual")) return(NULL)
+      lvls <- tryCatch(manual_pca_levels(), error = function(e) character(0))
+      if (length(lvls) == 0) return(NULL)
+      defaults <- .default_manual_colors(length(lvls))
+      vals <- vapply(seq_along(lvls), function(i) {
+        v <- input[[paste0("manual_color_", i)]]
+        if (is.null(v) || !nzchar(v)) defaults[i] else v
+      }, character(1))
+      setNames(vals, lvls)
+    })
+
     pca_plot <- reactive({
       req(shared_rv$vst_mat)
+      pal <- input$palette_choice %||% "default"
       plot_bulk_pca(shared_rv$vst_mat, global_data$bulk_obj$metadata,
                     color_by = if (nzchar(input$pca_color_by %||% "")) input$pca_color_by else NULL,
-                    shape_by = if (nzchar(input$pca_shape_by %||% "")) input$pca_shape_by else NULL)
+                    shape_by = if (nzchar(input$pca_shape_by %||% "")) input$pca_shape_by else NULL,
+                    palette  = pal,
+                    manual_colors = if (identical(pal, "manual")) manual_palette_vec() else NULL)
     })
     output$plot_pca <- renderPlot({ pca_plot() })
 
     output$pca_container <- renderUI({
-      if (isTRUE(input$pca_interactive)) plotlyOutput(ns("plot_pca_ly"), height = "550px")
-      else plotOutput(ns("plot_pca"), height = "550px")
+      if (isTRUE(input$pca_interactive)) plotlyOutput(ns("plot_pca_ly"), height = "620px")
+      else plotOutput(ns("plot_pca"), height = "620px")
     })
 
     output$plot_pca_ly <- renderPlotly({
@@ -212,15 +287,80 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
     )
 
     # =========================================================================
+    # SCREE PLOT — PCA companion, reuses shared_rv$vst_mat (no extra heavy
+    # computation; same ntop=500 variable-gene selection as plot_bulk_pca()).
+    # =========================================================================
+    scree_plot <- reactive({
+      req(shared_rv$vst_mat)
+      plot_scree_bulk(shared_rv$vst_mat)
+    })
+    output$plot_scree <- renderPlot({
+      tryCatch(scree_plot(), error = function(e) {
+        # Defensive: a transient near-zero-size render (e.g. mid card-resize /
+        # tab switch) throws "figure margins too large" from the graphics
+        # device, not from our code. Swallow it silently — the next regular
+        # redraw (stable container size) succeeds on its own.
+        if (grepl("figure margins too large", conditionMessage(e))) return(invisible(NULL))
+        stop(e)
+      })
+    })
+    output$dl_scree_png <- downloadHandler(
+      filename = function() paste0("scree_plot_bulk_", Sys.Date(), ".png"),
+      content  = function(file) ggsave(file, plot = scree_plot(), width = 7, height = 5, dpi = 300)
+    )
+
+    # =========================================================================
     # QC: Sample correlation heatmap (reuses shared_rv$vst_mat — zero extra
     # heavy computation)
     # =========================================================================
+    # Manual palette: own picker, keyed to qc_corr_annot's levels — kept
+    # SEPARATE from the PCA picker above because qc_corr_annot may point to
+    # a different metadata column (e.g. "batch" for QC vs "treatment" for PCA).
+    manual_qc_levels <- reactive({
+      req(global_data$bulk_obj$metadata, input$qc_corr_annot)
+      req(nzchar(input$qc_corr_annot))
+      lvls <- sort(unique(stats::na.omit(as.character(global_data$bulk_obj$metadata[[input$qc_corr_annot]]))))
+      req(length(lvls) > 0)
+      lvls
+    })
+
+    output$qc_manual_palette_ui <- renderUI({
+      if (!identical(input$palette_choice, "manual")) return(NULL)
+      if (!nzchar(input$qc_corr_annot %||% "")) {
+        return(div(class = "alert alert-warning", style = "font-size:0.8em;",
+                   "Sélectionnez d'abord une \"Annotation\" pour personnaliser ses couleurs."))
+      }
+      lvls <- tryCatch(manual_qc_levels(), error = function(e) character(0))
+      if (length(lvls) == 0) return(NULL)
+      ids <- paste0("qc_manual_color_", seq_along(lvls))
+      div(
+        class = "border rounded p-2 mb-2", style = "background:#f8f9fa;",
+        h6(paste("Couleurs manuelles —", input$qc_corr_annot),
+           style = "font-size:0.85em;font-weight:bold;margin-bottom:6px;"),
+        manual_color_picker_ui(ns, ids, lvls, .default_manual_colors(length(lvls)))
+      )
+    })
+
+    qc_manual_colors <- reactive({
+      if (!identical(input$palette_choice, "manual")) return(NULL)
+      lvls <- tryCatch(manual_qc_levels(), error = function(e) character(0))
+      if (length(lvls) == 0) return(NULL)
+      defaults <- .default_manual_colors(length(lvls))
+      vals <- vapply(seq_along(lvls), function(i) {
+        v <- input[[paste0("qc_manual_color_", i)]]
+        if (is.null(v) || !nzchar(v)) defaults[i] else v
+      }, character(1))
+      setNames(vals, lvls)
+    })
+
     sample_corr_plot_fn <- function() {
       req(shared_rv$vst_mat)
       annot <- if (nzchar(input$qc_corr_annot %||% "")) input$qc_corr_annot else NULL
+      pal   <- input$palette_choice %||% "default"
       plot_sample_correlation_heatmap(
         shared_rv$vst_mat, global_data$bulk_obj$metadata,
-        annotation_col = annot, method = input$qc_corr_method %||% "pearson"
+        annotation_col = annot, method = input$qc_corr_method %||% "pearson",
+        palette = pal, manual_colors = if (identical(pal, "manual")) qc_manual_colors() else NULL
       )
     }
     output$plot_sample_corr <- renderPlot({

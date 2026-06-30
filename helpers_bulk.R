@@ -535,6 +535,108 @@ run_bulk_de_dispatch <- function(engine, counts_matrix, metadata, condition_col,
 
 
 
+#' Run the SAME contrast through DESeq2 + edgeR + limma-voom (when available)
+#'
+#' Multi-method comparison helper: dispatches the same group_target vs
+#' group_ref contrast across all available engines and returns normalized
+#' results per method, so downstream code can compute rank consensus or
+#' compare significant gene sets via Venn/UpSet across METHODS (as opposed
+#' to across CONTRASTS — see `build_contrast_gene_sets()` for that). Reuses
+#' the exact same `run_bulk_de_dispatch()` + `.normalize_de_cols()` already
+#' used by the single-engine path, so results are byte-for-byte identical
+#' to running each engine individually — no parallel code path to drift.
+#' limma-voom is skipped if `has_limma` is FALSE (flag set in global.R), or
+#' silently dropped if its fit errors (e.g. too few replicates).
+#'
+#' @param counts_matrix Filtered counts matrix (genes x samples).
+#' @param metadata Sample metadata data.frame.
+#' @param condition_col Name of the grouping column.
+#' @param group_target,group_ref Levels of `condition_col` being compared.
+#' @param dds_full Pre-built DESeqDataSet (real design) — reused as-is.
+#' @param shrink Passed to the DESeq2 engine only (apeglm LFC shrinkage).
+#' @return Named list of normalized data.frames: any of `deseq2`/`edger`/
+#'   `limma` that succeeded (length >= 1; methods that errored are omitted,
+#'   with a `warning()` raised for each — caller decides whether to surface it).
+getAllDE <- function(counts_matrix, metadata, condition_col, group_target, group_ref,
+                     dds_full, shrink = TRUE) {
+  out <- list()
+
+  out$deseq2 <- tryCatch({
+    res <- run_bulk_de_dispatch("deseq2", counts_matrix, metadata, condition_col,
+                                group_target, group_ref, dds = dds_full, shrink = shrink)
+    .normalize_de_cols(res, counts_for_basemean = counts_matrix)
+  }, error = function(e) { warning("DESeq2 a échoué : ", conditionMessage(e)); NULL })
+
+  out$edger <- tryCatch({
+    res <- run_bulk_de_dispatch("edger", counts_matrix, metadata, condition_col,
+                                group_target, group_ref)
+    .normalize_de_cols(res, counts_for_basemean = counts_matrix)
+  }, error = function(e) { warning("edgeR a échoué : ", conditionMessage(e)); NULL })
+
+  if (isTRUE(has_limma)) {
+    out$limma <- tryCatch({
+      res <- run_bulk_de_dispatch("limma", counts_matrix, metadata, condition_col,
+                                  group_target, group_ref)
+      .normalize_de_cols(res, counts_for_basemean = counts_matrix)
+    }, error = function(e) { warning("limma-voom a échoué : ", conditionMessage(e)); NULL })
+  }
+
+  out[!vapply(out, is.null, logical(1))]
+}
+
+#' Rank-aggregation consensus across DE methods (mean-rank, dependency-free)
+#'
+#' For each gene tested by ALL supplied methods, ranks genes by p-value
+#' WITHIN each method (rank 1 = most significant), then averages the
+#' per-method ranks — a simple, transparent, well-understood aggregation
+#' scheme (equivalent to a Borda count), deliberately NOT using an extra
+#' package (e.g. RobustRankAggreg) per the project's RAM/CPU-only /
+#' minimal-dependency guidance. Genes a given method didn't report at all
+#' (NA padj — can happen with DESeq2's automatic outlier filtering) are
+#' excluded from the common gene set across methods.
+#'
+#' @param de_list Named list of normalized DE data.frames — typically the
+#'   output of `getAllDE()`. Must contain >= 2 methods.
+#' @param lfc_thresh,padj_thresh Significance thresholds, used only to
+#'   compute `n_methods_sig` / `consistent_sign` — does NOT filter rows out.
+#' @return data.frame ordered by `mean_rank` ascending (most consistently
+#'   significant first), with columns: gene, mean_rank, n_methods_sig,
+#'   mean_log2FC, consistent_sign, plus per-method log2FC_<m>/padj_<m>/rank_<m>.
+rankConsensus <- function(de_list, lfc_thresh = 1, padj_thresh = 0.05) {
+  de_list <- de_list[!vapply(de_list, is.null, logical(1))]
+  if (length(de_list) < 2) stop("Au moins 2 méthodes requises pour un consensus de rang.")
+
+  common_genes <- Reduce(intersect, lapply(de_list, function(d) d$gene[!is.na(d$padj)]))
+  if (length(common_genes) == 0) {
+    stop("Aucun gène commun (avec p-adj valide) entre les méthodes sélectionnées.")
+  }
+
+  per_method <- lapply(names(de_list), function(m) {
+    d <- de_list[[m]]
+    d <- d[match(common_genes, d$gene), c("gene", "log2FoldChange", "padj")]
+    d$rank <- rank(d$padj, ties.method = "average", na.last = "keep")
+    d$sig  <- !is.na(d$padj) & d$padj < padj_thresh & abs(d$log2FoldChange) > lfc_thresh
+    setNames(d, c("gene", paste0("log2FC_", m), paste0("padj_", m), paste0("rank_", m), paste0("sig_", m)))
+  })
+
+  merged <- Reduce(function(a, b) merge(a, b, by = "gene"), per_method)
+
+  rank_cols <- grep("^rank_",   colnames(merged))
+  sig_cols  <- grep("^sig_",    colnames(merged))
+  lfc_cols  <- grep("^log2FC_", colnames(merged))
+
+  merged$mean_rank     <- rowMeans(merged[, rank_cols, drop = FALSE], na.rm = TRUE)
+  merged$n_methods_sig <- rowSums(merged[, sig_cols, drop = FALSE], na.rm = TRUE)
+  merged$mean_log2FC   <- rowMeans(merged[, lfc_cols, drop = FALSE], na.rm = TRUE)
+  merged$consistent_sign <- apply(merged[, lfc_cols, drop = FALSE], 1, function(x) {
+    x <- x[!is.na(x)]
+    length(x) > 0 && (all(x > 0) || all(x < 0))
+  })
+
+  merged[order(merged$mean_rank), ]
+}
+
+
 #' Variance-stabilizing matrix for PCA/heatmap (falls back to log2 for small n)
 
 get_vst_matrix <- function(dds) {
@@ -591,9 +693,156 @@ get_vst_matrix <- function(dds) {
 
 
 
+#' Resolve a categorical ggplot color scale from a palette name
+#'
+#' Centralises palette choice so it can be reused by any bulk plot that
+#' colors by a metadata grouping variable. "manual" takes priority over
+#' `palette` when a non-empty `manual_colors` named vector is supplied —
+#' this lets `palette = "manual"` mean "use whatever the user picked in the
+#' color-picker UI for each level", falling back to the Okabe-Ito sequence
+#' if a level is missing a manual entry (defensive, should not happen in
+#' normal use since the UI always renders one picker per detected level).
+#'
+#' @param palette Character: "default" | "okabeito" | "viridis" | "set2" | "manual".
+#' @param manual_colors Optional named character vector (level -> hex color),
+#'   used only when `palette == "manual"`.
+#' @return A ggplot2 discrete color scale layer, or NULL.
+bulk_color_scale <- function(palette = "default", manual_colors = NULL) {
+  if (identical(palette, "manual") && !is.null(manual_colors) && length(manual_colors) > 0) {
+    return(scale_color_manual(values = manual_colors))
+  }
+  switch(palette %||% "default",
+    okabeito = scale_color_manual(values = c(
+      "#E69F00", "#56B4E9", "#009E73", "#F0E442",
+      "#0072B2", "#D55E00", "#CC79A7", "#999999"
+    )),
+    viridis  = scale_color_viridis_d(),
+    set2     = scale_color_brewer(palette = "Set2"),
+    NULL
+  )
+}
+
+#' Okabe-Ito sequence, recycled — starting point for the manual color pickers
+#' so the user tweaks from a colorblind-safe baseline instead of pure black.
+.default_manual_colors <- function(n) {
+  base <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442",
+           "#0072B2", "#D55E00", "#CC79A7", "#999999")
+  rep_len(base, n)
+}
+
+#' Native HTML5 color-picker row, zero extra package dependency
+#'
+#' Renders one `<input type="color">` per id/label/default triple, wired
+#' straight to Shiny via an inline `onchange` -> `Shiny.setInputValue()`
+#' (no `colourpicker` package needed — keeps the dependency footprint flat,
+#' per project guidance on RAM/CPU-only constraints). Reusable by ANY module
+#' that wants a "Manuel" palette mode — currently wired into PCA; queued for
+#' Heatmap annotation / Volcano / MA in a follow-up.
+#'
+#' @param ns Namespacing function for the CURRENT module server (`session$ns`).
+#' @param ids Character vector of un-namespaced input ids, one per swatch.
+#' @param labels Character vector of display labels (e.g. group level names).
+#' @param defaults Character vector of starting hex colors, same length.
+#' @return A `tagList` — one inline color swatch + label per id.
+manual_color_picker_ui <- function(ns, ids, labels, defaults) {
+  tagList(
+    div(
+      style = "display:flex;flex-wrap:wrap;gap:14px;align-items:center;padding:8px 0;",
+      lapply(seq_along(ids), function(i) {
+        full_id <- ns(ids[i])
+        div(
+          style = "display:flex;align-items:center;gap:6px;",
+          tags$input(
+            type     = "color",
+            id       = full_id,
+            value    = defaults[i],
+            style    = "width:34px;height:28px;border:1px solid #ccc;border-radius:4px;padding:0;cursor:pointer;",
+            onchange = sprintf("Shiny.setInputValue('%s', this.value)", full_id)
+          ),
+          tags$span(labels[i], style = "font-size:0.85em;")
+        )
+      })
+    )
+  )
+}
+
+
+#' Named color vector for categorical levels — ComplexHeatmap annotation flavor
+#'
+#' Companion to `bulk_color_scale()` (which returns a ggplot scale object).
+#' `HeatmapAnnotation(col = list(...))` wants a plain named character vector
+#' instead, hence this separate variant. Returns NULL for "default" so the
+#' caller skips `col=` entirely and ComplexHeatmap keeps its own built-in
+#' auto-assigned colors — fully backward-compatible unless the user
+#' explicitly picks a non-default palette.
+#'
+#' @param levels Character vector of the metadata levels needing a color
+#'   (duplicates allowed — only unique values are used).
+#' @param palette "default" | "okabeito" | "viridis" | "set2" | "manual".
+#' @param manual_colors Optional named vector (level -> hex), used only
+#'   when `palette == "manual"`; missing levels fall back to Okabe-Ito.
+#' @return Named character vector (one color per unique level), or NULL.
+bulk_annotation_colors <- function(levels, palette = "default", manual_colors = NULL) {
+  palette <- palette %||% "default"
+  if (identical(palette, "default")) return(NULL)
+  levels <- unique(as.character(levels))
+  n <- length(levels)
+  if (n == 0) return(NULL)
+
+  if (identical(palette, "manual")) {
+    defaults <- .default_manual_colors(n)
+    vals <- vapply(seq_along(levels), function(i) {
+      v <- if (levels[i] %in% names(manual_colors)) manual_colors[[levels[i]]] else NA_character_
+      if (is.null(v) || is.na(v) || !nzchar(v)) defaults[i] else v
+    }, character(1))
+    return(setNames(vals, levels))
+  }
+
+  cols <- switch(palette,
+    okabeito = .default_manual_colors(n),
+    viridis  = viridisLite::viridis(n),
+    set2     = RColorBrewer::brewer.pal(max(3, n), "Set2")[seq_len(n)],
+    .default_manual_colors(n)
+  )
+  setNames(cols, levels)
+}
+
+#' Semantic role colors (Up / Down / NS) for Volcano + MA-Plot
+#'
+#' Volcano/MA don't color by an arbitrary metadata grouping — they color by
+#' a FIXED 2-3 way significance role. This keeps that role-based scheme
+#' visually in sync with whichever app-wide palette is active, without
+#' forcing the N-level categorical machinery onto a fixed role scheme.
+#'
+#' @param palette "default" | "okabeito" | "viridis" | "set2" | "manual".
+#' @param manual_colors Optional named vector with any of Up/Down/NS keys,
+#'   used only when `palette == "manual"` — overrides just the supplied keys,
+#'   any role not present keeps its current-palette default.
+#' @return Named character vector with keys Up, Down, NS (always all three —
+#'   MA-Plot just uses Up (as "significant") + NS and ignores Down).
+bulk_role_colors <- function(palette = "default", manual_colors = NULL) {
+  presets <- list(
+    default  = c(Up = "#E74C3C", Down = "#2980B9", NS = "#BDC3C7"),
+    okabeito = c(Up = "#D55E00", Down = "#0072B2", NS = "#999999"),
+    viridis  = { v <- viridisLite::viridis(3); c(Up = v[3], Down = v[1], NS = "#BDC3C7") },
+    set2     = { s <- RColorBrewer::brewer.pal(3, "Set2"); c(Up = s[1], Down = s[2], NS = "#BDC3C7") }
+  )
+  base <- presets[[palette %||% "default"]]
+  if (is.null(base)) base <- presets$default
+  if (identical(palette, "manual") && !is.null(manual_colors)) {
+    for (role in intersect(names(manual_colors), names(base))) {
+      v <- manual_colors[[role]]
+      if (!is.null(v) && nzchar(v)) base[[role]] <- v
+    }
+  }
+  base
+}
+
+
 #' Bulk PCA plot colored/shaped by metadata
 
-plot_bulk_pca <- function(vst_matrix, metadata, color_by = NULL, shape_by = NULL, ntop = 500) {
+plot_bulk_pca <- function(vst_matrix, metadata, color_by = NULL, shape_by = NULL, ntop = 500,
+                          palette = "default", manual_colors = NULL) {
 
   rv   <- apply(vst_matrix, 1, var)
 
@@ -665,6 +914,11 @@ plot_bulk_pca <- function(vst_matrix, metadata, color_by = NULL, shape_by = NULL
 
   }
 
+  if (has_color) {
+    sc <- bulk_color_scale(palette, manual_colors)
+    if (!is.null(sc)) p <- p + sc
+  }
+
   p + geom_text(size = 3, vjust = -1, check_overlap = TRUE) +
 
     labs(title = "PCA — Échantillons Bulk RNA-seq",
@@ -685,7 +939,8 @@ plot_bulk_pca <- function(vst_matrix, metadata, color_by = NULL, shape_by = NULL
 
 #' Volcano plot for bulk DE results
 
-plot_volcano_bulk <- function(res_df, lfc_thresh = 1, padj_thresh = 0.05, top_label = 10) {
+plot_volcano_bulk <- function(res_df, lfc_thresh = 1, padj_thresh = 0.05, top_label = 10,
+                              up_color = "#E74C3C", down_color = "#2980B9", ns_color = "#BDC3C7") {
 
   res_df <- res_df[!is.na(res_df$padj), ]
 
@@ -713,7 +968,7 @@ plot_volcano_bulk <- function(res_df, lfc_thresh = 1, padj_thresh = 0.05, top_la
 
     geom_point(alpha = 0.7, size = 1.6) +
 
-    scale_color_manual(values = c(Up = "#E74C3C", Down = "#2980B9", NS = "#BDC3C7")) +
+    scale_color_manual(values = c(Up = up_color, Down = down_color, NS = ns_color)) +
 
     geom_vline(xintercept = c(-lfc_thresh, lfc_thresh), linetype = "dashed", color = "grey40") +
 
@@ -735,7 +990,8 @@ plot_volcano_bulk <- function(res_df, lfc_thresh = 1, padj_thresh = 0.05, top_la
 
 #' MA-plot for bulk DE results
 
-plot_ma_bulk <- function(res_df, lfc_thresh = 1, padj_thresh = 0.05) {
+plot_ma_bulk <- function(res_df, lfc_thresh = 1, padj_thresh = 0.05,
+                         sig_color = "#E74C3C", ns_color = "#BDC3C7") {
 
   res_df <- res_df[!is.na(res_df$padj) & !is.na(res_df$baseMean), ]
 
@@ -745,7 +1001,7 @@ plot_ma_bulk <- function(res_df, lfc_thresh = 1, padj_thresh = 0.05) {
 
     geom_point(alpha = 0.6, size = 1.4) +
 
-    scale_color_manual(values = c(`TRUE` = "#E74C3C", `FALSE` = "#BDC3C7"), guide = "none") +
+    scale_color_manual(values = c(`TRUE` = sig_color, `FALSE` = ns_color), guide = "none") +
 
     geom_hline(yintercept = 0, color = "grey30") +
 
@@ -761,7 +1017,9 @@ plot_ma_bulk <- function(res_df, lfc_thresh = 1, padj_thresh = 0.05) {
 
 #' Heatmap of selected genes (ComplexHeatmap if available, ggplot fallback otherwise)
 
-plot_heatmap_bulk <- function(vst_matrix, genes, metadata, annotation_col = NULL, scale_rows = TRUE) {
+plot_heatmap_bulk <- function(vst_matrix, genes, metadata, annotation_col = NULL, scale_rows = TRUE,
+
+                              palette = "default", manual_colors = NULL) {
 
   genes <- intersect(genes, rownames(vst_matrix))
 
@@ -779,7 +1037,19 @@ plot_heatmap_bulk <- function(vst_matrix, genes, metadata, annotation_col = NULL
 
     if (!is.null(annotation_col) && annotation_col %in% colnames(metadata)) {
 
-      ann <- ComplexHeatmap::HeatmapAnnotation(group = metadata[colnames(mat), annotation_col])
+      grp_vals   <- metadata[colnames(mat), annotation_col]
+
+      ann_colors <- bulk_annotation_colors(grp_vals, palette, manual_colors)
+
+      ann <- if (!is.null(ann_colors)) {
+
+        ComplexHeatmap::HeatmapAnnotation(group = grp_vals, col = list(group = ann_colors))
+
+      } else {
+
+        ComplexHeatmap::HeatmapAnnotation(group = grp_vals)
+
+      }
 
     }
 
@@ -846,7 +1116,9 @@ plot_heatmap_bulk <- function(vst_matrix, genes, metadata, annotation_col = NULL
 
 plot_sample_correlation_heatmap <- function(vst_matrix, metadata = NULL,
 
-                                             annotation_col = NULL, method = "pearson") {
+                                             annotation_col = NULL, method = "pearson",
+
+                                             palette = "default", manual_colors = NULL) {
 
   if (ncol(vst_matrix) < 2) stop("Au moins 2 échantillons requis pour la corrélation.")
 
@@ -860,11 +1132,19 @@ plot_sample_correlation_heatmap <- function(vst_matrix, metadata = NULL,
 
     if (!is.null(metadata) && !is.null(annotation_col) && annotation_col %in% colnames(metadata)) {
 
-      ann <- ComplexHeatmap::HeatmapAnnotation(
+      grp_vals   <- metadata[colnames(cor_mat), annotation_col]
 
-        group = metadata[colnames(cor_mat), annotation_col]
+      ann_colors <- bulk_annotation_colors(grp_vals, palette, manual_colors)
 
-      )
+      ann <- if (!is.null(ann_colors)) {
+
+        ComplexHeatmap::HeatmapAnnotation(group = grp_vals, col = list(group = ann_colors))
+
+      } else {
+
+        ComplexHeatmap::HeatmapAnnotation(group = grp_vals)
+
+      }
 
     }
 
@@ -1102,4 +1382,102 @@ build_contrast_intersection_dt <- function(gene_sets) {
                       n_sets = integer(0), comb_code = character(0)))
   }
   out[order(-out$n_sets, out$sets), ]
+}
+
+
+# =============================================================================
+# Up/Down summary + Scree plot (BingleSeq-inspired additions, Step-2 session)
+# =============================================================================
+
+#' Per-contrast Up/Down/Significant summary table (active thresholds, live)
+#'
+#' Single source of truth for the "n_sig/n_up/n_down per contrast" summary,
+#' shared by the HTML/PDF report (mod_bulk_report.R) and the "Resume Up/Down"
+#' tab (mod_bulk_de.R) — avoids the two diverging the way the report-only
+#' inline version used to, before this was extracted.
+#'
+#' @param contrasts Named list of DE result data.frames (log2FoldChange, padj).
+#' @param lfc_thresh,padj_thresh Significance thresholds, evaluated NOW.
+#' @param active_contrast Optional name flagged TRUE in the `actif` column.
+#' @return data.frame(Contraste, n_testes, n_sig, n_up, n_down, actif)
+summarize_contrasts_updown <- function(contrasts, lfc_thresh = 1, padj_thresh = 0.05,
+                                       active_contrast = NULL) {
+  contrasts <- contrasts %||% list()
+  if (length(contrasts) == 0) {
+    return(data.frame(Contraste = character(0), n_testes = integer(0),
+                      n_sig = integer(0), n_up = integer(0), n_down = integer(0),
+                      actif = logical(0)))
+  }
+  do.call(rbind, lapply(names(contrasts), function(nm) {
+    r   <- contrasts[[nm]]
+    sig <- !is.na(r$padj) & r$padj < padj_thresh & abs(r$log2FoldChange) > lfc_thresh
+    data.frame(
+      Contraste = nm,
+      n_testes  = nrow(r),
+      n_sig     = sum(sig),
+      n_up      = sum(sig & r$log2FoldChange > 0),
+      n_down    = sum(sig & r$log2FoldChange < 0),
+      actif     = identical(nm, active_contrast),
+      stringsAsFactors = FALSE
+    )
+  }))
+}
+
+#' Up/Down summary barchart — one or several contrasts side by side
+#' @param summary_df Output of `summarize_contrasts_updown()`.
+#' @return ggplot object (grouped bar chart, counts labelled).
+plot_updown_barchart <- function(summary_df) {
+  if (is.null(summary_df) || nrow(summary_df) == 0) {
+    stop("Aucun contraste calculé.")
+  }
+  long_df <- data.frame(
+    Contraste = rep(summary_df$Contraste, 2),
+    Direction = rep(c("Up", "Down"), each = nrow(summary_df)),
+    Count     = c(summary_df$n_up, summary_df$n_down)
+  )
+  long_df$Contraste <- factor(long_df$Contraste, levels = summary_df$Contraste)
+  long_df$Direction <- factor(long_df$Direction, levels = c("Up", "Down"))
+
+  ggplot(long_df, aes(x = Contraste, y = Count, fill = Direction)) +
+    geom_col(position = position_dodge(width = 0.7), width = 0.6) +
+    geom_text(aes(label = Count), position = position_dodge(width = 0.7),
+              vjust = -0.3, size = 3.4) +
+    scale_fill_manual(values = c(Up = "#E74C3C", Down = "#2980B9")) +
+    labs(title = "Gènes significatifs Up / Down par contraste",
+         x = NULL, y = "Nombre de gènes", fill = NULL) +
+    theme_minimal(base_size = 12) +
+    theme(plot.title = element_text(face = "bold", size = 14),
+          axis.text.x = element_text(angle = if (nrow(summary_df) > 4) 30 else 0, hjust = 1))
+}
+
+#' Scree plot (variance expliquée par composante) — PCA companion
+#'
+#' Reuses the exact same top-variable-gene selection as `plot_bulk_pca()`
+#' (ntop = 500, scale. = FALSE) so the % variance shown here matches what
+#' PC1/PC2 actually represent on the PCA tab.
+#'
+#' @param vst_matrix Matrix, VST-transformed expression (genes x samples).
+#' @param ntop Number of most-variable genes used (must match plot_bulk_pca()).
+#' @param max_pc Maximum number of components to display.
+#' @return ggplot object (bars = % variance per PC, line = cumulative %).
+plot_scree_bulk <- function(vst_matrix, ntop = 500, max_pc = 10) {
+  rv   <- apply(vst_matrix, 1, var)
+  ntop <- min(ntop, nrow(vst_matrix))
+  sel  <- order(rv, decreasing = TRUE)[seq_len(ntop)]
+  pca  <- prcomp(t(vst_matrix[sel, , drop = FALSE]), scale. = FALSE)
+
+  n_pc <- min(max_pc, length(pca$sdev))
+  pct  <- 100 * pca$sdev[seq_len(n_pc)]^2 / sum(pca$sdev^2)
+  df <- data.frame(PC = factor(paste0("PC", seq_len(n_pc)), levels = paste0("PC", seq_len(n_pc))),
+                   pct = pct, cum_pct = cumsum(pct))
+
+  ggplot(df, aes(x = PC)) +
+    geom_col(aes(y = pct), fill = "#18BC9C", width = 0.6) +
+    geom_line(aes(y = cum_pct, group = 1), color = "#2C3E50", linewidth = 0.8) +
+    geom_point(aes(y = cum_pct), color = "#2C3E50", size = 2) +
+    geom_text(aes(y = pct, label = paste0(round(pct, 1), "%")), vjust = -0.6, size = 3) +
+    labs(title = "Scree Plot — Variance Expliquée", x = NULL,
+         y = "% Variance (barres) / % Cumulée (ligne)") +
+    theme_minimal(base_size = 12) +
+    theme(plot.title = element_text(face = "bold", size = 13))
 }

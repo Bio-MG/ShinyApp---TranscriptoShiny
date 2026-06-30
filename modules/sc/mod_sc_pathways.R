@@ -1,12 +1,12 @@
 # =============================================================================
 # mod_sc_pathways.R  —  Child 6: GO / KEGG / Reactome enrichment
 # =============================================================================
-# Depends on global.R:
+# Depends on helpers_pathway.R (sourced by global.R, not defined there):
 #   run_pathway_enrichment(genes, organism, database, pvalcutoff)
 #   -> data.frame: ID, Description, p.adjust, Count, GeneRatio
-#   plot_pathway_barplot(df, db_label, top_n)   -- shared helper (Section 9)
-#   plot_pathway_dotplot(df, db_label, top_n)   -- shared helper (Section 9)
-#   build_pathway_dt(df)                        -- shared helper (Section 9)
+#   plot_pathway_barplot(df, db_label, top_n)
+#   plot_pathway_dotplot(df, db_label, top_n)
+#   build_pathway_dt(df)
 #
 # State contract (shared_rv):
 #   READ  : shared_rv$markers_data     -> data.frame (from mod_sc_markers)

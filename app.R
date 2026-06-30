@@ -12,6 +12,7 @@ source("helpers_pathway.R")
 source("modules/import/mod_import_sc.R")
 source("modules/import/mod_import_bulk.R")
 source("modules/import/mod_import_spatial.R")
+source("modules/import/mod_geo.R")
 
 source("modules/sc/mod_sc_pipeline.R")
 source("modules/sc/mod_sc_annotation.R")
@@ -171,7 +172,9 @@ ui <- page_navbar(
 
               icon = icon("map"),
 
-              mod_import_spatial_ui("import_spatial"))
+              mod_import_spatial_ui("import_spatial")),
+    
+    nav_panel("GEO", mod_geo_ui("geo")) ##ajout verif
 
   ),
 
@@ -236,6 +239,8 @@ server <- function(input, output, session) {
   mod_import_bulk_server("import_bulk", global_data)
 
   mod_import_spatial_server("import_spatial", global_data)
+  
+  mod_geo_server("geo", shared_rv) #ajout à verifier
 
   
 

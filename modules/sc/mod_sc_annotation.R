@@ -7,7 +7,8 @@
 #   path, so any direct showNotification() there would throw
 #   "Operation not allowed without an active reactive context".
 #
-# Depends on global.R / scran (no extra functions needed beyond Seurat + celldex)
+# No custom helper file needed — calls Seurat/SingleR/celldex APIs directly
+# (packages attached via global.R; no project-specific wrapper function).
 #
 # State contract (shared_rv):
 #   WRITE : shared_rv$active_tab -> "tab_viz" after successful annotation

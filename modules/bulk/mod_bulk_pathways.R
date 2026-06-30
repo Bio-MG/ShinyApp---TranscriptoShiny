@@ -1,7 +1,7 @@
 # =============================================================================
 # mod_bulk_pathways.R  —  Bulk Child 3: Pathway Enrichment (ORA + GSEA)
 # =============================================================================
-# Depends on global.R:
+# Depends on helpers_pathway.R (sourced by global.R, not defined there):
 #   run_pathway_enrichment(genes, organism, database, pval_cutoff)
 #   run_gsea_enrichment(de_results, organism, database, pval_cutoff)
 #   plot_pathway_barplot(), plot_pathway_dotplot(), build_pathway_dt()
@@ -76,11 +76,16 @@ mod_bulk_pathways_ui <- function(id) {
 
 mod_bulk_pathways_output_ui <- function(id) {
   ns <- NS(id)
-  navset_tab(
-    nav_panel("Barplot Top 15", plotOutput(ns("pathway_barplot"), height = "500px")),
-    nav_panel("Dotplot",        plotOutput(ns("pathway_dotplot"), height = "500px")),
-    nav_panel("Table",          DTOutput(ns("pathway_table"))),
-    nav_panel("Courbe GSEA",    uiOutput(ns("gsea_curve_ui")))
+  card(
+    full_screen = TRUE,
+    max_height  = "900px",
+    card_header("Pathway Enrichment"),
+    navset_tab(
+      nav_panel("Barplot Top 15", plotOutput(ns("pathway_barplot"), height = "580px")),
+      nav_panel("Dotplot",        plotOutput(ns("pathway_dotplot"), height = "580px")),
+      nav_panel("Table",          DTOutput(ns("pathway_table"))),
+      nav_panel("Courbe GSEA",    uiOutput(ns("gsea_curve_ui")))
+    )
   )
 }
 
