@@ -1,9 +1,9 @@
-# modules/mod_import_bulk.R - Import RNA Bulk
+# modules/import/mod_import_bulk.R - Import RNA Bulk
 # v3: ajout du mode "One file per sample" (import multi-fichiers bulk)
 #     en plus du mode "Merged matrix" existant (inchangé).
 #
-# Depends on global.R: infer_metadata_from_names(), preview_metadata_split(),
-# detect_gene_id_type()
+# Depends on helpers_io.R (sourced by global.R, not defined there):
+# infer_metadata_from_names(), preview_metadata_split(), detect_gene_id_type()
 
 # ── Helpers mode per-sample ───────────────────────────────────────────────────
 

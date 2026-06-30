@@ -119,19 +119,8 @@ mod_bulk_report_server <- function(id, global_data, shared_rv) {
         all_contrasts_summary <- if (length(all_contrasts) == 0) {
           NULL
         } else {
-          do.call(rbind, lapply(names(all_contrasts), function(nm) {
-            r <- all_contrasts[[nm]]
-            sig <- !is.na(r$padj) & r$padj < padj_thresh_now & abs(r$log2FoldChange) > lfc_thresh_now
-            data.frame(
-              Contraste = nm,
-              n_testes  = nrow(r),
-              n_sig     = sum(sig),
-              n_up      = sum(sig & r$log2FoldChange > 0),
-              n_down    = sum(sig & r$log2FoldChange < 0),
-              actif     = identical(nm, ac),
-              stringsAsFactors = FALSE
-            )
-          }))
+          summarize_contrasts_updown(all_contrasts, lfc_thresh = lfc_thresh_now,
+                                     padj_thresh = padj_thresh_now, active_contrast = ac)
         }
 
         template_path <- file.path("modules", "bulk", "bulk_report_template.Rmd")  # était file.path("modules", ...)

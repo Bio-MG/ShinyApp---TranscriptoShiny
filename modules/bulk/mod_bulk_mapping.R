@@ -9,7 +9,7 @@
 # global_data$bulk_obj$counts; the mapped result is exposed via shared_rv so
 # mod_bulk_filter (Step 1) can transparently pick it up.
 #
-# Depends on global.R:
+# Depends on helpers_io.R (sourced by global.R, not defined there):
 #   detect_gene_id_type(), remap_gene_ids_to_symbol()
 #
 # State contract (shared_rv):

@@ -19,10 +19,13 @@
 #     full gene/log2FC/baseMean/padj tooltips) — toggled via a checkbox, PNG
 #     export always uses the static ggplot version regardless of the toggle.
 #
-# Depends on global.R:
-#   has_limma, check_design_confounding(), validate_bulk_design(), build_dds(),
+# Depends on global.R: has_limma (package-availability flag, set there).
+# Depends on helpers_bulk.R (sourced by global.R, not defined there):
+#   check_design_confounding(), validate_bulk_design(), build_dds(),
 #   run_bulk_de_dispatch(), .normalize_de_cols(), plot_volcano_bulk(),
-#   plot_ma_bulk(), plot_heatmap_bulk(), build_de_results_dt()
+#   plot_ma_bulk(), plot_heatmap_bulk(), build_de_results_dt(),
+#   summarize_contrasts_updown(), plot_updown_barchart(),
+#   build_contrast_gene_sets() (Venn/UpSet)
 #
 # State contract (shared_rv):
 #   READ  : shared_rv$filtered_counts  — written by mod_bulk_filter (Step 1)
@@ -81,6 +84,11 @@ mod_bulk_de_ui <- function(id) {
 
     uiOutput(ns("pairwise_btn_ui")),
 
+    actionButton(ns("run_multimethod"), "🔬 Comparer DESeq2 / edgeR / limma-voom",
+                 class = "btn-outline-warning w-100 mt-1", icon = icon("scale-balanced")),
+    helpText("Lance le MÊME contraste (Cible/Référence ci-dessus) avec les 3 moteurs, ",
+             "puis calcule un consensus de rang — voir l'onglet \"Multi-méthodes\"."),
+
     hr(),
 
     h6("Contrastes calculés:", style = "font-weight:bold;"),
@@ -95,9 +103,13 @@ mod_bulk_de_ui <- function(id) {
 
 mod_bulk_de_volcano_ui <- function(id) {
   ns <- NS(id)
-  tagList(
+  card(
+    full_screen = TRUE,
+    max_height  = "850px",
+    card_header("Volcano Plot"),
     uiOutput(ns("sync_warning_banner")),
     checkboxInput(ns("volcano_interactive"), "📊 Interactif (Plotly — survol pour détails gène)", value = FALSE),
+    uiOutput(ns("volcano_manual_palette_ui")),
     uiOutput(ns("volcano_container")),
     downloadButton(ns("dl_volcano_png"), "Export PNG (statique)", class = "btn-sm btn-secondary mt-2")
   )
@@ -108,8 +120,14 @@ mod_bulk_de_volcano_ui <- function(id) {
 
 mod_bulk_de_ma_ui <- function(id) {
   ns <- NS(id)
-  tagList(
+  card(
+    full_screen = TRUE,
+    max_height  = "850px",
+    card_header("MA-Plot"),
     checkboxInput(ns("ma_interactive"), "📊 Interactif (Plotly — survol pour détails gène)", value = FALSE),
+    helpText(style = "font-size:0.8em;",
+            "Couleurs (Significatif / Non-sig.) réglables depuis l'onglet Volcano Plot ",
+            "(palette \"Manuel\" dans la barre latérale Étape 1)."),
     uiOutput(ns("ma_container")),
     downloadButton(ns("dl_ma_png"), "Export PNG (statique)", class = "btn-sm btn-secondary mt-2")
   )
@@ -120,13 +138,24 @@ mod_bulk_de_ma_ui <- function(id) {
 
 mod_bulk_de_heatmap_ui <- function(id) {
   ns <- NS(id)
-  tagList(
+  card(
+    full_screen = TRUE,
+    max_height  = "900px",
+    card_header("Heatmap"),
     uiOutput(ns("sync_warning_banner_heatmap")),
     fluidRow(
       column(4, numericInput(ns("heatmap_top_n"), "Top N gènes (par p-adj)", value = 30, min = 2, max = 200)),
-      column(4, selectInput(ns("heatmap_annot"), "Annotation colonnes", choices = NULL))
+      column(4, selectizeInput(ns("heatmap_annot"), "Annotation colonnes", choices = NULL,
+                               options = list(placeholder = "Aucun", allowEmptyOption = TRUE))),
+      column(4, selectInput(ns("heatmap_direction"), "Sous-ensemble",
+                            choices = c("Tous (par p-adj)" = "all",
+                                        "Significatifs (Up+Down)" = "sig",
+                                        "Up-régulés" = "up",
+                                        "Down-régulés" = "down",
+                                        "Non-significatifs" = "ns")))
     ),
-    div(style = "min-height:600px;", plotOutput(ns("plot_heatmap"), height = "600px")),
+    uiOutput(ns("heatmap_manual_palette_ui")),
+    plotOutput(ns("plot_heatmap"), height = "660px"),
     fluidRow(
       column(6, selectInput(ns("heatmap_export_fmt"), "Format export", choices = c("PNG" = "png", "PDF" = "pdf"))),
       column(6, div(style = "margin-top:25px;", downloadButton(ns("dl_heatmap"), "📥 Export Heatmap", class = "btn-sm btn-secondary w-100")))
@@ -139,7 +168,10 @@ mod_bulk_de_heatmap_ui <- function(id) {
 
 mod_bulk_de_table_ui <- function(id) {
   ns <- NS(id)
-  tagList(
+  card(
+    full_screen = TRUE,
+    max_height  = "850px",
+    card_header("Table DE"),
     div(
       style = "display:flex;justify-content:flex-end;gap:5px;margin-bottom:5px;",
       downloadButton(ns("dl_de_csv"),   "CSV",   class = "btn-sm btn-primary"),
@@ -150,11 +182,36 @@ mod_bulk_de_table_ui <- function(id) {
 }
 
 
+# ── UI: Résumé Up/Down tab (barchart, all computed contrasts) ────────────────
+
+mod_bulk_de_summary_ui <- function(id) {
+  ns <- NS(id)
+  card(
+    full_screen = TRUE,
+    max_height  = "900px",
+    card_header("Résumé Up/Down"),
+    div(class = "alert alert-light", style = "font-size:0.85em;border-left:3px solid #18BC9C;",
+       bsicons::bs_icon("info-circle"),
+       " Nombre de gènes Up / Down par contraste calculé, selon les seuils |Log2FC| / p-adj ",
+       "actuels (Étape 2) — se met à jour en direct si vous changez les seuils, sans recalcul DE."),
+    plotOutput(ns("plot_updown"), height = "480px"),
+    downloadButton(ns("dl_updown_png"), "Export PNG", class = "btn-sm btn-secondary mt-2"),
+    hr(),
+    h6("Table récapitulative", style = "font-weight:bold;"),
+    DTOutput(ns("table_updown")),
+    downloadButton(ns("dl_updown_csv"), "Export CSV", class = "btn-sm btn-info mt-2")
+  )
+}
+
+
 # ── UI: Venn/UpSet tab (compare gene sets across contrasts) ──────────────────
 
 mod_bulk_de_venn_ui <- function(id) {
   ns <- NS(id)
-  tagList(
+  card(
+    full_screen = TRUE,
+    max_height  = "950px",
+    card_header("Venn / UpSet"),
     div(class = "alert alert-light", style = "font-size:0.85em;border-left:3px solid #9B59B6;",
        bsicons::bs_icon("info-circle"),
        " Compare les gènes significatifs ENTRE plusieurs contrastes (utile après un run ",
@@ -174,8 +231,8 @@ mod_bulk_de_venn_ui <- function(id) {
     checkboxInput(ns("venn_direction_aware"),
                  "Distinguer Up / Down (chaque contraste devient 2 ensembles)", value = FALSE),
 
-    div(style = "min-height:500px;min-width:600px;overflow-x:auto;",
-       plotOutput(ns("venn_plot"), height = "500px")),
+    div(style = "min-width:600px;overflow-x:auto;",
+       plotOutput(ns("venn_plot"), height = "560px")),
 
     fluidRow(
       column(6, downloadButton(ns("dl_venn_png"), "Export PNG", class = "btn-sm btn-secondary w-100")),
@@ -186,6 +243,44 @@ mod_bulk_de_venn_ui <- function(id) {
     hr(),
     h6("Table des intersections", style = "font-weight:bold;"),
     DTOutput(ns("venn_intersection_table"))
+  )
+}
+
+
+# ── UI: Multi-méthodes tab (getAllDE + rankConsensus + Venn 3-méthodes) ──────
+
+mod_bulk_de_multimethod_ui <- function(id) {
+  ns <- NS(id)
+  card(
+    full_screen = TRUE,
+    max_height  = "950px",
+    card_header("Multi-méthodes (DESeq2 / edgeR / limma-voom)"),
+    div(class = "alert alert-light", style = "font-size:0.85em;border-left:3px solid #F39C12;",
+       bsicons::bs_icon("info-circle"),
+       " Compare le MÊME contraste (Cible/Référence du panneau Step 2) avec les 3 moteurs ",
+       "statistiques disponibles. Le consensus de rang moyenne le classement p-value de ",
+       "chaque méthode — un gène cohérent entre méthodes (rang faible, même sens du Log2FC) ",
+       "est un candidat plus robuste qu'un gène significatif sur une seule méthode."),
+
+    uiOutput(ns("multimethod_status_ui")),
+
+    navset_tab(
+      nav_panel(
+        "Venn / UpSet (méthodes)",
+        radioButtons(ns("mm_venn_type"), "Type de diagramme",
+                    choices = c("UpSet (recommandé)" = "upset", "Venn (2-3 méthodes)" = "venn"),
+                    selected = "upset", inline = TRUE),
+        plotOutput(ns("mm_venn_plot"), height = "480px"),
+        downloadButton(ns("dl_mm_venn_png"), "Export PNG", class = "btn-sm btn-secondary mt-2")
+      ),
+      nav_panel(
+        "Table consensus",
+        helpText("Triée par rang moyen (mean_rank) — les gènes les plus consistants entre ",
+                 "méthodes apparaissent en premier."),
+        DTOutput(ns("mm_consensus_table")),
+        downloadButton(ns("dl_mm_consensus_csv"), "Export CSV", class = "btn-sm btn-info mt-2")
+      )
+    )
   )
 }
 
@@ -221,7 +316,7 @@ mod_bulk_de_server <- function(id, global_data, shared_rv) {
 
       updateSelectInput(session, "condition_col", choices = cat_cols)
       updateSelectizeInput(session, "covariates",  choices = cat_cols, server = TRUE)
-      updateSelectInput(session, "heatmap_annot",  choices = c("Aucun" = "", cat_cols))
+      updateSelectizeInput(session, "heatmap_annot", choices = cat_cols, server = FALSE)
     }, ignoreNULL = TRUE)
 
     # ── Update group_ref/group_target when condition_col changes ────────────
@@ -565,15 +660,43 @@ mod_bulk_de_server <- function(id, global_data, shared_rv) {
     # =========================================================================
     # VOLCANO — static (export) + optional interactive (plotly, native tooltip)
     # =========================================================================
+    # Up/Down/NS are FIXED semantic roles (not an arbitrary N-level grouping),
+    # so this reuses bulk_role_colors() rather than the per-level picker used
+    # for PCA/Heatmap/QC — same "Manuel" MODE (shared_rv$bulk_palette, set in
+    # the Step 1 sidebar), but only 3 swatches regardless of dataset.
+    output$volcano_manual_palette_ui <- renderUI({
+      if (!identical(shared_rv$bulk_palette, "manual")) return(NULL)
+      div(
+        class = "border rounded p-2 mb-2", style = "background:#f8f9fa;",
+        h6("Couleurs manuelles — Up / Down / Non-significatif",
+           style = "font-size:0.85em;font-weight:bold;margin-bottom:6px;"),
+        manual_color_picker_ui(ns, c("role_color_up", "role_color_down", "role_color_ns"),
+                               c("Up-régulé", "Down-régulé", "Non-significatif"),
+                               c("#E74C3C", "#2980B9", "#BDC3C7"))
+      )
+    })
+
+    volcano_role_colors <- reactive({
+      pal <- shared_rv$bulk_palette %||% "default"
+      manual_vec <- if (identical(pal, "manual")) {
+        c(Up = input$role_color_up %||% "#E74C3C",
+          Down = input$role_color_down %||% "#2980B9",
+          NS = input$role_color_ns %||% "#BDC3C7")
+      } else NULL
+      bulk_role_colors(pal, manual_vec)
+    })
+
     volcano_plot <- reactive({
       req(active_de_results())
-      plot_volcano_bulk(active_de_results(), lfc_thresh = input$lfc_thresh, padj_thresh = input$padj_thresh)
+      rc <- volcano_role_colors()
+      plot_volcano_bulk(active_de_results(), lfc_thresh = input$lfc_thresh, padj_thresh = input$padj_thresh,
+                        up_color = rc[["Up"]], down_color = rc[["Down"]], ns_color = rc[["NS"]])
     })
     output$plot_volcano <- renderPlot({ volcano_plot() })
 
     output$volcano_container <- renderUI({
-      if (isTRUE(input$volcano_interactive)) plotlyOutput(ns("plot_volcano_ly"), height = "600px")
-      else plotOutput(ns("plot_volcano"), height = "600px")
+      if (isTRUE(input$volcano_interactive)) plotlyOutput(ns("plot_volcano_ly"), height = "650px")
+      else plotOutput(ns("plot_volcano"), height = "650px")
     })
 
     output$plot_volcano_ly <- renderPlotly({
@@ -586,7 +709,7 @@ mod_bulk_de_server <- function(id, global_data, shared_rv) {
         res$padj < pval & res$log2FoldChange < -lfc ~ "Down",
         TRUE ~ "NS"
       )
-      color_map <- c(Up = "#E74C3C", Down = "#2980B9", NS = "#BDC3C7")
+      color_map <- volcano_role_colors()
 
       plot_ly(
         data = res, x = ~log2FoldChange, y = ~-log10(padj + 1e-300),
@@ -603,9 +726,9 @@ mod_bulk_de_server <- function(id, global_data, shared_rv) {
           yaxis  = list(title = "-log10(P-adj)"),
           shapes = list(
             list(type = "line", x0 = lfc, x1 = lfc, y0 = 0, y1 = 1, yref = "paper",
-                line = list(dash = "dot", color = "#E74C3C", width = 1)),
+                line = list(dash = "dot", color = unname(color_map[["Up"]]), width = 1)),
             list(type = "line", x0 = -lfc, x1 = -lfc, y0 = 0, y1 = 1, yref = "paper",
-                line = list(dash = "dot", color = "#2980B9", width = 1)),
+                line = list(dash = "dot", color = unname(color_map[["Down"]]), width = 1)),
             list(type = "line", x0 = min(res$log2FoldChange, na.rm = TRUE),
                 x1 = max(res$log2FoldChange, na.rm = TRUE),
                 y0 = -log10(pval), y1 = -log10(pval),
@@ -623,15 +746,20 @@ mod_bulk_de_server <- function(id, global_data, shared_rv) {
     # =========================================================================
     # MA-PLOT — static (export) + optional interactive (plotly, native tooltip)
     # =========================================================================
+    # Reuses the SAME role-color picker as Volcano (Up = "significant" here,
+    # NS unchanged) — one fewer control to keep in sync, see helpText on the
+    # MA-Plot tab pointing back to Volcano.
     ma_plot <- reactive({
       req(active_de_results())
-      plot_ma_bulk(active_de_results(), lfc_thresh = input$lfc_thresh, padj_thresh = input$padj_thresh)
+      rc <- volcano_role_colors()
+      plot_ma_bulk(active_de_results(), lfc_thresh = input$lfc_thresh, padj_thresh = input$padj_thresh,
+                  sig_color = rc[["Up"]], ns_color = rc[["NS"]])
     })
     output$plot_ma <- renderPlot({ ma_plot() })
 
     output$ma_container <- renderUI({
-      if (isTRUE(input$ma_interactive)) plotlyOutput(ns("plot_ma_ly"), height = "550px")
-      else plotOutput(ns("plot_ma"), height = "550px")
+      if (isTRUE(input$ma_interactive)) plotlyOutput(ns("plot_ma_ly"), height = "650px")
+      else plotOutput(ns("plot_ma"), height = "650px")
     })
 
     output$plot_ma_ly <- renderPlotly({
@@ -673,8 +801,23 @@ mod_bulk_de_server <- function(id, global_data, shared_rv) {
       req(shared_rv$vst_mat, active_de_results())
       res <- active_de_results()
       res <- res[!is.na(res$padj), ]
+
+      # ── Directional subset (BingleSeq-style: Tous/Sig/Up/Down/Non-sig) ────
+      # Applied BEFORE ranking by p-adj, on the CURRENT lfc/padj thresholds —
+      # consistent with Volcano/MA-plot which already read the same inputs.
+      dir_choice <- input$heatmap_direction %||% "all"
+      lfc <- input$lfc_thresh; pval <- input$padj_thresh
+      is_sig <- !is.na(res$padj) & res$padj < pval & abs(res$log2FoldChange) > lfc
+      res <- switch(dir_choice,
+        sig  = res[is_sig, , drop = FALSE],
+        up   = res[is_sig & res$log2FoldChange > 0, , drop = FALSE],
+        down = res[is_sig & res$log2FoldChange < 0, , drop = FALSE],
+        ns   = res[!is_sig, , drop = FALSE],
+        res  # "all" — unchanged, original behaviour
+      )
       validate(need(nrow(res) > 0,
-                    "Aucun gène avec p-adj valide (DESeq2 a peut-être filtré tous les outliers)."))
+                    "Aucun gène dans ce sous-ensemble (Up/Down/Sig/Non-sig) avec les seuils actuels."))
+
       ranked_genes <- res$gene[order(res$padj)]
       valid_genes  <- intersect(ranked_genes, rownames(shared_rv$vst_mat))
       genes        <- head(valid_genes, input$heatmap_top_n)
@@ -686,9 +829,53 @@ mod_bulk_de_server <- function(id, global_data, shared_rv) {
       genes
     })
 
+    # ── Manual palette: own picker, keyed to heatmap_annot's levels — kept
+    #    SEPARATE from PCA/QC pickers since heatmap_annot may point to yet
+    #    another metadata column. Same shared_rv$bulk_palette MODE (Step 1
+    #    sidebar) decides whether "Manuel" is active app-wide.
+    manual_heatmap_levels <- reactive({
+      req(global_data$bulk_obj$metadata, input$heatmap_annot)
+      req(nzchar(input$heatmap_annot))
+      lvls <- sort(unique(stats::na.omit(as.character(global_data$bulk_obj$metadata[[input$heatmap_annot]]))))
+      req(length(lvls) > 0)
+      lvls
+    })
+
+    output$heatmap_manual_palette_ui <- renderUI({
+      if (!identical(shared_rv$bulk_palette, "manual")) return(NULL)
+      if (!nzchar(input$heatmap_annot %||% "")) {
+        return(div(class = "alert alert-warning", style = "font-size:0.8em;",
+                   "Sélectionnez d'abord une \"Annotation colonnes\" pour personnaliser ses couleurs."))
+      }
+      lvls <- tryCatch(manual_heatmap_levels(), error = function(e) character(0))
+      if (length(lvls) == 0) return(NULL)
+      ids <- paste0("heatmap_manual_color_", seq_along(lvls))
+      div(
+        class = "border rounded p-2 mb-2", style = "background:#f8f9fa;",
+        h6(paste("Couleurs manuelles —", input$heatmap_annot),
+           style = "font-size:0.85em;font-weight:bold;margin-bottom:6px;"),
+        manual_color_picker_ui(ns, ids, lvls, .default_manual_colors(length(lvls)))
+      )
+    })
+
+    heatmap_manual_colors <- reactive({
+      if (!identical(shared_rv$bulk_palette, "manual")) return(NULL)
+      lvls <- tryCatch(manual_heatmap_levels(), error = function(e) character(0))
+      if (length(lvls) == 0) return(NULL)
+      defaults <- .default_manual_colors(length(lvls))
+      vals <- vapply(seq_along(lvls), function(i) {
+        v <- input[[paste0("heatmap_manual_color_", i)]]
+        if (is.null(v) || !nzchar(v)) defaults[i] else v
+      }, character(1))
+      setNames(vals, lvls)
+    })
+
     .heatmap_obj <- function() {
       annot <- if (nzchar(input$heatmap_annot %||% "")) input$heatmap_annot else NULL
-      plot_heatmap_bulk(shared_rv$vst_mat, heatmap_genes(), global_data$bulk_obj$metadata, annotation_col = annot)
+      pal   <- shared_rv$bulk_palette %||% "default"
+      plot_heatmap_bulk(shared_rv$vst_mat, heatmap_genes(), global_data$bulk_obj$metadata,
+                        annotation_col = annot, palette = pal,
+                        manual_colors = if (identical(pal, "manual")) heatmap_manual_colors() else NULL)
     }
 
     output$plot_heatmap <- renderPlot({ .heatmap_obj() })
@@ -726,6 +913,192 @@ mod_bulk_de_server <- function(id, global_data, shared_rv) {
           write.csv(active_de_results(), file, row.names = FALSE)
         }
       }
+    )
+
+    # ── Résumé Up/Down — barchart across ALL computed contrasts ─────────────
+    # Reuses the same helper as the HTML/PDF report (summarize_contrasts_updown,
+    # helpers_bulk.R) — single source of truth, live on input$lfc_thresh/padj_thresh.
+    updown_summary <- reactive({
+      req(length(shared_rv$contrasts) > 0)
+      summarize_contrasts_updown(shared_rv$contrasts, lfc_thresh = input$lfc_thresh,
+                                 padj_thresh = input$padj_thresh,
+                                 active_contrast = shared_rv$active_contrast)
+    })
+
+    updown_plot <- reactive({ plot_updown_barchart(updown_summary()) })
+
+    output$plot_updown <- renderPlot({
+      validate(need(length(shared_rv$contrasts) > 0,
+                    "Aucun contraste calculé — lancez l'Étape 2 (DE) d'abord."))
+      updown_plot()
+    })
+
+    output$dl_updown_png <- downloadHandler(
+      filename = function() paste0("updown_summary_", Sys.Date(), ".png"),
+      content  = function(file) ggsave(file, plot = updown_plot(), width = 8, height = 5.5, dpi = 300)
+    )
+
+    output$table_updown <- renderDT({
+      req(updown_summary())
+      df <- updown_summary()
+      df$Actif <- ifelse(df$actif, "→ actif", "")
+      df$actif <- NULL
+      colnames(df) <- c("Contraste", "Gènes testés", "Significatifs", "Up", "Down", "Actif")
+      datatable(df, rownames = FALSE, options = list(pageLength = 10, scrollX = TRUE))
+    })
+
+    output$dl_updown_csv <- downloadHandler(
+      filename = function() paste0("updown_summary_", Sys.Date(), ".csv"),
+      content  = function(file) write.csv(updown_summary(), file, row.names = FALSE)
+    )
+
+    # =========================================================================
+    # MULTI-MÉTHODES — getAllDE() + rankConsensus() + Venn/UpSet ACROSS methods
+    # (same contraste cible/référence as Step 2, run through all 3 engines)
+    # =========================================================================
+    multi_de_rv           <- reactiveVal(NULL)  # named list: deseq2/edger/limma data.frames
+    consensus_rv          <- reactiveVal(NULL)  # rankConsensus() data.frame
+    multimethod_status_rv <- reactiveVal(NULL)
+
+    observeEvent(input$run_multimethod, {
+      req(shared_rv$filtered_counts, input$condition_col, input$group_ref, input$group_target)
+
+      if (input$group_ref == input$group_target) {
+        showNotification("⚠️ Le groupe Référence et le groupe Cible doivent être différents.",
+                         type = "warning"); return()
+      }
+      meta <- global_data$bulk_obj$metadata
+
+      # Same hard blocks as the single-engine run (confounding / single-level
+      # covariate) — duplicated check, not factored out, to avoid touching the
+      # already-tested single-engine path while adding this new one.
+      covariates_in_use <- input$covariates %||% character(0)
+      confounded <- Filter(function(cov) check_design_confounding(meta, input$condition_col, cov),
+                           covariates_in_use)
+      if (length(confounded) > 0) {
+        showNotification(sprintf("❌ Covariable(s) confondue(s) avec '%s' : %s.",
+                                 input$condition_col, paste(confounded, collapse = ", ")),
+                         type = "error", duration = 10); return()
+      }
+
+      p <- shiny::Progress$new(); on.exit(p$close())
+      p$set(message = "Comparaison multi-méthodes...", value = 0.15)
+
+      tryCatch({
+        design_str <- .design_str()
+
+        # Reuse the existing dds_full ONLY if it already matches this exact
+        # design (cheap heuristic: same design formula string) — otherwise
+        # refit. Avoids re-running DESeq() needlessly when the user just
+        # clicked "Comparer" right after "Lancer l'Analyse Différentielle"
+        # with the deseq2 engine already selected (the common case).
+        dds_full <- shared_rv$dds_full
+        needs_fit <- is.null(dds_full) ||
+          !isTRUE(identical(attr(dds_full, "design_str_cache"), design_str))
+        if (needs_fit) {
+          p$set(0.3, "Ajustement DESeq2 (requis pour le consensus)...")
+          dds_full <- build_dds(shared_rv$filtered_counts, meta, design_formula = design_str, run_deseq = TRUE)
+          attr(dds_full, "design_str_cache") <- design_str
+          shared_rv$dds_full <- dds_full
+        }
+
+        p$set(0.5, "DESeq2 + edgeR + limma-voom...")
+        de_list <- getAllDE(shared_rv$filtered_counts, meta, input$condition_col,
+                            input$group_target, input$group_ref,
+                            dds_full = dds_full, shrink = input$shrink_lfc)
+
+        if (length(de_list) < 2) {
+          stop("Au moins 2 méthodes doivent réussir pour comparer (", length(de_list),
+              " a réussi). Vérifiez que edgeR/limma sont installés.")
+        }
+        multi_de_rv(de_list)
+
+        p$set(0.85, "Consensus de rang...")
+        cons <- tryCatch(rankConsensus(de_list, input$lfc_thresh, input$padj_thresh),
+                         error = function(e) { warning(conditionMessage(e)); NULL })
+        consensus_rv(cons)
+
+        multimethod_status_rv(sprintf(
+          "✓ %d méthode(s) comparée(s) : %s (%s vs %s)",
+          length(de_list), paste(names(de_list), collapse = ", "),
+          input$group_target, input$group_ref
+        ))
+        showNotification(sprintf("✓ Comparaison multi-méthodes terminée (%s)",
+                                 paste(names(de_list), collapse = ", ")),
+                         type = "message", duration = 6)
+        shared_rv$active_tab <- "tab_multimethod"
+
+      }, error = function(e) {
+        multimethod_status_rv(NULL)
+        multi_de_rv(NULL); consensus_rv(NULL)
+        showNotification(paste("Erreur comparaison multi-méthodes:", e$message),
+                         type = "error", duration = 10)
+      })
+    })
+
+    output$multimethod_status_ui <- renderUI({
+      if (is.null(multimethod_status_rv())) {
+        div(class = "alert alert-info", style = "font-size:0.85em;",
+            "Cliquez \"🔬 Comparer DESeq2 / edgeR / limma-voom\" dans le panneau Step 2.")
+      } else {
+        div(class = "alert alert-success", style = "font-size:0.85em;", multimethod_status_rv())
+      }
+    })
+
+    # LIVE recompute on threshold change, same pattern as venn_gene_sets below.
+    mm_gene_sets <- reactive({
+      de_list <- multi_de_rv()
+      req(length(de_list) >= 2)
+      build_contrast_gene_sets(de_list, lfc_thresh = input$lfc_thresh, padj_thresh = input$padj_thresh)
+    })
+
+    output$mm_venn_plot <- renderPlot({
+      w <- session$clientData[[paste0("output_", "mm_venn_plot", "_width")]]
+      h <- session$clientData[[paste0("output_", "mm_venn_plot", "_height")]]
+      if (isTRUE(w < 30) || isTRUE(h < 30)) {
+        grid::grid.newpage()
+        grid::grid.text("Conteneur trop petit pour afficher le diagramme.",
+                        gp = grid::gpar(col = "grey40", fontsize = 12))
+        return(invisible(NULL))
+      }
+      sets <- tryCatch(mm_gene_sets(), error = function(e) NULL)
+      validate(need(!is.null(sets), "Lancez d'abord la comparaison multi-méthodes."))
+      tryCatch({
+        if (input$mm_venn_type == "venn") plot_venn_contrasts(sets) else plot_upset_contrasts(sets)
+      }, error = function(e) {
+        grid::grid.newpage()
+        grid::grid.text(paste("Conteneur trop petit, ou erreur :", conditionMessage(e)),
+                        gp = grid::gpar(col = "firebrick", fontsize = 11))
+      })
+    })
+
+    output$dl_mm_venn_png <- downloadHandler(
+      filename = function() paste0("venn_methodes_", Sys.Date(), ".png"),
+      content  = function(file) {
+        sets <- mm_gene_sets()
+        png(file, width = 9, height = 7, units = "in", res = 300)
+        if (input$mm_venn_type == "venn") plot_venn_contrasts(sets) else plot_upset_contrasts(sets)
+        dev.off()
+      }
+    )
+
+    output$mm_consensus_table <- renderDT({
+      df <- consensus_rv()
+      req(df)
+      df_display <- df
+      num_cols <- setdiff(colnames(df_display), c("gene", "consistent_sign"))
+      for (cl in num_cols) df_display[[cl]] <- round(df_display[[cl]], 4)
+      datatable(df_display, filter = "top", rownames = FALSE,
+               options = list(pageLength = 15, scrollX = TRUE)) %>%
+        formatStyle("n_methods_sig",
+                    background = styleColorBar(range(df_display$n_methods_sig), "#F39C12"),
+                    backgroundSize = "98% 88%", backgroundRepeat = "no-repeat",
+                    backgroundPosition = "center")
+    })
+
+    output$dl_mm_consensus_csv <- downloadHandler(
+      filename = function() paste0("consensus_rang_", Sys.Date(), ".csv"),
+      content  = function(file) { req(consensus_rv()); write.csv(consensus_rv(), file, row.names = FALSE) }
     )
 
     # ── Venn / UpSet — multi-contrast comparison ────────────────────────────

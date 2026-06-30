@@ -1,7 +1,7 @@
 # =============================================================================
 # mod_sc_trajectory.R  —  Child 7: Slingshot trajectory + pseudotime
 # =============================================================================
-# Depends on global.R:
+# Depends on helpers_sc.R (sourced by global.R, not defined there):
 #   calculate_pseudotime(seuratobj, reduction, rootcells)
 #     -> Seurat object with $pseudotime column added
 #     -> BLOCKED internally for > 100k cells (via stop())
