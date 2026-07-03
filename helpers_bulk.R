@@ -839,6 +839,26 @@ bulk_role_colors <- function(palette = "default", manual_colors = NULL) {
 }
 
 
+#' Safe plot render guard — "figure margins too large" (Bug C)
+.safe_plot_render <- function(session, output_id, plot_fn, min_px = 30) {
+  w <- session$clientData[[paste0("output_", output_id, "_width")]]
+  h <- session$clientData[[paste0("output_", output_id, "_height")]]
+  if (isTRUE(w < min_px) || isTRUE(h < min_px)) {
+    grid::grid.newpage()
+    grid::grid.text("Redimensionnement en cours...", gp = grid::gpar(col = "grey40", fontsize = 11))
+    return(invisible(NULL))
+  }
+  tryCatch(plot_fn(), error = function(e) {
+    if (grepl("figure margins too large", conditionMessage(e))) {
+      grid::grid.newpage()
+      grid::grid.text("Conteneur trop petit.", gp = grid::gpar(col = "grey40", fontsize = 11))
+      return(invisible(NULL))
+    }
+    stop(e)
+  })
+}
+
+
 #' Bulk PCA plot colored/shaped by metadata
 
 plot_bulk_pca <- function(vst_matrix, metadata, color_by = NULL, shape_by = NULL, ntop = 500,

@@ -22,6 +22,9 @@ params:
   pathway_db: NULL
   sections: NULL
   pca_color_by: NULL
+  pca_palette: "default"
+  pca_manual_colors: NULL
+  role_colors: NULL
   heatmap_top_n: 30
   lfc_thresh: 1
   padj_thresh: 0.05
@@ -112,7 +115,9 @@ tryCatch(
 cat("# PCA — Échantillons\n\n")
 ```
 ```{r pca_plot, eval="pca" %in% sections}
-render_plot(plot_bulk_pca(params$vst_mat, params$metadata, color_by = params$pca_color_by))
+render_plot(plot_bulk_pca(params$vst_mat, params$metadata, color_by = params$pca_color_by,
+                          palette = params$pca_palette %||% "default",
+                          manual_colors = params$pca_manual_colors))
 ```
 
 ---
@@ -131,12 +136,15 @@ print(plot_sample_correlation_heatmap(params$vst_mat, params$metadata))
 cat("# Volcano Plot & MA-Plot\n\n")
 ```
 ```{r volcano_plot, eval="volcano" %in% sections && !is.null(params$de_results)}
-render_plot(plot_volcano_bulk(params$de_results, lfc_thresh = params$lfc_thresh, padj_thresh = params$padj_thresh))
+rc <- params$role_colors %||% c(Up = "#E74C3C", Down = "#2980B9", NS = "#BDC3C7")
+render_plot(plot_volcano_bulk(params$de_results, lfc_thresh = params$lfc_thresh, padj_thresh = params$padj_thresh,
+                              up_color = rc[["Up"]], down_color = rc[["Down"]], ns_color = rc[["NS"]]))
 ```
 ```{r ma_plot, eval="volcano" %in% sections && !is.null(params$de_results)}
-# MA-plot stays static regardless of the interactivity toggle — low marginal
-# value for hover exploration, and keeps the report lighter.
-plot_ma_bulk(params$de_results, lfc_thresh = params$lfc_thresh, padj_thresh = params$padj_thresh)
+# MA-plot stays static regardless of the interactivity toggle.
+rc <- params$role_colors %||% c(Up = "#E74C3C", Down = "#2980B9", NS = "#BDC3C7")
+plot_ma_bulk(params$de_results, lfc_thresh = params$lfc_thresh, padj_thresh = params$padj_thresh,
+            sig_color = rc[["Up"]], ns_color = rc[["NS"]])
 ```
 
 ---
