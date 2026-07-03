@@ -74,7 +74,6 @@ mod_bulk_filter_pca_ui <- function(id) {
   ns <- NS(id)
   card(
     full_screen = TRUE,
-    max_height  = "850px",
     card_header("PCA"),
     fluidRow(
       column(4, selectizeInput(ns("pca_color_by"), "Colorer par", choices = NULL,
@@ -84,14 +83,14 @@ mod_bulk_filter_pca_ui <- function(id) {
     ),
     uiOutput(ns("manual_palette_ui")),   # only shown when palette == "manual" AND pca_color_by active
     checkboxInput(ns("pca_interactive"), "📊 Interactif (Plotly — survol pour identifier l'échantillon)", value = FALSE),
-    uiOutput(ns("pca_container")),
+    div(style = "height:620px;overflow-y:auto;", uiOutput(ns("pca_container"))),
     downloadButton(ns("dl_pca_png"), "Export PNG (statique)", class = "btn-sm btn-secondary mt-2"),
 
     hr(),
     h6("Scree Plot — Variance Expliquée", style = "font-weight:bold;"),
     helpText("Combien de composantes principales faut-il regarder ? Une chute nette (\"coude\") ",
              "indique où le signal biologique s'arrête et où le bruit commence."),
-    plotOutput(ns("plot_scree"), height = "380px"),
+    div(style = "height:400px;overflow-y:auto;", plotOutput(ns("plot_scree"), height = "380px")),
     downloadButton(ns("dl_scree_png"), "Export PNG", class = "btn-sm btn-secondary mt-2")
   )
 }
@@ -103,7 +102,6 @@ mod_bulk_filter_qc_ui <- function(id) {
   ns <- NS(id)
   card(
     full_screen = TRUE,
-    max_height  = "850px",
     card_header("QC Échantillons"),
     div(class = "alert alert-light", style = "font-size:0.85em;",
         bsicons::bs_icon("info-circle"),
@@ -117,7 +115,7 @@ mod_bulk_filter_qc_ui <- function(id) {
                             choices = c("Pearson" = "pearson", "Spearman" = "spearman")))
     ),
     uiOutput(ns("qc_manual_palette_ui")),
-    plotOutput(ns("plot_sample_corr"), height = "620px"),
+    div(style = "height:640px;overflow-y:auto;", plotOutput(ns("plot_sample_corr"), height = "620px")),
     downloadButton(ns("dl_sample_corr_png"), "Export PNG", class = "btn-sm btn-secondary mt-2")
   )
 }
@@ -143,9 +141,10 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
 
     # ── Mirror PCA inputs + palette choice to shared_rv (read by mod_bulk_report) ─
     observe({
-      shared_rv$pca_color_by <- input$pca_color_by
-      shared_rv$pca_shape_by <- input$pca_shape_by
-      shared_rv$bulk_palette <- input$palette_choice
+      shared_rv$pca_color_by    <- input$pca_color_by
+      shared_rv$pca_shape_by    <- input$pca_shape_by
+      shared_rv$bulk_palette    <- input$palette_choice
+      shared_rv$pca_manual_colors <- if (identical(input$palette_choice, "manual")) manual_palette_vec() else NULL
     })
 
     # ── Polish UI: disable the run button until an import actually exists ───
@@ -266,7 +265,9 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
                     palette  = pal,
                     manual_colors = if (identical(pal, "manual")) manual_palette_vec() else NULL)
     })
-    output$plot_pca <- renderPlot({ pca_plot() })
+    output$plot_pca <- renderPlot({
+      .safe_plot_render(session, "plot_pca", function() pca_plot())
+    })
 
     output$pca_container <- renderUI({
       if (isTRUE(input$pca_interactive)) plotlyOutput(ns("plot_pca_ly"), height = "620px")
@@ -295,14 +296,7 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
       plot_scree_bulk(shared_rv$vst_mat)
     })
     output$plot_scree <- renderPlot({
-      tryCatch(scree_plot(), error = function(e) {
-        # Defensive: a transient near-zero-size render (e.g. mid card-resize /
-        # tab switch) throws "figure margins too large" from the graphics
-        # device, not from our code. Swallow it silently — the next regular
-        # redraw (stable container size) succeeds on its own.
-        if (grepl("figure margins too large", conditionMessage(e))) return(invisible(NULL))
-        stop(e)
-      })
+      .safe_plot_render(session, "plot_scree", function() scree_plot())
     })
     output$dl_scree_png <- downloadHandler(
       filename = function() paste0("scree_plot_bulk_", Sys.Date(), ".png"),
@@ -365,7 +359,7 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
     }
     output$plot_sample_corr <- renderPlot({
       req(shared_rv$vst_mat)
-      print(sample_corr_plot_fn())
+      .safe_plot_render(session, "plot_sample_corr", function() print(sample_corr_plot_fn()))
     })
     output$dl_sample_corr_png <- downloadHandler(
       filename = function() paste0("sample_correlation_qc_", Sys.Date(), ".png"),

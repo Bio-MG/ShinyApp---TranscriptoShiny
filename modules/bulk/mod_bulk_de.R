@@ -91,6 +91,28 @@ mod_bulk_de_ui <- function(id) {
 
     hr(),
 
+    # ── Contraste Ad-hoc (BingleSeq pattern) ──────────────────────────────
+    div(
+      class = "border rounded p-2 mb-2", style = "background:#fff8e1;",
+      checkboxInput(ns("adhoc_mode"), tags$strong("🎯 Contraste Ad-hoc (sélection manuelle d'échantillons)"),
+                   value = FALSE),
+      conditionalPanel(
+        condition = "input.adhoc_mode == true", ns = ns,
+        helpText(style = "font-size:0.8em;",
+                 "Ignore la colonne condition — reconstruit une métadonnée minimale à la volée."),
+        splitLayout(
+          checkboxGroupInput(ns("adhoc_group_a"), "Groupe A", choices = NULL),
+          checkboxGroupInput(ns("adhoc_group_b"), "Groupe B", choices = NULL)
+        ),
+        textInput(ns("adhoc_contrast_name"), "Nom du contraste", placeholder = "Ex: KO_vs_WT"),
+        uiOutput(ns("adhoc_readiness")),
+        actionButton(ns("run_de_adhoc"), "🎯 Lancer l'Analyse (Ad-hoc)",
+                    class = "btn-warning w-100", icon = icon("play"))
+      )
+    ),
+
+    hr(),
+
     h6("Contrastes calculés:", style = "font-weight:bold;"),
     selectInput(ns("active_contrast_view"), NULL, choices = NULL),
 
@@ -210,16 +232,13 @@ mod_bulk_de_venn_ui <- function(id) {
   ns <- NS(id)
   card(
     full_screen = TRUE,
-    max_height  = "950px",
     card_header("Venn / UpSet"),
     div(class = "alert alert-light", style = "font-size:0.85em;border-left:3px solid #9B59B6;",
        bsicons::bs_icon("info-circle"),
        " Compare les gènes significatifs ENTRE plusieurs contrastes (utile après un run ",
        tags$em("Pairwise auto"), "). Seuils utilisés : ceux du panneau Step 2 (|Log2FC| / p-adj) ",
        "— se mettent à jour en direct si vous les changez, sans recalcul DE."),
-
     uiOutput(ns("venn_gate_message")),
-
     fluidRow(
       column(7, selectizeInput(ns("venn_contrasts"), "Contrastes à comparer",
                                choices = NULL, multiple = TRUE,
@@ -230,19 +249,17 @@ mod_bulk_de_venn_ui <- function(id) {
     ),
     checkboxInput(ns("venn_direction_aware"),
                  "Distinguer Up / Down (chaque contraste devient 2 ensembles)", value = FALSE),
-
-    div(style = "min-width:600px;overflow-x:auto;",
+    div(style = "min-width:600px;overflow-x:auto;height:580px;",
        plotOutput(ns("venn_plot"), height = "560px")),
-
     fluidRow(
       column(6, downloadButton(ns("dl_venn_png"), "Export PNG", class = "btn-sm btn-secondary w-100")),
       column(6, downloadButton(ns("dl_venn_genes_csv"), "Export gènes par intersection (CSV)",
                                class = "btn-sm btn-info w-100"))
     ),
-
     hr(),
     h6("Table des intersections", style = "font-weight:bold;"),
-    DTOutput(ns("venn_intersection_table"))
+    div(style = "min-height:200px;overflow-y:auto;",
+        DTOutput(ns("venn_intersection_table")))
   )
 }
 
@@ -331,10 +348,11 @@ mod_bulk_de_server <- function(id, global_data, shared_rv) {
 
     # ── Mirror report-relevant scalars to shared_rv ─────────────────────────
     observe({
-      shared_rv$lfc_thresh    <- input$lfc_thresh
-      shared_rv$padj_thresh   <- input$padj_thresh
-      shared_rv$heatmap_top_n <- input$heatmap_top_n
-      shared_rv$heatmap_annot <- input$heatmap_annot
+      shared_rv$lfc_thresh           <- input$lfc_thresh
+      shared_rv$padj_thresh          <- input$padj_thresh
+      shared_rv$heatmap_top_n        <- input$heatmap_top_n
+      shared_rv$heatmap_annot        <- input$heatmap_annot
+      shared_rv$active_condition_col <- input$condition_col  # Step-3.0: used by R script export
     })
 
     # ── Design formula preview ───────────────────────────────────────────────
@@ -479,6 +497,64 @@ mod_bulk_de_server <- function(id, global_data, shared_rv) {
       }, error = function(e) {
         showNotification(paste("Erreur DE:", e$message), type = "error", duration = 10)
       })
+    })
+
+    # =========================================================================
+    # CONTRASTE AD-HOC (BingleSeq pattern) — manual Group A/B sample selection
+    # =========================================================================
+    observeEvent(shared_rv$filtered_counts, {
+      req(shared_rv$filtered_counts)
+      samples <- colnames(shared_rv$filtered_counts)
+      updateCheckboxGroupInput(session, "adhoc_group_a", choices = samples, selected = character(0))
+      updateCheckboxGroupInput(session, "adhoc_group_b", choices = samples, selected = character(0))
+    })
+
+    output$adhoc_readiness <- renderUI({
+      a <- input$adhoc_group_a %||% character(0)
+      b <- input$adhoc_group_b %||% character(0)
+      issues <- character(0)
+      if (length(intersect(a, b)) > 0) issues <- c(issues, "Échantillon(s) présent(s) dans les 2 groupes.")
+      if (length(a) == 0 || length(b) == 0) issues <- c(issues, "Sélectionnez au moins 1 échantillon / groupe.")
+      else if (length(a) < 2 || length(b) < 2) issues <- c(issues, "Un groupe a < 2 réplicats — résultats peu fiables.")
+      if (length(issues) == 0) return(NULL)
+      div(class = "alert alert-warning", style = "font-size:0.78em;padding:4px 8px;",
+          lapply(issues, tags$div))
+    })
+
+    observeEvent(input$run_de_adhoc, {
+      req(shared_rv$filtered_counts, input$de_engine)
+      a <- input$adhoc_group_a %||% character(0)
+      b <- input$adhoc_group_b %||% character(0)
+      if (length(intersect(a, b)) > 0) { showNotification("❌ Même échantillon dans les 2 groupes.", type = "error", duration = 6); return() }
+      if (length(a) == 0 || length(b) == 0) { showNotification("❌ Sélectionnez au moins 1 échantillon / groupe.", type = "error", duration = 6); return() }
+
+      p <- shiny::Progress$new(); on.exit(p$close())
+      p$set(message = "Analyse ad-hoc...", value = 0.2)
+      tryCatch({
+        counts_sub <- shared_rv$filtered_counts[, c(a, b), drop = FALSE]
+        meta_adhoc <- data.frame(
+          condition = factor(c(rep("GroupA", length(a)), rep("GroupB", length(b))), levels = c("GroupB", "GroupA")),
+          row.names = c(a, b)
+        )
+        res <- if (input$de_engine == "deseq2") {
+          dds_a <- build_dds(counts_sub, meta_adhoc, "~condition", run_deseq = TRUE)
+          run_bulk_de_dispatch("deseq2", counts_sub, meta_adhoc, "condition", "GroupA", "GroupB", dds = dds_a, shrink = input$shrink_lfc)
+        } else {
+          run_bulk_de_dispatch(input$de_engine, counts_sub, meta_adhoc, "condition", "GroupA", "GroupB")
+        }
+        res <- .normalize_de_cols(res, counts_for_basemean = counts_sub)
+        cname <- if (nchar(trimws(input$adhoc_contrast_name %||% "")) > 0) trimws(input$adhoc_contrast_name) else "GroupA_vs_GroupB_adhoc"
+        .register_contrast(cname, res)
+        shared_rv$active_contrast <- cname
+        updateSelectInput(session, "active_contrast_view", choices = names(shared_rv$contrasts), selected = cname)
+        n_sig <- sum(res$padj < input$padj_thresh & abs(res$log2FoldChange) > input$lfc_thresh, na.rm = TRUE)
+        showNotification(sprintf("✓ Ad-hoc '%s': %d gènes sig.", cname, n_sig), type = "message", duration = 6)
+      }, error = function(e) showNotification(paste("Erreur DE ad-hoc:", e$message), type = "error", duration = 10))
+    })
+
+    # Step-3.0: mirror resolved role colors → used by report Rmd and R script
+    observe({
+      shared_rv$volcano_role_colors <- tryCatch(volcano_role_colors(), error = function(e) NULL)
     })
 
     # =========================================================================
@@ -1180,9 +1256,10 @@ mod_bulk_de_server <- function(id, global_data, shared_rv) {
 
     output$venn_intersection_table <- renderDT({
       sets <- tryCatch(venn_gene_sets(), error = function(e) NULL)
-      req(sets)
+      validate(need(!is.null(sets), "Sélectionnez au moins 2 contrastes avec des gènes significatifs."))
       dt <- tryCatch(build_contrast_intersection_dt(sets), error = function(e) NULL)
-      req(dt)
+      validate(need(!is.null(dt) && nrow(dt) > 0,
+                    "Aucun gène dans les intersections avec les seuils actuels."))
       datatable(dt, filter = "top", rownames = FALSE,
                options = list(pageLength = 15, scrollX = TRUE))
     })
