@@ -40,8 +40,10 @@ mod_bulk_report_ui <- function(id) {
     hr(),
     div(class = "alert alert-light", style = "font-size:0.82em;border-left:3px solid #18BC9C;",
         bsicons::bs_icon("code-slash"),
-        " Export script R reproductible — snapshot param\u00e8tres actuels."),
-    downloadButton(ns("dl_r_script"), "\U0001f9fe Export Script R Reproductible",
+        " Export script R reproductible (.zip) \u2014 contient le script + counts_raw.rds + metadata.rds. ",
+        "Pour l'ex\u00e9cuter : d\u00e9compressez le .zip, ouvrez R/RStudio dans CE dossier ",
+        "(ou faites setwd() dessus), puis source(\"analyse_bulk_....R\") ou ex\u00e9cutez-le ligne par ligne."),
+    downloadButton(ns("dl_r_script"), "\U0001f9fe Export Script R Reproductible (.zip)",
                    class = "btn-outline-secondary w-100"),
     div(class = "small text-muted mt-1", textOutput(ns("report_status")))
   )
@@ -130,43 +132,172 @@ mod_bulk_report_server <- function(id, global_data, shared_rv) {
 
     # ── Script R reproductible ─────────────────────────────────────────────
     output$dl_r_script <- downloadHandler(
-      filename = function() paste0("analyse_bulk_", Sys.Date(), ".R"),
+      filename = function() paste0("analyse_bulk_", Sys.Date(), ".zip"),
       content  = function(file) {
+        req(global_data$bulk_obj)
         ac    <- shared_rv$active_contrast %||% ""
         parts <- strsplit(ac, "_vs_")[[1]]
         target <- if (length(parts) >= 2) paste(parts[-length(parts)], collapse = "_") else "GroupA"
         ref    <- if (length(parts) >= 2) parts[length(parts)] else "GroupB"
-        writeLines(
-          .bulk_r_script_text(
-            n_genes       = if (!is.null(shared_rv$filtered_counts)) nrow(shared_rv$filtered_counts) else "?",
-            n_samp        = if (!is.null(shared_rv$filtered_counts)) ncol(shared_rv$filtered_counts) else "?",
-            lfc           = shared_rv$lfc_thresh  %||% 1,
-            padj          = shared_rv$padj_thresh %||% 0.05,
-            contrast_name = ac,
-            condition_col = shared_rv$active_condition_col %||% "condition",
-            group_target  = target,
-            group_ref     = ref,
-            palette_colors = shared_rv$volcano_role_colors
-          ),
-          file
+
+        script_text <- .bulk_r_script_text(
+          n_genes       = if (!is.null(shared_rv$filtered_counts)) nrow(shared_rv$filtered_counts) else "?",
+          n_samp        = if (!is.null(shared_rv$filtered_counts)) ncol(shared_rv$filtered_counts) else "?",
+          lfc           = shared_rv$lfc_thresh  %||% 1,
+          padj          = shared_rv$padj_thresh %||% 0.05,
+          contrast_name = ac,
+          condition_col = shared_rv$active_condition_col %||% "condition",
+          group_target  = target,
+          group_ref     = ref,
+          palette_colors = shared_rv$volcano_role_colors,
+          all_contrast_names = names(shared_rv$contrasts),
+          pathway_mode  = shared_rv$pathway_mode %||% "ora"
         )
+
+        # ── Bundle companion data (Step-3.5 fix) ──────────────────────────
+        # The script reads `counts_raw.rds` / `metadata.rds` from its own
+        # working directory (see section 0 of the generated script) — these
+        # were never actually produced before, making the script impossible
+        # to run standalone. RAW (unfiltered, pre-VST) counts are used, since
+        # the script re-does its own filtering — same matrix mod_bulk_filter
+        # would start from (mapped IDs if Step-0 mapping was applied).
+        tmp_dir <- tempfile("bulk_script_"); dir.create(tmp_dir)
+        on.exit(unlink(tmp_dir, recursive = TRUE), add = TRUE)
+
+        script_path <- file.path(tmp_dir, paste0("analyse_bulk_", Sys.Date(), ".R"))
+        writeLines(script_text, script_path)
+
+        raw_counts <- shared_rv$counts_mapped %||% global_data$bulk_obj$counts
+        saveRDS(raw_counts, file.path(tmp_dir, "counts_raw.rds"))
+        saveRDS(global_data$bulk_obj$metadata, file.path(tmp_dir, "metadata.rds"))
+
+        zip::zip(file, files = c(script_path,
+                                 file.path(tmp_dir, "counts_raw.rds"),
+                                 file.path(tmp_dir, "metadata.rds")),
+                 mode = "cherry-pick")
       }
     )
 
   }) # /moduleServer
 }
 
-# ── Helper: generate reproducible R script (Step-3.0: MA, Heatmap, Pathway) ──
+# ── Helper: generate reproducible R script (Step-3.0: MA, Heatmap, Pathway;
+#    Step-3.0b: pairwise section when the app computed >1 contrast) ─────────
 #' @param n_genes,n_samp Dataset dimensions (informational, in header comment).
 #' @param lfc,padj Thresholds mirrored from shared_rv at click time.
 #' @param condition_col The actual metadata column name used in the DE design.
 #' @param palette_colors Named vector c(Up=, Down=, NS=) for volcano colours.
+#' @param all_contrast_names Names of every contrast in shared_rv$contrasts —
+#'   when length > 1 (pairwise-auto or repeated manual runs), an extra
+#'   "3bis. Pairwise" section is generated computing/exporting every OTHER
+#'   pair by reusing the same fitted `dds` (results()/lfcShrink only, no
+#'   refit) — keeps the exported script a faithful, complete reproduction of
+#'   the session rather than just the single active contrast.
 .bulk_r_script_text <- function(n_genes, n_samp, lfc, padj,
                                  contrast_name, condition_col,
-                                 group_target, group_ref, palette_colors) {
+                                 group_target, group_ref, palette_colors,
+                                 all_contrast_names = NULL, pathway_mode = "ora") {
   rc   <- palette_colors %||% c(Up = "#E74C3C", Down = "#2980B9", NS = "#BDC3C7")
   date <- format(Sys.Date(), "%Y-%m-%d")
   cond <- condition_col %||% "condition"
+
+  # ── Pairwise block (only when the app has >1 stored contrast) ────────────
+  other_names <- setdiff(all_contrast_names %||% character(0), contrast_name)
+  pairwise_block <- ""
+  if (length(other_names) > 0) {
+    pair_list_lines <- vapply(other_names, function(nm) {
+      parts_nm <- strsplit(nm, "_vs_")[[1]]
+      tgt <- paste(parts_nm[-length(parts_nm)], collapse = "_")
+      rf  <- parts_nm[length(parts_nm)]
+      sprintf('  list(target = "%s", ref = "%s")', tgt, rf)
+    }, character(1))
+    pairwise_block <- paste0(
+'
+# \u2500\u2500 3bis. Pairwise \u2014 autres contrastes calcul\u00e9s dans l\'app (', length(other_names), ' paire(s) suppl.) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+# R\u00e9utilise le M\u00cAME ajustement DESeq2 "dds" (design ~ ', cond, ') pour chaque paire \u2014
+# results()/lfcShrink() seulement ; DESeq() n\'est PAS relanc\u00e9.
+other_pairs <- list(
+', paste(pair_list_lines, collapse = ",\n"), '
+)
+all_de <- list()
+all_de[[paste0(GROUP_TARGET, "_vs_", GROUP_REF)]] <- res_df
+for (pr in other_pairs) {
+  coef_p <- paste0(CONDITION_COL, "_", pr$target, "_vs_", pr$ref)
+  res_p <- tryCatch({
+    r0 <- DESeq2::results(dds, contrast = c(CONDITION_COL, pr$target, pr$ref))
+    if (coef_p %in% DESeq2::resultsNames(dds)) {
+      DESeq2::lfcShrink(dds, coef = coef_p, res = r0, type = "apeglm", quiet = TRUE)
+    } else {
+      DESeq2::lfcShrink(dds, contrast = c(CONDITION_COL, pr$target, pr$ref), res = r0, type = "normal", quiet = TRUE)
+    }
+  }, error = function(e) DESeq2::results(dds, contrast = c(CONDITION_COL, pr$target, pr$ref)))
+  df_p <- as.data.frame(res_p); df_p$gene <- rownames(df_p); df_p <- df_p[order(df_p$padj), ]
+  all_de[[paste0(pr$target, "_vs_", pr$ref)]] <- df_p
+  write.csv(df_p, paste0("DE_", pr$target, "_vs_", pr$ref, "_", Sys.Date(), ".csv"), row.names = FALSE)
+}
+
+# R\u00e9sum\u00e9 Up/Down \u2014 TOUS les contrastes (actif + pairwise)
+summary_rows <- lapply(names(all_de), function(nm) {
+  d <- all_de[[nm]]
+  sig <- !is.na(d$padj) & d$padj < PADJ_THRESH & abs(d$log2FoldChange) > LFC_THRESH
+  data.frame(Contraste = nm, n_testes = nrow(d), n_sig = sum(sig),
+             n_up = sum(sig & d$log2FoldChange > 0), n_down = sum(sig & d$log2FoldChange < 0))
+})
+summary_df <- do.call(rbind, summary_rows)
+write.csv(summary_df, paste0("summary_updown_pairwise_", Sys.Date(), ".csv"), row.names = FALSE)
+print(summary_df)
+'
+    )
+  }
+
+  # \u2500\u2500 Pathway section: ORA (significant genes) or GSEA (full ranked list) \u2500\u2500\u2500
+  pathway_section <- if (identical(pathway_mode, "gsea")) {
+'# \u2500\u2500 7. Pathway GSEA (optionnel, sans seuil) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+# BiocManager::install(c("clusterProfiler","org.Hs.eg.db","enrichplot"))
+if (requireNamespace("clusterProfiler",quietly=TRUE) && requireNamespace("org.Hs.eg.db",quietly=TRUE)) {
+  library(clusterProfiler); library(org.Hs.eg.db)
+  de_gsea <- res_df[!is.na(res_df$padj) & !is.na(res_df$log2FoldChange) & !is.na(res_df$pvalue), ]
+  gene_entrez <- tryCatch(
+    AnnotationDbi::select(org.Hs.eg.db, keys=unique(de_gsea$gene), keytype="SYMBOL", columns="ENTREZID"),
+    error=function(e) NULL)
+  if (!is.null(gene_entrez)) {
+    gene_entrez <- gene_entrez[!is.na(gene_entrez$ENTREZID) & !duplicated(gene_entrez$SYMBOL), ]
+    de_m <- merge(de_gsea, gene_entrez, by.x="gene", by.y="SYMBOL")
+    de_m$rank_metric <- -log10(pmax(de_m$pvalue, 1e-300)) * sign(de_m$log2FoldChange)
+    de_m <- stats::aggregate(rank_metric ~ ENTREZID, data=de_m, FUN=mean)
+    ranked <- sort(setNames(de_m$rank_metric, de_m$ENTREZID), decreasing=TRUE)
+    if (length(ranked) >= 10) {
+      gsea_res <- gseGO(geneList=ranked, OrgDb=org.Hs.eg.db, ont="BP",
+                        pvalueCutoff=0.05, pAdjustMethod="BH", verbose=FALSE)
+      if (!is.null(gsea_res) && nrow(as.data.frame(gsea_res)) > 0) {
+        write.csv(as.data.frame(gsea_res), paste0("pathways_GSEA_GOBP_",Sys.Date(),".csv"), row.names=FALSE)
+        if (requireNamespace("enrichplot", quietly=TRUE))
+          print(enrichplot::gseaplot2(gsea_res, geneSetID=1, title=as.data.frame(gsea_res)$Description[1]))
+      }
+    }
+  }
+}
+'
+  } else {
+'# \u2500\u2500 7. Pathway ORA (optionnel) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+# BiocManager::install(c("clusterProfiler","org.Hs.eg.db"))
+if (requireNamespace("clusterProfiler",quietly=TRUE) && requireNamespace("org.Hs.eg.db",quietly=TRUE)) {
+  library(clusterProfiler); library(org.Hs.eg.db)
+  sig_g  <- res_df$gene[!is.na(res_df$padj) & res_df$padj < PADJ_THRESH &
+                           abs(res_df$log2FoldChange) > LFC_THRESH]
+  entrez <- tryCatch(bitr(sig_g,fromType="SYMBOL",toType="ENTREZID",OrgDb=org.Hs.eg.db),
+                     error=function(e) NULL)
+  if (!is.null(entrez) && nrow(entrez) >= 10) {
+    ora <- enrichGO(gene=entrez$ENTREZID, OrgDb=org.Hs.eg.db, ont="BP",
+                    pAdjustMethod="BH", pvalueCutoff=0.05, readable=TRUE)
+    if (!is.null(ora) && nrow(as.data.frame(ora)) > 0) {
+      barplot(ora, showCategory=15, title="GO BP (ORA)")
+      write.csv(as.data.frame(ora), paste0("pathways_GOBP_",Sys.Date(),".csv"), row.names=FALSE)
+    }
+  }
+}
+'
+  }
 
   paste0(
 '# =============================================================================
@@ -226,7 +357,7 @@ res_df       <- as.data.frame(res); res_df$gene <- rownames(res_df)
 res_df       <- res_df[order(res_df$padj), ]
 cat(sprintf("%d significant genes\\n",
     sum(res_df$padj < PADJ_THRESH & abs(res_df$log2FoldChange) > LFC_THRESH, na.rm=TRUE)))
-
+', pairwise_block, '
 # \u2500\u2500 4. Volcano \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 res_v <- res_df[!is.na(res_df$padj), ]
 res_v$status <- dplyr::case_when(
@@ -263,23 +394,35 @@ if (length(top_genes) >= 2 && requireNamespace("pheatmap", quietly=TRUE)) {
                      main=paste("Top", length(top_genes), "g\u00e8nes (p-adj)"), fontsize_row=8)
 }
 
-# \u2500\u2500 7. Pathway ORA (optionnel) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-# BiocManager::install(c("clusterProfiler","org.Hs.eg.db"))
-if (requireNamespace("clusterProfiler",quietly=TRUE) && requireNamespace("org.Hs.eg.db",quietly=TRUE)) {
-  library(clusterProfiler); library(org.Hs.eg.db)
-  sig_g  <- res_df$gene[!is.na(res_df$padj) & res_df$padj < PADJ_THRESH &
-                           abs(res_df$log2FoldChange) > LFC_THRESH]
-  entrez <- tryCatch(bitr(sig_g,fromType="SYMBOL",toType="ENTREZID",OrgDb=org.Hs.eg.db),
-                     error=function(e) NULL)
-  if (!is.null(entrez) && nrow(entrez) >= 10) {
-    ora <- enrichGO(gene=entrez$ENTREZID, OrgDb=org.Hs.eg.db, ont="BP",
-                    pAdjustMethod="BH", pvalueCutoff=0.05, readable=TRUE)
-    if (!is.null(ora) && nrow(as.data.frame(ora)) > 0) {
-      barplot(ora, showCategory=15, title="GO BP (ORA)")
-      write.csv(as.data.frame(ora), paste0("pathways_GOBP_",Sys.Date(),".csv"), row.names=FALSE)
-    }
-  }
-}
+
+', pathway_section, '
+
+# \u2500\u2500 7bis. edgeR / limma-voom (optionnel, m\u00eame contraste) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+# D\u00e9comment\u00e9 sur demande \u2014 relance le M\u00eaME contraste avec un moteur diff\u00e9rent,
+# pour comparaison manuelle avec les r\u00e9sultats DESeq2 ci-dessus.
+# ---------------------------------------------------------------------------
+# if (requireNamespace("edgeR", quietly=TRUE)) {
+#   grp    <- factor(metadata[[CONDITION_COL]], levels=c(GROUP_REF, GROUP_TARGET))
+#   y      <- edgeR::DGEList(counts=round(filtered), group=grp)
+#   y      <- edgeR::calcNormFactors(y)
+#   design <- stats::model.matrix(~grp)
+#   y      <- edgeR::estimateDisp(y, design)
+#   fit    <- edgeR::glmQLFit(y, design)
+#   qlf    <- edgeR::glmQLFTest(fit, coef=2)
+#   res_edger <- edgeR::topTags(qlf, n=Inf)$table
+#   res_edger$gene <- rownames(res_edger)
+#   write.csv(res_edger, paste0("DE_edgeR_", CONDITION_COL, "_", Sys.Date(), ".csv"), row.names=FALSE)
+# }
+# if (requireNamespace("limma", quietly=TRUE) && requireNamespace("edgeR", quietly=TRUE)) {
+#   grp2    <- factor(metadata[[CONDITION_COL]], levels=c(GROUP_REF, GROUP_TARGET))
+#   y2      <- edgeR::calcNormFactors(edgeR::DGEList(counts=round(filtered)))
+#   design2 <- stats::model.matrix(~grp2)
+#   v       <- limma::voom(y2, design2)
+#   fit2    <- limma::eBayes(limma::lmFit(v, design2))
+#   res_limma <- limma::topTable(fit2, coef=2, number=Inf, sort.by="P")
+#   res_limma$gene <- rownames(res_limma)
+#   write.csv(res_limma, paste0("DE_limma_", CONDITION_COL, "_", Sys.Date(), ".csv"), row.names=FALSE)
+# }
 
 # \u2500\u2500 8. Export CSV \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 out <- paste0("DE_",CONDITION_COL,"_",GROUP_TARGET,"_vs_",GROUP_REF,"_",Sys.Date(),".csv")

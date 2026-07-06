@@ -105,7 +105,8 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
 
     # ── Mirror pathway_db to shared_rv (read by mod_bulk_report) ────────────
     observe({
-      shared_rv$pathway_db <- input$pathway_db
+      shared_rv$pathway_db   <- input$pathway_db
+      shared_rv$pathway_mode <- input$enrich_mode
     })
 
     # ── Helper: currently active DE result (plain list lookup, no req()) ────

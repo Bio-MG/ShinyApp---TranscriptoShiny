@@ -216,7 +216,7 @@ mod_bulk_de_summary_ui <- function(id) {
        bsicons::bs_icon("info-circle"),
        " Nombre de gènes Up / Down par contraste calculé, selon les seuils |Log2FC| / p-adj ",
        "actuels (Étape 2) — se met à jour en direct si vous changez les seuils, sans recalcul DE."),
-    plotOutput(ns("plot_updown"), height = "480px"),
+    div(style = "height:640px;overflow-y:auto;", plotOutput(ns("plot_updown"), height = "620px")),
     downloadButton(ns("dl_updown_png"), "Export PNG", class = "btn-sm btn-secondary mt-2"),
     hr(),
     h6("Table récapitulative", style = "font-weight:bold;"),
@@ -690,6 +690,19 @@ mod_bulk_de_server <- function(id, global_data, shared_rv) {
       shared_rv$active_contrast <- input$active_contrast_view
     })
 
+    # FIX: refresh the "Contraste actif" choices whenever shared_rv$contrasts
+    # changes, regardless of WHO wrote it. run_de/run_pairwise already call
+    # updateSelectInput() themselves, but the auto-pipeline (mod_bulk.R)
+    # writes shared_rv$contrasts directly and has no way to reach into this
+    # module's own input namespace — without this, contrasts existed and
+    # worked everywhere (Up/Down, Venn/UpSet) but were unselectable here.
+    observeEvent(shared_rv$contrasts, {
+      nm  <- names(shared_rv$contrasts)
+      cur <- shared_rv$active_contrast
+      sel <- if (!is.null(cur) && cur %in% nm) cur else if (length(nm) > 0) nm[1] else NULL
+      updateSelectInput(session, "active_contrast_view", choices = nm, selected = sel)
+    }, ignoreNULL = FALSE)
+
     # Reactive accessor for the currently displayed DE result (local to this
     # module — sibling modules read shared_rv$contrasts[[shared_rv$active_contrast]]
     # directly since they don't need req()-based reactive semantics here)
@@ -1143,7 +1156,7 @@ mod_bulk_de_server <- function(id, global_data, shared_rv) {
         if (input$mm_venn_type == "venn") plot_venn_contrasts(sets) else plot_upset_contrasts(sets)
       }, error = function(e) {
         grid::grid.newpage()
-        grid::grid.text(paste("Conteneur trop petit, ou erreur :", conditionMessage(e)),
+        grid::grid.text(paste0("Erreur : ", conditionMessage(e), "\n(ou conteneur trop petit — agrandissez la fenêtre/onglet)"),
                         gp = grid::gpar(col = "firebrick", fontsize = 11))
       })
     })
@@ -1249,7 +1262,7 @@ mod_bulk_de_server <- function(id, global_data, shared_rv) {
         # this fallback itself can no longer fail the way it used to (was
         # the actual source of the duplicate "figure margins too large").
         grid::grid.newpage()
-        grid::grid.text(paste("Conteneur trop petit, ou erreur :", conditionMessage(e)),
+        grid::grid.text(paste0("Erreur : ", conditionMessage(e), "\n(ou conteneur trop petit — agrandissez la fenêtre/onglet)"),
                         gp = grid::gpar(col = "firebrick", fontsize = 11))
       })
     })
