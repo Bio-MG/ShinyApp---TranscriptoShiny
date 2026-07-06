@@ -117,6 +117,21 @@ mod_sc_server <- function(id, global_data) {
           )
         ),
         h6("Options suppl\u00e9mentaires", style="font-weight:bold;"),
+        checkboxInput(ns_m("sc_ap_singler"),
+                      "\U0001f9ec Annotation SingleR (apr\u00e8s clustering, avant marqueurs)",
+                      value=FALSE),
+        conditionalPanel(
+          condition=sprintf("input['%s'] == true", ns_m("sc_ap_singler")),
+          fluidRow(
+            column(6, selectInput(ns_m("sc_ap_singler_ref"), "R\u00e9f\u00e9rence",
+                       c("Human Primary Cell Atlas"="hpca","Blueprint Encode"="blueprint",
+                         "ImmGen (Souris)"="immgen","DICE Immune"="dice"))),
+            column(6, radioButtons(ns_m("sc_ap_singler_level"), "Niveau",
+                       c("Main"="main","Fine"="fine"), inline=TRUE))
+          ),
+          helpText(style="font-size:0.78em;",
+                   "Ignor\u00e9 automatiquement si SingleR/celldex ne sont pas install\u00e9s.")
+        ),
         checkboxInput(ns_m("sc_ap_markers"),
                       "\U0001f9ec FindAllMarkers apr\u00e8s clustering (top marqueurs par cluster)",
                       value=FALSE),
@@ -190,6 +205,37 @@ mod_sc_server <- function(id, global_data) {
         p$set(0.70, "UMAP...")
         obj <- RunUMAP(obj, dims=1:input$sc_ap_pca_dim, verbose=FALSE)
         log_sc("\u2713 UMAP OK")
+
+        # Optional: SingleR annotation (reuses .run_singler_safe() from
+        # mod_sc_annotation.R — same helper used by the manual "2. Annotation"
+        # step, so results are identical whether run here or by hand).
+        if (isTRUE(input$sc_ap_singler)) {
+          if (!requireNamespace("SingleR", quietly=TRUE) ||
+              !requireNamespace("celldex", quietly=TRUE)) {
+            log_sc("\u26a0\ufe0f SingleR/celldex non install\u00e9s \u2014 annotation ignor\u00e9e.")
+          } else {
+            p$set(0.76, "Annotation SingleR...")
+            log_sc(sprintf("SingleR (%s, %s)...", input$sc_ap_singler_ref, input$sc_ap_singler_level))
+            result <- tryCatch(
+              withCallingHandlers(
+                .run_singler_safe(obj, input$sc_ap_singler_ref, input$sc_ap_singler_level),
+                warning = function(w) {
+                  if (grepl("cluster-level aggregation", conditionMessage(w))) {
+                    log_sc("\u26a0\ufe0f Dataset large : SingleR sur profils de clusters (pseudo-bulk).")
+                    invokeRestart("muffleWarning")
+                  }
+                }
+              ),
+              error = function(e) { log_sc(paste("\u26a0\ufe0f SingleR :", e$message)); NULL }
+            )
+            if (!is.null(result)) {
+              col_name <- paste0("SingleR_", input$sc_ap_singler_ref, "_", input$sc_ap_singler_level)
+              obj[[col_name]] <- result$labels
+              log_sc(sprintf("\u2713 Annot\u00e9 [%s] \u2014 %d types cellulaires",
+                             result$method, length(unique(result$labels))))
+            }
+          }
+        }
 
         # Optional: FindAllMarkers
         if (isTRUE(input$sc_ap_markers)) {

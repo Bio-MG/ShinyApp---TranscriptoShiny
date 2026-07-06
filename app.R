@@ -244,7 +244,20 @@ server <- function(input, output, session) {
 
   
 
-  # === MODULES D'ANALYSE ===
+  # === MODULES D'ANALYSE ===source("global.R")
+source("helpers_io.R")
+source("helpers_sc.R")
+source("helpers_bulk.R")
+source("helpers_pathway.R")
+
+source("modules/bulk/mod_bulk_mapping.R")
+source("modules/bulk/mod_bulk_filter.R")
+source("modules/bulk/mod_bulk_de.R")
+source("modules/bulk/mod_bulk_pathways.R")
+source("modules/bulk/mod_bulk_report.R")
+source("modules/bulk/mod_bulk.R")
+
+testthat::test_file("Tests/testthat/test_autopipeline_bulk.R")
 
   mod_sc_server("sc", global_data)
 
