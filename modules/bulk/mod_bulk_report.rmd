@@ -100,7 +100,7 @@ if (!is.null(params$de_results)) {
 ```
 
 ```{r all_contrasts_section, eval=!is.null(params$all_contrasts_summary) && nrow(params$all_contrasts_summary) > 1, results='asis'}
-cat("\n\n### Tous les contrastes calcules\n\n")
+cat("### Tous les contrastes calcules\n\n")
 cat(sprintf("Seuils appliques : |Log2FC| > %s, P-adj < %s.\n\n", params$lfc_thresh, params$padj_thresh))
 ```
 ```{r all_contrasts_table, eval=!is.null(params$all_contrasts_summary) && nrow(params$all_contrasts_summary) > 1}
@@ -116,14 +116,10 @@ knitr::kable(tbl, row.names = FALSE,
   requireNamespace("ComplexHeatmap", quietly = TRUE)
 ```
 ```{r upset_contrasts_title, eval=.show_upset, results='asis'}
-# Step-3.5 FIX: le titre Markdown doit être émis AVANT \begin{landscape} --
-# pandoc capture tout le contenu entre \begin{landscape} et \end{landscape}
-# comme un bloc LaTeX brut opaque (pas re-interprété comme Markdown), donc un
-# "### titre" a l'interieur produit un "#" litteral hors contexte de macro et
-# fait planter xelatex ("You can't use `macro parameter character #' in
-# vertical mode."). Le titre doit rester en dehors du bloc raw LaTeX.
-cat("\n\n### Comparaison des genes significatifs entre contrastes (UpSet)\n\n")
+# Step-3.5: mise en page paysage (PDF) pour eviter le chevauchement de
+# colonnes/label sur les jeux avec beaucoup de contrastes.
 .tex_landscape_start()
+cat("### Comparaison des genes significatifs entre contrastes (UpSet)\n\n")
 ```
 ```{r upset_contrasts_plot, eval=.show_upset, fig.width=11, fig.height=6.5}
 gene_sets <- build_contrast_gene_sets(
@@ -143,7 +139,7 @@ tryCatch(
 ---
 
 ```{r pca_section, eval="pca" %in% sections, results='asis'}
-cat("\n\n# PCA -- Echantillons\n\n")
+cat("# PCA -- Echantillons\n\n")
 ```
 ```{r pca_plot, eval="pca" %in% sections}
 render_plot(plot_bulk_pca(params$vst_mat, params$metadata, color_by = params$pca_color_by,
@@ -154,7 +150,7 @@ render_plot(plot_bulk_pca(params$vst_mat, params$metadata, color_by = params$pca
 ---
 
 ```{r qc_section, eval="qc" %in% sections, results='asis'}
-cat("\n\n# QC -- Correlation Inter-Echantillons\n\n")
+cat("# QC -- Correlation Inter-Echantillons\n\n")
 cat("Detecte les echantillons mal etiquetes ou les outliers avant interpretation du contraste.\n\n")
 ```
 ```{r qc_plot, eval="qc" %in% sections}
@@ -164,7 +160,7 @@ print(plot_sample_correlation_heatmap(params$vst_mat, params$metadata))
 ---
 
 ```{r volcano_section, eval="volcano" %in% sections && !is.null(params$de_results), results='asis'}
-cat("\n\n# Volcano Plot & MA-Plot\n\n")
+cat("# Volcano Plot & MA-Plot\n\n")
 ```
 ```{r volcano_plot, eval="volcano" %in% sections && !is.null(params$de_results)}
 rc <- params$role_colors %||% c(Up = "#E74C3C", Down = "#2980B9", NS = "#BDC3C7")
@@ -183,7 +179,7 @@ render_plot(plot_ma_bulk(params$de_results, lfc_thresh = params$lfc_thresh, padj
 ---
 
 ```{r heatmap_section, eval="heatmap" %in% sections && !is.null(params$de_results), results='asis'}
-cat("\n\n# Heatmap -- Top Genes Differentiels\n\n")
+cat("# Heatmap -- Top Genes Differentiels\n\n")
 ```
 ```{r heatmap_plot, eval="heatmap" %in% sections && !is.null(params$de_results)}
 res <- params$de_results
@@ -205,13 +201,13 @@ if (length(genes) >= 2) {
 .pw_full <- .show_pw && identical(params$pairwise_layout, "full")
 ```
 ```{r pairwise_title, eval=.show_pw, results='asis'}
-cat("\n\n# Toutes les paires -- Volcano & MA-Plot\n\n")
+cat("# Toutes les paires -- Volcano & MA-Plot\n\n")
 cat(sprintf("Petits multiples pour chacun des %d contrastes calcules -- mise en page : **%s**.\n\n",
             length(params$all_contrasts), ifelse(.pw_grid, "grille compacte", "grand format (1 par contraste)")))
 ```
 
 <!-- ============ MODE GRILLE (petits multiples compiles, statique) ============ -->
-```{r pairwise_volcano_grid, eval=.pw_grid, fig.width=11, fig.height=max(3.2, ceiling(length(params$all_contrasts %||% list())/3)*3.2)}
+```{r pairwise_volcano_grid, eval=.pw_grid, fig.width=11, fig.height=ceiling(length(params$all_contrasts)/3)*3.2}
 rc <- params$role_colors %||% c(Up = "#E74C3C", Down = "#2980B9", NS = "#BDC3C7")
 if (requireNamespace("patchwork", quietly = TRUE)) {
   plots <- lapply(names(params$all_contrasts), function(nm) {
@@ -222,7 +218,7 @@ if (requireNamespace("patchwork", quietly = TRUE)) {
   patchwork::wrap_plots(plots, ncol = min(3, length(plots)))
 } else cat("Package 'patchwork' manquant -- grille ignoree.")
 ```
-```{r pairwise_ma_grid, eval=.pw_grid, fig.width=11, fig.height=max(3.2, ceiling(length(params$all_contrasts %||% list())/3)*3.2)}
+```{r pairwise_ma_grid, eval=.pw_grid, fig.width=11, fig.height=ceiling(length(params$all_contrasts)/3)*3.2}
 rc <- params$role_colors %||% c(Up = "#E74C3C", Down = "#2980B9", NS = "#BDC3C7")
 if (requireNamespace("patchwork", quietly = TRUE)) {
   plots <- lapply(names(params$all_contrasts), function(nm) {
@@ -257,7 +253,7 @@ for (nm in names(params$all_contrasts)) {
 .show_pw_hm <- .show_pw && length(params$all_contrasts) <= 6
 ```
 ```{r pairwise_hm_title, eval=.show_pw_hm, results='asis'}
-cat("\n\n### Heatmap top genes -- par paire\n\n")
+cat("### Heatmap top genes -- par paire\n\n")
 ```
 ```{r pairwise_hm_grid, eval=.show_pw_hm, fig.height=4}
 for (nm in names(params$all_contrasts)) {
@@ -277,7 +273,7 @@ cat(sprintf("Heatmaps par paire non affichees (%d contrastes > 6) -- changez le 
 ---
 
 ```{r table_section, eval="table" %in% sections && !is.null(params$de_results), results='asis'}
-cat("\n\n# Table Complete -- Expression Differentielle\n\n")
+cat("# Table Complete -- Expression Differentielle\n\n")
 ```
 ```{r table_render, eval="table" %in% sections && !is.null(params$de_results) && knitr::is_html_output()}
 # NOTE: interactive DT widgets cannot render in PDF -- for PDF output we fall
@@ -299,7 +295,7 @@ knitr::kable(head(res_pdf_display, 100), caption = "Top 100 genes (table complet
 ---
 
 ```{r pathway_section, eval="pathway" %in% sections && !is.null(params$pathway_results), results='asis'}
-cat("\n\n# Pathway Enrichment --", params$pathway_db, "\n\n")
+cat("# Pathway Enrichment --", params$pathway_db, "\n\n")
 ```
 ```{r pathway_barplot, eval="pathway" %in% sections && !is.null(params$pathway_results)}
 plot_pathway_barplot(params$pathway_results, db_label = params$pathway_db, top_n = 15)
@@ -318,7 +314,7 @@ knitr::kable(head(params$pathway_results[, cols, drop = FALSE], 20))
 .show_mm <- !is.null(params$multimethod_de) && length(params$multimethod_de) >= 2
 ```
 ```{r mm_title, eval=.show_mm, results='asis'}
-cat("\n\n# Multi-methodes -- DESeq2 / edgeR / limma-voom\n\n")
+cat("# Multi-methodes -- DESeq2 / edgeR / limma-voom\n\n")
 cat(sprintf("Comparaison du meme contraste avec %d methodes : %s.\n\n",
             length(params$multimethod_de), paste(names(params$multimethod_de), collapse = ", ")))
 ```
@@ -327,10 +323,10 @@ mm_sets <- build_contrast_gene_sets(params$multimethod_de, lfc_thresh = params$l
 tryCatch(plot_upset_contrasts(mm_sets), error = function(e) cat("Diagramme non disponible :", conditionMessage(e)))
 ```
 ```{r mm_consensus_title, eval=.show_mm && !is.null(params$multimethod_consensus), results='asis'}
-# Step-3.5 FIX: meme correctif que la section UpSet -- titre AVANT
-# \begin{landscape}, jamais a l'interieur (voir commentaire detaille plus haut).
-cat("\n\n### Table consensus (top 20 par rang moyen)\n\n")
+# Step-3.5: paysage en PDF -- corrige le chevauchement de colonnes signale
+# sur "Table consensus (top 20 par rang moyen)".
 .tex_landscape_start()
+cat("### Table consensus (top 20 par rang moyen)\n\n")
 ```
 ```{r mm_consensus_table, eval=.show_mm && !is.null(params$multimethod_consensus)}
 cons <- params$multimethod_consensus
