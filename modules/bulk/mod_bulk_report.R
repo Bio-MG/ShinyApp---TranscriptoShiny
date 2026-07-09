@@ -6,7 +6,40 @@
 #   pca_palette, pca_manual_colors, volcano_role_colors, lfc_thresh,
 #   padj_thresh, heatmap_top_n, pathway_db,
 #   active_condition_col   <- Step-3.0: mirrors DE condition column name
+#   multimethod_de, multimethod_consensus <- Step-3.5: mirrored by mod_bulk_de.R
 # =============================================================================
+
+#' Locate bulk_report_template.Rmd robustly (Step-3.6 fix)
+#'
+#' The previous version hardcoded a single relative path
+#' (`modules/bulk/bulk_report_template.Rmd`), which only resolves when the
+#' app's working directory is EXACTLY the project root at render time (true
+#' for the normal `shiny::runApp()` from the project folder, but not
+#' guaranteed for every deployment/launch method — e.g. Shiny Server app
+#' directories, `rsconnect`, or running from a different `wd`). A missing
+#' template previously surfaced as a cryptic `file.copy()`/`rmarkdown::render()`
+#' error with no actionable message. This tries a small set of realistic
+#' candidates and fails with a clear, French, actionable message otherwise.
+#'
+#' @return Character path to the template file.
+.find_bulk_report_template <- function() {
+  candidates <- unique(c(
+    file.path("modules", "bulk", "bulk_report_template.Rmd"),
+    file.path(getwd(), "modules", "bulk", "bulk_report_template.Rmd"),
+    file.path(dirname(getwd()), "modules", "bulk", "bulk_report_template.Rmd")
+  ))
+  hit <- Filter(file.exists, candidates)
+  if (length(hit) == 0) {
+    stop(
+      "\u274c Template 'bulk_report_template.Rmd' introuvable. Chemins essay\u00e9s :\n  - ",
+      paste(candidates, collapse = "\n  - "),
+      "\nV\u00e9rifiez que l'application est lanc\u00e9e depuis la racine du projet ",
+      "(shiny::runApp() depuis le dossier contenant app.R).",
+      call. = FALSE
+    )
+  }
+  hit[[1]]
+}
 
 mod_bulk_report_ui <- function(id) {
   ns <- NS(id)
@@ -26,13 +59,20 @@ mod_bulk_report_ui <- function(id) {
                   "Table DE complète" = "table", "Pathway Enrichment" = "pathway"),
       selected = c("pca", "qc", "volcano", "heatmap", "table", "pathway")),
 
+    # Step-3.5: choix de mise en page pour la section "Toutes les paires"
+    # (Volcano/MA/Heatmap pairwise) — grille compacte ou 1 plot pleine page.
+    radioButtons(ns("pairwise_layout"), "Mise en page \"Toutes les paires\" (Volcano/MA/Heatmap)",
+      choices = c("Petits multiples compilés (grille)" = "grid",
+                  "Grand format (1 par contraste)" = "full"),
+      selected = "grid", inline = TRUE),
+
     radioButtons(ns("report_format"), "Format de sortie",
       choices = c("HTML interactif" = "html", "PDF statique" = "pdf", "Les deux (.zip)" = "both"),
       selected = "html"),
 
     conditionalPanel(condition = "input.report_format != 'pdf'", ns = ns,
       checkboxInput(ns("report_interactive"),
-                    "Graphiques interactifs (PCA, Volcano) — HTML uniquement", value = TRUE)),
+                    "Graphiques interactifs (PCA, Volcano, MA individuel) — HTML uniquement", value = TRUE)),
     div(class = "small text-muted", "Le PDF requiert LaTeX (tinytex::install_tinytex())."),
 
     downloadButton(ns("dl_report"), "\U0001f4c4 G\u00e9n\u00e9rer le Rapport",
@@ -66,7 +106,9 @@ mod_bulk_report_server <- function(id, global_data, shared_rv) {
     output$dl_report <- downloadHandler(
       filename = function() {
         ext <- switch(input$report_format, html = "html", pdf = "pdf", both = "zip")
-        paste0("rapport_bulk_", Sys.Date(), ".", ext)
+        # Step-3.5: horodatage à la seconde — évite l'écrasement si plusieurs
+        # exports sont générés le même jour (Sys.Date() seul ne suffisait pas).
+        paste0("rapport_bulk_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".", ext)
       },
       content = function(file) {
         req(shared_rv$vst_mat)
@@ -79,7 +121,11 @@ mod_bulk_report_server <- function(id, global_data, shared_rv) {
         all_c_sum <- if (length(all_c) == 0) NULL else
                        summarize_contrasts_updown(all_c, lfc_now, padj_now, ac)
 
-        template_path <- file.path("modules", "bulk", "bulk_report_template.Rmd")
+        template_path <- tryCatch(.find_bulk_report_template(), error = function(e) {
+          showNotification(conditionMessage(e), type = "error", duration = 15)
+          NULL
+        })
+        req(template_path)
         tmp_rmd <- file.path(tempdir(), "bulk_report_template.Rmd")
         file.copy(template_path, tmp_rmd, overwrite = TRUE)
 
@@ -100,6 +146,12 @@ mod_bulk_report_server <- function(id, global_data, shared_rv) {
           heatmap_top_n         = shared_rv$heatmap_top_n %||% 30,
           lfc_thresh            = lfc_now,
           padj_thresh           = padj_now,
+          # Step-3.5: Multi-méthodes (consensus DESeq2/edgeR/limma) — miroir
+          # écrit par mod_bulk_de.R après un run "🔬 Comparer".
+          multimethod_de        = shared_rv$multimethod_de,
+          multimethod_consensus = shared_rv$multimethod_consensus,
+          # Step-3.5: choix de mise en page pour "Toutes les paires".
+          pairwise_layout       = input$pairwise_layout %||% "grid",
           report_title          = input$report_title %||% "Analyse RNA-seq Bulk",
           report_subtitle       = input$report_subtitle %||% "",
           report_notes          = input$report_notes %||% "",
@@ -113,7 +165,17 @@ mod_bulk_report_server <- function(id, global_data, shared_rv) {
           out_files <- character(0)
           for (fmt in formats_needed) {
             incProgress(0.3, detail = paste("Rendu", fmt))
-            out_path <- file.path(tempdir(), paste0("bulk_report_", as.integer(Sys.time())))
+            # Step-3.5 FIX: tempfile() avec fileext explicite -- l'ancienne
+            # version encodait les secondes fractionnaires (%OS3) DANS le nom
+            # de base, qui contient donc un "." (ex: "..._143022.456").
+            # rmarkdown interprete CE point comme l'extension du fichier et
+            # n'ajoute PAS le vrai ".html"/".pdf" -- inoffensif pour un export
+            # simple (Shiny renomme via downloadHandler$filename), mais casse
+            # le mode "Les deux (.zip)" : les 2 fichiers dans l'archive
+            # n'avaient plus d'extension reconnaissable et n'etaient plus
+            # ouvrables directement une fois decompresses.
+            ext_i    <- if (fmt == "html_document") "html" else "pdf"
+            out_path <- tempfile(pattern = paste0("bulk_report_", ext_i, "_"), fileext = paste0(".", ext_i))
             res <- tryCatch(
               rmarkdown::render(input = tmp_rmd, output_format = fmt, output_file = out_path,
                                 params = render_params, envir = new.env(parent = globalenv()), quiet = TRUE),
@@ -132,7 +194,8 @@ mod_bulk_report_server <- function(id, global_data, shared_rv) {
 
     # ── Script R reproductible ─────────────────────────────────────────────
     output$dl_r_script <- downloadHandler(
-      filename = function() paste0("analyse_bulk_", Sys.Date(), ".zip"),
+      # Step-3.5: horodatage à la seconde — même logique que dl_report.
+      filename = function() paste0("analyse_bulk_", format(Sys.time(), "%Y%m%d_%H%M%S"), ".zip"),
       content  = function(file) {
         req(global_data$bulk_obj)
         ac    <- shared_rv$active_contrast %||% ""
@@ -164,7 +227,11 @@ mod_bulk_report_server <- function(id, global_data, shared_rv) {
         tmp_dir <- tempfile("bulk_script_"); dir.create(tmp_dir)
         on.exit(unlink(tmp_dir, recursive = TRUE), add = TRUE)
 
-        script_path <- file.path(tmp_dir, paste0("analyse_bulk_", Sys.Date(), ".R"))
+        # Step-3.5: le nom du .R interne au zip est lui aussi horodaté à la
+        # seconde — cohérent avec le nom du .zip, et évite toute confusion
+        # si l'utilisateur extrait plusieurs zips dans le même dossier.
+        script_stamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
+        script_path <- file.path(tmp_dir, paste0("analyse_bulk_", script_stamp, ".R"))
         writeLines(script_text, script_path)
 
         raw_counts <- shared_rv$counts_mapped %||% global_data$bulk_obj$counts
@@ -213,7 +280,7 @@ mod_bulk_report_server <- function(id, global_data, shared_rv) {
     }, character(1))
     pairwise_block <- paste0(
 '
-# \u2500\u2500 3bis. Pairwise \u2014 autres contrastes calcul\u00e9s dans l\'app (', length(other_names), ' paire(s) suppl.) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+# \u2500\u2500 3bis. Pairwise \u2014 autres contrastes calcul\u00e9s dans l\'app (', length(other_names), ' paire(s) suppl.) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 # R\u00e9utilise le M\u00cAME ajustement DESeq2 "dds" (design ~ ', cond, ') pour chaque paire \u2014
 # results()/lfcShrink() seulement ; DESeq() n\'est PAS relanc\u00e9.
 other_pairs <- list(
@@ -250,9 +317,9 @@ print(summary_df)
     )
   }
 
-  # \u2500\u2500 Pathway section: ORA (significant genes) or GSEA (full ranked list) \u2500\u2500\u2500
+  # ── Pathway section: ORA (significant genes) or GSEA (full ranked list) ──
   pathway_section <- if (identical(pathway_mode, "gsea")) {
-'# \u2500\u2500 7. Pathway GSEA (optionnel, sans seuil) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+'# \u2500\u2500 7. Pathway GSEA (optionnel, sans seuil) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 # BiocManager::install(c("clusterProfiler","org.Hs.eg.db","enrichplot"))
 if (requireNamespace("clusterProfiler",quietly=TRUE) && requireNamespace("org.Hs.eg.db",quietly=TRUE)) {
   library(clusterProfiler); library(org.Hs.eg.db)
@@ -279,7 +346,7 @@ if (requireNamespace("clusterProfiler",quietly=TRUE) && requireNamespace("org.Hs
 }
 '
   } else {
-'# \u2500\u2500 7. Pathway ORA (optionnel) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+'# \u2500\u2500 7. Pathway ORA (optionnel) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 # BiocManager::install(c("clusterProfiler","org.Hs.eg.db"))
 if (requireNamespace("clusterProfiler",quietly=TRUE) && requireNamespace("org.Hs.eg.db",quietly=TRUE)) {
   library(clusterProfiler); library(org.Hs.eg.db)
@@ -310,15 +377,15 @@ if (requireNamespace("clusterProfiler",quietly=TRUE) && requireNamespace("org.Hs
 
 library(DESeq2); library(ggplot2); library(dplyr)
 
-# \u2500\u2500 0. Donn\u00e9es \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+# \u2500\u2500 0. Donn\u00e9es \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 counts   <- readRDS("counts_raw.rds")   # matrix: genes x samples (raw integers)
 metadata <- readRDS("metadata.rds")     # data.frame: rownames = colnames(counts)
 
-# \u2500\u2500 1. Filtrage \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+# \u2500\u2500 1. Filtrage \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 filtered <- counts[rowSums(counts, na.rm=TRUE) >= 10 & rowSums(counts >= 1, na.rm=TRUE) >= 1, ]
 cat(sprintf("%d genes retained\\n", nrow(filtered)))
 
-# \u2500\u2500 2. VST + PCA \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+# \u2500\u2500 2. VST + PCA \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 dds_b   <- DESeq2::DESeqDataSetFromMatrix(filtered, metadata, design = ~1)
 dds_b   <- DESeq2::estimateSizeFactors(dds_b)
 vst_mat <- SummarizedExperiment::assay(DESeq2::vst(dds_b, blind = TRUE))
@@ -338,7 +405,7 @@ if (requireNamespace("pheatmap", quietly=TRUE))
   pheatmap::pheatmap(cor(vst_mat), main="QC \u2014 Corr\u00e9lation inter-\u00e9chantillons",
                      color=colorRampPalette(c("white","#2C3E50"))(50), fontsize=8)
 
-# \u2500\u2500 3. DESeq2 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+# \u2500\u2500 3. DESeq2 \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 CONDITION_COL <- "', cond, '"
 GROUP_TARGET  <- "', group_target, '"
 GROUP_REF     <- "', group_ref, '"
@@ -358,7 +425,7 @@ res_df       <- res_df[order(res_df$padj), ]
 cat(sprintf("%d significant genes\\n",
     sum(res_df$padj < PADJ_THRESH & abs(res_df$log2FoldChange) > LFC_THRESH, na.rm=TRUE)))
 ', pairwise_block, '
-# \u2500\u2500 4. Volcano \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+# \u2500\u2500 4. Volcano \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 res_v <- res_df[!is.na(res_df$padj), ]
 res_v$status <- dplyr::case_when(
   res_v$padj < PADJ_THRESH & res_v$log2FoldChange >  LFC_THRESH ~ "Up",
@@ -375,7 +442,7 @@ ggplot(res_v, aes(log2FoldChange, -log10(padj+1e-300), color=status)) +
   labs(title="Volcano", subtitle=paste(GROUP_TARGET,"vs",GROUP_REF),
        x="Log2FC", y="-log10(padj)", color="Status") + theme_minimal(base_size=13)
 
-# \u2500\u2500 5. MA-Plot \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+# \u2500\u2500 5. MA-Plot \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 res_ma <- res_df[!is.na(res_df$padj) & !is.na(res_df$baseMean), ]
 res_ma$sig <- res_ma$padj < PADJ_THRESH & abs(res_ma$log2FoldChange) > LFC_THRESH
 ggplot(res_ma, aes(log10(baseMean+1), log2FoldChange, color=sig)) +
@@ -384,7 +451,7 @@ ggplot(res_ma, aes(log10(baseMean+1), log2FoldChange, color=sig)) +
   geom_hline(yintercept=0, color="grey30") +
   labs(title="MA-Plot", x="Log10(BaseMean+1)", y="Log2FC") + theme_minimal()
 
-# \u2500\u2500 6. Heatmap top g\u00e8nes \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+# \u2500\u2500 6. Heatmap top g\u00e8nes \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 # install.packages("pheatmap")  si n\u00e9cessaire
 top_genes <- intersect(head(res_df$gene, 30), rownames(vst_mat))
 if (length(top_genes) >= 2 && requireNamespace("pheatmap", quietly=TRUE)) {
@@ -397,8 +464,8 @@ if (length(top_genes) >= 2 && requireNamespace("pheatmap", quietly=TRUE)) {
 
 ', pathway_section, '
 
-# \u2500\u2500 7bis. edgeR / limma-voom (optionnel, m\u00eame contraste) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-# D\u00e9comment\u00e9 sur demande \u2014 relance le M\u00eaME contraste avec un moteur diff\u00e9rent,
+# \u2500\u2500 7bis. edgeR / limma-voom (optionnel, m\u00eame contraste) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+# D\u00e9comment\u00e9 sur demande \u2014 relance le M\u00eame contraste avec un moteur diff\u00e9rent,
 # pour comparaison manuelle avec les r\u00e9sultats DESeq2 ci-dessus.
 # ---------------------------------------------------------------------------
 # if (requireNamespace("edgeR", quietly=TRUE)) {
@@ -424,7 +491,7 @@ if (length(top_genes) >= 2 && requireNamespace("pheatmap", quietly=TRUE)) {
 #   write.csv(res_limma, paste0("DE_limma_", CONDITION_COL, "_", Sys.Date(), ".csv"), row.names=FALSE)
 # }
 
-# \u2500\u2500 8. Export CSV \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+# \u2500\u2500 8. Export CSV \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 out <- paste0("DE_",CONDITION_COL,"_",GROUP_TARGET,"_vs_",GROUP_REF,"_",Sys.Date(),".csv")
 write.csv(res_df, out, row.names=FALSE)
 cat("Results saved to:", out, "\\n")
