@@ -241,8 +241,9 @@ server <- function(input, output, session) {
 
   mod_import_spatial_server("import_spatial", global_data)
   
-  mod_geo_server("geo", shared_rv) #ajout à verifier
-
+  
+  # AFTER (fix #1) : mod_geo_server("geo", global_data) shared_rv undefined at app scope → crash
+  mod_geo_server("geo", global_data)
   
 
   # === MODULES D'ANALYSE ===
