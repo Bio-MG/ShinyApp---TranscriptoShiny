@@ -224,6 +224,7 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
         )
         global_data$sc_obj <- obj_updated
         shared_rv$active_tab <- "tab_trajectory"
+        shared_rv$traj_reduction <- input$traj_reduction   # mirrored for report title/reduction sync (adding test)
         traj_status_rv("✓ Pseudotemps calculé avec succès")
         showNotification("✓ Trajectoire calculée", type = "message", duration = 4)
         
