@@ -20,6 +20,8 @@ params:
   corr_target_gene: NULL
   sections: NULL
   reduction: "umap"
+  traj_reduction: "umap"
+  saved_viz_list: NULL
   group_by: "seurat_clusters"
   report_title: "Analyse Single-Cell"
   report_subtitle: ""
@@ -28,7 +30,8 @@ params:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE, fig.width=9, fig.height=6)
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE,
+                      fig.width=9, fig.height=6, out.width="100%")
 sections <- params$sections
 obj      <- params$sc_obj
 `%||%`   <- function(a, b) if (is.null(a)) b else a
@@ -45,12 +48,16 @@ render_plot <- function(p, allow_interactive=TRUE) {
 .has_pathway <- !is.null(params$pathway_results) && nrow(params$pathway_results) > 0
 .has_traj    <- !is.null(obj) && "pseudotime" %in% colnames(obj@meta.data)
 .has_singler <- !is.null(obj) && length(grep("^SingleR_", colnames(obj@meta.data))) > 0
+.has_viz     <- !is.null(params$saved_viz_list) && length(params$saved_viz_list) > 0
 
-# Safe reduction picker — braces required to avoid "else inattendu" parse error
+# Safe reduction picker
 .pick_red <- function(preferred) {
   reds <- names(obj@reductions)
   if (preferred %in% reds) preferred else if (length(reds) > 0) reds[1] else NULL
 }
+
+# Trajectory reduction: use stored value (PCA/UMAP/Harmony), fallback to UMAP
+.traj_red <- params$traj_reduction %||% "umap"
 ```
 
 ```{r notes_section, eval=nzchar(params$report_notes), results='asis'}
@@ -85,7 +92,8 @@ cat("# Réduction Dimensionnelle —", toupper(params$reduction), "\n\n")
 ```{r dim_plot, eval="dim" %in% sections && !is.null(obj)}
 red <- .pick_red(params$reduction)
 if (!is.null(red)) {
-  render_plot(DimPlot(obj, reduction=red, group.by=params$group_by, label=TRUE, pt.size=0.5) +
+  render_plot(DimPlot(obj, reduction=red, group.by=params$group_by,
+                      label=TRUE, pt.size=0.5) +
               ggtitle(paste(toupper(red), "—", params$group_by)))
 } else { cat("Aucune réduction calculée — lancez le Pipeline.") }
 ```
@@ -115,10 +123,13 @@ build_markers_dt(params$markers_data)
 ```
 ```{r markers_table_pdf, eval="markers" %in% sections && .has_markers && !knitr::is_html_output()}
 df <- params$markers_data
-knitr::kable(head(data.frame(Gene=df$gene, Cluster=df$cluster,
-                              Log2FC=round(df$avg_log2FC,3),
-                              P_adj=format(df$p_val_adj,scientific=TRUE,digits=3))[order(df$p_val_adj),], 50),
-             caption="Top 50 marqueurs")
+knitr::kable(
+  head(data.frame(Gene    = df$gene,
+                  Cluster = df$cluster,
+                  Log2FC  = round(df$avg_log2FC, 3),
+                  P_adj   = format(df$p_val_adj, scientific=TRUE, digits=3)
+                  )[order(df$p_val_adj), ], 50),
+  caption="Top 50 marqueurs")
 ```
 
 ---
@@ -142,7 +153,8 @@ plot_pathway_barplot(params$pathway_results, db_label=params$pathway_db %||% "",
 build_pathway_dt(params$pathway_results)
 ```
 ```{r pathway_table_pdf, eval="pathway" %in% sections && .has_pathway && !knitr::is_html_output()}
-cols <- intersect(c("ID","Description","p.adjust","Count","GeneRatio"), colnames(params$pathway_results))
+cols <- intersect(c("ID","Description","p.adjust","Count","GeneRatio"),
+                  colnames(params$pathway_results))
 knitr::kable(head(params$pathway_results[, cols, drop=FALSE], 20))
 ```
 
@@ -150,20 +162,65 @@ knitr::kable(head(params$pathway_results[, cols, drop=FALSE], 20))
 
 ```{r traj_section, eval="trajectory" %in% sections && .has_traj, results='asis'}
 cat("# Trajectory Analysis — Pseudotemps\n\n")
+cat(sprintf("*(Réduction utilisée : %s)*\n\n", toupper(.traj_red)))
 ```
 ```{r traj_plot, eval="trajectory" %in% sections && .has_traj}
-red_t <- .pick_red("umap")
+# FIX: uses params$traj_reduction (PCA/UMAP/Harmony) instead of hardcoded "umap"
+red_t <- .pick_red(.traj_red)
 if (!is.null(red_t)) {
   render_plot(plot_trajectory(seurat_obj=obj, reduction=red_t, color_by="pseudotime"))
+} else {
+  cat(sprintf("Réduction '%s' non trouvée dans l'objet.", .traj_red))
 }
 ```
 ```{r traj_dist, eval="trajectory" %in% sections && .has_traj}
-df_t <- data.frame(pseudotime=obj@meta.data$pseudotime,
-                   cluster=as.character(obj@meta.data$seurat_clusters))
-ggplot(df_t, aes(x=pseudotime, fill=cluster)) +
-  geom_density(alpha=0.6) + scale_fill_viridis_d(option="turbo") +
-  labs(title="Distribution du Pseudotemps par Cluster", x="Pseudotemps", y="Densité") +
-  theme_minimal()
+df_t <- data.frame(pseudotime = obj@meta.data$pseudotime,
+                   cluster    = as.character(obj@meta.data$seurat_clusters))
+# Remove NA pseudotime (cells outside root component in disconnected graphs)
+df_t <- df_t[!is.na(df_t$pseudotime), ]
+if (nrow(df_t) > 0) {
+  ggplot(df_t, aes(x=pseudotime, fill=cluster)) +
+    geom_density(alpha=0.6) + scale_fill_viridis_d(option="turbo") +
+    labs(title="Distribution du Pseudotemps par Cluster",
+         x="Pseudotemps", y="Densité") +
+    theme_minimal()
+} else {
+  cat("Distribution non disponible (pseudotemps NA pour toutes les cellules).")
+}
+```
+
+---
+
+```{r custom_viz_check, include=FALSE}
+.show_viz <- "custom_viz" %in% sections && .has_viz
+```
+```{r custom_viz_section, eval=.show_viz, results='asis'}
+cat("# Visualisations Sauvegardées\n\n")
+cat(sprintf("*%d visualisation(s) exportée(s) depuis l'onglet Graphiques.*\n\n",
+            length(params$saved_viz_list)))
+```
+```{r custom_viz_loop, eval=.show_viz, results='asis'}
+# build_sc_viz_plot() is defined in mod_sc_viz.R (sourced into globalenv by app.R)
+# and therefore accessible here via new.env(parent=globalenv()).
+for (nm in names(params$saved_viz_list)) {
+  cfg <- params$saved_viz_list[[nm]]
+  cat(sprintf("\n\n### %s\n\n", nm))
+  p <- tryCatch(
+    build_sc_viz_plot(obj, cfg, sc_palette="default", manual_colors=NULL),
+    error = function(e) {
+      cat(sprintf("*Erreur lors du rendu de '%s': %s*\n\n", nm, conditionMessage(e)))
+      NULL
+    }
+  )
+  if (!is.null(p)) {
+    # heatmap / stacked_violin are grid objects (not ggplot), print directly
+    if (inherits(p, "gg") || inherits(p, "patchwork")) {
+      print(render_plot(p))
+    } else {
+      print(p)
+    }
+  }
+}
 ```
 
 ---
