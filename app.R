@@ -21,7 +21,9 @@ source("modules/sc/mod_sc_markers.R")
 source("modules/sc/mod_sc_corr.R")
 source("modules/sc/mod_sc_pathways.R")
 source("modules/sc/mod_sc_trajectory.R")
+source("modules/sc/mod_sc_mapping.R")
 source("modules/sc/mod_sc.R")
+
 
 source("modules/bulk/mod_bulk_mapping.R")
 source("modules/bulk/mod_bulk_filter.R")
@@ -249,6 +251,8 @@ server <- function(input, output, session) {
   # === MODULES D'ANALYSE ===
 
   mod_sc_server("sc", global_data)
+  
+  mod_sc_mapping_server("mapping", global_data)
 
   mod_bulk_server("bulk", global_data)
 
