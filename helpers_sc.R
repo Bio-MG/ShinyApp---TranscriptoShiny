@@ -670,63 +670,57 @@ plot_correlation_matrix <- function(seurat_obj, features, method = "pearson") {
 #' @return Objet Seurat avec $pseudotime
 
 calculate_pseudotime <- function(seurat_obj, reduction = "umap", root_cells = NULL) {
-
   if (!reduction %in% names(seurat_obj@reductions))
-
     stop(paste("Réduction", reduction, "non trouvée"))
-
   
-
   embeddings <- Embeddings(seurat_obj, reduction = reduction)
-
   if (!requireNamespace("igraph", quietly = TRUE)) stop("Package igraph requis")
-
   
-
   dist_mat <- as.matrix(dist(embeddings))
-
   k <- min(10, ncol(seurat_obj) - 1)
-
   edge_list <- c()
-
   for (i in 1:nrow(dist_mat)) {
-
     neighbors <- order(dist_mat[i, ])[2:(k+1)]
-
     for (j in neighbors) edge_list <- c(edge_list, i, j)
-
   }
-
   
-
   g <- igraph::graph(edges = edge_list, n = ncol(seurat_obj), directed = FALSE)
-
   g <- igraph::simplify(g, remove.multiple = TRUE, remove.loops = TRUE)
-
   
-
-  if (is.null(root_cells)) {
-
-    centrality <- igraph::closeness(g)
-
-    root_cell <- which.max(centrality)
-
-  } else {
-
-    root_cell <- root_cells[1]
-
+  # FIX: a k-NN graph on well-separated clusters (small test datasets) can be
+  # disconnected. igraph::distances() then returns Inf across components,
+  # which used to corrupt the min/max normalization below -- every reachable
+  # cell collapsed near 0 and the rest became NaN (empty distribution plot,
+  # trajectory colored by a single value). Now: root cell is picked within
+  # its own component, cells outside it get NA (excluded downstream by
+  # ggplot's na.rm) instead of a corrupted value.
+  comp <- igraph::components(g)
+  if (comp$no > 1) {
+    warning(sprintf(
+      "Graphe de trajectoire deconnecte (%d composantes) -- pseudotemps calcule uniquement sur la composante de la cellule racine ; les autres cellules recoivent NA.",
+      comp$no
+    ))
   }
-
   
-
-  pseudotime <- igraph::distances(g, v = root_cell, to = igraph::V(g))[1, ]
-
-  pseudotime <- (pseudotime - min(pseudotime)) / (max(pseudotime) - min(pseudotime))
-
+  if (is.null(root_cells)) {
+    main_comp  <- which.max(comp$csize)
+    comp_cells <- which(comp$membership == main_comp)
+    centrality <- igraph::closeness(g, vids = comp_cells)
+    root_cell  <- comp_cells[which.max(centrality)]
+  } else {
+    root_cell <- root_cells[1]
+  }
+  
+  root_comp <- comp$membership[root_cell]
+  same_comp <- which(comp$membership == root_comp)
+  
+  pseudotime <- rep(NA_real_, ncol(seurat_obj))
+  d   <- igraph::distances(g, v = root_cell, to = same_comp)[1, ]
+  rng <- range(d, finite = TRUE)
+  pseudotime[same_comp] <- if (diff(rng) > 0) (d - rng[1]) / diff(rng) else 0
+  
   seurat_obj$pseudotime <- pseudotime
-
-  return(seurat_obj)
-
+  seurat_obj
 }
 
 
@@ -935,4 +929,196 @@ build_markers_dt <- function(df) {
 
                                                         c("darkgreen", "green", "orange", "red")))
 
+}
+#' Remap a Seurat object's RNA assay rownames (Ensembl/Entrez) to gene symbols
+#'
+#' Mirrors remap_gene_ids_to_symbol() (helpers_io.R, used for Bulk) but is
+#' RAM-safe for large sparse SC matrices: duplicate-symbol collapsing is done
+#' via sparse indicator-matrix multiplication (t(G) %*% counts), never
+#' densifying the (genes x cells) matrix -- unlike the Bulk version which
+#' densifies (`mode(mat) <- "numeric"`), acceptable there because bulk
+#' matrices are small. Rebuilds a FRESH Seurat object from raw counts only;
+#' any existing normalization/PCA/UMAP/clusters must be recomputed after
+#' (same constraint as Bulk Step-0 mapping vs Step-1 filter/VST) -- this MUST
+#' run BEFORE "1. Pipeline".
+#'
+#' @param obj Seurat object (RNA assay, raw counts).
+#' @param from_type "ensembl" or "entrez".
+#' @param organism "human" or "mouse".
+#' @param collapse_method "sum" (recommended) or "max_mean".
+#' @param strip_version Strip Ensembl ".N" version suffix before mapping.
+#' @return list(object, n_mapped, n_unmapped, n_collapsed)
+remap_seurat_ids_to_symbol <- function(obj, from_type = "ensembl", organism = "human",
+                                       collapse_method = "sum", strip_version = TRUE) {
+  if (!from_type %in% c("ensembl", "entrez")) {
+    stop("from_type doit etre 'ensembl' ou 'entrez' pour Single-Cell.")
+  }
+  orgdb <- if (organism == "human") {
+    if (!requireNamespace("org.Hs.eg.db", quietly = TRUE)) stop("Package 'org.Hs.eg.db' requis.")
+    org.Hs.eg.db::org.Hs.eg.db
+  } else {
+    if (!requireNamespace("org.Mm.eg.db", quietly = TRUE)) stop("Package 'org.Mm.eg.db' requis.")
+    org.Mm.eg.db::org.Mm.eg.db
+  }
+  from_key <- switch(from_type, ensembl = "ENSEMBL", entrez = "ENTREZID")
+  
+  counts <- tryCatch(
+    GetAssayData(obj, assay = "RNA", layer = "counts"),
+    error = function(e) GetAssayData(obj, assay = "RNA", slot = "counts")
+  )
+  ids_clean <- rownames(counts)
+  if (strip_version && from_type == "ensembl") ids_clean <- gsub("\\.[0-9]+$", "", ids_clean)
+  
+  expected_pattern <- switch(from_type, ensembl = "^ENS(MUS)?G[0-9]{6,}", entrez = "^[0-9]+$")
+  sample_ids <- head(ids_clean[!is.na(ids_clean)], 200)
+  pct_match  <- if (length(sample_ids) > 0) mean(grepl(expected_pattern, sample_ids)) else 0
+  if (pct_match < 0.05) {
+    stop(sprintf(
+      "Vos identifiants ne ressemblent pas a des ID '%s' (%.0f%% correspondent). Exemple : '%s'.",
+      from_type, pct_match * 100, if (length(sample_ids) > 0) sample_ids[1] else "?"
+    ))
+  }
+  
+  map_df <- tryCatch(
+    AnnotationDbi::select(orgdb, keys = ids_clean, keytype = from_key, columns = "SYMBOL"),
+    error = function(e) stop("Echec du mapping d'identifiants : ", conditionMessage(e))
+  )
+  map_df <- map_df[!is.na(map_df$SYMBOL), ]
+  map_df <- map_df[!duplicated(map_df[[from_key]]), ]
+  id_to_symbol <- setNames(map_df$SYMBOL, map_df[[from_key]])
+  
+  mapped_symbols <- id_to_symbol[ids_clean]
+  keep       <- !is.na(mapped_symbols)
+  n_mapped   <- sum(keep)
+  n_unmapped <- sum(!keep)
+  if (n_mapped == 0) stop("Aucun gene n'a pu etre converti en symbole. Verifiez organisme/type source.")
+  
+  mat  <- counts[keep, , drop = FALSE]
+  syms <- unname(mapped_symbols[keep])
+  n_before_collapse <- nrow(mat)
+  uniq_syms <- unique(syms)
+  
+  if (collapse_method == "sum") {
+    # Sparse-safe collapse: G is a (n_genes x n_unique_symbols) 0/1 indicator;
+    # t(G) %*% mat sums duplicate-symbol rows without ever densifying `mat`.
+    G <- Matrix::sparseMatrix(
+      i = seq_along(syms), j = match(syms, uniq_syms), x = 1,
+      dims = c(length(syms), length(uniq_syms))
+    )
+    new_mat <- Matrix::t(G) %*% mat
+    rownames(new_mat) <- uniq_syms
+  } else {
+    mean_expr  <- Matrix::rowMeans(mat)
+    ord        <- order(syms, -mean_expr)
+    mat_ord    <- mat[ord, , drop = FALSE]
+    syms_ord   <- syms[ord]
+    keep_first <- !duplicated(syms_ord)
+    new_mat    <- mat_ord[keep_first, , drop = FALSE]
+    rownames(new_mat) <- syms_ord[keep_first]
+  }
+  
+  meta_keep <- obj@meta.data[, intersect("orig.ident", colnames(obj@meta.data)), drop = FALSE]
+  new_obj   <- CreateSeuratObject(counts = new_mat, meta.data = meta_keep, project = Project(obj))
+  if ("orig.ident" %in% colnames(meta_keep)) new_obj$orig.ident <- meta_keep$orig.ident
+  
+  list(object = new_obj, n_mapped = n_mapped, n_unmapped = n_unmapped,
+       n_collapsed = n_before_collapse - nrow(new_mat))
+}
+
+#' Build a single SC visualization from a saved config — single source of
+#' truth reused by the "📌 Ajouter au Rapport" basket (mod_sc_viz.R) and the
+#' report Rmd, so exported plots match what the user saw live. Kept SEPARATE
+#' from the live renderPlotly's inline code (not refactored in-place) to
+#' avoid any regression risk on the already-tested live viz tab.
+#'
+#' @param obj Seurat object.
+#' @param cfg List captured from mod_sc_viz's inputs at "add to report" time.
+#' @return ggplot (or patchwork-combined ggplot) object.
+build_sc_viz_plot <- function(obj, cfg) {
+  theme_fn <- switch(cfg$plot_theme %||% "minimal",
+                     classic = theme_classic(), minimal = theme_minimal(),
+                     bw = theme_bw(), void = theme_void(), theme_minimal())
+  type    <- cfg$type
+  pt_size <- cfg$pt_size %||% 0.5
+  
+  if (type == "dim") {
+    red <- cfg$reduction %||% "umap"
+    if (!red %in% names(obj@reductions)) stop("Réduction non calculée")
+    return(DimPlot(obj, reduction = red, group.by = cfg$group_by, label = TRUE, pt.size = pt_size) +
+             theme_fn + ggtitle(paste(toupper(red), "-", cfg$group_by)))
+  }
+  if (type == "feature") {
+    valid <- intersect(cfg$feat_sel, rownames(obj)); if (!length(valid)) stop("Aucun gène valide")
+    return(FeaturePlot(obj, features = head(valid, 4), ncol = 2, pt.size = pt_size) + theme_fn)
+  }
+  if (type == "scatter") {
+    return(plot_enhanced_scatter(obj, cfg$scatter_gene1, cfg$scatter_gene2, group.by = cfg$group_by,
+                                 method = cfg$scatter_cor_method %||% "pearson",
+                                 add_smooth = isTRUE(cfg$scatter_smooth), pt.size = pt_size) + theme_fn)
+  }
+  if (type == "violin") {
+    valid <- intersect(cfg$feat_sel, rownames(obj)); if (!length(valid)) stop("Aucun gène valide")
+    if (length(valid) == 1)
+      return(plot_violin_enhanced(obj, valid[1], cfg$group_by, add_boxplot = isTRUE(cfg$violin_boxplot)) + theme_fn)
+    plots <- lapply(head(valid, 4), function(g)
+      VlnPlot(obj, features = g, group.by = cfg$group_by, pt.size = 0) + theme_fn + ggtitle(g))
+    return(wrap_plots(plots, ncol = 2))
+  }
+  if (type == "stacked_violin") {
+    valid <- intersect(cfg$feat_sel, rownames(obj)); if (!length(valid)) stop("Aucun gène valide")
+    plots <- lapply(head(valid, 8), function(g)
+      VlnPlot(obj, features = g, group.by = cfg$group_by, pt.size = 0) +
+        theme(legend.position = "none", axis.title.x = element_blank(), axis.text.x = element_blank()) + ggtitle(g))
+    return(wrap_plots(plots, ncol = 1) + theme_fn)
+  }
+  if (type == "ridge") {
+    valid <- intersect(cfg$feat_sel, rownames(obj)); if (!length(valid)) stop("Aucun gène valide")
+    return(RidgePlot(obj, features = head(valid, 6), ncol = 2) + theme_fn)
+  }
+  if (type == "dot") {
+    valid <- intersect(cfg$feat_sel, rownames(obj)); if (!length(valid)) stop("Aucun gène valide")
+    return(DotPlot(obj, features = head(valid, 20), group.by = cfg$group_by) + theme_fn +
+             theme(axis.text.x = element_text(angle = 45, hjust = 1)))
+  }
+  if (type == "heatmap") {
+    valid <- intersect(cfg$feat_sel, rownames(obj)); if (!length(valid)) stop("Aucun gène valide")
+    return(DoHeatmap(obj, features = head(valid, 30), group.by = cfg$group_by) + theme_fn)
+  }
+  if (type == "correlation_matrix") {
+    valid <- intersect(cfg$feat_sel, rownames(obj)); if (length(valid) < 2) stop("≥2 gènes requis")
+    return(plot_correlation_matrix(obj, head(valid, 30), method = "pearson") + theme_fn)
+  }
+  if (type == "multi_sample") {
+    if (length(unique(obj$orig.ident)) < 2) stop("≥2 échantillons requis")
+    return(plot_multi_sample(obj, cfg$multi_gene, cfg$multi_plot_type %||% "violin") + theme_fn)
+  }
+  if (type == "volcano") {
+    grp <- cfg$group_by
+    if (!grp %in% colnames(obj@meta.data)) stop("Colonne de groupe introuvable")
+    Idents(obj) <- factor(as.character(obj@meta.data[[grp]]))
+    ident2 <- if (is.null(cfg$volcano_group2) || cfg$volcano_group2 == "rest") NULL else cfg$volcano_group2
+    markers <- FindMarkers(obj, ident.1 = cfg$volcano_group1, ident.2 = ident2,
+                           only.pos = FALSE, min.pct = 0.1, logfc.threshold = 0, verbose = FALSE)
+    if (!nrow(markers)) stop("Aucun marqueur trouvé")
+    markers$gene <- rownames(markers)
+    lfc <- cfg$volcano_logfc %||% 0.25; pval <- cfg$volcano_pval %||% 0.05
+    markers$status <- dplyr::case_when(
+      markers$avg_log2FC >  lfc & markers$p_val_adj < pval ~ "Up",
+      markers$avg_log2FC < -lfc & markers$p_val_adj < pval ~ "Down",
+      TRUE ~ "NS")
+    color_map <- c(Up = "#E74C3C", Down = "#2980B9", NS = "#BDC3C7")
+    show_lbl <- isTRUE(cfg$volcano_show_labels)
+    sig_up   <- head(markers[markers$status == "Up", ][order(-markers[markers$status == "Up", ]$avg_log2FC), ], 10)
+    sig_down <- head(markers[markers$status == "Down", ][order(markers[markers$status == "Down", ]$avg_log2FC), ], 10)
+    markers$label <- ifelse(show_lbl & markers$gene %in% c(sig_up$gene, sig_down$gene), markers$gene, "")
+    p <- ggplot(markers, aes(x = avg_log2FC, y = -log10(p_val_adj + 1e-300), color = status)) +
+      geom_point(alpha = 0.75, size = pt_size) + scale_color_manual(values = color_map) +
+      geom_vline(xintercept = c(-lfc, lfc), linetype = "dotted", color = "grey40") +
+      geom_hline(yintercept = -log10(pval), linetype = "dotted", color = "grey40") +
+      labs(title = paste0("Volcano: ", cfg$volcano_group1, " vs ", ident2 %||% "rest"),
+           x = "Log2 Fold Change", y = "-log10(P.adj)", color = "Statut") + theme_fn
+    if (show_lbl) p <- p + geom_text(aes(label = label), size = 2.8, na.rm = TRUE, vjust = -0.6, show.legend = FALSE)
+    return(p)
+  }
+  stop("Type de visualisation non supporté: ", type)
 }
