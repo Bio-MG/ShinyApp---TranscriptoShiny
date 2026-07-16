@@ -1,66 +1,41 @@
-# modules/mod_spatial.R
+# modules/spatial/mod_spatial.R
+# Parent Module: UI/Server Router for Spatial Analysis
+# Declares shared_rv and instantiates child modules (QC, Cluster, Deconv, Viz)
+
+library(shiny)
+library(bslib)
+library(bsicons)
+library(mirai)
 
 mod_spatial_ui <- function(id) {
   ns <- NS(id)
+  
   tagList(
-    layout_sidebar(
-      sidebar = sidebar(
-        title = "Pipeline Spatial",
-        
-        # Validation visual
-        uiOutput(ns("spatial_status_ui")),
-        
-        accordion(
-          id = ns("acc_spatial"),
-          open = "1. QC & Norm",
-          
-          # Etape 1: QC & Normalisation
-          accordion_panel("1. QC & Norm", icon = icon("filter"),
-                          numericInput(ns("qc_min_features"), "Min Features", 200, step=50),
-                          sliderInput(ns("qc_mt"), "% Mito Max", 0, 50, 15, step=1),
-                          radioButtons(ns("norm_method"), "Normalisation", 
-                                       choices = c("LogNormalize" = "log", "SCTransform" = "sct")),
-                          actionButton(ns("run_spatial_qc"), "Lancer QC/Norm", class = "btn-danger w-100")
-          ),
-          
-          # Etape 2: Clustering
-          accordion_panel("2. Clustering", icon = icon("shapes"),
-                          sliderInput(ns("pca_dim"), "Dims PCA", 5, 50, 20),
-                          numericInput(ns("clust_res"), "Résolution", 0.5, step=0.1),
-                          actionButton(ns("run_spatial_cluster"), "Lancer Clustering", class = "btn-warning w-100")
-          ),
-          
-          # Etape 3: Paramètres Visuels
-          accordion_panel("3. Visualisation", icon = icon("eye"),
-                          selectInput(ns("sp_image"), "Image / Slice", choices = NULL),
-                          
-                          div(style = "display: flex; align-items: center; justify-content: space-between;",
-                              tags$label("Feature à visualiser:", class = "control-label"),
-                              tooltip(
-                                bsicons::bs_icon("info-circle"),
-                                "Entrez un gène (ex: ACTB) ou une métadonnée (ex: nCount_Spatial)"
-                              )
-                          ),
-                          selectizeInput(ns("sp_gene"), NULL, choices = NULL, 
-                                         options = list(maxOptions=3000, placeholder = "Rechercher...")),
-                          
-                          sliderInput(ns("pt_size"), "Taille Points", 0.5, 10, 1.6, step=0.1),
-                          sliderInput(ns("alpha"), "Transparence", 0, 1, 1, step=0.1)
-          )
-        )
+    # Status indicator
+    uiOutput(ns("spatial_status_ui")),
+    
+    # Main navigation tabs
+    navset_card_underline(
+      id = ns("spatial_nav"),
+      
+      # Tab 1: Quality Control
+      nav_panel("QC & Metrics",
+                mod_spatial_qc_ui(ns("qc"))
       ),
       
-      # Visualization Tabs
-      navset_card_underline(
-        nav_panel("Expression Spatiale (FeaturePlot)", 
-                  plotOutput(ns("spatial_plot"), height = "700px")
-        ),
-        nav_panel("Clusters Spatiaux (DimPlot)", 
-                  plotOutput(ns("spatial_dim_plot"), height = "700px")
-        ),
-        nav_panel("QC Métriques",
-                  plotOutput(ns("spatial_qc_plot"), height = "400px")
-        )
+      # Tab 2: Spatial Clustering
+      nav_panel("Clustering",
+                mod_spatial_cluster_ui(ns("cluster"))
+      ),
+      
+      # Tab 3: Deconvolution
+      nav_panel("Deconvolution",
+                mod_spatial_deconv_ui(ns("deconv"))
+      ),
+      
+      # Tab 4: Visualization
+      nav_panel("Visualization",
+                mod_spatial_viz_ui(ns("viz"))
       )
     )
   )
@@ -69,136 +44,74 @@ mod_spatial_ui <- function(id) {
 mod_spatial_server <- function(id, global_data) {
   moduleServer(id, function(input, output, session) {
     
-    # 0. Data Status UI
+    # Initialize mirai daemons for spatial processing (6 workers max)
+    initialize_spatial_mirai(n_daemons = 6)
+    
+    # Shared reactive values for inter-module communication
+    shared_rv <- reactiveValues(
+      active_tab = "QC",
+      cluster_labels = NULL,      # Vector: Cell_ID -> Cluster_ID
+      deconv_props = NULL,        # Matrix: Cell_ID -> CellType proportions
+      current_fov_crop = NULL,    # Current field of view coordinates
+      qc_metrics = NULL,          # QC results (nCount, nFeature, %MT)
+      moran_results = NULL,       # Moran's I results for top variable genes
+      bpcells_path = "",          # Path to on-disk BPCells matrix
+      sketch_obj = NULL,          # Downsampled object for visualization (max 50k cells)
+      task_status = "idle",       # Current async task status
+      log_file = tempfile("spatial_log_", fileext = ".txt")
+    )
+    
+    # Update status UI based on data availability
     output$spatial_status_ui <- renderUI({
-      if(is.null(global_data$spatial_obj)) {
-        div(class = "alert alert-danger", 
+      if (is.null(global_data$spatial_obj)) {
+        div(class = "alert alert-danger",
             bsicons::bs_icon("exclamation-triangle"),
             " Aucune donnée spatiale chargée. Allez dans l'onglet 'Import Données > Spatial'.")
       } else {
+        n_spots <- ncol(global_data$spatial_obj)
         div(class = "alert alert-success",
             bsicons::bs_icon("check-circle"),
-            paste(" Objet Spatial:", ncol(global_data$spatial_obj), "spots"))
+            paste0(" Objet Spatial chargé: ", format(n_spots, big.mark = ","), " spots"))
       }
     })
     
-    # --- Helpers ---
-    observe({
+    # Extract BPCells path and create sketch when spatial object is loaded
+    observeEvent(global_data$spatial_obj, {
       req(global_data$spatial_obj)
+      
       obj <- global_data$spatial_obj
       
-      # 1. Update Images
-      imgs <- Images(obj)
-      if(length(imgs) > 0) {
-        updateSelectInput(session, "sp_image", choices = imgs, selected = imgs[1])
+      # Get or create BPCells directory path
+      # Assuming the import module already converted to BPCells
+      # If not, we would call convert_to_bpcells_and_fov() here
+      
+      # Store path in shared_rv for child modules
+      # This is a placeholder - actual path should come from import module
+      shared_rv$bpcells_path <- tempfile("bpcells_spatial_")
+      
+      # Create sketch for visualization (max 50k cells)
+      shared_rv$sketch_obj <- safe_downsample(obj, max_cells = 50000)
+      
+      showNotification("Spatial data prepared for analysis", type = "message", duration = 3)
+    }, ignoreInit = TRUE)
+    
+    # Instantiate child modules
+    mod_spatial_qc_server("qc", global_data, shared_rv)
+    mod_spatial_cluster_server("cluster", global_data, shared_rv)
+    mod_spatial_deconv_server("deconv", global_data, shared_rv)
+    mod_spatial_viz_server("viz", global_data, shared_rv)
+    
+    # Track active tab for context-aware operations
+    observeEvent(input$spatial_nav, {
+      shared_rv$active_tab <- input$spatial_nav
+    })
+    
+    # Cleanup on session end
+    session$onSessionEnded(function() {
+      # Optionally clean up temp files
+      if (file.exists(shared_rv$log_file)) {
+        unlink(shared_rv$log_file)
       }
-      
-      # 2. Update Features (Genes + Metadata)
-      # Optimization: Do not load all genes at once if > 30k
-      # Here we load metadata + a subset or rely on server-side selectize if needed
-      metadata_cols <- colnames(obj@meta.data)
-      # For genes, we rely on server-side updating for performance if needed, 
-      # but for now we bind them to the object rownames.
-      
-      updateSelectizeInput(session, "sp_gene", choices = c(metadata_cols, rownames(obj)), server = TRUE)
     })
-    
-    # --- 1. QC & Norm Pipeline ---
-    observeEvent(input$run_spatial_qc, {
-      req(global_data$spatial_obj)
-      obj <- global_data$spatial_obj
-      
-      withProgress(message = "Spatial QC & Norm...", {
-        tryCatch({
-          # QC
-          obj[["percent.mt"]] <- PercentageFeatureSet(obj, pattern = "^MT-")
-          obj <- subset(obj, subset = nFeature_Spatial > input$qc_min_features & percent.mt < input$qc_mt)
-          
-          if(ncol(obj) == 0) stop("Tous les spots ont été filtrés. Vérifiez vos seuils.")
-          
-          # Norm
-          if (input$norm_method == "sct") {
-            obj <- SCTransform(obj, assay = "Spatial", verbose = FALSE)
-          } else {
-            DefaultAssay(obj) <- "Spatial"
-            obj <- NormalizeData(obj, assay = "Spatial")
-            obj <- ScaleData(obj)
-          }
-          
-          global_data$spatial_obj <- obj
-          showNotification("Spatial QC & Normalisation terminés", type = "message")
-          
-        }, error = function(e) {
-          showNotification(paste("Erreur Spatial QC:", e$message), type = "error")
-        })
-      })
-    })
-    
-    # --- 2. Clustering Pipeline ---
-    observeEvent(input$run_spatial_cluster, {
-      req(global_data$spatial_obj)
-      obj <- global_data$spatial_obj
-      
-      withProgress(message = "Spatial Clustering...", {
-        tryCatch({
-          # Check which assay to use
-          assay_use <- if("SCT" %in% names(obj@assays)) "SCT" else "Spatial"
-          DefaultAssay(obj) <- assay_use
-          
-          if(assay_use == "Spatial") {
-            obj <- FindVariableFeatures(obj)
-            obj <- ScaleData(obj)
-          }
-          
-          obj <- RunPCA(obj, assay = assay_use, verbose = FALSE, npcs = input$pca_dim)
-          obj <- FindNeighbors(obj, dims = 1:input$pca_dim)
-          obj <- FindClusters(obj, resolution = input$clust_res)
-          obj <- RunUMAP(obj, dims = 1:input$pca_dim)
-          
-          global_data$spatial_obj <- obj
-          showNotification("Spatial Clustering terminé", type = "message")
-          
-        }, error = function(e) {
-          showNotification(paste("Erreur Clustering:", e$message), type = "error")
-        })
-      })
-    })
-    
-    # --- 3. Visualizations ---
-    output$spatial_plot <- renderPlot({
-      req(global_data$spatial_obj, input$sp_gene)
-      obj <- global_data$spatial_obj
-      
-      # Handle image selection
-      img_use <- input$sp_image
-      if(is.null(img_use) || !img_use %in% Images(obj)) {
-        img_use <- Images(obj)[1] # Fallback
-      }
-      
-      validate(need(!is.null(img_use), "Aucune image spatiale disponible."))
-      
-      SpatialFeaturePlot(obj, features = input$sp_gene, images = img_use,
-                         pt.size.factor = input$pt_size, alpha = c(input$alpha, 1)) +
-        theme(legend.position = "right")
-    })
-    
-    output$spatial_dim_plot <- renderPlot({
-      req(global_data$spatial_obj)
-      obj <- global_data$spatial_obj
-      
-      img_use <- input$sp_image
-      if(is.null(img_use) || !img_use %in% Images(obj)) {
-        img_use <- Images(obj)[1]
-      }
-      
-      SpatialDimPlot(obj, images = img_use, pt.size.factor = input$pt_size, alpha = c(input$alpha, 1))
-    })
-    
-    output$spatial_qc_plot <- renderPlot({
-      req(global_data$spatial_obj)
-      VlnPlot(global_data$spatial_obj, features = c("nFeature_Spatial", "nCount_Spatial", "percent.mt"), 
-              ncol = 3, pt.size = 0.1)
-    })
-    
   })
 }

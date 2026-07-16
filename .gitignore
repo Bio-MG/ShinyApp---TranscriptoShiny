@@ -1,0 +1,30 @@
+```
+# R-specific build artifacts
+*.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata/
+
+# Dependencies
+renv/library/
+renv/staging/
+packrat/lib/
+packrat/src/
+devtools/
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Environment files
+.Rprofile
+Renviron.*
+.env
+.env.local
+
+# IDE files
+.Rproj.user/
+.vscode/
+.idea/
+```
