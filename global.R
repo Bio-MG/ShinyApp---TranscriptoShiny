@@ -39,7 +39,7 @@ required_packages <- c(
 
   "SingleCellExperiment", "harmony", "destiny", "fs", "igraph", "Matrix", "reshape2",
 
-  "shinyjs", "circlize", "rmarkdown", "zip"
+  "shinyjs", "circlize", "rmarkdown", "zip", "leaflet", "mirai", "BPCells"
 
 ) 
 
