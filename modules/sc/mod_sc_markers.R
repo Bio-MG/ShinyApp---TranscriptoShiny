@@ -4,9 +4,22 @@
 # Inputs  (from parent):
 #   global_data  : reactiveValues(sc_obj = NULL)
 #   shared_rv    : reactiveValues()
+#     READ  : shared_rv$max_cells_heavy -> RAM-safety cap (mod_sc_pipeline.R)
 #     WRITE : shared_rv$markers_data    -> consumed by mod_sc_pathways
 #             shared_rv$selected_genes  -> consumed by mod_sc_viz (gene basket)
 #             shared_rv$active_tab      -> "tab_table" after markers run
+#
+# Step-3.7 changes:
+#   - BUG1 fix: markers_rv was ONLY ever written by this module's own
+#     "Trouver Marqueurs" button. The auto-pipeline (mod_sc.R) writes
+#     shared_rv$markers_data directly, which this module never read back —
+#     so after an auto-pipeline run, the "Table Marqueurs" tab stayed empty
+#     until the user manually clicked "Trouver Marqueurs" again. Fixed with
+#     an observeEvent(shared_rv$markers_data, ...) sync, mirrored in
+#     mod_sc_corr.R and mod_sc_pathways.R for the same class of bug.
+#   - RAM-safety: FindAllMarkers now runs on a per-cluster-capped subsample
+#     (shared_rv$max_cells_heavy, set in "1. Pipeline") instead of always the
+#     full object — global_data$sc_obj itself is untouched.
 #
 # UI split:
 #   mod_sc_markers_ui(id)         -> sidebar accordion body
@@ -150,6 +163,16 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
     selected_genes_rv <- reactiveVal(character(0))
     marker_log_rv    <- reactiveVal("En attente du calcul...")
 
+    # ── Step-3.7 BUG1 fix: keep the local table in sync with shared_rv,
+    #    whichever module wrote it (this one's button, OR the auto-pipeline
+    #    in mod_sc.R, OR a restored session). ignoreNULL=FALSE so an explicit
+    #    reset (e.g. "0 marqueurs trouvés") also clears the table. ──────────
+    observeEvent(shared_rv$markers_data, {
+      markers_rv(shared_rv$markers_data)
+      if (!is.null(shared_rv$markers_data))
+        marker_log_rv(paste("Trouve", nrow(shared_rv$markers_data), "marqueurs"))
+    }, ignoreNULL = FALSE)
+
     # ── Helper: push genes to the shared viz basket ───────────────────────────
     .push_to_viz <- function(genes) {
       if (length(genes) == 0) return(invisible(NULL))
@@ -172,15 +195,32 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
       marker_log_rv("Recherche en cours...")
       p <- shiny::Progress$new()
       on.exit(p$close())
-      p$set(message = "Recherche Marqueurs...", value = 0.5)
+      p$set(message = "Recherche Marqueurs...", value = 0.3)
 
       tryCatch({
         groups <- obj@meta.data[[grp_col]]
         if (length(unique(groups)) < 2) stop("Au moins 2 groupes necessaires")
         Idents(obj) <- as.factor(groups)
 
+        # ── RAM-safety (Step-3.7): cap cells/cluster before FindAllMarkers.
+        #    Computation happens on a LOCAL subsample only — global_data$sc_obj
+        #    (used everywhere else: Viz, Trajectory, export...) is untouched. ──
+        cap     <- shared_rv$max_cells_heavy %||% Inf
+        sub_res <- subsample_seurat_for_analysis(obj, max_per_group = cap, group_col = grp_col)
+        if (sub_res$was_subsampled) {
+          p$set(0.4, "Sous-échantillonnage...")
+          showNotification(
+            sprintf("ℹ️ Sous-échantillonnage : %s → %s cellules (max %s/cluster) pour accélérer FindAllMarkers.",
+                    format(sub_res$n_before, big.mark=","), format(sub_res$n_after, big.mark=","),
+                    format(cap, big.mark=",")),
+            type = "message", duration = 6)
+        }
+        obj_use <- sub_res$object
+        Idents(obj_use) <- as.factor(obj_use@meta.data[[grp_col]])
+
+        p$set(0.6, "FindAllMarkers...")
         markers <- FindAllMarkers(
-          obj,
+          obj_use,
           test.use      = input$marker_test,
           min.pct       = input$marker_min_pct,
           logfc.threshold = input$marker_logfc,
