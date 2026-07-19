@@ -1,7 +1,15 @@
 # mod_sc_corr.R  —  Child 5: Gene Correlation
 # Step-3.6 fix: shared_rv$corr_target_gene now written on every successful run
-#   (was missing → sc_report_template corr_plot received NULL target_gene
-#    → data.frame(from=NULL, to=top$gene[20]) → "0, 20" crash in PDF export)
+#   (was missing -> sc_report_template corr_plot received NULL target_gene
+#    -> data.frame(from=NULL, to=top$gene[20]) -> "0, 20" crash in PDF export)
+# Step-3.7:
+#   - BUG1 fix: corr_rv (+ the target_gene picker) is now synced from
+#     shared_rv$correlated_genes / shared_rv$corr_target_gene, so results
+#     written by the auto-pipeline (mod_sc.R) show up here immediately
+#     instead of needing a manual re-run (same class of bug as mod_sc_markers.R).
+#   - RAM-safety: find_correlated_genes() now runs on a cell-count-capped
+#     subsample (shared_rv$max_cells_heavy, stratified by orig.ident to keep
+#     per-sample balance) instead of always the full object.
 
 mod_sc_corr_ui <- function(id) {
   ns <- NS(id)
@@ -65,13 +73,45 @@ mod_sc_corr_server <- function(id, global_data, shared_rv) {
       updateSelectizeInput(session, "target_gene", choices = gene_choices, server = TRUE)
     })
 
+    # ── Step-3.7 BUG1 fix: sync local table from shared_rv (auto-pipeline / restored
+    #    session visibility) — mirrors mod_sc_markers.R / mod_sc_pathways.R. ────────
+    observeEvent(shared_rv$correlated_genes, {
+      corr_rv(shared_rv$correlated_genes)
+    }, ignoreNULL = FALSE)
+
+    # ── Sync the target-gene picker too, so it reflects who the auto-pipeline
+    #    correlated against (top marker) rather than staying on its old value. ────
+    observeEvent(shared_rv$corr_target_gene, {
+      req(shared_rv$corr_target_gene, global_data$sc_obj)
+      obj          <- global_data$sc_obj
+      var_features <- tryCatch(VariableFeatures(obj), error = function(e) character(0))
+      gene_choices <- c(var_features, setdiff(rownames(obj), var_features))
+      updateSelectizeInput(session, "target_gene", choices = gene_choices,
+                           selected = shared_rv$corr_target_gene, server = TRUE)
+    }, ignoreInit = TRUE)
+
     observeEvent(input$find_correlated, {
       req(global_data$sc_obj, input$target_gene)
-      obj <- global_data$sc_obj
+      obj_full <- global_data$sc_obj
       p <- shiny::Progress$new(); on.exit(p$close())
       p$set(message = "Calcul des corrélations...", value = 0)
 
       tryCatch({
+        p$set(0.15, "Sous-échantillonnage éventuel")
+        # ── RAM-safety (Step-3.7): cap total cells (stratified by sample) before
+        #    the per-gene cor.test() loop — the main cost driver on large datasets.
+        cap     <- shared_rv$max_cells_heavy %||% Inf
+        sub_res <- subsample_seurat_for_analysis(obj_full, max_per_group = cap,
+                                                 group_col = "orig.ident")
+        if (sub_res$was_subsampled) {
+          showNotification(
+            sprintf("ℹ️ Sous-échantillonnage : %s → %s cellules (max %s/échantillon) pour accélérer la corrélation.",
+                    format(sub_res$n_before, big.mark=","), format(sub_res$n_after, big.mark=","),
+                    format(cap, big.mark=",")),
+            type = "message", duration = 6)
+        }
+        obj <- sub_res$object
+
         p$set(0.30, "Extraction données")
         cor_df <- find_correlated_genes(
           seurat_obj  = obj,
