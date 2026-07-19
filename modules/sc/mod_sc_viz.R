@@ -10,6 +10,18 @@
 #       + dynamic manual colour pickers per group_by level (mirrors Bulk pattern)
 #   [4] "📌 Ajouter au Rapport" → shared_rv$report_viz_list (consumed by mod_sc.R)
 #   [5] Volcano pickers: fixed stale isolate bug (new reactive on list(sc_obj, group_by))
+#
+# Step-3.7 changes:
+#   [6] sc_discrete_colors() — NEW: returns a concrete hex color VECTOR (not a
+#       ggplot scale layer) for a given palette/levels. Needed because DoHeatmap()
+#       takes group.colors= directly rather than accepting `+ scale_color_manual(...)`
+#       like every other Seurat plot function used here — this is why the manual/
+#       Okabe-Ito/Set2/Viridis palette was silently ignored on the Heatmap's group
+#       color bar while the expression gradient (fill) was fine.
+#   [7] .current_cfg() now also captures sc_palette/sc_manual_colors, and the SC
+#       report (sc_report_template.Rmd) reads them back instead of hardcoding
+#       "default" — so "📌 Ajouter au Rapport" plots match the live palette both
+#       on screen AND in the exported HTML/PDF.
 # =============================================================================
 
 `%||%` <- function(a, b) if (is.null(a) || (length(a) == 1L && is.na(a)) ||
@@ -42,12 +54,61 @@ sc_discrete_scale <- function(palette = "default", manual_colors = NULL,
     NULL)   # "default" → Seurat/ggplot auto-colors
 }
 
-#' Continuous ggplot color scale for SC feature expression
-sc_continuous_scale <- function(palette = "default", aesthetic = "color") {
-  fn <- if (aesthetic == "color") scale_color_viridis_c else scale_fill_viridis_c
+#' Continuous ggplot color scale for SC feature expression (sequential: low -> high)
+#' @param gradient Optional list(low=, high=) hex colors, used when palette=="manual".
+sc_continuous_scale <- function(palette = "default", aesthetic = "color", gradient = NULL) {
+  fn_g <- if (aesthetic == "color") scale_color_gradient  else scale_fill_gradient
+  fn_v <- if (aesthetic == "color") scale_color_viridis_c else scale_fill_viridis_c
+  if (identical(palette, "manual") && !is.null(gradient))
+    return(fn_g(low = gradient$low %||% "#2166AC", high = gradient$high %||% "#B2182B"))
   opt <- switch(palette %||% "default",
     okabeito = "plasma", viridis = "plasma", set2 = "viridis", "viridis")
-  fn(option = opt)
+  fn_v(option = opt)
+}
+
+#' Diverging ggplot color scale (low -> mid -> high), for Heatmap / Correlation
+#' Matrix. Restores the "Manuel" diverging gradient picker (Step-3.7 BUG4)
+#' that was accidentally dropped when mod_sc_viz.R got fully rewritten later.
+#' @param gradient Optional list(low=, mid=, high=) hex colors.
+#' @return ggplot scale layer, or NULL for "default" (caller keeps its own
+#'   built-in diverging scale unchanged -- e.g. plot_correlation_matrix()'s
+#'   hardcoded blue/white/red).
+sc_diverging_scale <- function(palette = "default", aesthetic = "fill", gradient = NULL) {
+  fn_g2 <- if (aesthetic == "color") scale_color_gradient2 else scale_fill_gradient2
+  if (identical(palette, "manual") && !is.null(gradient))
+    return(fn_g2(low = gradient$low %||% "#2166AC", mid = gradient$mid %||% "white",
+                 high = gradient$high %||% "#B2182B", midpoint = 0))
+  NULL
+}
+
+#' Concrete discrete color VECTOR for a set of group levels (Step-3.7).
+#'
+#' Unlike sc_discrete_scale() (a ggplot scale LAYER added via `+`), some
+#' Seurat plotting functions — namely DoHeatmap() — take colors directly as a
+#' `group.colors=` argument, ordered to match the levels of `group.by`. This
+#' generates that vector using the exact same palette logic as
+#' sc_discrete_scale(), so Heatmap group bars stay visually consistent with
+#' every other plot type in the app.
+#'
+#' @param levels Character vector of group levels, in the order to color them.
+#' @param palette "default"|"okabeito"|"viridis"|"set2"|"manual"
+#' @param manual_colors Named hex vector (level→color), used when palette=="manual"
+#' @return Character vector of hex colors (same length as `levels`), or NULL
+#'   for palette=="default" (caller should then omit group.colors entirely
+#'   and let DoHeatmap use its own built-in default, unchanged behaviour).
+sc_discrete_colors <- function(levels, palette = "default", manual_colors = NULL) {
+  n <- length(levels)
+  if (n == 0) return(NULL)
+  if (identical(palette, "manual") && length(manual_colors) > 0) {
+    cols <- unname(manual_colors[levels])
+    cols[is.na(cols)] <- "#999999"
+    return(cols)
+  }
+  switch(palette %||% "default",
+    okabeito = rep(.sc_okabe, length.out = n),
+    viridis  = viridis::viridis(n, option = "turbo"),
+    set2     = scales::brewer_pal(palette = "Set2")(n),
+    NULL)   # "default" → let DoHeatmap use its own default palette
 }
 
 # ── Unified plot builder ──────────────────────────────────────────────────────
@@ -71,7 +132,8 @@ sc_continuous_scale <- function(palette = "default", aesthetic = "color") {
 #' @param sc_palette Character palette name.
 #' @param manual_colors Named character vector (level→hex), manual palette only.
 #' @return ggplot or patchwork object.
-build_sc_viz_plot <- function(obj, cfg, sc_palette = "default", manual_colors = NULL) {
+build_sc_viz_plot <- function(obj, cfg, sc_palette = "default", manual_colors = NULL,
+                              manual_gradient = NULL, manual_volcano_cols = NULL) {
   type    <- cfg$type     %||% "dim"
   pt_size <- as.numeric(cfg$pt_size %||% 0.5)
   grp     <- cfg$group_by %||% "seurat_clusters"
@@ -82,7 +144,7 @@ build_sc_viz_plot <- function(obj, cfg, sc_palette = "default", manual_colors = 
 
   pal_disc <- sc_discrete_scale(sc_palette, manual_colors, "color")
   pal_fill <- sc_discrete_scale(sc_palette, manual_colors, "fill")
-  pal_cont <- sc_continuous_scale(sc_palette, "color")
+  pal_cont <- sc_continuous_scale(sc_palette, "color", manual_gradient)
 
   # NULL-safe scale adder: suppressWarnings silences ggplot2's "replacing
   # existing scale" message (expected when overriding Seurat's built-in scale).
@@ -163,23 +225,50 @@ build_sc_viz_plot <- function(obj, cfg, sc_palette = "default", manual_colors = 
     p <- DotPlot(obj, features = head(valid, 20), group.by = grp) + theme_fn +
          theme(axis.text.x = element_text(angle = 45, hjust = 1))
     # DotPlot: color encodes avg expression (continuous), size encodes pct expressed.
-    # Apply continuous viridis on color only; size scale untouched.
-    opt <- switch(sc_palette %||% "default",
-      okabeito = "plasma", viridis = "plasma", set2 = "viridis", "viridis")
-    return(suppressWarnings(p + scale_color_viridis_c(option = opt)))
+    # Route through sc_continuous_scale() so "Manuel" (sequential gradient) is
+    # respected here too, same as FeaturePlot; size scale untouched.
+    return(suppressWarnings(p + sc_continuous_scale(sc_palette, "color", manual_gradient)))
   }
 
-  # 8. Heatmap ----------------------------------------------------------------
+  # 8. Heatmap ------------------------------------------------------------------
+  # Step-3.7 FIX: DoHeatmap's group color bar is set via group.colors=, NOT via
+  # a `+ scale_color_manual(...)` layer (unlike every other plot type here) —
+  # so the selected palette (manual/Okabe-Ito/Set2/Viridis) used to be silently
+  # ignored on the top annotation strip while the blue/red expression gradient
+  # (unaffected, driven separately by DoHeatmap's internal fill scale) looked
+  # correct. sc_discrete_colors() supplies the matching concrete color vector;
+  # NULL (palette=="default") preserves the previous/original behaviour exactly.
   if (type == "heatmap") {
     valid <- intersect(cfg$feat_sel %||% character(0), rownames(obj))
     if (!length(valid)) stop("Aucun gène valide")
-    return(DoHeatmap(obj, features = head(valid, 30), group.by = grp) + theme_fn)
+    valid <- head(valid, 30)
+    # Step-3.7A: smart_scale_data()/ScaleData() upstream now restricts scale.data
+    # to VariableFeatures by default (RAM-safety) — marker genes picked here that
+    # fall outside that set need scale.data extended on demand, without ever
+    # re-scaling the whole assay.
+    obj <- tryCatch(ensure_genes_scaled(obj, valid), error = function(e) obj)
+    lvls     <- sort(unique(na.omit(as.character(obj@meta.data[[grp]]))))
+    grp_cols <- tryCatch(sc_discrete_colors(lvls, sc_palette, manual_colors),
+                         error = function(e) NULL)
+    p <- if (!is.null(grp_cols))
+      DoHeatmap(obj, features = valid, group.by = grp, group.colors = grp_cols)
+    else
+      DoHeatmap(obj, features = valid, group.by = grp)
+    div_scale <- sc_diverging_scale(sc_palette, "fill", manual_gradient)
+    if (!is.null(div_scale)) p <- suppressWarnings(p + div_scale)
+    return(p + theme_fn)
   }
 
   # 9. Correlation Matrix -----------------------------------------------------
   if (type == "correlation_matrix") {
     valid <- intersect(cfg$feat_sel %||% character(0), rownames(obj))
     if (length(valid) < 2) stop("Au moins 2 gènes requis")
+    if (identical(sc_palette, "manual") && !is.null(manual_gradient)) {
+      return(plot_correlation_matrix(obj, head(valid, 30), method = "pearson",
+                                     low_color  = manual_gradient$low  %||% "#2166AC",
+                                     mid_color  = manual_gradient$mid  %||% "white",
+                                     high_color = manual_gradient$high %||% "#B2182B") + theme_fn)
+    }
     return(plot_correlation_matrix(obj, head(valid, 30), method = "pearson") + theme_fn)
   }
 
@@ -216,7 +305,11 @@ build_sc_viz_plot <- function(obj, cfg, sc_palette = "default", manual_colors = 
       markers$avg_log2FC < -lfc & markers$p_val_adj < pval ~ "Down",
       TRUE ~ "NS")
 
-    color_map <- c(Up = "#E74C3C", Down = "#2980B9", NS = "#BDC3C7")
+    color_map <- c(
+      Up   = manual_volcano_cols[["up"]]   %||% "#E74C3C",
+      Down = manual_volcano_cols[["down"]] %||% "#2980B9",
+      NS   = manual_volcano_cols[["ns"]]   %||% "#BDC3C7"
+    )
     show_lbl  <- isTRUE(cfg$volcano_show_labels %||% TRUE)
     top_genes <- c(head(markers$gene[markers$status == "Up"],   10),
                    head(markers$gene[markers$status == "Down"], 10))
@@ -363,7 +456,9 @@ mod_sc_viz_ui <- function(id) {
                             "Viridis"                = "viridis",
                             "Set2 (ColorBrewer)"     = "set2",
                             "Manuel"                 = "manual")),
-    uiOutput(ns("sc_manual_palette_ui"))
+    uiOutput(ns("sc_manual_palette_ui")),
+    uiOutput(ns("sc_manual_gradient_ui")),
+    uiOutput(ns("sc_manual_volcano_ui"))
   )
 }
 
@@ -419,6 +514,8 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
     # ── Helper: config snapshot (used ONLY for report basket — NOT for renders
     #    to avoid retriggerring expensive computations like FindMarkers when
     #    unrelated inputs change) ─────────────────────────────────────────────
+    # Step-3.7: now also captures sc_palette/sc_manual_colors so the exported
+    # report reproduces the exact palette the user configured live (BUG2 fix).
     .current_cfg <- function() {
       list(
         type               = input$viz_type,
@@ -438,7 +535,11 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
         volcano_pval       = input$volcano_pval,
         volcano_show_labels= input$volcano_show_labels,
         pt_size            = input$pt_size,
-        plot_theme         = input$plot_theme
+        plot_theme         = input$plot_theme,
+        sc_palette         = input$sc_palette,
+        sc_manual_colors   = if (identical(input$sc_palette, "manual")) sc_manual_colors_vec() else NULL,
+        sc_gradient        = if (identical(input$sc_palette, "manual")) sc_gradient_vec() else NULL,
+        sc_volcano_colors  = if (identical(input$sc_palette, "manual")) sc_volcano_colors_vec() else NULL
       )
     }
 
@@ -500,6 +601,65 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
         if (is.null(v) || !nzchar(v)) defaults[i] else v
       }, character(1))
       setNames(vals, lvls)
+    })
+
+    # ── Step-3.7 (restored) — continuous gradient picker: sequential for
+    #    Feature/DotPlot, diverging for Heatmap/Correlation Matrix. Only
+    #    shown when palette=="manual" AND the current viz_type actually uses
+    #    a continuous color scale. ─────────────────────────────────────────
+    output$sc_manual_gradient_ui <- renderUI({
+      if (!identical(input$sc_palette, "manual")) return(NULL)
+      type <- input$viz_type
+      if (!isTRUE(type %in% c("feature", "dot", "heatmap", "correlation_matrix"))) return(NULL)
+      if (type %in% c("feature", "dot")) {
+        ids      <- c("sc_grad_low", "sc_grad_high")
+        labels   <- c("Bas (expression min)", "Haut (expression max)")
+        defaults <- c("#2166AC", "#B2182B")
+      } else {
+        ids      <- c("sc_grad_low", "sc_grad_mid", "sc_grad_high")
+        labels   <- c("Bas (-1)", "Milieu (0)", "Haut (+1)")
+        defaults <- c("#2166AC", "#FFFFFF", "#B2182B")
+      }
+      div(
+        class = "border rounded p-2 mb-2", style = "background:#f8f9fa;",
+        h6("Dégradé manuel (expression)", style = "font-size:0.85em;font-weight:bold;margin-bottom:6px;"),
+        manual_color_picker_ui(ns, ids, labels, defaults)
+      )
+    })
+
+    sc_gradient_vec <- reactive({
+      if (!identical(input$sc_palette, "manual")) return(NULL)
+      type <- input$viz_type
+      if (type %in% c("feature", "dot")) {
+        list(low  = input$sc_grad_low  %||% "#2166AC",
+             high = input$sc_grad_high %||% "#B2182B")
+      } else if (type %in% c("heatmap", "correlation_matrix")) {
+        list(low  = input$sc_grad_low  %||% "#2166AC",
+             mid  = input$sc_grad_mid  %||% "#FFFFFF",
+             high = input$sc_grad_high %||% "#B2182B")
+      } else NULL
+    })
+
+    # ── Volcano Up/Down/NS manual colors — same rationale, separate from the
+    #    group-level discrete picker (Volcano's "groups" are a fixed 3-level
+    #    status field, not the group_by metadata column). ───────────────────
+    output$sc_manual_volcano_ui <- renderUI({
+      if (!identical(input$sc_palette, "manual") || !identical(input$viz_type, "volcano")) return(NULL)
+      ids      <- c("sc_volc_up", "sc_volc_down", "sc_volc_ns")
+      labels   <- c("Up (significatif +)", "Down (significatif -)", "NS (non significatif)")
+      defaults <- c("#E74C3C", "#2980B9", "#BDC3C7")
+      div(
+        class = "border rounded p-2 mb-2", style = "background:#f8f9fa;",
+        h6("Couleurs manuelles — Volcano", style = "font-size:0.85em;font-weight:bold;margin-bottom:6px;"),
+        manual_color_picker_ui(ns, ids, labels, defaults)
+      )
+    })
+
+    sc_volcano_colors_vec <- reactive({
+      if (!identical(input$sc_palette, "manual")) return(NULL)
+      c(up   = input$sc_volc_up   %||% "#E74C3C",
+        down = input$sc_volc_down %||% "#2980B9",
+        ns   = input$sc_volc_ns   %||% "#BDC3C7")
     })
 
     # ── Sync gene basket from sibling modules ────────────────────────────────
@@ -599,7 +759,7 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
                   pt_size=input$pt_size, plot_theme=input$plot_theme)
 
       p <- tryCatch(
-        build_sc_viz_plot(obj, cfg, input$sc_palette, sc_manual_colors_vec()),
+        build_sc_viz_plot(obj, cfg, input$sc_palette, sc_manual_colors_vec(), sc_gradient_vec()),
         error = function(e)
           ggplot() + annotate("text",x=1,y=1,label=paste("Erreur:", e$message)) + theme_void()
       )
@@ -637,7 +797,8 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
       )
 
       p_gg <- tryCatch(
-        build_sc_viz_plot(obj, cfg, input$sc_palette, sc_manual_colors_vec()),
+        build_sc_viz_plot(obj, cfg, input$sc_palette, sc_manual_colors_vec(),
+                          sc_gradient_vec(), sc_volcano_colors_vec()),
         error = function(e)
           ggplot() + annotate("text",x=1,y=1,
                               label=paste("Erreur:", e$message), color="red") + theme_void()
@@ -653,7 +814,11 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
           lfc       <- as.numeric(input$volcano_logfc %||% 0.25)
           pval      <- as.numeric(input$volcano_pval  %||% 0.05)
           pt_sz     <- as.numeric(input$pt_size %||% 0.5) * 5
-          color_map <- c("Up"="#E74C3C","Down"="#2980B9","NS"="#BDC3C7")
+          color_map <- c(
+            "Up"   = sc_volcano_colors_vec()[["up"]]   %||% "#E74C3C",
+            "Down" = sc_volcano_colors_vec()[["down"]] %||% "#2980B9",
+            "NS"   = sc_volcano_colors_vec()[["ns"]]   %||% "#BDC3C7"
+          )
           x_rng     <- range(markers$avg_log2FC, na.rm=TRUE)
           return(
             plot_ly(data=markers, x=~avg_log2FC, y=~-log10(p_val_adj+1e-300),
