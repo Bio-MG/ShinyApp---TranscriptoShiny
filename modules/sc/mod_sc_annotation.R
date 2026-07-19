@@ -1,13 +1,15 @@
 # mod_sc_annotation.R  —  Child 2: SingleR
 # Step-3.6: integrated user's working ENSG→Symbol fix (extended for mouse)
 #   Standard path now always normalizes first, then auto-remaps if no gene overlap.
+# Step-3.7: "Afficher les étiquettes" toggle for the UMAP plot (readability on
+#   dense datasets with many fine-grained cell types).
 
 .annot_is_big    <- function(obj) ncol(obj) > 100000L
 .annot_is_ondisk <- function(obj) {
-  if (!"RNA" %in% names(obj@assays)) return(FALSE)
-  tryCatch({ dl <- LayerData(obj, layer="data")
-             inherits(dl,"IterableMatrix") || inherits(dl,"DelayedMatrix") },
-           error=function(e) FALSE)
+  # Step-3.7A: now delegates to the shared sc_backend_status() helper
+  # (helpers_sc_bpcells.R) instead of its own inline IterableMatrix/
+  # DelayedMatrix check, so every module agrees on what "on-disk" means.
+  tryCatch(sc_backend_status(obj) == "disk", error = function(e) FALSE)
 }
 
 .load_ref <- function(code) {
@@ -147,6 +149,12 @@ mod_sc_annotation_ui <- function(id) {
     actionButton(ns("run_annot"),"Annoter avec SingleR",
                  class="btn-warning w-100",icon=icon("user-tag")),
     hr(),
+    # Step-3.7: readability toggle for the UMAP plot (label + repel), independent
+    # of re-running SingleR — purely a display setting for output$annot_umap_plot.
+    checkboxInput(ns("annot_show_labels"),
+                  "Afficher les étiquettes de types cellulaires sur l'UMAP",
+                  value = TRUE),
+    hr(),
     div(class="small text-muted",textOutput(ns("annot_status")))
   )
 }
@@ -225,7 +233,8 @@ mod_sc_annotation_server <- function(id, global_data, shared_rv) {
       validate(need(length(singler_cols)>0, "Aucune annotation. Lancez 'Annoter avec SingleR'."))
       col_use <- tail(singler_cols, 1)
       validate(need("umap" %in% names(obj@reductions), "UMAP non calculé."))
-      DimPlot(obj, reduction="umap", group.by=col_use, label=TRUE, repel=TRUE, pt.size=0.5) +
+      show_lbl <- isTRUE(input$annot_show_labels)
+      DimPlot(obj, reduction="umap", group.by=col_use, label=show_lbl, repel=show_lbl, pt.size=0.5) +
         labs(title=paste("SingleR:", col_use)) + theme_minimal() +
         theme(plot.title=element_text(face="bold",size=13))
     })
