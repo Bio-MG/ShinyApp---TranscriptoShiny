@@ -1,13 +1,22 @@
 # =============================================================================
-# mod_sc.R  —  Parent Router Module (Step-3.6 complete)
+# mod_sc.R  —  Parent Router Module (Step-3.7)
 # =============================================================================
-# Changes vs prev version:
-#   [1] report_viz_list + traj_reduction in reactiveValues
-#   [2] "0. Mapping IDs" accordion panel → mod_sc_mapping_server wired
-#   [3] "Visualisations Sauvegardées" section in report + basket UI
-#   [4] Auto-pipeline extended: Mapping IDs, Gene Correlation, Trajectory
-#   [5] dl_report render_params: traj_reduction, saved_viz_list forwarded
-#   [6] Pipeline status bar + Résumé Pipeline tab (from Step-3.6 earlier)
+# Step-3.6 changes (recap): report_viz_list + traj_reduction in reactiveValues,
+# "0. Mapping IDs" panel, saved-viz basket, extended auto-pipeline, pipeline
+# status bar + Résumé Pipeline tab.
+#
+# Step-3.7 changes:
+#   [1] Auto-pipeline: secondary t-SNE always computed after UMAP (capped via
+#       .AUTO_TSNE_MAX_CELLS, defined in mod_sc_pipeline.R) — same rationale
+#       as the standalone "1. Pipeline" module: PCA/UMAP/t-SNE all available
+#       in the Viz "Réduction à visualiser" picker without an extra manual run.
+#   [2] Auto-pipeline: FindAllMarkers / Gene Correlation steps now run on a
+#       RAM-safety-capped subsample (shared_rv$max_cells_heavy, set in
+#       "1. Pipeline") instead of always the full object.
+#   [3] render_params$traj_genes forwarded to the report (mirrors
+#       shared_rv$traj_genes, written live by mod_sc_trajectory.R) so the new
+#       "Gènes vs Pseudotemps" report section renders the same genes the user
+#       was looking at live.
 # =============================================================================
 
 mod_sc_ui <- function(id) {
@@ -112,7 +121,9 @@ mod_sc_server <- function(id, global_data) {
       selected_genes   = character(0),
       active_tab       = NULL,
       report_viz_list  = list(),    # basket for "📌 Ajouter au Rapport"
-      traj_reduction   = NULL       # mirrors last trajectory reduction used
+      traj_reduction   = NULL,      # mirrors last trajectory reduction used
+      traj_genes       = character(0),  # Step-3.7: mirrors "Genes vs Pseudotemps" picker
+      max_cells_heavy  = Inf        # Step-3.7: RAM-safety cap (set by mod_sc_pipeline.R)
     )
 
     observeEvent(shared_rv$active_tab, {
@@ -172,6 +183,10 @@ mod_sc_server <- function(id, global_data) {
         c("Pathways",              if (!is.null(shared_rv$pathway_results))
                                      paste(nrow(shared_rv$pathway_results),"pathways") else "Non calculés"),
         c("Pseudotemps",           if ("pseudotime" %in% colnames(meta)) "Calculé" else "Non calculé"),
+        c("Backend stockage",      if (sc_backend_status(obj) == "disk") "\U0001f4bd Disque (BPCells)" else "\U0001f9e0 RAM (standard)"),
+        c("Sous-échant. (marqueurs/corr)", if (is.finite(shared_rv$max_cells_heavy %||% Inf))
+                                     paste0("max ", format(shared_rv$max_cells_heavy, big.mark=","), " cellules/groupe")
+                                   else "désactivé"),
         c("Viz. sauvegardées",     paste(length(shared_rv$report_viz_list), "plot(s) dans le panier"))
       )
       tagList(
@@ -210,9 +225,7 @@ mod_sc_server <- function(id, global_data) {
     mod_sc_pathways_server(  "pathways",  global_data, shared_rv)
     mod_sc_trajectory_server("trajectory",global_data, shared_rv)
 
-    # ── traj_reduction mirror (written by mod_sc_trajectory_server) ──────────
-    # mod_sc_trajectory.R writes shared_rv$traj_reduction <- input$traj_reduction
-    # after a successful calculation (added in previous Step-3.6 patch).
+    # ── traj_reduction / traj_genes mirrors (written by mod_sc_trajectory_server)
 
     # =========================================================================
     # AUTO-PIPELINE MODAL
@@ -233,6 +246,10 @@ mod_sc_server <- function(id, global_data) {
           condition=sprintf("input['%s'] == true", ns_m("sc_ap_mapping")),
           selectInput(ns_m("sc_ap_mapping_org"), "Organisme (mapping)",
                       c("Humain"="human","Souris"="mouse"))),
+        checkboxInput(ns_m("sc_ap_bpcells"),
+                      sprintf("\U0001f4bd Backend disque (BPCells) si > %s cellules",
+                              format(.BPCELLS_AUTO_THRESHOLD, big.mark=" ")),
+                      value = TRUE),
         hr(),
 
         # ── Step 1: QC ──────────────────────────────────────────────────────
@@ -251,6 +268,8 @@ mod_sc_server <- function(id, global_data) {
             numericInput(ns_m("sc_ap_res"), "Résolution clustering", 0.5, min=0.1, step=0.1)
           )
         ),
+        div(class="small text-muted mb-2",
+            "UMAP + t-SNE secondaire (si dataset raisonnable) sont tous deux calculés."),
 
         # ── Steps 2-7 optional ──────────────────────────────────────────────
         h6("Options supplémentaires", style="font-weight:bold;"),
@@ -347,7 +366,32 @@ mod_sc_server <- function(id, global_data) {
           "Seulement %d cellule(s) après QC (départ: %d). Réduisez les seuils.", ncol(obj), n_before))
         log_sc(sprintf("\u2713 QC : %d cellules (retirées: %d)", ncol(obj), n_before-ncol(obj)))
 
+        # ── Step 1b: Backend disque (BPCells) — Step-3.7A ────────────────────
+        if (isTRUE(input$sc_ap_bpcells) && ncol(obj) > .BPCELLS_AUTO_THRESHOLD &&
+            sc_backend_status(obj) == "memory") {
+          if (!.bpcells_available()) {
+            log_sc("\u26a0\ufe0f BPCells non installé — pipeline exécuté en RAM.")
+          } else {
+            conv <- tryCatch(convert_seurat_to_bpcells(obj),
+                             error=function(e){ log_sc(paste("\u26a0\ufe0f BPCells:", e$message)); NULL })
+            if (!is.null(conv)) {
+              obj <- conv$object
+              if (!isTRUE(conv$already_disk)) {
+                session$onSessionEnded(function() unlink(conv$dir, recursive = TRUE))
+                log_sc(sprintf("\u2713 Backend disque (BPCells) activé — %s cellules",
+                               format(conv$n_cells, big.mark=" ")))
+              }
+            }
+          }
+        }
+
         # ── Step 2: Normalisation ────────────────────────────────────────────
+        if (sc_backend_status(obj) == "disk") {
+          .ap_old_plan <- future::plan()
+          on.exit(future::plan(.ap_old_plan), add = TRUE)
+          future::plan("sequential")
+          log_sc("\u2139\ufe0f Backend disque : future séquentiel forcé (Normalisation \u2192 Clustering) pour éviter un crash 'globals size'.")
+        }
         p$set(0.20,"Normalisation..."); log_sc("Normalisation...")
         if (input$sc_ap_norm=="sct") {
           obj <- SCTransform(obj, verbose=FALSE, vst.flavor="v2")
@@ -355,7 +399,7 @@ mod_sc_server <- function(id, global_data) {
           DefaultAssay(obj) <- "RNA"
           obj <- NormalizeData(obj, verbose=FALSE)
           obj <- FindVariableFeatures(obj, nfeatures=2000, verbose=FALSE)
-          obj <- ScaleData(obj, verbose=FALSE)
+          obj <- smart_scale_data(obj)   # Step-3.7A: RAM-safe (VariableFeatures only)
         }
         log_sc("\u2713 Normalisation OK")
 
@@ -372,9 +416,23 @@ mod_sc_server <- function(id, global_data) {
         log_sc(sprintf("\u2713 %d clusters (res %.1f)", n_cl, input$sc_ap_res))
 
         # ── Step 5: UMAP ────────────────────────────────────────────────────
-        p$set(0.70,"UMAP...")
+        p$set(0.68,"UMAP...")
         obj <- RunUMAP(obj, dims=1:input$sc_ap_pca_dim, verbose=FALSE)
         log_sc("\u2713 UMAP OK")
+
+        # ── Step 5b: t-SNE secondaire (Step-3.7) ──────────────────────────────
+        # Toujours calculé (si dataset raisonnable) pour être disponible aux
+        # côtés de PCA/UMAP dans le picker "Réduction à visualiser" — même
+        # constante de garde que le module "1. Pipeline" (.AUTO_TSNE_MAX_CELLS).
+        p$set(0.72,"t-SNE (secondaire)...")
+        if (ncol(obj) > .AUTO_TSNE_MAX_CELLS) {
+          log_sc(sprintf("\u26a0\ufe0f t-SNE secondaire ignoré (%s cellules > %s max).",
+                         format(ncol(obj), big.mark=" "), format(.AUTO_TSNE_MAX_CELLS, big.mark=" ")))
+        } else {
+          obj <- tryCatch(RunTSNE(obj, dims=1:input$sc_ap_pca_dim, verbose=FALSE),
+                          error=function(e){ log_sc(paste("\u26a0\ufe0f t-SNE secondaire ignoré:", e$message)); obj })
+          log_sc("\u2713 t-SNE secondaire OK")
+        }
 
         # ── Step 6: SingleR (optional) ───────────────────────────────────────
         if (isTRUE(input$sc_ap_singler)) {
@@ -402,12 +460,19 @@ mod_sc_server <- function(id, global_data) {
         }
 
         # ── Step 7: FindAllMarkers (optional, also needed for correlation) ───
+        # Step-3.7: runs on a RAM-safety-capped subsample (shared_rv$max_cells_heavy,
+        # set in "1. Pipeline") — `obj` itself (UMAP/t-SNE/clusters) stays full-size.
         if (isTRUE(input$sc_ap_markers) || isTRUE(input$sc_ap_correlation)) {
           p$set(0.82,"FindAllMarkers...")
+          cap_m   <- shared_rv$max_cells_heavy %||% Inf
+          sub_res <- subsample_seurat_for_analysis(obj, max_per_group = cap_m, group_col = "seurat_clusters")
+          if (sub_res$was_subsampled)
+            log_sc(sprintf("\u2139\ufe0f Sous-échantillonnage marqueurs : %d \u2192 %d cellules (max %d/cluster)",
+                           sub_res$n_before, sub_res$n_after, cap_m))
           log_sc("FindAllMarkers...")
           markers <- tryCatch({
-            Idents(obj) <- obj$seurat_clusters
-            FindAllMarkers(obj, only.pos=TRUE, min.pct=0.1,
+            Idents(sub_res$object) <- sub_res$object$seurat_clusters
+            FindAllMarkers(sub_res$object, only.pos=TRUE, min.pct=0.1,
                            logfc.threshold=0.25, verbose=FALSE)
           }, error=function(e) { log_sc(paste("\u26a0\ufe0f Markers:", e$message)); NULL })
 
@@ -446,6 +511,7 @@ mod_sc_server <- function(id, global_data) {
         }
 
         # ── Step 8: Gene Correlation (optional) — top significant marker ─────
+        # Step-3.7: also subsampled (stratified by orig.ident) with the same cap.
         if (isTRUE(input$sc_ap_correlation)) {
           p$set(0.90,"Corrélation..."); log_sc("Gene Correlation...")
           target_gene <- NULL
@@ -456,8 +522,13 @@ mod_sc_server <- function(id, global_data) {
           if (is.null(target_gene)) {
             log_sc("\u26a0\ufe0f Corrélation ignorée : aucun marqueur disponible (cochez 'Marqueurs').")
           } else {
+            cap_c     <- shared_rv$max_cells_heavy %||% Inf
+            sub_res_c <- subsample_seurat_for_analysis(obj, max_per_group = cap_c, group_col = "orig.ident")
+            if (sub_res_c$was_subsampled)
+              log_sc(sprintf("\u2139\ufe0f Sous-échantillonnage corrélation : %d \u2192 %d cellules (max %d/échantillon)",
+                             sub_res_c$n_before, sub_res_c$n_after, cap_c))
             corr_res <- tryCatch(
-              find_correlated_genes(obj, target_gene=target_gene,
+              find_correlated_genes(sub_res_c$object, target_gene=target_gene,
                                     method="pearson", threshold=0.3, top_n=50),
               error=function(e) { log_sc(paste("\u26a0\ufe0f Corrélation:", e$message)); NULL }
             )
@@ -546,6 +617,7 @@ mod_sc_server <- function(id, global_data) {
           sections         = input$report_sections %||% character(0),
           reduction        = "umap",
           traj_reduction   = shared_rv$traj_reduction %||% "umap",
+          traj_genes       = shared_rv$traj_genes %||% character(0),  # Step-3.7
           saved_viz_list   = if (length(shared_rv$report_viz_list)) shared_rv$report_viz_list else NULL,
           group_by         = "seurat_clusters",
           report_title     = input$report_title    %||% "Analyse Single-Cell",
@@ -664,19 +736,21 @@ DefaultAssay(obj) <- "RNA"
 obj <- NormalizeData(obj); obj <- FindVariableFeatures(obj, nfeatures=2000); obj <- ScaleData(obj)
 # Alternative : obj <- SCTransform(obj, verbose=FALSE, vst.flavor="v2")
 
-# \u2500\u2500 3. PCA + Clustering + UMAP ──────────────────────────────────────────────────
+# \u2500\u2500 3. PCA + Clustering + UMAP/t-SNE ────────────────────────────────────────────
 PCA_DIMS  <- ', pca_dims, '
 CLUST_RES <- 0.5
 obj <- RunPCA(obj, npcs=PCA_DIMS, verbose=FALSE)
 obj <- FindNeighbors(obj, dims=1:PCA_DIMS); obj <- FindClusters(obj, resolution=CLUST_RES)
 obj <- RunUMAP(obj, dims=1:PCA_DIMS, verbose=FALSE)
+obj <- RunTSNE(obj, dims=1:PCA_DIMS, verbose=FALSE)   # secondaire, dispo dans l\'app aux côtés d\'UMAP
 p_umap <- DimPlot(obj, reduction="umap", label=TRUE, pt.size=0.5)
 print(p_umap)
 ggsave(paste0("umap_clusters_',date,'.png"), p_umap, width=8, height=6, dpi=300)
 
 # \u2500\u2500 4. Marqueurs ────────────────────────────────────────────────────────────────
 ',
-if (has_markers) paste0('# ', nrow(shared_rv$markers_data), ' marqueurs dans l\'app (recalculés ci-dessous) :') else '',
+if (has_markers) paste0('# ', nrow(shared_rv$markers_data), ' marqueurs dans l\'app (recalculés ci-dessous, sur',
+  ' l\'objet complet — l\'app peut avoir sous-échantillonné pour accélérer le calcul) :') else '',
 '
 Idents(obj) <- obj$seurat_clusters
 markers <- FindAllMarkers(obj, only.pos=TRUE, min.pct=0.1, logfc.threshold=0.25, verbose=FALSE)
