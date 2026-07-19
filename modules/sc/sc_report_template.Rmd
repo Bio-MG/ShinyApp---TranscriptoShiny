@@ -21,6 +21,7 @@ params:
   sections: NULL
   reduction: "umap"
   traj_reduction: "umap"
+  traj_genes: NULL
   saved_viz_list: NULL
   group_by: "seurat_clusters"
   report_title: "Analyse Single-Cell"
@@ -36,9 +37,15 @@ sections <- params$sections
 obj      <- params$sc_obj
 `%||%`   <- function(a, b) if (is.null(a)) b else a
 
+# Step-3.7 fix (BUG6): printing a raw htmlwidget (plotly) inside a
+# results='asis' loop mixed with cat() breaks JS/CSS dependency injection.
+# Wrapping in htmltools::tagList() is the documented htmlwidgets pattern for
+# this exact situation.
 render_plot <- function(p, allow_interactive=TRUE) {
   if (allow_interactive && isTRUE(params$interactive) && knitr::is_html_output() &&
-      requireNamespace("plotly", quietly=TRUE)) return(plotly::ggplotly(p))
+      requireNamespace("plotly", quietly=TRUE)) {
+    return(htmltools::tagList(plotly::ggplotly(p)))
+  }
   p
 }
 
@@ -49,6 +56,11 @@ render_plot <- function(p, allow_interactive=TRUE) {
 .has_traj    <- !is.null(obj) && "pseudotime" %in% colnames(obj@meta.data)
 .has_singler <- !is.null(obj) && length(grep("^SingleR_", colnames(obj@meta.data))) > 0
 .has_viz     <- !is.null(params$saved_viz_list) && length(params$saved_viz_list) > 0
+
+# Step-3.7: genes actually present in the object, used by the new
+# "Gènes vs Pseudotemps" section below.
+.traj_genes_valid <- if (!is.null(obj)) intersect(params$traj_genes %||% character(0), rownames(obj)) else character(0)
+.show_traj_genes  <- "trajectory" %in% sections && .has_traj && length(.traj_genes_valid) > 0
 
 # Safe reduction picker
 .pick_red <- function(preferred) {
@@ -141,6 +153,23 @@ cat("# Réseau de Corrélation —", params$corr_target_gene %||% "", "\n\n")
 plot_gene_correlation_network(params$correlated_genes, params$corr_target_gene, top_n=20)
 ```
 
+```{r corr_table_title, eval="correlation" %in% sections && .has_corr, results='asis'}
+cat("\n\n## Table des Corrélations\n\n")
+```
+```{r corr_table_html, eval="correlation" %in% sections && .has_corr && knitr::is_html_output()}
+# Step-3.7: was missing entirely from the report (network plot only).
+build_corr_dt(params$correlated_genes)
+```
+```{r corr_table_pdf, eval="correlation" %in% sections && .has_corr && !knitr::is_html_output()}
+df_c <- params$correlated_genes
+knitr::kable(
+  head(data.frame(Gene        = df_c$gene,
+                  Correlation = round(df_c$correlation, 3),
+                  P_adj       = format(df_c$p_adj, scientific=TRUE, digits=2)
+                  )[order(-abs(df_c$correlation)), ], 30),
+  caption="Top 30 gènes corrélés")
+```
+
 ---
 
 ```{r pathway_section, eval="pathway" %in% sections && .has_pathway, results='asis'}
@@ -165,7 +194,6 @@ cat("# Trajectory Analysis — Pseudotemps\n\n")
 cat(sprintf("*(Réduction utilisée : %s)*\n\n", toupper(.traj_red)))
 ```
 ```{r traj_plot, eval="trajectory" %in% sections && .has_traj}
-# FIX: uses params$traj_reduction (PCA/UMAP/Harmony) instead of hardcoded "umap"
 red_t <- .pick_red(.traj_red)
 if (!is.null(red_t)) {
   render_plot(plot_trajectory(seurat_obj=obj, reduction=red_t, color_by="pseudotime"))
@@ -174,19 +202,22 @@ if (!is.null(red_t)) {
 }
 ```
 ```{r traj_dist, eval="trajectory" %in% sections && .has_traj}
-df_t <- data.frame(pseudotime = obj@meta.data$pseudotime,
-                   cluster    = as.character(obj@meta.data$seurat_clusters))
-# Remove NA pseudotime (cells outside root component in disconnected graphs)
-df_t <- df_t[!is.na(df_t$pseudotime), ]
-if (nrow(df_t) > 0) {
-  ggplot(df_t, aes(x=pseudotime, fill=cluster)) +
-    geom_density(alpha=0.6) + scale_fill_viridis_d(option="turbo") +
-    labs(title="Distribution du Pseudotemps par Cluster",
-         x="Pseudotemps", y="Densité") +
-    theme_minimal()
-} else {
-  cat("Distribution non disponible (pseudotemps NA pour toutes les cellules).")
-}
+tryCatch(
+  print(plot_pseudotime_distribution(obj)),
+  error = function(e) cat("Distribution non disponible :", conditionMessage(e))
+)
+```
+
+```{r traj_genes_title, eval=.show_traj_genes, results='asis'}
+cat("\n\n## Gènes vs Pseudotemps\n\n")
+```
+```{r traj_genes_plot, eval=.show_traj_genes}
+# Step-3.7: was entirely missing from the report — same helper as the live
+# "Genes vs Pseudotemps" tab (single source of truth, helpers_sc.R).
+tryCatch(
+  render_plot(plot_genes_vs_pseudotime(obj, .traj_genes_valid, smooth_method="loess")),
+  error = function(e) cat("Plot non disponible :", conditionMessage(e))
+)
 ```
 
 ---
@@ -206,18 +237,46 @@ for (nm in names(params$saved_viz_list)) {
   cfg <- params$saved_viz_list[[nm]]
   cat(sprintf("\n\n### %s\n\n", nm))
   p <- tryCatch(
-    build_sc_viz_plot(obj, cfg, sc_palette="default", manual_colors=NULL),
+    # Step-3.7A.1: sc_gradient / sc_volcano_colors are captured at "Ajouter au
+    # Rapport" time (mod_sc_viz.R .current_cfg()) alongside sc_palette/sc_manual_colors.
+    build_sc_viz_plot(obj, cfg,
+                      sc_palette          = cfg$sc_palette %||% "default",
+                      manual_colors       = cfg$sc_manual_colors,
+                      manual_gradient     = cfg$sc_gradient,
+                      manual_volcano_cols = cfg$sc_volcano_colors),
     error = function(e) {
       cat(sprintf("*Erreur lors du rendu de '%s': %s*\n\n", nm, conditionMessage(e)))
       NULL
     }
   )
   if (!is.null(p)) {
-    # heatmap / stacked_violin are grid objects (not ggplot), print directly
-    if (inherits(p, "gg") || inherits(p, "patchwork")) {
-      print(render_plot(p))
-    } else {
-      print(p)
+    is_static_type   <- isTRUE(cfg$type %in% c("heatmap", "stacked_violin"))
+    want_interactive <- !is_static_type && isTRUE(params$interactive) &&
+                        knitr::is_html_output() && requireNamespace("plotly", quietly=TRUE) &&
+                        (inherits(p, "gg") || inherits(p, "patchwork"))
+    rendered <- FALSE
+    if (want_interactive) {
+      # Step-3.7A.1 fix: multiple ggplotly() widgets printed in the same
+      # results='asis' loop can collide on auto-generated elementIds -- every
+      # widget after the first (sometimes all of them) then fails to mount in
+      # the browser: a blank space where the plot should be, with the
+      # surrounding title/text rendering fine (that's plain markdown, so it
+      # looked like "only the title shows up"). Forcing a unique elementId
+      # per widget fixes this reliably.
+      widget <- tryCatch({
+        w <- plotly::ggplotly(p)
+        w$elementId <- paste0("sc_viz_", make.names(nm), "_", sample.int(1e6, 1))
+        w
+      }, error = function(e) NULL)
+      if (!is.null(widget)) { print(htmltools::tagList(widget)); rendered <- TRUE }
+    }
+    if (!rendered) {
+      # Static fallback (heatmap/stacked_violin always, PDF always, or if the
+      # interactive conversion above failed) -- image-embed is format-agnostic
+      # (pandoc renders `![]()` correctly in both html_document and pdf_document).
+      tmp_png <- tempfile(fileext = ".png")
+      ggsave(tmp_png, plot = p, width = 9, height = 6, dpi = 150, bg = "white")
+      cat(sprintf("\n\n![%s](%s)\n\n", nm, tmp_png))
     }
   }
 }
