@@ -8,14 +8,24 @@
 # Contents:
 #   - Plots      : plot_enhanced_scatter(), plot_violin_enhanced(),
 #                  plot_multi_sample(), plot_correlation_matrix(),
-#                  plot_trajectory(), plot_gene_correlation_network()
-#   - Analysis   : find_correlated_genes(), calculate_pseudotime()
-#   - DT tables  : build_markers_dt()
+#                  plot_trajectory(), plot_gene_correlation_network(),
+#                  plot_pseudotime_distribution(), plot_genes_vs_pseudotime()
+#   - Analysis   : find_correlated_genes(), calculate_pseudotime(),
+#                  subsample_seurat_for_analysis()
+#   - DT tables  : build_markers_dt(), build_corr_dt()
 #   - Internal   : .get_norm_matrix() (Seurat v4/v5-safe assay extraction)
 #
 # Pathway enrichment (ORA/GSEA) is shared with bulk — see helpers_pathway.R,
 # NOT duplicated here even though it's used by mod_sc_pathways.R too.
-# Depends on: Seurat, ggplot2, igraph, viridis, scales, DT.
+#
+# Step-3.7 note: the SC visualization builder build_sc_viz_plot(obj, cfg,
+# sc_palette, manual_colors) lives ONLY in mod_sc_viz.R now. A duplicate
+# 2-arg build_sc_viz_plot(obj, cfg) used to live here too — since app.R
+# source()s helpers_sc.R BEFORE mod_sc_viz.R, the later definition always
+# silently shadowed this one (same global env), making it 100% dead code.
+# Removed to avoid confusion/drift between the two copies.
+#
+# Depends on: Seurat, ggplot2, igraph, viridis, scales, DT, tidyr.
 # =============================================================================
 
 
@@ -551,7 +561,11 @@ find_correlated_genes <- function(seurat_obj, target_gene,
 
 #' @return ggplot heatmap
 
-plot_correlation_matrix <- function(seurat_obj, features, method = "pearson") {
+plot_correlation_matrix <- function(seurat_obj, features, method = "pearson",
+
+                                    low_color = "#2166AC", mid_color = "white",
+
+                                    high_color = "#B2182B") {
 
   
 
@@ -617,7 +631,7 @@ plot_correlation_matrix <- function(seurat_obj, features, method = "pearson") {
 
     scale_fill_gradient2(
 
-      low = "#2166AC", mid = "white", high = "#B2182B",
+      low = low_color, mid = mid_color, high = high_color,
 
       midpoint = 0, limits = c(-1, 1),
 
@@ -930,6 +944,233 @@ build_markers_dt <- function(df) {
                                                         c("darkgreen", "green", "orange", "red")))
 
 }
+
+
+
+#' Standardized gene-correlation results DT table (Step-3.7) — mirrors
+
+#' build_markers_dt(). Shared by mod_sc_corr.R's live table AND the new
+
+#' "Table des Corrélations" report section (sc_report_template.Rmd), so the
+#' exported table always matches what was shown live.
+
+#'
+
+#' @param df data.frame from find_correlated_genes() (gene, correlation, p_value, abs_correlation, p_adj).
+
+#' @return A DT::datatable object.
+
+build_corr_dt <- function(df) {
+
+  df_display <- data.frame(
+
+    Gene        = df$gene,
+
+    Correlation = round(df$correlation, 3),
+
+    `|r|`       = round(df$abs_correlation, 3),
+
+    P_value     = format(df$p_value, scientific = TRUE, digits = 2),
+
+    P_adj       = format(df$p_adj, scientific = TRUE, digits = 2),
+
+    check.names = FALSE
+
+  )
+
+  DT::datatable(df_display, selection = list(mode = "none"), filter = "top", rownames = FALSE,
+
+                options = list(pageLength = 15, scrollX = TRUE)) %>%
+
+    DT::formatStyle("Correlation",
+
+                    background = DT::styleColorBar(range(df_display$Correlation), "lightblue"),
+
+                    backgroundSize = "98% 88%", backgroundRepeat = "no-repeat",
+
+                    backgroundPosition = "center") %>%
+
+    DT::formatStyle("P_adj", color = DT::styleInterval(c(0.001, 0.01, 0.05),
+
+                                                        c("darkgreen", "green", "orange", "red")))
+
+}
+
+
+
+#' Pseudotime distribution plot (density per cluster) — Step-3.7: factored
+
+#' out of mod_sc_trajectory.R so the live plot, its PNG/PDF export, AND the
+
+#' HTML/PDF report all call the exact same code (previous version had 3
+
+#' near-identical ggplot blocks copy-pasted across renderPlot()/downloadHandler,
+
+#' and the downloadHandler ones were broken — they called `output$xxx()` which
+
+#' is not how you retrieve a renderPlot's underlying ggplot object).
+
+#'
+
+#' @param seurat_obj Seurat object with a $pseudotime + $seurat_clusters column.
+
+#' @return ggplot object.
+
+plot_pseudotime_distribution <- function(seurat_obj) {
+
+  if (!"pseudotime" %in% colnames(seurat_obj@meta.data))
+
+    stop("Pseudotemps non calculé — lancez d'abord 'Calculer Trajectoire'.")
+
+
+
+  df <- data.frame(
+
+    pseudotime = seurat_obj@meta.data$pseudotime,
+
+    cluster    = as.character(seurat_obj@meta.data$seurat_clusters)
+
+  )
+
+  df <- df[!is.na(df$pseudotime), ]   # cells outside the root component (disconnected graph)
+
+  if (nrow(df) == 0) stop("Distribution non disponible (pseudotemps NA pour toutes les cellules).")
+
+
+
+  ggplot(df, aes(x = pseudotime, fill = cluster)) +
+
+    geom_density(alpha = 0.6) +
+
+    scale_fill_viridis_d(option = "turbo") +
+
+    labs(title = "Distribution du Pseudotemps par Cluster",
+
+         x = "Pseudotemps", y = "Densité", fill = "Cluster") +
+
+    theme_minimal() +
+
+    theme(plot.title = element_text(face = "bold", size = 13))
+
+}
+
+
+
+#' Gene expression vs pseudotime plot (Step-3.7) — factored out of
+
+#' mod_sc_trajectory.R, single source of truth reused by the live render
+
+#' (no more "Tracer" button — updates as soon as genes are picked), its
+
+#' PNG/PDF export, AND the new "Gènes vs Pseudotemps" report section.
+
+#'
+
+#' @param seurat_obj Seurat object with a $pseudotime column already computed.
+
+#' @param genes Character vector of gene symbols to trace (max 8 kept).
+
+#' @param smooth_method "loess", "gam", or "lm".
+
+#' @return ggplot object (faceted, one panel per gene).
+
+plot_genes_vs_pseudotime <- function(seurat_obj, genes, smooth_method = "loess") {
+
+  if (!"pseudotime" %in% colnames(seurat_obj@meta.data))
+
+    stop("Pseudotemps non calculé — lancez d'abord 'Calculer Trajectoire'.")
+
+
+
+  valid_genes <- intersect(genes, rownames(seurat_obj))
+
+  valid_genes <- head(valid_genes, 8)
+
+  if (length(valid_genes) == 0) stop("Aucun gène valide sélectionné")
+
+
+
+  expr_df   <- FetchData(seurat_obj, vars = c("pseudotime", valid_genes))
+
+  expr_long <- tidyr::pivot_longer(expr_df, cols = -pseudotime,
+
+                                   names_to = "gene", values_to = "expression")
+
+
+
+  ggplot(expr_long, aes(x = pseudotime, y = expression, color = gene)) +
+
+    geom_point(alpha = 0.3, size = 0.6) +
+
+    geom_smooth(method = smooth_method, se = TRUE, linewidth = 0.9, na.rm = TRUE) +
+
+    facet_wrap(~gene, scales = "free_y", ncol = 2) +
+
+    scale_color_viridis_d(option = "turbo") +
+
+    labs(title = "Expression génique le long du Pseudotemps",
+
+         x = "Pseudotemps", y = "Expression Normalisée") +
+
+    theme_minimal() +
+
+    theme(legend.position = "none",
+
+          plot.title = element_text(face = "bold", size = 13),
+
+          strip.text = element_text(face = "bold"))
+
+}
+
+
+
+#' Cap the number of cells used for a heavy per-cell computation
+#' (FindAllMarkers, find_correlated_genes, ...) — RAM/CPU safety net for large
+#' Single-Cell objects on a 32Go CPU-only machine.
+#'
+#' Stratifies by `group_col` (default: cluster) rather than a flat random
+#' subsample of the whole object, so rare cell populations are not wiped out
+#' by a global cap. Falls back to a flat/global subsample if `group_col`
+#' doesn't exist in the object's metadata (e.g. correlation subsampling by
+#' "orig.ident" on a single-sample object).
+#'
+#' @param obj Seurat object.
+#' @param max_per_group Max cells to keep per level of `group_col`.
+#'   `Inf`, `NA`, or `<= 0` disables subsampling entirely (returns obj as-is).
+#' @param group_col Metadata column to stratify by (default "seurat_clusters").
+#' @param seed Random seed, for reproducibility across re-runs of the same step.
+#' @return list(object, n_before, n_after, was_subsampled)
+subsample_seurat_for_analysis <- function(obj, max_per_group = Inf,
+                                          group_col = "seurat_clusters", seed = 1) {
+  n_before <- ncol(obj)
+
+  if (is.null(max_per_group) || is.na(max_per_group) || !is.finite(max_per_group) || max_per_group <= 0) {
+    return(list(object = obj, n_before = n_before, n_after = n_before, was_subsampled = FALSE))
+  }
+
+  set.seed(seed)
+
+  if (group_col %in% colnames(obj@meta.data)) {
+    groups <- obj@meta.data[[group_col]]
+    keep_cells <- unlist(lapply(split(Cells(obj), groups), function(cells) {
+      if (length(cells) > max_per_group) sample(cells, max_per_group) else cells
+    }), use.names = FALSE)
+  } else {
+    all_cells  <- Cells(obj)
+    keep_cells <- if (length(all_cells) > max_per_group) sample(all_cells, max_per_group) else all_cells
+  }
+
+  n_after <- length(keep_cells)
+  if (n_after >= n_before) {
+    return(list(object = obj, n_before = n_before, n_after = n_before, was_subsampled = FALSE))
+  }
+
+  list(object = subset(obj, cells = keep_cells),
+       n_before = n_before, n_after = n_after, was_subsampled = TRUE)
+}
+
+
+
 #' Remap a Seurat object's RNA assay rownames (Ensembl/Entrez) to gene symbols
 #'
 #' Mirrors remap_gene_ids_to_symbol() (helpers_io.R, used for Bulk) but is
@@ -1023,102 +1264,4 @@ remap_seurat_ids_to_symbol <- function(obj, from_type = "ensembl", organism = "h
   
   list(object = new_obj, n_mapped = n_mapped, n_unmapped = n_unmapped,
        n_collapsed = n_before_collapse - nrow(new_mat))
-}
-
-#' Build a single SC visualization from a saved config — single source of
-#' truth reused by the "📌 Ajouter au Rapport" basket (mod_sc_viz.R) and the
-#' report Rmd, so exported plots match what the user saw live. Kept SEPARATE
-#' from the live renderPlotly's inline code (not refactored in-place) to
-#' avoid any regression risk on the already-tested live viz tab.
-#'
-#' @param obj Seurat object.
-#' @param cfg List captured from mod_sc_viz's inputs at "add to report" time.
-#' @return ggplot (or patchwork-combined ggplot) object.
-build_sc_viz_plot <- function(obj, cfg) {
-  theme_fn <- switch(cfg$plot_theme %||% "minimal",
-                     classic = theme_classic(), minimal = theme_minimal(),
-                     bw = theme_bw(), void = theme_void(), theme_minimal())
-  type    <- cfg$type
-  pt_size <- cfg$pt_size %||% 0.5
-  
-  if (type == "dim") {
-    red <- cfg$reduction %||% "umap"
-    if (!red %in% names(obj@reductions)) stop("Réduction non calculée")
-    return(DimPlot(obj, reduction = red, group.by = cfg$group_by, label = TRUE, pt.size = pt_size) +
-             theme_fn + ggtitle(paste(toupper(red), "-", cfg$group_by)))
-  }
-  if (type == "feature") {
-    valid <- intersect(cfg$feat_sel, rownames(obj)); if (!length(valid)) stop("Aucun gène valide")
-    return(FeaturePlot(obj, features = head(valid, 4), ncol = 2, pt.size = pt_size) + theme_fn)
-  }
-  if (type == "scatter") {
-    return(plot_enhanced_scatter(obj, cfg$scatter_gene1, cfg$scatter_gene2, group.by = cfg$group_by,
-                                 method = cfg$scatter_cor_method %||% "pearson",
-                                 add_smooth = isTRUE(cfg$scatter_smooth), pt.size = pt_size) + theme_fn)
-  }
-  if (type == "violin") {
-    valid <- intersect(cfg$feat_sel, rownames(obj)); if (!length(valid)) stop("Aucun gène valide")
-    if (length(valid) == 1)
-      return(plot_violin_enhanced(obj, valid[1], cfg$group_by, add_boxplot = isTRUE(cfg$violin_boxplot)) + theme_fn)
-    plots <- lapply(head(valid, 4), function(g)
-      VlnPlot(obj, features = g, group.by = cfg$group_by, pt.size = 0) + theme_fn + ggtitle(g))
-    return(wrap_plots(plots, ncol = 2))
-  }
-  if (type == "stacked_violin") {
-    valid <- intersect(cfg$feat_sel, rownames(obj)); if (!length(valid)) stop("Aucun gène valide")
-    plots <- lapply(head(valid, 8), function(g)
-      VlnPlot(obj, features = g, group.by = cfg$group_by, pt.size = 0) +
-        theme(legend.position = "none", axis.title.x = element_blank(), axis.text.x = element_blank()) + ggtitle(g))
-    return(wrap_plots(plots, ncol = 1) + theme_fn)
-  }
-  if (type == "ridge") {
-    valid <- intersect(cfg$feat_sel, rownames(obj)); if (!length(valid)) stop("Aucun gène valide")
-    return(RidgePlot(obj, features = head(valid, 6), ncol = 2) + theme_fn)
-  }
-  if (type == "dot") {
-    valid <- intersect(cfg$feat_sel, rownames(obj)); if (!length(valid)) stop("Aucun gène valide")
-    return(DotPlot(obj, features = head(valid, 20), group.by = cfg$group_by) + theme_fn +
-             theme(axis.text.x = element_text(angle = 45, hjust = 1)))
-  }
-  if (type == "heatmap") {
-    valid <- intersect(cfg$feat_sel, rownames(obj)); if (!length(valid)) stop("Aucun gène valide")
-    return(DoHeatmap(obj, features = head(valid, 30), group.by = cfg$group_by) + theme_fn)
-  }
-  if (type == "correlation_matrix") {
-    valid <- intersect(cfg$feat_sel, rownames(obj)); if (length(valid) < 2) stop("≥2 gènes requis")
-    return(plot_correlation_matrix(obj, head(valid, 30), method = "pearson") + theme_fn)
-  }
-  if (type == "multi_sample") {
-    if (length(unique(obj$orig.ident)) < 2) stop("≥2 échantillons requis")
-    return(plot_multi_sample(obj, cfg$multi_gene, cfg$multi_plot_type %||% "violin") + theme_fn)
-  }
-  if (type == "volcano") {
-    grp <- cfg$group_by
-    if (!grp %in% colnames(obj@meta.data)) stop("Colonne de groupe introuvable")
-    Idents(obj) <- factor(as.character(obj@meta.data[[grp]]))
-    ident2 <- if (is.null(cfg$volcano_group2) || cfg$volcano_group2 == "rest") NULL else cfg$volcano_group2
-    markers <- FindMarkers(obj, ident.1 = cfg$volcano_group1, ident.2 = ident2,
-                           only.pos = FALSE, min.pct = 0.1, logfc.threshold = 0, verbose = FALSE)
-    if (!nrow(markers)) stop("Aucun marqueur trouvé")
-    markers$gene <- rownames(markers)
-    lfc <- cfg$volcano_logfc %||% 0.25; pval <- cfg$volcano_pval %||% 0.05
-    markers$status <- dplyr::case_when(
-      markers$avg_log2FC >  lfc & markers$p_val_adj < pval ~ "Up",
-      markers$avg_log2FC < -lfc & markers$p_val_adj < pval ~ "Down",
-      TRUE ~ "NS")
-    color_map <- c(Up = "#E74C3C", Down = "#2980B9", NS = "#BDC3C7")
-    show_lbl <- isTRUE(cfg$volcano_show_labels)
-    sig_up   <- head(markers[markers$status == "Up", ][order(-markers[markers$status == "Up", ]$avg_log2FC), ], 10)
-    sig_down <- head(markers[markers$status == "Down", ][order(markers[markers$status == "Down", ]$avg_log2FC), ], 10)
-    markers$label <- ifelse(show_lbl & markers$gene %in% c(sig_up$gene, sig_down$gene), markers$gene, "")
-    p <- ggplot(markers, aes(x = avg_log2FC, y = -log10(p_val_adj + 1e-300), color = status)) +
-      geom_point(alpha = 0.75, size = pt_size) + scale_color_manual(values = color_map) +
-      geom_vline(xintercept = c(-lfc, lfc), linetype = "dotted", color = "grey40") +
-      geom_hline(yintercept = -log10(pval), linetype = "dotted", color = "grey40") +
-      labs(title = paste0("Volcano: ", cfg$volcano_group1, " vs ", ident2 %||% "rest"),
-           x = "Log2 Fold Change", y = "-log10(P.adj)", color = "Statut") + theme_fn
-    if (show_lbl) p <- p + geom_text(aes(label = label), size = 2.8, na.rm = TRUE, vjust = -0.6, show.legend = FALSE)
-    return(p)
-  }
-  stop("Type de visualisation non supporté: ", type)
 }
