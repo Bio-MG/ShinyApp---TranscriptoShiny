@@ -22,6 +22,7 @@ source("modules/sc/mod_sc_corr.R")
 source("modules/sc/mod_sc_pathways.R")
 source("modules/sc/mod_sc_trajectory.R")
 source("modules/sc/mod_sc_mapping.R")
+source("helpers_sc_bpcells.R")
 source("modules/sc/mod_sc.R")
 
 
@@ -33,9 +34,17 @@ source("modules/bulk/mod_bulk_pathways.R")
 source("modules/bulk/mod_bulk_report.R")
 source("modules/bulk/mod_bulk.R")
 
+
+# Source Spatial Utilities
+source("R/utils_spatial_io.R")
+source("R/utils_spatial_async.R")
+
+# Source Spatial Modules
 source("modules/spatial/mod_spatial.R")
-
-
+source("modules/spatial/mod_spatial_qc.R")
+source("modules/spatial/mod_spatial_cluster.R")
+source("modules/spatial/mod_spatial_deconv.R")
+source("modules/spatial/mod_spatial_viz.R")
 
 
 
