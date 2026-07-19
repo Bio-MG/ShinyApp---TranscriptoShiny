@@ -1,5 +1,10 @@
 # mod_sc_pathways.R  —  Child 6: GO / KEGG / Reactome enrichment
 # Step-3.6: auto-remap ENSG→Symbol before enrichment when gene IDs are Ensembl
+# Step-3.7: BUG1 fix — pathway_rv (+ the "Base de donnees" selector) is now
+#   synced from shared_rv$pathway_results / shared_rv$pathway_db, so results
+#   written by the auto-pipeline (mod_sc.R) show up here immediately instead
+#   of needing a manual "Lancer Enrichissement" click (same class of bug as
+#   mod_sc_markers.R / mod_sc_corr.R).
 
 # ── Helper: remap ENSG IDs → Symbols if detected ─────────────────────────────
 .remap_if_ensg <- function(genes, organism = "human", notify_fn = NULL) {
@@ -88,6 +93,17 @@ mod_sc_pathways_server <- function(id, global_data, shared_rv) {
       updateSelectizeInput(session, "pathway_genes",
                            choices=rownames(global_data$sc_obj), server=TRUE)
     })
+
+    # ── Step-3.7 BUG1 fix: sync local table + db selector from shared_rv,
+    #    written by either this module's own button OR the auto-pipeline. ──────
+    observeEvent(shared_rv$pathway_results, {
+      pathway_rv(shared_rv$pathway_results)
+    }, ignoreNULL = FALSE)
+
+    observeEvent(shared_rv$pathway_db, {
+      req(shared_rv$pathway_db)
+      updateSelectInput(session, "pathway_db", selected = shared_rv$pathway_db)
+    }, ignoreInit = TRUE)
 
     observeEvent(input$run_pathway, {
       req(global_data$sc_obj)
