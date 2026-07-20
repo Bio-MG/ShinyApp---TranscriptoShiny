@@ -6,8 +6,21 @@ source("global.R")
 # d'importance, R ne résout les appels de fonction qu'à l'exécution).
 source("helpers_io.R")
 source("helpers_sc.R")
+source("helpers_sc_bpcells.R")
 source("helpers_bulk.R")
 source("helpers_pathway.R")
+
+# --- NOUVEAU (module Spatial v3, BPCells + mirai) ---
+# Ces deux fichiers ne dépendent que des packages chargés par global.R —
+# doivent être sourcés avant tout module qui les utilise (import spatial,
+# modules/spatial/*). init_spatial_daemons() est idempotent : sans risque si
+# rappelé plus tard (voir mod_spatial.R, appel défensif dans le module).
+source("R/utils_spatial_async.R")
+source("R/utils_spatial_io.R")
+tryCatch(
+  init_spatial_daemons(n_daemons = 6),
+  error = function(e) warning("Initialisation des daemons mirai (spatial) impossible : ", conditionMessage(e))
+)
 
 source("modules/import/mod_import_sc.R")
 source("modules/import/mod_import_bulk.R")
@@ -22,7 +35,6 @@ source("modules/sc/mod_sc_corr.R")
 source("modules/sc/mod_sc_pathways.R")
 source("modules/sc/mod_sc_trajectory.R")
 source("modules/sc/mod_sc_mapping.R")
-source("helpers_sc_bpcells.R")
 source("modules/sc/mod_sc.R")
 
 
@@ -34,17 +46,14 @@ source("modules/bulk/mod_bulk_pathways.R")
 source("modules/bulk/mod_bulk_report.R")
 source("modules/bulk/mod_bulk.R")
 
-
-# Source Spatial Utilities
-source("R/utils_spatial_io.R")
-source("R/utils_spatial_async.R")
-
-# Source Spatial Modules
-source("modules/spatial/mod_spatial.R")
+# --- Spatial (parent + 4 sous-modules enfants) ---
 source("modules/spatial/mod_spatial_qc.R")
 source("modules/spatial/mod_spatial_cluster.R")
 source("modules/spatial/mod_spatial_deconv.R")
 source("modules/spatial/mod_spatial_viz.R")
+source("modules/spatial/mod_spatial.R")
+
+
 
 
 
@@ -136,7 +145,11 @@ ui <- page_navbar(
 
         "La sauvegarde capture l'ensemble des données chargées (Single-Cell, Bulk, Spatial) — ",
 
-        "elle est déclenchée uniquement par ce bouton, jamais automatiquement."),
+        "elle est déclenchée uniquement par ce bouton, jamais automatiquement. Pour le Spatial, ",
+
+        "seul le \"sketch\" (echantillon RAM) est garanti portable : les donnees BPCells sur ",
+
+        "disque doivent rester disponibles au meme chemin pour relancer clustering/deconvolution."),
 
 
 
@@ -238,7 +251,7 @@ server <- function(input, output, session) {
 
     bulk_obj = NULL,    # Objet Bulk (liste avec counts + metadata)
 
-    spatial_obj = NULL  # Objet Seurat Spatial
+    spatial_obj = NULL  # Spatial : liste (sketch, bpcells_dir, coords, ...) — voir R/utils_spatial_io.R
 
   )
 
@@ -338,6 +351,9 @@ server <- function(input, output, session) {
 
 
     # ── Spatial state ────────────────────────────────────────────────────
+    # global_data$spatial_obj est une LISTE depuis le refactor BPCells (voir
+    # R/utils_spatial_io.R) : $sketch (Seurat, RAM) + $bpcells_dir (disque,
+    # pleine resolution) + $n_total — ne jamais faire ncol(spatial_obj) direct.
 
     spatial_state <- if (is.null(global_data$spatial_obj)) {
 
@@ -345,15 +361,25 @@ server <- function(input, output, session) {
 
     } else {
 
-      n_spots <- ncol(global_data$spatial_obj)
+      obj <- global_data$spatial_obj
+
+      n_total  <- obj$n_total %||% ncol(obj$sketch)
+
+      n_sketch <- ncol(obj$sketch)
+
+      disk_ok  <- !is.null(obj$bpcells_dir) && dir.exists(obj$bpcells_dir)
 
       list(
 
-        icon   = "🟢",
+        icon   = if (disk_ok) "🟢" else "🟠",
 
         label  = "Spatial",
 
-        detail = sprintf("%s spots", format(n_spots, big.mark = ","))
+        detail = sprintf("%s elements (%s en RAM, sketch)%s",
+
+                         format(n_total, big.mark = ","), format(n_sketch, big.mark = ","),
+
+                         if (!disk_ok) " — disque introuvable" else "")
 
       )
 
@@ -394,6 +420,16 @@ server <- function(input, output, session) {
   # a per-module save, because a partial save would silently desync from
 
   # whatever else is loaded when the user reopens the app.
+
+  # NOTE spatial_obj: only $sketch (in-RAM Seurat) round-trips faithfully in
+
+  # the .rds itself; $bpcells_dir is just a path string — the BPCells cache
+
+  # directory it points to must still exist on disk for clustering/
+
+  # deconvolution to work after reloading (see bpcells_cache_root(), a
+
+  # persistent tools::R_user_dir() location, not tempdir()).
 
   output$save_session_btn <- downloadHandler(
 
@@ -475,6 +511,40 @@ server <- function(input, output, session) {
 
       )
 
+
+
+      # Spatial : avertir si le cache BPCells sur disque n'est plus présent —
+
+      # le sketch reste utilisable pour la visualisation, mais tout nouveau
+
+      # calcul lourd (clustering/deconvolution) nécessitera un réimport.
+
+      if (!is.null(snapshot$spatial_obj)) {
+
+        disk_ok <- !is.null(snapshot$spatial_obj$bpcells_dir) &&
+
+          dir.exists(snapshot$spatial_obj$bpcells_dir)
+
+        if (!disk_ok) {
+
+          showNotification(
+
+            paste0("⚠️ Session Spatial : donnees BPCells introuvables sur ce disque ",
+
+                   "(", snapshot$spatial_obj$bpcells_dir %||% "chemin inconnu", "). ",
+
+                   "Seule la vue \"sketch\" est disponible — reimportez pour relancer ",
+
+                   "clustering/deconvolution."),
+
+            type = "warning", duration = 12
+
+          )
+
+        }
+
+      }
+
     }, error = function(e) {
 
       showNotification(
@@ -521,7 +591,9 @@ server <- function(input, output, session) {
 
           tags$li(tags$strong("RNA Bulk:"), " Matrices de counts (CSV/TSV) + Métadonnées optionnelles"),
 
-          tags$li(tags$strong("Spatial:"), " Dossiers 10X Visium ou fichiers .rds spatiaux")
+          tags$li(tags$strong("Spatial:"), " Visium / Xenium / CosMx — converti automatiquement en ",
+
+                  "matrice BPCells sur disque + echantillon RAM (\"sketch\")")
 
         ),
 
@@ -587,7 +659,9 @@ server <- function(input, output, session) {
 
           tags$li(tags$strong("Bulk RNA:"), " Analyse différentielle avec DESeq2/edgeR"),
 
-          tags$li(tags$strong("Spatial:"), " Visualisation spatiale des patterns d'expression")
+          tags$li(tags$strong("Spatial:"), " QC → Clustering (BANKSY, asynchrone) → Deconvolution ",
+
+                  "(RCTD/STdeconvolve, asynchrone) → Visualisation WebGL")
 
         ),
 
@@ -601,7 +675,11 @@ server <- function(input, output, session) {
 
         p("Le bouton ", tags$code("Nettoyer RAM"), 
 
-          " permet de libérer la mémoire entre les analyses."),
+          " permet de libérer la mémoire entre les analyses. Pour le Spatial, les calculs ",
+
+          "lourds (clustering, déconvolution) s'exécutent dans des processus séparés (mirai) ",
+
+          "qui ne bloquent jamais votre session."),
 
         
 
@@ -748,4 +826,3 @@ server <- function(input, output, session) {
 # Lancement de l'application
 
 shinyApp(ui, server)
-
