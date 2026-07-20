@@ -22,6 +22,9 @@ params:
   reduction: "umap"
   traj_reduction: "umap"
   traj_genes: NULL
+  qc_snapshot: NULL
+  fig_width: 9
+  fig_height: 6
   saved_viz_list: NULL
   group_by: "seurat_clusters"
   report_title: "Analyse Single-Cell"
@@ -31,11 +34,12 @@ params:
 ---
 
 ```{r setup, include=FALSE}
+`%||%`   <- function(a, b) if (is.null(a)) b else a
 knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE,
-                      fig.width=9, fig.height=6, out.width="100%")
+                      fig.width=params$fig_width %||% 9, fig.height=params$fig_height %||% 6,
+                      out.width="100%")
 sections <- params$sections
 obj      <- params$sc_obj
-`%||%`   <- function(a, b) if (is.null(a)) b else a
 
 # Step-3.7 fix (BUG6): printing a raw htmlwidget (plotly) inside a
 # results='asis' loop mixed with cat() breaks JS/CSS dependency injection.
@@ -94,6 +98,17 @@ cat("# QC — Contrôle Qualité\n\n")
 ```{r qc_plot, eval="qc" %in% sections && !is.null(obj)}
 qc_ft <- intersect(c("nFeature_RNA","nCount_RNA","percent.mt"), colnames(obj@meta.data))
 if (length(qc_ft) > 0) VlnPlot(obj, features=qc_ft, ncol=length(qc_ft), pt.size=0)
+```
+
+```{r qc_table_title, eval="qc" %in% sections && !is.null(obj) && !is.null(params$qc_snapshot), results='asis'}
+cat("\n\n## Récapitulatif par échantillon\n\n")
+```
+```{r qc_table_html, eval="qc" %in% sections && !is.null(obj) && !is.null(params$qc_snapshot) && knitr::is_html_output()}
+DT::datatable(build_qc_summary_table(params$qc_snapshot, obj), rownames = FALSE,
+             options = list(pageLength = 10, dom = "t"))
+```
+```{r qc_table_pdf, eval="qc" %in% sections && !is.null(obj) && !is.null(params$qc_snapshot) && !knitr::is_html_output()}
+knitr::kable(build_qc_summary_table(params$qc_snapshot, obj))
 ```
 
 ---
@@ -275,7 +290,8 @@ for (nm in names(params$saved_viz_list)) {
       # interactive conversion above failed) -- image-embed is format-agnostic
       # (pandoc renders `![]()` correctly in both html_document and pdf_document).
       tmp_png <- tempfile(fileext = ".png")
-      ggsave(tmp_png, plot = p, width = 9, height = 6, dpi = 150, bg = "white")
+      ggsave(tmp_png, plot = p, width = params$fig_width %||% 9, height = params$fig_height %||% 6,
+             dpi = 150, bg = "white")
       cat(sprintf("\n\n![%s](%s)\n\n", nm, tmp_png))
     }
   }

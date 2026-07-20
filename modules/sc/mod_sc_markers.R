@@ -218,6 +218,18 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
         obj_use <- sub_res$object
         Idents(obj_use) <- as.factor(obj_use@meta.data[[grp_col]])
 
+        # Step-3.8: on a disk-backed (BPCells) object, re-orient the
+        # (already cell-capped) subsample to row-major storage before
+        # FindAllMarkers — avoids the repeated internal transpositions
+        # BPCells otherwise performs on every marker test (see
+        # optimize_bpcells_for_markers() docstring, helpers_sc_bpcells.R).
+        bpc <- tryCatch(optimize_bpcells_for_markers(obj_use), error = function(e) NULL)
+        if (!is.null(bpc) && isTRUE(bpc$transposed)) {
+          obj_use <- bpc$object
+          Idents(obj_use) <- as.factor(obj_use@meta.data[[grp_col]])
+          session$onSessionEnded(function() unlink(bpc$dir, recursive = TRUE))
+        }
+
         p$set(0.6, "FindAllMarkers...")
         markers <- FindAllMarkers(
           obj_use,
