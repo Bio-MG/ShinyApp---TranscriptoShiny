@@ -55,10 +55,6 @@ mod_sc_ui <- function(id) {
           textInput(ns("report_title"),    "Titre",    value="Analyse Single-Cell"),
           textInput(ns("report_subtitle"), "Sous-titre (optionnel)"),
           textAreaInput(ns("report_notes"), "Notes", rows=3),
-          fluidRow(
-            column(6, numericInput(ns("report_fig_width"),  "Largeur plots (in)", value=9, min=4, max=16, step=1)),
-            column(6, numericInput(ns("report_fig_height"), "Hauteur plots (in)", value=6, min=3, max=12, step=1))
-          ),
           checkboxGroupInput(ns("report_sections"), "Sections",
             choices=c("QC"="qc",
                       "Réduction Dimensionnelle"="dim",
@@ -104,10 +100,7 @@ mod_sc_ui <- function(id) {
       nav_panel("QC", value="tab_qc",
         card(max_height=750,
           div(class="card-header bg-light", h5("Contrôle Qualité", class="card-title mb-0")),
-          plotOutput(ns("plot_qc"), height="400px"),
-          div(class="p-2",
-              h6("Récapitulatif par échantillon", style="font-weight:bold;"),
-              DTOutput(ns("qc_summary_table"))))),
+          plotOutput(ns("plot_qc"), height="650px"))),
       nav_panel("Résumé Pipeline", value="tab_summary",
         card(card_header("Résumé du Pipeline Single-Cell"),
              uiOutput(ns("pipeline_summary_panel"))))
@@ -143,19 +136,6 @@ mod_sc_server <- function(id, global_data) {
       req(global_data$sc_obj)
       VlnPlot(global_data$sc_obj,
               features=c("nFeature_RNA","nCount_RNA","percent.mt"), ncol=3, pt.size=0)
-    })
-
-    # ── QC summary table (Step-3.7A.2) ────────────────────────────────────────
-    # shared_rv$qc_snapshot (before/after counts + %mito median) is written by
-    # mod_sc_pipeline.R / this module's auto-pipeline at QC-filter time; the
-    # doublet column is joined live here from whatever's currently in
-    # global_data$sc_obj (see build_qc_summary_table(), helpers_sc.R).
-    output$qc_summary_table <- renderDT({
-      req(shared_rv$qc_snapshot)
-      df <- build_qc_summary_table(shared_rv$qc_snapshot, global_data$sc_obj)
-      datatable(df, rownames=FALSE, options=list(pageLength=10, dom="t")) %>%
-        formatStyle("Pct_Conserve", color = styleInterval(c(50, 80), c("red","orange","darkgreen"))) %>%
-        formatStyle("Pct_Doublets", color = styleInterval(c(5, 15), c("darkgreen","orange","red")))
     })
 
     # ── Pipeline status bar ───────────────────────────────────────────────────
@@ -253,14 +233,31 @@ mod_sc_server <- function(id, global_data) {
     sc_log_rv <- reactiveVal("")
     output$sc_auto_log <- renderText({ sc_log_rv() })
 
+    # ── Step-3.8A: sketch preset hint + PCA-dims sync ──────────────────────
+    output$sc_ap_sketch_hint <- renderUI({
+      req(global_data$sc_obj, input$sc_ap_sketch_preset)
+      n_total <- ncol(global_data$sc_obj)
+      params  <- resolve_sketch_preset(input$sc_ap_sketch_preset, n_total,
+                                        input$sc_ap_sketch_ncells_custom)
+      will_sketch <- params$ncells < n_total
+      div(class="small", style=paste0("color:", if (will_sketch) "#18BC9C" else "#666", ";"),
+          sprintf("%s / %s cellules \u2014 npcs sugg\u00e9r\u00e9 : %d%s",
+                  format(params$ncells, big.mark=" "), format(n_total, big.mark=" "),
+                  params$npcs,
+                  if (will_sketch) " (sketch actif, slider Dims PCA ajust\u00e9)"
+                  else " (pas de sketch)"))
+    })
+
+    observeEvent(input$sc_ap_sketch_preset, {
+      req(global_data$sc_obj)
+      params <- resolve_sketch_preset(input$sc_ap_sketch_preset, ncol(global_data$sc_obj),
+                                       input$sc_ap_sketch_ncells_custom)
+      updateSliderInput(session, "sc_ap_pca_dim", value = params$npcs)
+    }, ignoreInit = TRUE)
+
     observeEvent(input$btn_auto_pipeline_sc, {
       req(global_data$sc_obj)
       ns_m <- session$ns
-      # Step-3.8: pre-select organism from ID prefix (ENSMUSG.../ENSG...) so
-      # mouse datasets don't silently fail mapping against org.Hs.eg.db.
-      detected_org <- tryCatch(detect_organism_from_ids(rownames(global_data$sc_obj)),
-                               error = function(e) NA_character_)
-      mapping_org_selected <- if (!is.na(detected_org)) detected_org else "human"
       showModal(modalDialog(
         title="\u25b6 Pipeline SC \u2014 Paramètres", size="m", easyClose=TRUE,
 
@@ -270,7 +267,7 @@ mod_sc_server <- function(id, global_data) {
         conditionalPanel(
           condition=sprintf("input['%s'] == true", ns_m("sc_ap_mapping")),
           selectInput(ns_m("sc_ap_mapping_org"), "Organisme (mapping)",
-                      c("Humain"="human","Souris"="mouse"), selected = mapping_org_selected)),
+                      c("Humain"="human","Souris"="mouse"))),
         checkboxInput(ns_m("sc_ap_bpcells"),
                       sprintf("\U0001f4bd Backend disque (BPCells) si > %s cellules",
                               format(.BPCELLS_AUTO_THRESHOLD, big.mark=" ")),
@@ -290,17 +287,38 @@ mod_sc_server <- function(id, global_data) {
             radioButtons(ns_m("sc_ap_norm"), "Normalisation",
                          c("LogNormalize"="log","SCTransform"="sct")),
             sliderInput(ns_m("sc_ap_pca_dim"), "Dims PCA", 5, 50, 20),
-            numericInput(ns_m("sc_ap_res"), "Résolution clustering", 0.5, min=0.1, step=0.1),
-            selectInput(ns_m("sc_ap_cluster_algo"), "Algorithme",
-                       choices = c("Louvain"="1","Louvain (multilevel)"="2",
-                                  "SLM"="3","Leiden (reticulate)"="4"), selected="1"),
-            checkboxInput(ns_m("sc_ap_compute_umap"),
-                         "Calculer UMAP (décochez pour PCA seul — bien plus rapide sur gros dataset)",
-                         value = TRUE)
+            numericInput(ns_m("sc_ap_res"), "Résolution clustering", 0.5, min=0.1, step=0.1)
           )
         ),
         div(class="small text-muted mb-2",
             "UMAP + t-SNE secondaire (si dataset raisonnable) sont tous deux calculés."),
+        hr(),
+
+        # ── Step-3.8A: Sketch (sous-échantillonnage intelligent) ─────────────
+        h6("Sketch — gros datasets", style="font-weight:bold;"),
+        div(class="small text-muted mb-1",
+            "PCA/Clustering/UMAP tournent sur un sous-ensemble représentatif ",
+            "(LeverageScore), puis sont projetés sur toutes les cellules. ",
+            "Accélère fortement les gros datasets (ex: 1,3M cellules) sans ",
+            "perdre les clusters rares. Ignoré si SCTransform est choisi."),
+        fluidRow(
+          column(7, selectInput(ns_m("sc_ap_sketch_preset"), "Preset sketch",
+            choices = list(
+              "Rapide (test, 5 000 cellules)"         = "fast",
+              "Léger (10 000 cellules)"                = "light",
+              "Moyen (25 000 cellules)"                = "medium",
+              "Standard (50 000 cellules)"             = "standard",
+              "Élevé (100 000 cellules)"                = "high",
+              "Max (dataset complet, pas de sketch)"   = "max",
+              "Personnalisé"                            = "custom"
+            ), selected = "standard")),
+          column(5, conditionalPanel(
+            condition = sprintf("input['%s'] == 'custom'", ns_m("sc_ap_sketch_preset")),
+            numericInput(ns_m("sc_ap_sketch_ncells_custom"), "N cellules",
+                         value = 20000, min = 1000, max = 500000, step = 1000)))
+        ),
+        uiOutput(ns_m("sc_ap_sketch_hint")),
+        hr(),
 
         # ── Steps 2-7 optional ──────────────────────────────────────────────
         h6("Options supplémentaires", style="font-weight:bold;"),
@@ -389,7 +407,6 @@ mod_sc_server <- function(id, global_data) {
         obj[["percent.mt"]] <- if (!is.null(mt_pat))
           PercentageFeatureSet(obj, pattern=mt_pat) else 0
         n_before <- ncol(obj)
-        meta_pre <- obj@meta.data
         obj <- subset(obj,
                       subset = nFeature_RNA > input$sc_ap_min_gene &
                                nFeature_RNA < input$sc_ap_max_gene &
@@ -397,21 +414,6 @@ mod_sc_server <- function(id, global_data) {
         if (ncol(obj) < 10) stop(sprintf(
           "Seulement %d cellule(s) après QC (départ: %d). Réduisez les seuils.", ncol(obj), n_before))
         log_sc(sprintf("\u2713 QC : %d cellules (retirées: %d)", ncol(obj), n_before-ncol(obj)))
-
-        # Step-3.7A.2: per-sample QC snapshot (see mod_sc_pipeline.R for rationale)
-        samples    <- union(names(table(meta_pre$orig.ident)), unique(as.character(obj$orig.ident)))
-        before_tab <- table(meta_pre$orig.ident)
-        after_tab  <- table(obj$orig.ident)
-        mt_med     <- tapply(meta_pre$percent.mt, meta_pre$orig.ident, median, na.rm = TRUE)
-        qc_snap <- data.frame(
-          Echantillon     = samples,
-          Cellules_avant  = as.integer(ifelse(is.na(before_tab[samples]), 0L, before_tab[samples])),
-          Cellules_apres  = as.integer(ifelse(is.na(after_tab[samples]),  0L, after_tab[samples])),
-          Pct_Mito_Median = round(as.numeric(mt_med[samples]), 1),
-          stringsAsFactors = FALSE
-        )
-        qc_snap$Pct_Conserve <- round(100 * qc_snap$Cellules_apres / pmax(qc_snap$Cellules_avant, 1), 1)
-        shared_rv$qc_snapshot <- qc_snap
 
         # ── Step 1b: Backend disque (BPCells) — Step-3.7A ────────────────────
         if (isTRUE(input$sc_ap_bpcells) && ncol(obj) > .BPCELLS_AUTO_THRESHOLD &&
@@ -432,77 +434,118 @@ mod_sc_server <- function(id, global_data) {
           }
         }
 
-        # ── Step 2: Normalisation ────────────────────────────────────────────
+        # ── Step 2-5: Normalisation / PCA / Clustering / UMAP (Step-3.8A) ────
+        # Sketch workflow (Seurat v5): analyse sur un sous-ensemble représentatif
+        # (LeverageScore) puis projection sur le dataset complet via ProjectData().
+        # Voir resolve_sketch_preset()/standardize_sketch_reductions() (helpers_sc.R).
+        n_total_cells <- ncol(obj)
+        sketch_params <- resolve_sketch_preset(
+          input$sc_ap_sketch_preset %||% "standard", n_total_cells,
+          input$sc_ap_sketch_ncells_custom)
+        use_sketch <- !identical(input$sc_ap_norm, "sct") &&
+                      sketch_params$ncells < n_total_cells
+        pca_dim <- input$sc_ap_pca_dim  # fallback / full-dataset path
+
         if (sc_backend_status(obj) == "disk") {
           .ap_old_plan <- future::plan()
           on.exit(future::plan(.ap_old_plan), add = TRUE)
           future::plan("sequential")
           log_sc("\u2139\ufe0f Backend disque : future séquentiel forcé (Normalisation \u2192 Clustering) pour éviter un crash 'globals size'.")
         }
-        p$set(0.20,"Normalisation..."); log_sc("Normalisation...")
-        if (input$sc_ap_norm=="sct") {
-          obj <- SCTransform(obj, verbose=FALSE, vst.flavor="v2")
-        } else {
+
+        if (isTRUE(use_sketch)) {
+          # ── Sketch: analyse sur sous-ensemble ────────────────────────────
+          p$set(0.15,"Sketch..."); log_sc(sprintf(
+            "Sketch : %s / %s cellules (preset '%s')...",
+            format(sketch_params$ncells, big.mark=" "), format(n_total_cells, big.mark=" "),
+            input$sc_ap_sketch_preset))
           DefaultAssay(obj) <- "RNA"
           obj <- NormalizeData(obj, verbose=FALSE)
           obj <- FindVariableFeatures(obj, nfeatures=2000, verbose=FALSE)
-          obj <- smart_scale_data(obj)   # Step-3.7A: RAM-safe (VariableFeatures only)
-        }
-        log_sc("\u2713 Normalisation OK")
+          obj <- SketchData(object=obj, ncells=sketch_params$ncells,
+                            method="LeverageScore", sketched.assay="sketch")
+          DefaultAssay(obj) <- "sketch"
+          log_sc("\u2713 Sketch OK")
 
-        # ── Step 3: PCA ─────────────────────────────────────────────────────
-        p$set(0.40,"PCA...")
-        obj <- RunPCA(obj, verbose=FALSE, npcs=input$sc_ap_pca_dim)
-        log_sc(sprintf("\u2713 PCA (%d dims)", input$sc_ap_pca_dim))
+          p$set(0.30,"Normalisation (sketch)..."); log_sc("Normalisation (sketch)...")
+          obj <- FindVariableFeatures(obj, nfeatures=2000, verbose=FALSE)
+          obj <- ScaleData(obj, verbose=FALSE)
+          log_sc("\u2713 Normalisation OK")
 
-        # Step-3.7A.2: free scale.data right after PCA (see mod_sc_pipeline.R)
-        obj <- tryCatch({
-          da <- DefaultAssay(obj)
-          if (isTRUE("scale.data" %in% SeuratObject::Layers(obj[[da]]))) obj[[da]]$scale.data <- NULL
-          obj
-        }, error = function(e) obj)
-        clean_mem()
+          p$set(0.40,"PCA (sketch)...")
+          obj <- RunPCA(obj, npcs=sketch_params$npcs, verbose=FALSE)
+          log_sc(sprintf("\u2713 PCA (%d dims, sketch)", sketch_params$npcs))
 
-        # ── Step 4: Clustering ───────────────────────────────────────────────
-        p$set(0.55,"Clustering...")
-        obj  <- FindNeighbors(obj, dims=1:input$sc_ap_pca_dim, verbose=FALSE)
-        algo <- suppressWarnings(as.integer(input$sc_ap_cluster_algo %||% "1"))
-        obj  <- tryCatch(
-          FindClusters(obj, resolution=input$sc_ap_res, algorithm=algo, verbose=FALSE),
-          error = function(e) {
-            if (algo != 1L) {
-              # Step-3.8: algorithms 2/3 observed to crash on BPCells-backed
-              # objects — same defensive fallback as the standalone pipeline.
-              algo_name <- c("2"="Louvain multilevel","3"="SLM","4"="Leiden")[as.character(algo)]
-              log_sc(paste0("\u26a0\ufe0f ", algo_name %||% "Algorithme", " indisponible/a échoué, repli Louvain: ", e$message))
-              FindClusters(obj, resolution=input$sc_ap_res, algorithm=1, verbose=FALSE)
-            } else stop(e)
-          }
-        )
-        n_cl <- length(levels(obj$seurat_clusters))
-        log_sc(sprintf("\u2713 %d clusters (res %.1f)", n_cl, input$sc_ap_res))
+          p$set(0.55,"Clustering (sketch)...")
+          obj <- FindNeighbors(obj, dims=1:sketch_params$npcs, verbose=FALSE)
+          obj <- FindClusters(obj, resolution=input$sc_ap_res, verbose=FALSE)
+          log_sc(sprintf("\u2713 Clustering sketch OK (res %.1f)", input$sc_ap_res))
 
-        # ── Step 5: UMAP (+ t-SNE secondaire) — Step-3.8: skippable ──────────
-        # UMAP was previously unconditional (~35min alone on a 1.3M-cell
-        # BPCells dataset per user testing) — now gated behind
-        # sc_ap_compute_umap so "PCA seul" stays a real fast path, not just
-        # in the standalone "1. Pipeline" module.
-        if (isTRUE(input$sc_ap_compute_umap)) {
-          p$set(0.68,"UMAP...")
-          obj <- RunUMAP(obj, dims=1:input$sc_ap_pca_dim, verbose=FALSE)
-          log_sc("\u2713 UMAP OK")
+          p$set(0.63,"UMAP (sketch)...")
+          obj <- RunUMAP(obj, dims=1:sketch_params$npcs, reduction="pca",
+                         return.model=TRUE, verbose=FALSE)
+          log_sc("\u2713 UMAP sketch OK")
 
-          p$set(0.72,"t-SNE (secondaire)...")
-          if (ncol(obj) > .AUTO_TSNE_MAX_CELLS) {
-            log_sc(sprintf("\u26a0\ufe0f t-SNE secondaire ignoré (%s cellules > %s max).",
-                           format(ncol(obj), big.mark=" "), format(.AUTO_TSNE_MAX_CELLS, big.mark=" ")))
-          } else {
-            obj <- tryCatch(RunTSNE(obj, dims=1:input$sc_ap_pca_dim, verbose=FALSE),
-                            error=function(e){ log_sc(paste("\u26a0\ufe0f t-SNE secondaire ignoré:", e$message)); obj })
-            log_sc("\u2713 t-SNE secondaire OK")
-          }
+          # ── Projection sketch → dataset complet ──────────────────────────
+          p$set(0.68,"Projection sur le dataset complet...")
+          log_sc("Projection (ProjectData) sur le dataset complet...")
+          obj <- ProjectData(
+            object=obj, assay="RNA", sketched.assay="sketch",
+            sketched.reduction="pca", full.reduction="pca.full",
+            umap.model="umap", dims=1:sketch_params$npcs,
+            refdata=list(seurat_clusters="seurat_clusters"))
+          obj <- standardize_sketch_reductions(obj, full_pca_name="pca.full")
+          DefaultAssay(obj) <- "RNA"
+          pca_dim <- sketch_params$npcs
+          log_sc(sprintf("\u2713 Projection OK \u2014 %s cellules", format(ncol(obj), big.mark=" ")))
+
         } else {
-          log_sc("\u2139\ufe0f UMAP/t-SNE ignorés (PCA seul, plus rapide) — dans l'onglet Viz, 'Réduction à visualiser' proposera PCA.")
+          # ── Dataset complet (comportement existant, inchangé) ────────────
+          if (identical(input$sc_ap_norm, "sct"))
+            log_sc("\u2139\ufe0f Sketch non support\u00e9 avec SCTransform \u2014 pipeline sur dataset complet.")
+          else
+            log_sc("\u2139\ufe0f Sketch ignor\u00e9 : preset \u2265 taille du dataset \u2014 pipeline sur dataset complet.")
+
+          p$set(0.20,"Normalisation..."); log_sc("Normalisation...")
+          if (input$sc_ap_norm=="sct") {
+            obj <- SCTransform(obj, verbose=FALSE, vst.flavor="v2")
+          } else {
+            DefaultAssay(obj) <- "RNA"
+            obj <- NormalizeData(obj, verbose=FALSE)
+            obj <- FindVariableFeatures(obj, nfeatures=2000, verbose=FALSE)
+            obj <- smart_scale_data(obj)   # Step-3.7A: RAM-safe (VariableFeatures only)
+          }
+          log_sc("\u2713 Normalisation OK")
+
+          p$set(0.40,"PCA...")
+          obj <- RunPCA(obj, verbose=FALSE, npcs=pca_dim)
+          log_sc(sprintf("\u2713 PCA (%d dims)", pca_dim))
+
+          p$set(0.55,"Clustering...")
+          obj <- FindNeighbors(obj, dims=1:pca_dim, verbose=FALSE)
+          obj <- FindClusters(obj,  resolution=input$sc_ap_res,  verbose=FALSE)
+          log_sc(sprintf("\u2713 %d clusters (res %.1f)", length(unique(obj$seurat_clusters)), input$sc_ap_res))
+
+          p$set(0.68,"UMAP...")
+          obj <- RunUMAP(obj, dims=1:pca_dim, verbose=FALSE)
+          log_sc("\u2713 UMAP OK")
+        }
+
+        n_cl <- length(unique(obj$seurat_clusters))
+        if (isTRUE(use_sketch)) log_sc(sprintf("\u2713 %d clusters (projet\u00e9s sur dataset complet)", n_cl))
+
+        # ── Step 5b: t-SNE secondaire (Step-3.7) ──────────────────────────────
+        # Toujours calculé (si dataset raisonnable) pour être disponible aux
+        # côtés de PCA/UMAP dans le picker "Réduction à visualiser" — même
+        # constante de garde que le module "1. Pipeline" (.AUTO_TSNE_MAX_CELLS).
+        p$set(0.72,"t-SNE (secondaire)...")
+        if (ncol(obj) > .AUTO_TSNE_MAX_CELLS) {
+          log_sc(sprintf("\u26a0\ufe0f t-SNE secondaire ignoré (%s cellules > %s max).",
+                         format(ncol(obj), big.mark=" "), format(.AUTO_TSNE_MAX_CELLS, big.mark=" ")))
+        } else {
+          obj <- tryCatch(RunTSNE(obj, dims=1:pca_dim, verbose=FALSE),
+                          error=function(e){ log_sc(paste("\u26a0\ufe0f t-SNE secondaire ignoré:", e$message)); obj })
+          log_sc("\u2713 t-SNE secondaire OK")
         }
 
         # ── Step 6: SingleR (optional) ───────────────────────────────────────
@@ -621,16 +664,14 @@ mod_sc_server <- function(id, global_data) {
             log_sc(sprintf("\u26a0\ufe0f Trajectoire ignorée : dataset trop grand (%d > %d).",
                            ncol(obj), .MAX_TRAJECTORY_CELLS))
           } else {
-            # Step-3.8: fall back to PCA if UMAP was skipped ("PCA seul" mode)
-            traj_red_use <- if ("umap" %in% names(obj@reductions)) "umap" else "pca"
             traj_res <- tryCatch(
-              calculate_pseudotime(obj, reduction=traj_red_use, root_cells=NULL),
+              calculate_pseudotime(obj, reduction="umap", root_cells=NULL),
               error=function(e) { log_sc(paste("\u26a0\ufe0f Trajectoire:", e$message)); NULL }
             )
             if (!is.null(traj_res)) {
               obj                    <- traj_res
-              shared_rv$traj_reduction <- traj_red_use
-              log_sc(sprintf("\u2713 Pseudotemps calculé (racine auto, réduction: %s)", toupper(traj_red_use)))
+              shared_rv$traj_reduction <- "umap"
+              log_sc("\u2713 Pseudotemps calculé (racine auto)")
             }
           }
         }
@@ -691,9 +732,6 @@ mod_sc_server <- function(id, global_data) {
           reduction        = "umap",
           traj_reduction   = shared_rv$traj_reduction %||% "umap",
           traj_genes       = shared_rv$traj_genes %||% character(0),  # Step-3.7
-          qc_snapshot      = shared_rv$qc_snapshot,                   # Step-3.7A.2
-          fig_width        = input$report_fig_width  %||% 9,
-          fig_height       = input$report_fig_height %||% 6,
           saved_viz_list   = if (length(shared_rv$report_viz_list)) shared_rv$report_viz_list else NULL,
           group_by         = "seurat_clusters",
           report_title     = input$report_title    %||% "Analyse Single-Cell",

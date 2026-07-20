@@ -231,40 +231,76 @@ prepare_bulk_object <- function(counts_matrix, metadata = NULL, project_name = "
 
 
 
-load_spatial_visium <- function(visium_dir, sample_name = "Spatial_Sample",
+load_spatial_visium <- function(visium_dir, sample_name = "Spatial_Sample", 
+
                                 min_counts = 100, min_features = 200) {
+
   if (!dir.exists(file.path(visium_dir, "spatial"))) {
+
     stop("Dossier 'spatial' introuvable dans ", visium_dir)
+
   }
+
   
-  # --- FIX: détection automatique du nom de fichier .h5 ---
-  h5_files    <- list.files(visium_dir, pattern = "\\.h5$", full.names = FALSE)
-  h5_filename <- head(h5_files[grepl("filtered_feature_bc_matrix", h5_files)], 1)
-  
+
   spatial_obj <- tryCatch({
-    if (length(h5_filename) == 1) {
-      Load10X_Spatial(
-        data.dir      = visium_dir,
-        filename      = h5_filename,   # <-- plus de hardcode
-        assay         = "Spatial",
-        slice         = sample_name,
-        filter.matrix = TRUE
-      )
-    } else {
-      stop("Aucun fichier *filtered_feature_bc_matrix.h5 detecte.")
-    }
+
+    Load10X_Spatial(
+
+      data.dir = visium_dir,
+
+      filename = "filtered_feature_bc_matrix.h5",
+
+      assay = "Spatial",
+
+      slice = sample_name,
+
+      filter.matrix = TRUE
+
+    )
+
   }, error = function(e) {
+
     if (dir.exists(file.path(visium_dir, "filtered_feature_bc_matrix"))) {
-      Load10X_Spatial(data.dir = visium_dir, assay = "Spatial",
-                      slice = sample_name, filter.matrix = TRUE)
+
+      Load10X_Spatial(
+
+        data.dir = visium_dir,
+
+        assay = "Spatial",
+
+        slice = sample_name,
+
+        filter.matrix = TRUE
+
+      )
+
     } else {
-      stop("Impossible de charger les donnees Visium : ", e$message)
+
+      stop("Impossible de charger les données Visium : ", e$message)
+
     }
+
   })
+
   
+
   spatial_obj$orig.ident <- sample_name
-  subset(spatial_obj, subset = nCount_Spatial >= min_counts & nFeature_Spatial >= min_features)
+
+  
+
+  spatial_obj <- subset(spatial_obj, 
+
+                        subset = nCount_Spatial >= min_counts & 
+
+                          nFeature_Spatial >= min_features)
+
+  
+
+  return(spatial_obj)
+
 }
+
 
 
 prepare_spatial_object <- function(obj) {
@@ -456,6 +492,26 @@ detect_gene_id_type <- function(gene_ids) {
 
   "unknown"
 
+}
+
+#' Detect species (human/mouse) from Ensembl gene ID prefixes
+#'
+#' Step-3.8A: used to auto-pick the correct org.*.eg.db package instead of
+#' relying on the currently-selected reference/UI default (which defaults to
+#' "human" and silently breaks mouse ENSMUSG... datasets).
+#'
+#' @param gene_ids Character vector (rownames of the counts/expression matrix).
+#' @return "human", "mouse", or "unknown".
+detect_organism_from_ids <- function(gene_ids) {
+  gene_ids <- head(stats::na.omit(as.character(gene_ids)), 200)
+  if (length(gene_ids) == 0L) return("unknown")
+
+  pct_mouse <- mean(grepl("^ENSMUSG[0-9]+", gene_ids))
+  pct_human <- mean(grepl("^ENSG[0-9]+", gene_ids))
+
+  if (pct_mouse >= 0.50) return("mouse")
+  if (pct_human >= 0.50) return("human")
+  "unknown"
 }
 
 

@@ -26,7 +26,23 @@
 
 .run_singler_safe <- function(obj, refcode, labellevel, maxcells = 50000L) {
   label_col <- if (labellevel == "main") "label.main" else "label.fine"
-  organism  <- .refcode_to_organism(refcode)
+
+  # Step-3.8A: organism is now detected from the actual gene IDs (Ensembl
+  # prefix) rather than inferred solely from the chosen reference — fixes
+  # systematic mismatches on mouse data (ENSMUSG... tested against org.Hs.eg.db
+  # whenever a non-ImmGen reference is picked). Detected value wins; a warning
+  # is raised if it conflicts with what the reference choice implies.
+  ref_organism <- .refcode_to_organism(refcode)
+  detected     <- detect_organism_from_ids(rownames(obj))
+  organism     <- if (!identical(detected, "unknown")) detected else ref_organism
+
+  if (!identical(detected, "unknown") && !identical(detected, ref_organism)) {
+    warning(sprintf(
+      paste0("Organisme d\u00e9tect\u00e9 depuis les identifiants g\u00e8nes ('%s') diff\u00e8re de la ",
+             "r\u00e9f\u00e9rence choisie ('%s', organisme attendu '%s'). Conversion ID effectu\u00e9e ",
+             "avec '%s' \u2014 v\u00e9rifiez que la r\u00e9f\u00e9rence SingleR correspond \u00e0 votre esp\u00e8ce."),
+      detected, refcode, ref_organism, organism))
+  }
 
   # ── Standard path ──────────────────────────────────────────────────────────
   if (!.annot_is_big(obj) && !.annot_is_ondisk(obj)) {
@@ -100,30 +116,22 @@
     tmp   <- subset(obj, cells = cells)
     DefaultAssay(tmp) <- "RNA"
     tmp   <- NormalizeData(tmp, verbose = FALSE)
-    Matrix::rowMeans(GetAssayData(tmp, layer = "data"))
+    # Step-3.8A: GetAssayData(slot=) is DEFUNCT in SeuratObject 5.0 (crashed
+    # this exact pseudobulk loop on the 1.3M-neurons dataset) -> LayerData().
+    Matrix::rowMeans(SeuratObject::LayerData(tmp, assay = "RNA", layer = "data"))
   })
   profile_matrix <- do.call(cbind, cluster_profiles)
 
-  # Also try ENSG remap for cluster-aggregate path
+  # Step-3.8A: pseudobulk (per-cluster) ENSEMBL -> Symbol remap, organism
+  # auto-detected above (detect_organism_from_ids), not just from `refcode`.
   ref_ids <- rownames(ref)
   if (!any(rownames(profile_matrix) %in% ref_ids)) {
-    orgdb_pkg <- if (organism == "human") "org.Hs.eg.db" else "org.Mm.eg.db"
-    if (requireNamespace("AnnotationDbi",quietly=TRUE) && requireNamespace(orgdb_pkg,quietly=TRUE)) {
-      orgdb <- getExportedValue(orgdb_pkg, orgdb_pkg)
-      sym   <- tryCatch(
-        AnnotationDbi::mapIds(orgdb, keys=rownames(profile_matrix),
-                              keytype="ENSEMBL", column="SYMBOL", multiVals="first"),
-        error=function(e) NULL)
-      if (!is.null(sym)) {
-        keep <- !is.na(sym) & nchar(sym) > 0
-        if (sum(keep) > 0) {
-          pm <- profile_matrix[keep, , drop=FALSE]
-          rownames(pm) <- sym[keep]
-          pm <- pm[!duplicated(rownames(pm)), , drop=FALSE]
-          profile_matrix <- pm
-        }
-      }
-    }
+    profile_matrix <- tryCatch(
+      map_ensembl_matrix_to_symbol(profile_matrix, organism = organism),
+      error = function(e) {
+        warning(paste("Conversion ENSEMBL -> Symbol (pseudobulk) impossible :", conditionMessage(e)))
+        profile_matrix
+      })
   }
 
   pred           <- SingleR::SingleR(test=profile_matrix, ref=ref, labels=ref[[label_col]])
