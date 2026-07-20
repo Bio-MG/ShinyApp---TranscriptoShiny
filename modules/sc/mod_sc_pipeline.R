@@ -53,6 +53,27 @@ mod_sc_pipeline_ui <- function(id) {
         bsicons::bs_icon("info-circle"),
         " Valeurs conseillées pour jeux de test réduits :\n",
         "Min gènes = 50, Max gènes = 10 000, % Mito = 40."),
+    # --- UI: sketch size preset selector ---
+    selectInput(
+      ns("sketch_preset"),
+      "Taille du sketch (vitesse vs precision)",
+      choices = list(
+        "Rapide (test, 5 000 cellules)"   = "fast",
+        "Leger (10 000 cellules)"         = "light",
+        "Moyen (25 000 cellules)"         = "medium",
+        "Standard (50 000 cellules)"      = "standard",
+        "Eleve (100 000 cellules)"        = "high",
+        "Max (dataset complet)"           = "max",
+        "Personnalise"                    = "custom"
+      ),
+      selected = "standard"
+    ),
+    
+    conditionalPanel(
+      condition = sprintf("input['%s'] == 'custom'", ns("sketch_preset")),
+      numericInput(ns("sketch_ncells_custom"), "Nombre de cellules (sketch)",
+                   value = 20000, min = 1000, max = 500000, step = 1000)
+    )
     hr(),
     h6("Normalisation"),
     radioButtons(ns("norm_method"), NULL,
@@ -70,6 +91,16 @@ mod_sc_pipeline_ui <- function(id) {
       sliderInput(ns("pca_dim"),    "Dims PCA",   5, 50, 20),
       numericInput(ns("clust_res"), "Résolution", 0.5, step=0.1)
     ),
+    selectInput(ns("cluster_algo"), "Algorithme de clustering",
+                choices = c("Louvain (standard)"               = "1",
+                           "Louvain (multilevel refinement)"   = "2",
+                           "SLM (Smart Local Moving)"          = "3",
+                           "Leiden (nécessite reticulate + leidenalg)" = "4"),
+                selected = "1"),
+    div(class="small text-muted mb-2",
+        "Leiden est souvent plus rapide/qualitatif sur les gros datasets, mais",
+        " nécessite un environnement Python (reticulate + leidenalg/igraph)",
+        " installé séparément — repli automatique sur Louvain si indisponible."),
     actionButton(ns("run_pipeline"), "Lancer Pipeline",
                  class="btn-danger w-100", icon=icon("play")),
     hr(),
@@ -176,6 +207,25 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
           ))
         }
 
+        # Step-3.7A.2: per-sample QC snapshot (before/after counts + %mito
+        # median) -- MUST be captured here, meta_pre is the only place the
+        # "before filter" metadata still exists. Doublet rate is NOT captured
+        # here (scDblFinder runs after QC) -- build_qc_summary_table() joins
+        # it in live from the current object at display time instead.
+        samples    <- union(names(table(meta_pre$orig.ident)), unique(as.character(obj$orig.ident)))
+        before_tab <- table(meta_pre$orig.ident)
+        after_tab  <- table(obj$orig.ident)
+        mt_med     <- tapply(meta_pre$percent.mt, meta_pre$orig.ident, median, na.rm = TRUE)
+        qc_snap <- data.frame(
+          Echantillon     = samples,
+          Cellules_avant  = as.integer(ifelse(is.na(before_tab[samples]), 0L, before_tab[samples])),
+          Cellules_apres  = as.integer(ifelse(is.na(after_tab[samples]),  0L, after_tab[samples])),
+          Pct_Mito_Median = round(as.numeric(mt_med[samples]), 1),
+          stringsAsFactors = FALSE
+        )
+        qc_snap$Pct_Conserve <- round(100 * qc_snap$Cellules_apres / pmax(qc_snap$Cellules_avant, 1), 1)
+        shared_rv$qc_snapshot <- qc_snap
+
         # ── Step 1b : Backend disque (BPCells) — Step-3.7A ─────────────────
         p$set(0.22, "Backend stockage...")
         bpcells_mode <- input$bpcells_mode %||% "auto"
@@ -240,10 +290,42 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
         p$set(0.50, "PCA")
         obj <- RunPCA(obj, verbose=FALSE, npcs=input$pca_dim)
 
+        # Step-3.7A.2: scale.data (dense, VariableFeatures x cells -- e.g.
+        # ~20 Go for 2000 genes x 1.3M cells) is only needed by RunPCA().
+        # Freeing it immediately gives FindNeighbors/FindClusters (next, the
+        # actual RAM/CPU bottleneck on huge datasets) more headroom. Heatmap
+        # re-derives scale.data on demand for whatever genes it needs via
+        # ensure_genes_scaled() (helpers_sc_bpcells.R) -- nothing downstream
+        # depends on scale.data surviving past this point.
+        obj <- tryCatch({
+          da <- DefaultAssay(obj)
+          if (isTRUE("scale.data" %in% SeuratObject::Layers(obj[[da]]))) obj[[da]]$scale.data <- NULL
+          obj
+        }, error = function(e) obj)
+        clean_mem()
+
         # ── Step 4 : Clustering ───────────────────────────────────────────
         p$set(0.60, "Clustering")
         obj <- FindNeighbors(obj, dims=1:input$pca_dim)
-        obj <- FindClusters(obj, resolution=input$clust_res)
+        algo <- suppressWarnings(as.integer(input$cluster_algo %||% "1"))
+        obj <- tryCatch(
+          FindClusters(obj, resolution=input$clust_res, algorithm=algo),
+          error = function(e) {
+            if (algo != 1L) {
+              # Step-3.8: algorithms 2 (Louvain multilevel refinement) and 3
+              # (SLM) were observed to crash on BPCells-backed objects
+              # (igraph/leiden C++ backends expecting a dense/standard sparse
+              # adjacency representation) -- same defensive fallback pattern
+              # already used for Leiden (algorithm=4) below, generalized.
+              algo_name <- c("2"="Louvain multilevel","3"="SLM","4"="Leiden")[as.character(algo)]
+              showNotification(
+                paste0(algo_name %||% "Algorithme", " indisponible/a échoué sur cet objet — repli sur Louvain standard. ",
+                      e$message),
+                type = "warning", duration = 10)
+              FindClusters(obj, resolution=input$clust_res, algorithm=1)
+            } else stop(e)
+          }
+        )
 
         # ── Step 5 : Réduction dimensionnelle (méthode principale) ────────
         p$set(0.70, paste("Réduction:", input$reduction_method))

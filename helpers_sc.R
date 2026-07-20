@@ -344,19 +344,17 @@ plot_multi_sample <- function(seurat_obj, gene, plot_type = "violin") {
 
 
 
-#' Safe normalized matrix extraction (Seurat v4/v5 compatible)
+#' Safe normalized matrix extraction (Seurat v5, layer= only -- slot= is
+
+#' DEFUNCT since SeuratObject 5.0 and errors outright, so it is no longer
+
+#' used even as a fallback here)
 
 .get_norm_matrix <- function(obj) {
 
   assay_use <- DefaultAssay(obj)
 
-  mat <- tryCatch(
-
-    GetAssayData(obj, layer = "data", assay = assay_use),
-
-    error = function(e) GetAssayData(obj, slot = "data", assay = assay_use)
-
-  )
+  mat <- GetAssayData(obj, layer = "data", assay = assay_use)
 
   if (inherits(mat, "dgCMatrix")) mat <- as.matrix(mat)
 
@@ -403,25 +401,9 @@ find_correlated_genes <- function(seurat_obj, target_gene,
 
   
 
-  # Extraire expression normalisée
+  # Extraire expression normalisée (peut être dgCMatrix, matrix, ou BPCells IterableMatrix)
 
   expr_matrix <- .get_norm_matrix(seurat_obj)
-
-  
-
-  # Convertir en matrice dense si sparse
-
-  if(inherits(expr_matrix, "dgCMatrix")) {
-
-    expr_matrix <- as.matrix(expr_matrix)
-
-  }
-
-  
-
-  # Expression du gène cible
-
-  target_expr <- as.numeric(expr_matrix[target_gene, ])
 
   
 
@@ -449,11 +431,41 @@ find_correlated_genes <- function(seurat_obj, target_gene,
 
   
 
+  # Step-3.8: matérialiser UNIQUEMENT les lignes nécessaires (cible + gènes
+
+  # candidats) en dense — sûr pour dgCMatrix/matrix ET pour un objet BPCells
+
+  # IterableMatrix, dont un slicing ligne-par-ligne ne se convertit pas
+
+  # automatiquement en vecteur numérique simple via as.numeric() (provoquait
+
+  # "cannot coerce type 'S4' to vector of type 'double'"). Bien plus RAM-safe
+
+  # aussi qu'une densification de la matrice complète (gènes x cellules).
+
+  needed_genes <- unique(c(target_gene, all_genes))
+
+  sub_mat <- tryCatch(
+
+    as.matrix(expr_matrix[needed_genes, , drop = FALSE]),
+
+    error = function(e) stop("Impossible d'extraire les données d'expression : ", conditionMessage(e))
+
+  )
+
+  
+
+  # Expression du gène cible
+
+  target_expr <- as.numeric(sub_mat[target_gene, ])
+
+  
+
   # FIX: Calcul avec gestion des ex-aequos
 
   cor_results <- lapply(all_genes, function(g) {
 
-    gene_expr <- as.numeric(expr_matrix[g, ])
+    gene_expr <- as.numeric(sub_mat[g, ])
 
     
 
@@ -893,6 +905,46 @@ plot_gene_correlation_network <- function(corr_df, target_gene, top_n = 20) {
 
 
 
+#' Per-sample QC summary table (Step-3.7A.2) — single source of truth for the
+#' live "QC" tab AND the HTML/PDF report's QC section.
+#'
+#' Cell counts before/after the QC filter can only be captured AT filter time
+#' (the "before" metadata no longer exists once subset() runs) — that part is
+#' a static snapshot written by mod_sc_pipeline.R / mod_sc.R at QC time
+#' (`shared_rv$qc_snapshot`). The doublet rate, on the other hand, is read
+#' LIVE from the current object here (rather than baked into the snapshot),
+#' because scDblFinder runs AFTER QC (before Normalisation) — joining at
+#' display time means this table is correct regardless of whether doublet
+#' detection has run yet, or ran in a totally separate step this function
+#' knows nothing about.
+#'
+#' @param qc_snapshot data.frame(Echantillon, Cellules_avant, Cellules_apres,
+#'   Pct_Mito_Median, Pct_Conserve).
+#' @param obj Current Seurat object (optional — NULL skips the doublet column).
+#' @return data.frame ready for DT::datatable() or knitr::kable().
+build_qc_summary_table <- function(qc_snapshot, obj = NULL) {
+
+  df <- qc_snapshot
+
+  if (!is.null(obj) && "scDblFinder_class" %in% colnames(obj@meta.data)) {
+
+    meta     <- obj@meta.data
+
+    dbl_rate <- tapply(meta$scDblFinder_class == "doublet", meta$orig.ident, mean, na.rm = TRUE)
+
+    df$Pct_Doublets <- round(100 * as.numeric(dbl_rate[df$Echantillon]), 1)
+
+  } else {
+
+    df$Pct_Doublets <- NA_real_
+
+  }
+
+  df
+
+}
+
+
 #' Standardized FindAllMarkers results DT table (shared by mod_sc_markers.R
 
 #' and the future Single-Cell HTML/PDF report — same rationale as
@@ -1222,7 +1274,16 @@ remap_seurat_ids_to_symbol <- function(obj, from_type = "ensembl", organism = "h
   
   map_df <- tryCatch(
     AnnotationDbi::select(orgdb, keys = ids_clean, keytype = from_key, columns = "SYMBOL"),
-    error = function(e) stop("Echec du mapping d'identifiants : ", conditionMessage(e))
+    error = function(e) {
+      # Step-3.8: name the likely correct organism when the mismatch looks
+      # organism-related (e.g. ENSMUSG IDs tested against org.Hs.eg.db) --
+      # mirrors the same fix in helpers_io.R's remap_gene_ids_to_symbol().
+      detected_org <- if (from_type == "ensembl") detect_organism_from_ids(ids_clean) else NA_character_
+      org_hint <- if (!is.na(detected_org) && detected_org != organism)
+        sprintf(" Organisme detecte a partir des IDs : %s -- selectionnez '%s'.", detected_org, detected_org)
+      else ""
+      stop("Echec du mapping d'identifiants : ", conditionMessage(e), org_hint)
+    }
   )
   map_df <- map_df[!is.na(map_df$SYMBOL), ]
   map_df <- map_df[!duplicated(map_df[[from_key]]), ]

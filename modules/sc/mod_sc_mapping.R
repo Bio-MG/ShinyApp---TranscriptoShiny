@@ -5,6 +5,12 @@
 # global_data$sc_obj (rebuilds it from raw counts via remap_seurat_ids_to_symbol()
 # in helpers_sc.R) — must run BEFORE "1. Pipeline" since normalisation/PCA/
 # clusters are invalidated when rownames change.
+#
+# Step-3.8: auto-detect ORGANISM from Ensembl ID prefixes (ENSMUSG.../ENSG...),
+# not just ID TYPE — previously the organism selector always defaulted to
+# "human" regardless of dataset, silently breaking every mapping attempt on
+# mouse data (org.Hs.eg.db has no ENSMUSG keys -> "None of the keys entered
+# are valid keys for 'ENSEMBL'"), leaving raw Ensembl IDs in the final tables.
 # =============================================================================
 
 mod_sc_mapping_ui <- function(id) {
@@ -48,12 +54,13 @@ mod_sc_mapping_server <- function(id, global_data) {
 
     mapping_status_rv <- reactiveVal(NULL)
 
-    # ── Auto-detect gene ID type when sc_obj changes ──────────────────────
+    # ── Auto-detect gene ID type + organism when sc_obj changes ────────────
     output$detected_id_type_ui <- renderUI({
       req(global_data$sc_obj)
-      ids        <- rownames(global_data$sc_obj)
-      detected   <- tryCatch(detect_gene_id_type(ids), error=function(e) "unknown")
-      example_id <- if (length(ids)) ids[1] else "?"
+      ids            <- rownames(global_data$sc_obj)
+      detected       <- tryCatch(detect_gene_id_type(ids), error=function(e) "unknown")
+      detected_org   <- tryCatch(detect_organism_from_ids(ids), error=function(e) NA_character_)
+      example_id     <- if (length(ids)) ids[1] else "?"
 
       if (detected == "unknown") {
         return(div(class="alert alert-warning", style="font-size:0.8em;",
@@ -67,16 +74,28 @@ mod_sc_mapping_server <- function(id, global_data) {
         affy_probe = "Probe Affymetrix (non supporté pour SC)",
         symbol     = "Symbole — déjà mappé \u2713")
       cls <- if (detected == "symbol") "alert-success" else "alert-info"
+      org_line <- if (!is.na(detected_org))
+        tags$div(class="mt-1",
+                 sprintf("Organisme détecté : %s (pré-sélectionné ci-dessous).",
+                        if (detected_org == "mouse") "Souris" else "Humain"))
+      else NULL
       div(class=paste("alert", cls), style="font-size:0.8em;",
-          sprintf("Type détecté : %s (ex: '%s').", label, example_id))
+          sprintf("Type détecté : %s (ex: '%s').", label, example_id),
+          org_line)
     })
 
     observeEvent(global_data$sc_obj, {
       req(global_data$sc_obj)
-      detected <- tryCatch(detect_gene_id_type(rownames(global_data$sc_obj)),
-                           error=function(e) "unknown")
+      ids      <- rownames(global_data$sc_obj)
+      detected <- tryCatch(detect_gene_id_type(ids), error=function(e) "unknown")
       if (detected %in% c("ensembl","entrez"))
         updateSelectInput(session, "map_from_type", selected=detected)
+
+      # Step-3.8: auto-select organism from ENSMUSG/ENSG prefix, so the user
+      # doesn't have to notice/remember to flip it away from the "human" default.
+      detected_org <- tryCatch(detect_organism_from_ids(ids), error=function(e) NA_character_)
+      if (!is.na(detected_org))
+        updateSelectInput(session, "map_organism", selected=detected_org)
     }, ignoreNULL=TRUE)
 
     # ── Run mapping ───────────────────────────────────────────────────────

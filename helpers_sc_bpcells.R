@@ -122,3 +122,56 @@ ensure_genes_scaled <- function(obj, genes) {
   if (all(genes %in% scaled_now)) return(obj)
   ScaleData(obj, features = unique(c(scaled_now, genes)), verbose = FALSE)
 }
+
+#' Re-orient a disk-backed (BPCells) object's counts to row-major (gene-major)
+#' storage before FindAllMarkers()/find_correlated_genes() (Step-3.8).
+#'
+#' Seurat/BPCells warns: "Column-major order detected; FindMarkers requires
+#' row-major order. Consider first running BPCells::transpose_storage_order()
+#' to avoid repeated transpositions." -- BPCells' default write orientation
+#' (from convert_seurat_to_bpcells()) is cell-major (column-major), matching
+#' how counts are read during import/QC/normalization; marker tests instead
+#' scan gene-by-gene (row-major), so without this step every FindAllMarkers
+#' call silently re-transposes internally, repeatedly, which is the actual
+#' reason marker/correlation calculations can crawl on a disk-backed dataset
+#' even after RAM-safety cell subsampling.
+#'
+#' Deliberately meant to be called AFTER subsample_seurat_for_analysis() by
+#' its callers (mod_sc_markers.R, mod_sc_corr.R, mod_sc.R auto-pipeline) --
+#' transposing the FULL multi-million-cell matrix would itself be a slow full
+#' disk rewrite; transposing the already-capped subsample (typically a few
+#' hundred thousand cells at most) is comparatively cheap and one-time.
+#'
+#' Fully defensive: no-op (returns `obj` unchanged) if the object isn't
+#' disk-backed, if BPCells is unavailable, or if the transpose call itself
+#' fails for any reason (API surface not guaranteed stable across BPCells
+#' versions) -- callers never need their own tryCatch around this.
+#'
+#' @param obj Seurat object, ideally already cell-count-capped.
+#' @param dir Target directory for the transposed copy. NULL uses tempfile().
+#' @return list(object, dir, transposed). `dir` is NULL when transposed==FALSE
+#'   (nothing written, nothing to clean up); when TRUE, caller should schedule
+#'   `unlink(dir, recursive=TRUE)` (e.g. via session$onSessionEnded()).
+optimize_bpcells_for_markers <- function(obj, dir = NULL) {
+  no_op <- list(object = obj, dir = NULL, transposed = FALSE)
+  if (!.bpcells_available() || sc_backend_status(obj) != "disk") return(no_op)
+
+  mat <- tryCatch(GetAssayData(obj, assay = "RNA", layer = "counts"), error = function(e) NULL)
+  if (is.null(mat) || !inherits(mat, "IterableMatrix")) return(no_op)
+
+  if (is.null(dir)) dir <- tempfile(pattern = "bpcells_rowmajor_")
+
+  result <- tryCatch({
+    row_major <- BPCells::transpose_storage_order(mat)
+    BPCells::write_matrix_dir(mat = row_major, dir = dir, overwrite = TRUE)
+    disk_mat  <- BPCells::open_matrix_dir(dir = dir)
+
+    meta_keep <- obj@meta.data
+    new_obj   <- CreateSeuratObject(counts = disk_mat, meta.data = meta_keep, project = Project(obj))
+    list(object = new_obj, dir = dir, transposed = TRUE)
+  }, error = function(e) NULL)
+
+  if (is.null(result)) return(no_op)
+  result
+}
+

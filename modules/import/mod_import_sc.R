@@ -3,6 +3,18 @@
 #   - .ensure_10x_features(): writes features.tsv.GZ (Seurat prefers it over genes.tsv.gz)
 #   - load_single_cell_data(): checks matrix.mtx exists before Read10X(); fixes add_log&& bug
 #   - prepare_seurat_object(): handles SCE, list, sparse/dense matrix
+# Step-3.8 fix:
+#   - .verify_upload_integrity(): a large upload (e.g. a multi-GB .h5) whose
+#     temp-file write fails partway through (typically: the drive R's
+#     tempdir() lives on runs out of space mid-upload — observed with
+#     TMPDIR defaulting to a nearly-full C: drive even though the app/libs
+#     live on D:) used to surface as a cryptic low-level HDF5 C++ stack
+#     trace ("H5Fopen(): unable to open file... Iteration failed...") with
+#     no indication of the real cause. Browser-reported size (input$file$size)
+#     vs actual bytes written to datapath is a cheap, reliable signal for
+#     exactly this failure mode -- checked before attempting to open the
+#     file at all, replaced with an actionable French message pointing at
+#     disk space / TMPDIR instead of the raw HDF5 error.
 
 `%||%` <- function(a, b) if (is.null(a)) b else a
 
@@ -53,6 +65,48 @@
   invisible(feat_gz)
 }
 
+# ── Helper (Step-3.8): detect a truncated/corrupted upload before opening it ────────────────
+#' Compare the browser-reported upload size to the actual bytes written to
+#' the temp file. A mismatch means the write to disk failed partway through
+#' (almost always: destination drive ran out of space) -- catching this here
+#' turns an opaque low-level HDF5/Seurat parser crash into an actionable
+#' message that names the actual cause and how to fix it.
+#'
+#' @param datapath  Path to the uploaded temp file (input$file$datapath).
+#' @param expected_size  Browser-reported size in bytes (input$file$size).
+#' @return list(ok, msg). ok=TRUE means sizes match (or expected_size unknown
+#'   -- fileInput doesn't always populate $size reliably, in which case this
+#'   check is silently skipped rather than raising a false alarm).
+.verify_upload_integrity <- function(datapath, expected_size) {
+  if (is.null(expected_size) || is.na(expected_size) || expected_size <= 0)
+    return(list(ok = TRUE, msg = NULL))   # nothing to compare against — skip
+
+  actual_size <- tryCatch(file.info(datapath)$size, error = function(e) NA_real_)
+  if (is.na(actual_size))
+    return(list(ok = FALSE, msg = "Fichier temporaire introuvable après upload — l'écriture a probablement échoué."))
+
+  if (actual_size < expected_size) {
+    gb <- function(b) sprintf("%.2f Go", b / 1024^3)
+    return(list(
+      ok = FALSE,
+      msg = sprintf(
+        paste0(
+          "\u274c Upload incomplet : %s reçus sur %s attendus. ",
+          "Cause la plus probable : l'espace disque du dossier temporaire R (TMPDIR, ",
+          "généralement sur le disque C:) est insuffisant pour ce fichier, MÊME SI l'app et ",
+          "vos bibliothèques R sont installées ailleurs (ex: D:). ",
+          "Solution : libérez de l'espace sur le disque C:, OU redirigez TMPDIR/TMP/TEMP vers ",
+          "un disque avec plus d'espace libre via un fichier .Renviron ",
+          "(ex: TMPDIR=D:/Rtemp), puis redémarrez la session R et réessayez l'import."
+        ),
+        gb(actual_size), gb(expected_size)
+      )
+    ))
+  }
+
+  list(ok = TRUE, msg = NULL)
+}
+
 # ── UI ────────────────────────────────────────────────────────────────────────────────────────
 mod_import_sc_ui <- function(id) {
   ns <- NS(id)
@@ -89,6 +143,10 @@ mod_import_sc_ui <- function(id) {
             "Option B: Fichiers Multiples (.rds, .h5, .h5ad)",
             div(class="alert alert-info", style="font-size:0.85rem;",
                 bsicons::bs_icon("info-circle"), " Importez plusieurs fichiers pour les fusionner."),
+            div(class="alert alert-light", style="font-size:0.78rem;",
+                bsicons::bs_icon("hdd"),
+                " Fichiers volumineux (> quelques Go) : vérifiez l'espace disque disponible sur le",
+                " disque où pointe le dossier temporaire de R (TMPDIR), pas seulement celui de l'app."),
             fileInput(ns("file_upload"), "Ajouter Fichier(s)",
                       accept=c(".rds",".h5",".h5ad",".loom"), multiple=TRUE),
             uiOutput(ns("file_list_display")),
@@ -218,6 +276,15 @@ mod_import_sc_server <- function(id, global_data) {
         for (i in 1:nrow(files)) {
           fn <- tools::file_path_sans_ext(files$name[i])
           p$set(i/nrow(files), detail=files$name[i])
+
+          # Step-3.8: verify the upload actually completed before attempting
+          # to open it (see .verify_upload_integrity() docstring above).
+          integrity <- .verify_upload_integrity(files$datapath[i], files$size[i])
+          if (!integrity$ok) {
+            add_log(paste("  ❌", files$name[i], "—", integrity$msg))
+            stop(integrity$msg)
+          }
+
           add_log(paste("  📄", files$name[i]))
           raw <- load_single_cell_data(files$datapath[i], add_log)
           obj <- prepare_seurat_object(raw, fn)
@@ -232,7 +299,7 @@ mod_import_sc_server <- function(id, global_data) {
         showNotification("✅ Import réussi!", type="message", duration=5)
       }, error=function(e) {
         msg <- paste("❌ Erreur:", conditionMessage(e))
-        add_log(msg); showNotification(msg, type="error", duration=10)
+        add_log(msg); showNotification(msg, type="error", duration=12)
       })
     })
 
@@ -242,6 +309,17 @@ mod_import_sc_server <- function(id, global_data) {
       add_log("🔄 Import fichier unique...")
       withProgress(message="Chargement...", {
         tryCatch({
+          # Step-3.8: same upload-integrity check as Option B — this is the
+          # path the user's 1M-neurons .h5 import went through when it hit
+          # the HDF5 "unable to open file" crash (root cause: TMPDIR on a
+          # nearly-full C: drive truncating the ~4.5Go upload mid-write).
+          integrity <- .verify_upload_integrity(input$single_file_upload$datapath,
+                                                input$single_file_upload$size)
+          if (!integrity$ok) {
+            add_log(paste("❌", integrity$msg))
+            stop(integrity$msg)
+          }
+
           raw <- load_single_cell_data(input$single_file_upload$datapath, add_log)
           obj <- prepare_seurat_object(raw, "SingleSample")
           global_data$sc_obj <- obj
@@ -249,7 +327,7 @@ mod_import_sc_server <- function(id, global_data) {
           showNotification("✅ Import réussi!", type="message")
         }, error=function(e) {
           msg <- paste("❌ Erreur:", conditionMessage(e))
-          add_log(msg); showNotification(msg, type="error", duration=10)
+          add_log(msg); showNotification(msg, type="error", duration=12)
         })
       })
     })

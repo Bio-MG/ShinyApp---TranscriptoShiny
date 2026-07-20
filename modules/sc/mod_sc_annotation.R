@@ -99,8 +99,8 @@
     if (length(cells) > maxcells) cells <- sample(cells, maxcells)
     tmp   <- subset(obj, cells = cells)
     DefaultAssay(tmp) <- "RNA"
-    tmp   <- NormalizeData(tmp)
-    Matrix::rowMeans(GetAssayData(tmp, slot = "data"))
+    tmp   <- NormalizeData(tmp, verbose = FALSE)
+    Matrix::rowMeans(GetAssayData(tmp, layer = "data"))
   })
   profile_matrix <- do.call(cbind, cluster_profiles)
 
