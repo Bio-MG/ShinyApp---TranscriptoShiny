@@ -344,17 +344,19 @@ plot_multi_sample <- function(seurat_obj, gene, plot_type = "violin") {
 
 
 
-#' Safe normalized matrix extraction (Seurat v5, layer= only -- slot= is
-
-#' DEFUNCT since SeuratObject 5.0 and errors outright, so it is no longer
-
-#' used even as a fallback here)
+#' Safe normalized matrix extraction (Seurat v4/v5 compatible)
 
 .get_norm_matrix <- function(obj) {
 
   assay_use <- DefaultAssay(obj)
 
-  mat <- GetAssayData(obj, layer = "data", assay = assay_use)
+  mat <- tryCatch(
+
+    GetAssayData(obj, layer = "data", assay = assay_use),
+
+    error = function(e) GetAssayData(obj, slot = "data", assay = assay_use)
+
+  )
 
   if (inherits(mat, "dgCMatrix")) mat <- as.matrix(mat)
 
@@ -401,9 +403,25 @@ find_correlated_genes <- function(seurat_obj, target_gene,
 
   
 
-  # Extraire expression normalisée (peut être dgCMatrix, matrix, ou BPCells IterableMatrix)
+  # Extraire expression normalisée
 
   expr_matrix <- .get_norm_matrix(seurat_obj)
+
+  
+
+  # Convertir en matrice dense si sparse
+
+  if(inherits(expr_matrix, "dgCMatrix")) {
+
+    expr_matrix <- as.matrix(expr_matrix)
+
+  }
+
+  
+
+  # Expression du gène cible
+
+  target_expr <- as.numeric(expr_matrix[target_gene, ])
 
   
 
@@ -431,41 +449,11 @@ find_correlated_genes <- function(seurat_obj, target_gene,
 
   
 
-  # Step-3.8: matérialiser UNIQUEMENT les lignes nécessaires (cible + gènes
-
-  # candidats) en dense — sûr pour dgCMatrix/matrix ET pour un objet BPCells
-
-  # IterableMatrix, dont un slicing ligne-par-ligne ne se convertit pas
-
-  # automatiquement en vecteur numérique simple via as.numeric() (provoquait
-
-  # "cannot coerce type 'S4' to vector of type 'double'"). Bien plus RAM-safe
-
-  # aussi qu'une densification de la matrice complète (gènes x cellules).
-
-  needed_genes <- unique(c(target_gene, all_genes))
-
-  sub_mat <- tryCatch(
-
-    as.matrix(expr_matrix[needed_genes, , drop = FALSE]),
-
-    error = function(e) stop("Impossible d'extraire les données d'expression : ", conditionMessage(e))
-
-  )
-
-  
-
-  # Expression du gène cible
-
-  target_expr <- as.numeric(sub_mat[target_gene, ])
-
-  
-
   # FIX: Calcul avec gestion des ex-aequos
 
   cor_results <- lapply(all_genes, function(g) {
 
-    gene_expr <- as.numeric(sub_mat[g, ])
+    gene_expr <- as.numeric(expr_matrix[g, ])
 
     
 
@@ -905,46 +893,6 @@ plot_gene_correlation_network <- function(corr_df, target_gene, top_n = 20) {
 
 
 
-#' Per-sample QC summary table (Step-3.7A.2) — single source of truth for the
-#' live "QC" tab AND the HTML/PDF report's QC section.
-#'
-#' Cell counts before/after the QC filter can only be captured AT filter time
-#' (the "before" metadata no longer exists once subset() runs) — that part is
-#' a static snapshot written by mod_sc_pipeline.R / mod_sc.R at QC time
-#' (`shared_rv$qc_snapshot`). The doublet rate, on the other hand, is read
-#' LIVE from the current object here (rather than baked into the snapshot),
-#' because scDblFinder runs AFTER QC (before Normalisation) — joining at
-#' display time means this table is correct regardless of whether doublet
-#' detection has run yet, or ran in a totally separate step this function
-#' knows nothing about.
-#'
-#' @param qc_snapshot data.frame(Echantillon, Cellules_avant, Cellules_apres,
-#'   Pct_Mito_Median, Pct_Conserve).
-#' @param obj Current Seurat object (optional — NULL skips the doublet column).
-#' @return data.frame ready for DT::datatable() or knitr::kable().
-build_qc_summary_table <- function(qc_snapshot, obj = NULL) {
-
-  df <- qc_snapshot
-
-  if (!is.null(obj) && "scDblFinder_class" %in% colnames(obj@meta.data)) {
-
-    meta     <- obj@meta.data
-
-    dbl_rate <- tapply(meta$scDblFinder_class == "doublet", meta$orig.ident, mean, na.rm = TRUE)
-
-    df$Pct_Doublets <- round(100 * as.numeric(dbl_rate[df$Echantillon]), 1)
-
-  } else {
-
-    df$Pct_Doublets <- NA_real_
-
-  }
-
-  df
-
-}
-
-
 #' Standardized FindAllMarkers results DT table (shared by mod_sc_markers.R
 
 #' and the future Single-Cell HTML/PDF report — same rationale as
@@ -1274,16 +1222,7 @@ remap_seurat_ids_to_symbol <- function(obj, from_type = "ensembl", organism = "h
   
   map_df <- tryCatch(
     AnnotationDbi::select(orgdb, keys = ids_clean, keytype = from_key, columns = "SYMBOL"),
-    error = function(e) {
-      # Step-3.8: name the likely correct organism when the mismatch looks
-      # organism-related (e.g. ENSMUSG IDs tested against org.Hs.eg.db) --
-      # mirrors the same fix in helpers_io.R's remap_gene_ids_to_symbol().
-      detected_org <- if (from_type == "ensembl") detect_organism_from_ids(ids_clean) else NA_character_
-      org_hint <- if (!is.na(detected_org) && detected_org != organism)
-        sprintf(" Organisme detecte a partir des IDs : %s -- selectionnez '%s'.", detected_org, detected_org)
-      else ""
-      stop("Echec du mapping d'identifiants : ", conditionMessage(e), org_hint)
-    }
+    error = function(e) stop("Echec du mapping d'identifiants : ", conditionMessage(e))
   )
   map_df <- map_df[!is.na(map_df$SYMBOL), ]
   map_df <- map_df[!duplicated(map_df[[from_key]]), ]
@@ -1325,4 +1264,117 @@ remap_seurat_ids_to_symbol <- function(obj, from_type = "ensembl", organism = "h
   
   list(object = new_obj, n_mapped = n_mapped, n_unmapped = n_unmapped,
        n_collapsed = n_before_collapse - nrow(new_mat))
+}
+
+# =============================================================================
+# Step-3.8A — Sketch presets (large-dataset speed/precision tradeoff)
+# =============================================================================
+
+#' Resolve a sketch-size preset into concrete SketchData/RunPCA parameters
+#'
+#' @param preset One of "fast","light","medium","standard","high","max","custom".
+#' @param n_total_cells Total cells in the object (post-QC), used to cap ncells
+#'   and to fall back to "no sketch" when the dataset is already small.
+#' @param custom_ncells Used only when preset == "custom".
+#' @return List with ncells, max_per_cluster, npcs.
+resolve_sketch_preset <- function(preset, n_total_cells, custom_ncells = NULL) {
+  presets <- list(
+    fast     = list(ncells = 5000,   max_per_cluster = 300,  npcs = 15),
+    light    = list(ncells = 10000,  max_per_cluster = 500,  npcs = 20),
+    medium   = list(ncells = 25000,  max_per_cluster = 1000, npcs = 20),
+    standard = list(ncells = 50000,  max_per_cluster = 1000, npcs = 20),
+    high     = list(ncells = 100000, max_per_cluster = 2000, npcs = 30),
+    max      = list(ncells = n_total_cells, max_per_cluster = 3000, npcs = 30)
+  )
+
+  if (identical(preset, "custom")) {
+    ncells <- custom_ncells %||% 20000
+    return(list(
+      ncells          = min(ncells, n_total_cells),
+      max_per_cluster = max(300, round(ncells / 25)),
+      npcs            = if (ncells < 15000) 15 else if (ncells < 60000) 20 else 30
+    ))
+  }
+
+  params <- presets[[preset]] %||% presets[["standard"]]
+  params$ncells <- min(params$ncells, n_total_cells)
+  params
+}
+
+#' Standardize Seurat reduction names after a sketch-based ProjectData() call
+#'
+#' Seurat's sketch workflow (SketchData -> analyze on "sketch" assay ->
+#' ProjectData) writes the full-size projected embeddings under whatever names
+#' were passed to `full.reduction=`/`umap.model=`, not automatically "pca"/
+#' "umap". The rest of TranscriptoShiny (Viz, Annotation, Trajectory...)
+#' assumes reductions are named "pca"/"umap", so this copies them into place.
+#' Fully defensive: never errors out, no-op if names already match or if the
+#' expected reduction can't be identified (Seurat version differences).
+#'
+#' @param obj Seurat object just returned by ProjectData().
+#' @param full_pca_name Name used as `full.reduction=` in ProjectData().
+#' @return The Seurat object with "pca"/"umap" reductions pointing at the
+#'   full-size projected embeddings (best effort).
+standardize_sketch_reductions <- function(obj, full_pca_name = "pca.full") {
+  tryCatch({
+    reds <- names(obj@reductions)
+
+    if (full_pca_name %in% reds && !"pca" %in% reds) {
+      obj[["pca"]] <- obj[[full_pca_name]]
+    }
+
+    if (!"umap" %in% reds) {
+      # ProjectData() typically names the projected UMAP "ref.umap"; fall back
+      # to any "*umap*" reduction whose embedding row count matches ncol(obj).
+      umap_candidates <- reds[grepl("umap", reds, ignore.case = TRUE)]
+      full_n <- ncol(obj)
+      for (cand in umap_candidates) {
+        if (nrow(Embeddings(obj[[cand]])) == full_n) {
+          obj[["umap"]] <- obj[[cand]]
+          break
+        }
+      }
+    }
+  }, error = function(e) {
+    warning(paste("standardize_sketch_reductions() non-bloquant :", conditionMessage(e)))
+  })
+  obj
+}
+
+#' Map Ensembl gene IDs to gene symbols in an expression matrix, collapsing duplicates
+#'
+#' Used for the SingleR cluster-aggregate ("pseudobulk") path: applied to the
+#' small per-cluster profile matrix, never to the full cell x gene matrix.
+#'
+#' @param mat Numeric/dgCMatrix with genes (Ensembl IDs) as rownames.
+#' @param organism "human" or "mouse".
+#' @return Matrix with unique gene-symbol rownames (duplicates summed via
+#'   Matrix::rowsum).
+map_ensembl_matrix_to_symbol <- function(mat, organism = c("human", "mouse")) {
+  organism  <- match.arg(organism)
+  orgdb_pkg <- if (organism == "human") "org.Hs.eg.db" else "org.Mm.eg.db"
+
+  if (!requireNamespace("AnnotationDbi", quietly = TRUE) ||
+      !requireNamespace(orgdb_pkg, quietly = TRUE)) {
+    stop(sprintf(
+      "Package Bioconductor '%s' (+ AnnotationDbi) requis pour la conversion ENSEMBL -> Symbol.",
+      orgdb_pkg))
+  }
+
+  orgdb     <- getExportedValue(orgdb_pkg, orgdb_pkg)
+  clean_ids <- sub("\\..*$", "", rownames(mat))  # drop Ensembl version suffix
+
+  symbols <- AnnotationDbi::mapIds(orgdb, keys = clean_ids, keytype = "ENSEMBL",
+                                    column = "SYMBOL", multiVals = "first")
+
+  keep <- !is.na(symbols) & nzchar(symbols)
+  if (sum(keep) < 200L) {
+    stop(sprintf(
+      "Mapping ENSEMBL -> Symbol insuffisant (%d genes mappes, organisme '%s'). V\u00e9rifiez l'organisme.",
+      sum(keep), organism))
+  }
+
+  mat <- mat[keep, , drop = FALSE]
+  rownames(mat) <- unname(symbols[keep])
+  Matrix::rowsum(mat, group = rownames(mat), reorder = FALSE)
 }

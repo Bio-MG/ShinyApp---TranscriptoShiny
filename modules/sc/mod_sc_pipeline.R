@@ -73,7 +73,7 @@ mod_sc_pipeline_ui <- function(id) {
       condition = sprintf("input['%s'] == 'custom'", ns("sketch_preset")),
       numericInput(ns("sketch_ncells_custom"), "Nombre de cellules (sketch)",
                    value = 20000, min = 1000, max = 500000, step = 1000)
-    )
+    ),
     hr(),
     h6("Normalisation"),
     radioButtons(ns("norm_method"), NULL,
