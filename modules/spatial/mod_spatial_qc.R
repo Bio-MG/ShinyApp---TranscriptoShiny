@@ -155,7 +155,7 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
           )
         },
         bpcells_dir = bpcells_dir, pass_idx = pass_idx, coords = coords,
-        n_hvg = n_hvg, log_file = log_file
+        n_hvg = n_hvg, log_file = log_file, .timeout = MIRAI_TASK_TIMEOUT_MS
       )
     })
     bslib::bind_task_button(moran_task, "btn_moran")
@@ -177,13 +177,16 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
         shared_rv$moran_results <- moran_task$result()
         showNotification("Autocorrelation spatiale terminee.", type = "message", duration = 4)
       } else if (moran_task$status() == "error") {
-        showNotification("Erreur lors du calcul de l'indice de Moran — voir le log.", type = "error", duration = 8)
+        showNotification(
+          "Erreur (ou depassement du delai) pendant le calcul de Moran — voir le log. Essayez 'Reinitialiser les daemons' puis relancez.",
+          type = "error", duration = 10)
       }
     })
 
     output$moran_progress_text <- renderText({
-      p <- parse_log_progress(tracker())
-      if (!is.na(p$pct)) sprintf("%s (%d%%)", p$text, p$pct) else p$text
+      lines <- tracker()
+      if (length(lines) == 0) return("En attente...")
+      paste(lines, collapse = "\n")
     })
 
     output$moran_table <- DT::renderDT({
