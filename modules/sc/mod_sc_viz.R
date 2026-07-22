@@ -150,12 +150,20 @@ build_sc_viz_plot <- function(obj, cfg, sc_palette = "default", manual_colors = 
   # existing scale" message (expected when overriding Seurat's built-in scale).
   .add <- function(p, s) if (is.null(s)) p else suppressWarnings(p + s)
 
+  # Step-3.8B: past ~50k points, plain ggplot geom_point (what DimPlot/
+  # FeaturePlot use by default) makes plotly conversion crawl or hang the
+  # browser -- observed on the 1.3M-neurons dataset ("previews non
+  # interactives / trop lentes" even though export PNG/PDF worked fine).
+  # Seurat's raster=TRUE routes through scattermore (already a project
+  # dependency, see global.R) -- point count no longer drives render cost.
+  .raster_large <- ncol(obj) > 50000L
+
   # 1. DimPlot ----------------------------------------------------------------
   if (type == "dim") {
     red <- cfg$reduction %||% "umap"
     if (!red %in% names(obj@reductions)) stop("Réduction non calculée : ", red)
     p <- DimPlot(obj, reduction = red, group.by = grp,
-                 label = TRUE, pt.size = pt_size) +
+                 label = TRUE, pt.size = pt_size, raster = .raster_large) +
          theme_fn + ggtitle(paste(toupper(red), "\u2014", grp))
     return(.add(p, pal_disc))
   }
@@ -166,11 +174,11 @@ build_sc_viz_plot <- function(obj, cfg, sc_palette = "default", manual_colors = 
     if (!length(valid)) stop("Aucun gène valide")
     # multi-gene returns patchwork: scale only safe for single gene
     if (length(valid) == 1L) {
-      p <- FeaturePlot(obj, features = valid[1], pt.size = pt_size) + theme_fn
+      p <- FeaturePlot(obj, features = valid[1], pt.size = pt_size, raster = .raster_large) + theme_fn
       return(.add(p, pal_cont))
     }
     return(FeaturePlot(obj, features = head(valid, 4), ncol = 2,
-                       pt.size = pt_size) + theme_fn)
+                       pt.size = pt_size, raster = .raster_large) + theme_fn)
   }
 
   # 3. Scatter (enhanced) -----------------------------------------------------
@@ -491,11 +499,13 @@ mod_sc_viz_output_ui <- function(id) {
             numericInput(ns("plot_height"), "Hauteur", 600, min=300, max=1500),
             selectInput(ns("export_format"), "Format",
                         choices = c("PNG"="png","PDF"="pdf")),
+            uiOutput(ns("export_fidelity_note")),
             downloadButton(ns("export_plot"), "Exporter")
           )
         )
       )
     ),
+    uiOutput(ns("preview_badge")),
     div(style="height:650px;overflow:auto;",
         uiOutput(ns("plot_container")))
   )
@@ -510,6 +520,43 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
 
     # ── Reactive: ggplot for export ──────────────────────────────────────────
     current_plot <- reactiveVal(NULL)
+
+    # ── Step-3.8B (section E): live preview vs high-fidelity export ─────────
+    # Per-cell plot types (dim/feature/scatter/violin) get expensive on very
+    # large objects -- not RAM (Seurat/ggplot don't densify), but disk I/O:
+    # FetchData() on a BPCells-backed 1.3M-cell object streams from disk for
+    # every single render, and the resulting SVG/plotly point count also
+    # chokes the browser (see raster=TRUE fix in build_sc_viz_plot() above).
+    # Live preview renders on a capped, cluster-stratified subsample (reusing
+    # subsample_seurat_for_analysis(), already used for markers/correlation
+    # RAM-safety); export re-renders build_sc_viz_plot() on the FULL object
+    # on demand so the exported file is always full-fidelity regardless of
+    # what the live preview showed.
+    .PREVIEW_MAX_CELLS  <- 50000L
+    .PREVIEW_CELL_TYPES <- c("dim", "feature", "scatter", "violin")
+    preview_subsampled  <- reactiveVal(FALSE)
+
+    .preview_obj <- function(obj, type, grp_col) {
+      if (!type %in% .PREVIEW_CELL_TYPES || ncol(obj) <= .PREVIEW_MAX_CELLS) {
+        preview_subsampled(FALSE)
+        return(obj)
+      }
+      max_per_grp <- max(500L, round(.PREVIEW_MAX_CELLS / max(1L, length(unique(obj@meta.data[[grp_col]] %||% "all")))))
+      sub <- tryCatch(
+        subsample_seurat_for_analysis(obj, max_per_group = max_per_grp, group_col = grp_col),
+        error = function(e) list(object = obj, was_subsampled = FALSE)
+      )
+      preview_subsampled(isTRUE(sub$was_subsampled))
+      sub$object
+    }
+
+    output$preview_badge <- renderUI({
+      if (!isTRUE(preview_subsampled())) return(NULL)
+      div(class="alert alert-info py-1 px-2 mb-1", style="font-size:0.78em;",
+          bsicons::bs_icon("info-circle"),
+          sprintf(" Aper\u00e7u sous-échantillonn\u00e9 (max %s cellules) pour la fluidit\u00e9 \u2014 l'export utilise le dataset complet.",
+                 format(.PREVIEW_MAX_CELLS, big.mark=" ")))
+    })
 
     # ── Helper: config snapshot (used ONLY for report basket — NOT for renders
     #    to avoid retriggerring expensive computations like FindMarkers when
@@ -796,6 +843,10 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
         plot_theme         = input$plot_theme
       )
 
+      # Step-3.8B: fast preview on large objects (see .preview_obj() above) --
+      # export_plot() re-renders on the untouched `obj`/full dataset separately.
+      obj <- .preview_obj(obj, type, cfg$group_by %||% "seurat_clusters")
+
       p_gg <- tryCatch(
         build_sc_viz_plot(obj, cfg, input$sc_palette, sc_manual_colors_vec(),
                           sc_gradient_vec(), sc_volcano_colors_vec()),
@@ -853,15 +904,54 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
                error = function(e) plotly_empty())
     })
 
+    output$export_fidelity_note <- renderUI({
+      req(global_data$sc_obj)
+      type <- input$viz_type %||% "dim"
+      if (!type %in% .PREVIEW_CELL_TYPES || ncol(global_data$sc_obj) <= .PREVIEW_MAX_CELLS) return(NULL)
+      div(class="alert alert-warning py-1 px-2 mb-2", style="font-size:0.76em;",
+          bsicons::bs_icon("hourglass-split"),
+          sprintf(" Export haute fid\u00e9lit\u00e9 (%s cellules, dataset complet, jamais sous-\u00e9chantillonn\u00e9) : ",
+                 format(ncol(global_data$sc_obj), big.mark=" ")),
+          tags$strong("peut prendre plusieurs minutes (voire plus sur donn\u00e9es sur disque/BPCells)."))
+    })
+
     # ── Export ───────────────────────────────────────────────────────────────
+    # Step-3.8B: re-renders build_sc_viz_plot() from scratch on the FULL,
+    # untouched global_data$sc_obj -- deliberately does NOT reuse current_plot(),
+    # which may be the subsampled live-preview render (see .preview_obj() /
+    # plot_interactive above). Export is always full-fidelity; if that's slow
+    # on a very large object the UI warns beforehand (export_fidelity_note)
+    # and shows an in-progress message here -- it is never silently downsampled.
     output$export_plot <- downloadHandler(
       filename = function() paste0("plot_", Sys.Date(), ".", input$export_format %||% "png"),
       content  = function(file) {
-        req(current_plot())
-        ggsave(file, plot=current_plot(),
-               width  = (input$plot_width  %||% 800) / 100,
-               height = (input$plot_height %||% 600) / 100,
-               dpi    = 300)
+        req(global_data$sc_obj)
+        cfg  <- .current_cfg()
+        type <- cfg$type %||% "dim"
+        n_cells <- ncol(global_data$sc_obj)
+        is_slow <- type %in% .PREVIEW_CELL_TYPES && n_cells > .PREVIEW_MAX_CELLS
+
+        withProgress(
+          message = if (is_slow)
+            sprintf("Export haute fid\u00e9lit\u00e9 (%s cellules) \u2014 peut prendre plusieurs minutes...",
+                    format(n_cells, big.mark=" "))
+          else "Export...",
+          value = 0.3, {
+            p <- tryCatch(
+              build_sc_viz_plot(global_data$sc_obj, cfg, cfg$sc_palette %||% input$sc_palette,
+                                cfg$sc_manual_colors, cfg$sc_gradient, cfg$sc_volcano_colors),
+              error = function(e) {
+                showNotification(paste("Erreur export:", conditionMessage(e)), type="error", duration=10)
+                stop(e)
+              }
+            )
+            incProgress(0.6, detail = "Écriture du fichier...")
+            ggsave(file, plot=p,
+                   width  = (input$plot_width  %||% 800) / 100,
+                   height = (input$plot_height %||% 600) / 100,
+                   dpi    = 300)
+          }
+        )
       }
     )
 
