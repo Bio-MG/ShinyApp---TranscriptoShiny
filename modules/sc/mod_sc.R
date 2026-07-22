@@ -258,6 +258,15 @@ mod_sc_server <- function(id, global_data) {
     observeEvent(input$btn_auto_pipeline_sc, {
       req(global_data$sc_obj)
       ns_m <- session$ns
+      # Step-3.8B: pre-select organism from actual ID prefixes (ENSMUSG.../
+      # ENSG...) -- was always defaulting to "Humain", the direct cause of
+      # "None of the keys entered are valid keys for 'ENSEMBL'" on the real
+      # mouse dataset (org.Hs.eg.db has no ENSMUSG keys). The mapping call
+      # itself now also auto-corrects (see remap_seurat_ids_to_symbol()) but
+      # pre-selecting here avoids relying on that silent correction.
+      detected_map_org <- tryCatch(detect_organism_from_ids(rownames(global_data$sc_obj)),
+                                   error = function(e) NA_character_)
+      mapping_org_selected <- if (!is.na(detected_map_org)) detected_map_org else "human"
       showModal(modalDialog(
         title="\u25b6 Pipeline SC \u2014 Paramètres", size="m", easyClose=TRUE,
 
@@ -267,7 +276,7 @@ mod_sc_server <- function(id, global_data) {
         conditionalPanel(
           condition=sprintf("input['%s'] == true", ns_m("sc_ap_mapping")),
           selectInput(ns_m("sc_ap_mapping_org"), "Organisme (mapping)",
-                      c("Humain"="human","Souris"="mouse"))),
+                      c("Humain"="human","Souris"="mouse"), selected = mapping_org_selected)),
         checkboxInput(ns_m("sc_ap_bpcells"),
                       sprintf("\U0001f4bd Backend disque (BPCells) si > %s cellules",
                               format(.BPCELLS_AUTO_THRESHOLD, big.mark=" ")),
@@ -287,11 +296,19 @@ mod_sc_server <- function(id, global_data) {
             radioButtons(ns_m("sc_ap_norm"), "Normalisation",
                          c("LogNormalize"="log","SCTransform"="sct")),
             sliderInput(ns_m("sc_ap_pca_dim"), "Dims PCA", 5, 50, 20),
-            numericInput(ns_m("sc_ap_res"), "Résolution clustering", 0.5, min=0.1, step=0.1)
+            numericInput(ns_m("sc_ap_res"), "Résolution clustering", 0.5, min=0.1, step=0.1),
+            selectInput(ns_m("sc_ap_cluster_algo"), "Algorithme de clustering",
+                       choices = c("Louvain"="1","Louvain (multilevel)"="2",
+                                  "SLM"="3","Leiden (reticulate)"="4"), selected="1")
           )
         ),
+        checkboxInput(ns_m("sc_ap_compute_umap"),
+                     "\u2713 Calculer UMAP (d\u00e9cochez pour PCA seul \u2014 bien plus rapide, mode debug)",
+                     value = TRUE),
         div(class="small text-muted mb-2",
-            "UMAP + t-SNE secondaire (si dataset raisonnable) sont tous deux calculés."),
+            "Si coché : UMAP + t-SNE secondaire (si dataset raisonnable) sont calculés ",
+            "(le plus lent du pipeline). Si décoché : PCA seul \u2014 previews/trajectoire ",
+            "se rabattent automatiquement sur PCA, rien ne plante."),
         hr(),
 
         # ── Step-3.8A: Sketch (sous-échantillonnage intelligent) ─────────────
@@ -384,10 +401,13 @@ mod_sc_server <- function(id, global_data) {
           if (detected %in% c("ensembl","entrez")) {
             p$set(0.02,"Mapping IDs..."); log_sc(sprintf("Mapping IDs (%s)...", detected))
             map_res <- tryCatch(
-              remap_seurat_ids_to_symbol(obj,
-                from_type        = detected,
-                organism         = input$sc_ap_mapping_org %||% "human",
-                collapse_method  = "sum"),
+              withCallingHandlers(
+                remap_seurat_ids_to_symbol(obj,
+                  from_type        = detected,
+                  organism         = input$sc_ap_mapping_org %||% "human",
+                  collapse_method  = "sum"),
+                warning = function(w) { log_sc(paste("\u2139\ufe0f", conditionMessage(w))); invokeRestart("muffleWarning") }
+              ),
               error=function(e) { log_sc(paste("\u26a0\ufe0f Mapping ignoré:", e$message)); NULL }
             )
             if (!is.null(map_res)) {
@@ -455,6 +475,7 @@ mod_sc_server <- function(id, global_data) {
 
         if (isTRUE(use_sketch)) {
           # ── Sketch: analyse sur sous-ensemble ────────────────────────────
+          .t_sketch <- Sys.time()
           p$set(0.15,"Sketch..."); log_sc(sprintf(
             "Sketch : %s / %s cellules (preset '%s')...",
             format(sketch_params$ncells, big.mark=" "), format(n_total_cells, big.mark=" "),
@@ -465,7 +486,7 @@ mod_sc_server <- function(id, global_data) {
           obj <- SketchData(object=obj, ncells=sketch_params$ncells,
                             method="LeverageScore", sketched.assay="sketch")
           DefaultAssay(obj) <- "sketch"
-          log_sc("\u2713 Sketch OK")
+          log_sc(sprintf("\u2713 Sketch OK (%.0fs)", as.numeric(difftime(Sys.time(), .t_sketch, units="secs"))))
 
           p$set(0.30,"Normalisation (sketch)..."); log_sc("Normalisation (sketch)...")
           obj <- FindVariableFeatures(obj, nfeatures=2000, verbose=FALSE)
@@ -478,26 +499,40 @@ mod_sc_server <- function(id, global_data) {
 
           p$set(0.55,"Clustering (sketch)...")
           obj <- FindNeighbors(obj, dims=1:sketch_params$npcs, verbose=FALSE)
-          obj <- FindClusters(obj, resolution=input$sc_ap_res, verbose=FALSE)
+          obj <- robust_find_clusters(obj, resolution=input$sc_ap_res, algo=input$sc_ap_cluster_algo,
+                                      log_fn=function(m) log_sc(paste("\u26a0\ufe0f", m)))
           log_sc(sprintf("\u2713 Clustering sketch OK (res %.1f)", input$sc_ap_res))
 
-          p$set(0.63,"UMAP (sketch)...")
-          obj <- RunUMAP(obj, dims=1:sketch_params$npcs, reduction="pca",
-                         return.model=TRUE, verbose=FALSE)
-          log_sc("\u2713 UMAP sketch OK")
+          # Step-3.8B: UMAP is the slowest step by far on large sketches --
+          # skippable for fast debug iteration. When skipped, ProjectData()
+          # below simply omits umap.model= (PCA-only projection); trajectory
+          # (Step 9) and any live/report preview fall back to PCA automatically.
+          compute_umap_sketch <- isTRUE(input$sc_ap_compute_umap)
+          if (compute_umap_sketch) {
+            p$set(0.63,"UMAP (sketch)...")
+            obj <- RunUMAP(obj, dims=1:sketch_params$npcs, reduction="pca",
+                           return.model=TRUE, verbose=FALSE)
+            log_sc("\u2713 UMAP sketch OK")
+          } else {
+            log_sc("\u2139\ufe0f UMAP d\u00e9sactiv\u00e9 (mode PCA seul, debug rapide) \u2014 previews/trajectoire utiliseront PCA.")
+          }
 
           # ── Projection sketch → dataset complet ──────────────────────────
+          .t_project <- Sys.time()
           p$set(0.68,"Projection sur le dataset complet...")
           log_sc("Projection (ProjectData) sur le dataset complet...")
-          obj <- ProjectData(
+          project_args <- list(
             object=obj, assay="RNA", sketched.assay="sketch",
             sketched.reduction="pca", full.reduction="pca.full",
-            umap.model="umap", dims=1:sketch_params$npcs,
+            dims=1:sketch_params$npcs,
             refdata=list(seurat_clusters="seurat_clusters"))
+          if (compute_umap_sketch) project_args$umap.model <- "umap"
+          obj <- do.call(ProjectData, project_args)
           obj <- standardize_sketch_reductions(obj, full_pca_name="pca.full")
           DefaultAssay(obj) <- "RNA"
           pca_dim <- sketch_params$npcs
-          log_sc(sprintf("\u2713 Projection OK \u2014 %s cellules", format(ncol(obj), big.mark=" ")))
+          log_sc(sprintf("\u2713 Projection OK \u2014 %s cellules (%.0fs)",
+                         format(ncol(obj), big.mark=" "), as.numeric(difftime(Sys.time(), .t_project, units="secs"))))
 
         } else {
           # ── Dataset complet (comportement existant, inchangé) ────────────
@@ -523,12 +558,17 @@ mod_sc_server <- function(id, global_data) {
 
           p$set(0.55,"Clustering...")
           obj <- FindNeighbors(obj, dims=1:pca_dim, verbose=FALSE)
-          obj <- FindClusters(obj,  resolution=input$sc_ap_res,  verbose=FALSE)
+          obj <- robust_find_clusters(obj, resolution=input$sc_ap_res, algo=input$sc_ap_cluster_algo,
+                                      log_fn=function(m) log_sc(paste("\u26a0\ufe0f", m)))
           log_sc(sprintf("\u2713 %d clusters (res %.1f)", length(unique(obj$seurat_clusters)), input$sc_ap_res))
 
-          p$set(0.68,"UMAP...")
-          obj <- RunUMAP(obj, dims=1:pca_dim, verbose=FALSE)
-          log_sc("\u2713 UMAP OK")
+          if (isTRUE(input$sc_ap_compute_umap)) {
+            p$set(0.68,"UMAP...")
+            obj <- RunUMAP(obj, dims=1:pca_dim, verbose=FALSE)
+            log_sc("\u2713 UMAP OK")
+          } else {
+            log_sc("\u2139\ufe0f UMAP d\u00e9sactiv\u00e9 (mode PCA seul, debug rapide).")
+          }
         }
 
         n_cl <- length(unique(obj$seurat_clusters))
@@ -538,14 +578,18 @@ mod_sc_server <- function(id, global_data) {
         # Toujours calculé (si dataset raisonnable) pour être disponible aux
         # côtés de PCA/UMAP dans le picker "Réduction à visualiser" — même
         # constante de garde que le module "1. Pipeline" (.AUTO_TSNE_MAX_CELLS).
-        p$set(0.72,"t-SNE (secondaire)...")
-        if (ncol(obj) > .AUTO_TSNE_MAX_CELLS) {
-          log_sc(sprintf("\u26a0\ufe0f t-SNE secondaire ignoré (%s cellules > %s max).",
-                         format(ncol(obj), big.mark=" "), format(.AUTO_TSNE_MAX_CELLS, big.mark=" ")))
+        if (!isTRUE(input$sc_ap_compute_umap)) {
+          log_sc("\u2139\ufe0f t-SNE secondaire ignor\u00e9 (UMAP d\u00e9sactiv\u00e9, mode PCA seul).")
         } else {
-          obj <- tryCatch(RunTSNE(obj, dims=1:pca_dim, verbose=FALSE),
-                          error=function(e){ log_sc(paste("\u26a0\ufe0f t-SNE secondaire ignoré:", e$message)); obj })
-          log_sc("\u2713 t-SNE secondaire OK")
+          p$set(0.72,"t-SNE (secondaire)...")
+          if (ncol(obj) > .AUTO_TSNE_MAX_CELLS) {
+            log_sc(sprintf("\u26a0\ufe0f t-SNE secondaire ignoré (%s cellules > %s max).",
+                           format(ncol(obj), big.mark=" "), format(.AUTO_TSNE_MAX_CELLS, big.mark=" ")))
+          } else {
+            obj <- tryCatch(RunTSNE(obj, dims=1:pca_dim, verbose=FALSE),
+                            error=function(e){ log_sc(paste("\u26a0\ufe0f t-SNE secondaire ignoré:", e$message)); obj })
+            log_sc("\u2713 t-SNE secondaire OK")
+          }
         }
 
         # ── Step 6: SingleR (optional) ───────────────────────────────────────
@@ -554,6 +598,7 @@ mod_sc_server <- function(id, global_data) {
               !requireNamespace("celldex",quietly=TRUE)) {
             log_sc("\u26a0\ufe0f SingleR/celldex non installés — annotation ignorée.")
           } else {
+            .t_singler <- Sys.time()
             p$set(0.76,"Annotation SingleR...")
             result <- tryCatch(
               withCallingHandlers(
@@ -567,8 +612,9 @@ mod_sc_server <- function(id, global_data) {
             if (!is.null(result)) {
               col_name <- paste0("SingleR_", input$sc_ap_singler_ref, "_", input$sc_ap_singler_level)
               obj[[col_name]] <- result$labels
-              log_sc(sprintf("\u2713 Annoté [%s] — %d types",
-                             result$method, length(unique(result$labels))))
+              log_sc(sprintf("\u2713 Annoté [%s] — %d types (%.0fs)",
+                             result$method, length(unique(result$labels)),
+                             as.numeric(difftime(Sys.time(), .t_singler, units="secs"))))
             }
           }
         }
@@ -603,19 +649,37 @@ mod_sc_server <- function(id, global_data) {
 
             # Step 7b: Pathway ORA on top markers (optional)
             if (isTRUE(input$sc_ap_pathway)) {
+              .t_pathway <- Sys.time()
               log_sc("Pathway ORA...")
-              top_g <- head(markers$gene[order(markers$p_val_adj)], 100)
-              pw <- tryCatch(
-                run_pathway_enrichment(top_g,
-                                       organism = input$sc_ap_pathway_org %||% "human",
-                                       database = input$sc_ap_pathway_db  %||% "GOBP",
-                                       pval_cutoff = 0.05),
-                error=function(e) { log_sc(paste("\u26a0\ufe0f Pathway:", e$message)); NULL }
-              )
-              if (!is.null(pw) && nrow(pw) > 0) {
-                shared_rv$pathway_results <- pw
-                shared_rv$pathway_db      <- input$sc_ap_pathway_db %||% "GOBP"
-                log_sc(sprintf("\u2713 %d pathways", nrow(pw)))
+              pathway_org <- input$sc_ap_pathway_org %||% "human"
+              top_g_raw   <- head(markers$gene[order(markers$p_val_adj)], 100)
+              # Step-3.8B: .remap_if_ensg() (mod_sc_pathways.R, globally
+              # available -- sourced before this module in app.R) converts
+              # ENSEMBL marker IDs to symbols before bitr(); a no-op if
+              # markers are already symbols (e.g. Step 0 mapping succeeded).
+              # Without this, sketch/auto-pipeline runs where mapping was
+              # skipped or failed always produced "Aucun gene converti".
+              top_g <- .remap_if_ensg(top_g_raw, pathway_org,
+                                      notify_fn = function(msg, ...) log_sc(paste("\u2139\ufe0f", msg)))
+              if (length(top_g) == 0) {
+                log_sc(sprintf("\u26a0\ufe0f Pathway ignoré : 0/%d gènes convertibles (organisme '%s'). Exemples : %s.",
+                               length(top_g_raw), pathway_org, paste(head(top_g_raw, 5), collapse=", ")))
+              } else {
+                pw <- tryCatch(
+                  run_pathway_enrichment(top_g,
+                                         organism = pathway_org,
+                                         database = input$sc_ap_pathway_db %||% "GOBP",
+                                         pval_cutoff = 0.05),
+                  error=function(e) { log_sc(paste("\u26a0\ufe0f Pathway:", e$message,
+                                                    "\u2014 exemples testés :",
+                                                    paste(head(top_g, 5), collapse=", "))); NULL }
+                )
+                if (!is.null(pw) && nrow(pw) > 0) {
+                  shared_rv$pathway_results <- pw
+                  shared_rv$pathway_db      <- input$sc_ap_pathway_db %||% "GOBP"
+                  log_sc(sprintf("\u2713 %d pathways (%d/%d gènes convertis, %.0fs)", nrow(pw), length(top_g), length(top_g_raw),
+                                 as.numeric(difftime(Sys.time(), .t_pathway, units="secs"))))
+                }
               }
             }
 
@@ -664,14 +728,16 @@ mod_sc_server <- function(id, global_data) {
             log_sc(sprintf("\u26a0\ufe0f Trajectoire ignorée : dataset trop grand (%d > %d).",
                            ncol(obj), .MAX_TRAJECTORY_CELLS))
           } else {
+            # Step-3.8B: fall back to PCA if UMAP was skipped ("PCA seul" mode)
+            traj_red_use <- if ("umap" %in% names(obj@reductions)) "umap" else "pca"
             traj_res <- tryCatch(
-              calculate_pseudotime(obj, reduction="umap", root_cells=NULL),
+              calculate_pseudotime(obj, reduction=traj_red_use, root_cells=NULL),
               error=function(e) { log_sc(paste("\u26a0\ufe0f Trajectoire:", e$message)); NULL }
             )
             if (!is.null(traj_res)) {
-              obj                    <- traj_res
-              shared_rv$traj_reduction <- "umap"
-              log_sc("\u2713 Pseudotemps calculé (racine auto)")
+              obj                      <- traj_res
+              shared_rv$traj_reduction <- traj_red_use
+              log_sc(sprintf("\u2713 Pseudotemps calculé (racine auto, réduction: %s)", toupper(traj_red_use)))
             }
           }
         }
