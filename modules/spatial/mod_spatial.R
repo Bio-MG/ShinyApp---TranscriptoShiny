@@ -1,21 +1,21 @@
 # =============================================================================
 # modules/spatial/mod_spatial.R — Parent Module (router)
 # =============================================================================
-# BREAKING CHANGE vs the pre-refactor version of this file: global_data$spatial_obj
-# is no longer a raw Seurat object. It is the list produced by
+# global_data$spatial_obj is the list produced by
 # R/utils_spatial_io.R::convert_to_bpcells_and_fov() —
 #   $sketch (Seurat, <=50k, in-RAM), $bpcells_dir (disk path, full res),
 #   $coords, $technology, $n_total, $images, $project.
 # Every read of global_data$spatial_obj below (and in every child module)
-# must go through $sketch / $bpcells_dir explicitly. Old code that did
-# `ncol(global_data$spatial_obj)` or `Images(global_data$spatial_obj)`
-# directly on the object no longer works — this file (and app.R's
-# global_status_panel) is exactly that: already migrated.
+# goes through $sketch / $bpcells_dir explicitly.
 #
-# This module owns `shared_rv`, the reactive bus between the four child
-# modules (QC -> Clustering -> Deconvolution -> Visualization), and starts
-# the mirai daemon pool (idempotent; also called once from app.R at startup —
-# harmless either way, see R/utils_spatial_async.R).
+# v2 (post-test-3): added a "Reinitialiser les daemons" button. Several
+# heavy packages used by the async steps were found to spawn nested
+# parallel worker processes from inside a mirai daemon (see
+# mod_spatial_cluster.R / mod_spatial_deconv.R headers) — when one of those
+# hangs or errors ungracefully, the daemon that handled it can be left in a
+# bad state for every future task routed to it (daemons are long-lived).
+# This button tears the pool down and respawns it fresh, without needing to
+# restart R.
 # =============================================================================
 
 mod_spatial_ui <- function(id) {
@@ -23,13 +23,18 @@ mod_spatial_ui <- function(id) {
   tagList(
     uiOutput(ns("spatial_status_ui")),
 
+    div(style = "display:flex;justify-content:flex-end;margin-bottom:6px;",
+        actionButton(ns("btn_reset_daemons"), "\U1F504 Reinitialiser les daemons",
+                     class = "btn-outline-warning btn-sm"),
+        uiOutput(ns("daemon_status_ui"), inline = TRUE)),
+
     navset_card_underline(
       id = ns("spatial_nav"),
 
       nav_panel("1. QC & Autocorrelation", icon = icon("filter"),
                 mod_spatial_qc_ui(ns("qc"))),
 
-      nav_panel("2. Clustering (BANKSY)", icon = icon("shapes"),
+      nav_panel("2. Clustering (BANKSY-lite)", icon = icon("shapes"),
                 mod_spatial_cluster_ui(ns("cluster"))),
 
       nav_panel("3. Deconvolution", icon = icon("puzzle-piece"),
@@ -73,6 +78,22 @@ mod_spatial_server <- function(id, global_data) {
                     format(obj$n_total, big.mark = ","),
                     format(ncol(obj$sketch), big.mark = ","),
                     if (!disk_ok) " Donnees sur disque introuvables — reimportez pour relancer les calculs lourds (clustering/deconvolution)." else ""))
+      }
+    })
+
+    output$daemon_status_ui <- renderUI({
+      input$btn_reset_daemons  # invalidate after reset
+      ready <- tryCatch(spatial_daemons_ready(), error = function(e) FALSE)
+      tags$span(class = "small text-muted", style = "margin-left:8px;align-self:center;",
+                if (ready) "\u2705 daemons mirai actifs" else "\u26aa daemons inactifs")
+    })
+
+    observeEvent(input$btn_reset_daemons, {
+      ok <- tryCatch(reset_spatial_daemons(6), error = function(e) FALSE)
+      if (isTRUE(ok)) {
+        showNotification("\U1F504 Daemons mirai reinitialises — relancez votre tache.", type = "message", duration = 5)
+      } else {
+        showNotification("Echec de la reinitialisation des daemons — voir la console R.", type = "error", duration = 8)
       }
     })
 
