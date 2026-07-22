@@ -1,11 +1,18 @@
 # =============================================================================
 # R/utils_spatial_async.R — mirai daemon pool + reactivePoll progress tracking
 # =============================================================================
-# Pure utilities, no Shiny module code. Called from:
-#   - app.R (once, at startup)         -> init_spatial_daemons()
-#   - modules/spatial/mod_spatial_*.R  -> spatial_log_path(), reset_log(),
-#                                          create_reactive_tracker(), parse_log_progress()
-#   - *inside* mirai daemons            -> write_mirai_log()
+# v2 (post-test-3): added .timeout support (mirai() has a native `.timeout`
+# arg — a hung task now errors out after MIRAI_TASK_TIMEOUT_MS instead of
+# blocking forever) and reset_spatial_daemons() (recover a poisoned pool
+# from the UI, no R restart needed). Root cause of "stuck" tasks in earlier
+# tests: several bioinformatics packages (Banksy, spacexr/RCTD, STdeconvolve)
+# try to spawn NESTED parallel worker processes (parallel::makeCluster /
+# BiocParallel::SnowParam) from inside an already-isolated mirai daemon --
+# fragile in general, and observed to hang outright on a Windows project
+# path containing spaces/brackets. See mod_spatial_cluster.R /
+# mod_spatial_deconv.R for how each daemon body now avoids that class of bug
+# (custom implementation / forcing single-core paths) -- the timeout here is
+# the last line of defense regardless of root cause.
 #
 # Daemons are process-level (shared by every Shiny session running in this R
 # process), so init_spatial_daemons() is idempotent — it only spawns workers
@@ -17,6 +24,12 @@
 
 .spatial_async_env <- new.env(parent = emptyenv())
 .spatial_async_env$daemons_ready <- FALSE
+.spatial_async_env$n_daemons     <- 6L
+
+# Hard ceiling for any single spatial async task (clustering, deconvolution,
+# Moran's I, sketch UMAP) — after this, the ExtendedTask errors out instead
+# of hanging forever, so the UI always eventually gets actionable feedback.
+MIRAI_TASK_TIMEOUT_MS <- 20 * 60 * 1000  # 20 minutes
 
 #' Initialize the mirai daemon pool used by all spatial async tasks
 #'
@@ -44,6 +57,7 @@ init_spatial_daemons <- function(n_daemons = 6,
   if (isTRUE(.spatial_async_env$daemons_ready)) return(invisible(TRUE))
 
   mirai::daemons(n_daemons)
+  .spatial_async_env$n_daemons <- n_daemons
 
   # Pre-load on every current + future daemon (mirai::everywhere runs once
   # per worker, not once per task) — keeps individual mirai() bodies short.
@@ -74,6 +88,23 @@ stop_spatial_daemons <- function() {
   }
   .spatial_async_env$daemons_ready <- FALSE
   invisible(NULL)
+}
+
+#' Recover a possibly-poisoned daemon pool WITHOUT restarting R
+#'
+#' A daemon whose R process had a package leave bad internal state behind
+#' (e.g. a half-initialized C++/S4 singleton after a failed call) stays bad
+#' for every future task routed to it, since daemons are long-lived — this
+#' tears the whole pool down and respawns fresh processes. Call this from
+#' the UI ("Reinitialiser les daemons") whenever a task fails unexpectedly
+#' or times out.
+#'
+#' @param n_daemons Integer, pool size (default: whatever was last used).
+#' @return invisible(TRUE)/(FALSE), see init_spatial_daemons().
+reset_spatial_daemons <- function(n_daemons = NULL) {
+  n <- n_daemons %||% .spatial_async_env$n_daemons %||% 6L
+  stop_spatial_daemons()
+  init_spatial_daemons(n_daemons = n)
 }
 
 #' Build a stable per-session, per-task log file path
