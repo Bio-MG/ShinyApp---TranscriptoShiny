@@ -236,14 +236,14 @@ crop_fov_bbox <- function(obj, fov, x, y) {
 build_sketch <- function(obj, max_cells = 50000, assay = NULL) {
   assay <- assay %||% Seurat::DefaultAssay(obj)
 
-  tryCatch({
+  sk <- tryCatch({
     obj_norm <- Seurat::NormalizeData(obj, assay = assay, verbose = FALSE)
     obj_norm <- Seurat::SketchData(obj_norm, assay = assay, ncells = max_cells,
                                     sketched.assay = "sketch", method = "Uniform",
                                     cast = "dgCMatrix", verbose = FALSE)
     sketch_cells <- SeuratObject::Cells(obj_norm[["sketch"]])
     sk <- subset(obj_norm, cells = sketch_cells)
-    sk <- SeuratObject::DietSeurat(sk, assays = "sketch")
+    sk <- Seurat::DietSeurat(sk, assays = "sketch")  # FIX: DietSeurat lives in Seurat, not SeuratObject
     Seurat::DefaultAssay(sk) <- "sketch"
     sk
   }, error = function(e) {
@@ -257,6 +257,21 @@ build_sketch <- function(obj, max_cells = 50000, assay = NULL) {
     Seurat::DefaultAssay(sk) <- "sketch"
     sk
   })
+
+  # FIX (post-test-2): guarantee a populated "data" layer no matter which
+  # path above ran — the fallback never normalizes at all, and SketchData()
+  # is not guaranteed to carry every layer through on every version. Every
+  # downstream consumer (mod_spatial_viz.R gene-coloring, sketch UMAP) reads
+  # layer="data" directly, so this must never be silently empty.
+  has_data <- tryCatch({
+    d <- SeuratObject::LayerData(sk, assay = "sketch", layer = "data")
+    !is.null(d) && length(d) > 0 && nrow(d) > 0
+  }, error = function(e) FALSE)
+  if (!has_data) {
+    sk <- tryCatch(Seurat::NormalizeData(sk, assay = "sketch", verbose = FALSE),
+                    error = function(e) { warning("Normalisation du sketch echouee : ", conditionMessage(e)); sk })
+  }
+  sk
 }
 
 #' Fast, streamed QC stats directly from the on-disk BPCells matrix
