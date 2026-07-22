@@ -472,7 +472,7 @@ preview_metadata_split <- function(sample_names, delimiter = "[_-]", n_preview =
 
 detect_gene_id_type <- function(gene_ids) {
 
-  sample_ids <- head(gene_ids[!is.na(gene_ids)], 50)
+  sample_ids <- trimws(head(gene_ids[!is.na(gene_ids)], 50))
 
   if (length(sample_ids) == 0) return("unknown")
 
@@ -501,17 +501,31 @@ detect_gene_id_type <- function(gene_ids) {
 #' "human" and silently breaks mouse ENSMUSG... datasets).
 #'
 #' @param gene_ids Character vector (rownames of the counts/expression matrix).
-#' @return "human", "mouse", or "unknown".
+#' @return "human", "mouse", or NA_character_ (ambiguous/unknown).
+#'
+#' Step-3.8B fix: previously returned the STRING "unknown" for the ambiguous
+#' case. Every call site checks `is.na(detected_org)` (mod_sc_annotation.R,
+#' mod_sc.R, remap_seurat_ids_to_symbol()) -- is.na("unknown") is FALSE, so
+#' "unknown" silently passed every one of those checks as if it were a real
+#' detected organism, defeating the whole auto-detect mechanism. Root cause of
+#' the real-world mouse dataset defaulting to organism="human".
 detect_organism_from_ids <- function(gene_ids) {
   gene_ids <- head(stats::na.omit(as.character(gene_ids)), 200)
-  if (length(gene_ids) == 0L) return("unknown")
+  if (length(gene_ids) == 0L) return(NA_character_)
+
+  # Normalize before matching: strip Ensembl version suffix + whitespace --
+  # a caller passing un-stripped IDs (e.g. "ENSMUSG00000051951.5") must not
+  # silently fail detection (the regex below has no trailing anchor so
+  # version suffixes alone don't break it, but trimws() guards stray
+  # whitespace from copy-pasted/CSV-derived rownames).
+  gene_ids <- trimws(gene_ids)
 
   pct_mouse <- mean(grepl("^ENSMUSG[0-9]+", gene_ids))
   pct_human <- mean(grepl("^ENSG[0-9]+", gene_ids))
 
   if (pct_mouse >= 0.50) return("mouse")
   if (pct_human >= 0.50) return("human")
-  "unknown"
+  NA_character_
 }
 
 

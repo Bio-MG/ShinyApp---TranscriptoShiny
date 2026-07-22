@@ -1207,22 +1207,53 @@ remap_seurat_ids_to_symbol <- function(obj, from_type = "ensembl", organism = "h
     GetAssayData(obj, assay = "RNA", layer = "counts"),
     error = function(e) GetAssayData(obj, assay = "RNA", slot = "counts")
   )
-  ids_clean <- rownames(counts)
+  ids_clean <- trimws(rownames(counts))
   if (strip_version && from_type == "ensembl") ids_clean <- gsub("\\.[0-9]+$", "", ids_clean)
-  
-  expected_pattern <- switch(from_type, ensembl = "^ENS(MUS)?G[0-9]{6,}", entrez = "^[0-9]+$")
+
+  # Step-3.8B: cross-check the SELECTED organism against what the IDs
+  # actually look like, and auto-correct (loud warning, not a silent swap)
+  # BEFORE the pre-flight pattern check below. The old pre-flight pattern
+  # ("^ENS(MUS)?G...") matched BOTH species agnostically, so a wrong
+  # `organism` (e.g. UI default "human" on a real ENSMUSG mouse dataset)
+  # sailed straight through it and only failed downstream inside
+  # AnnotationDbi::select() with an opaque "not valid keys" error -- this was
+  # the actual root cause on the 1.3M-neurons mouse test.
+  if (from_type == "ensembl") {
+    detected_org <- tryCatch(detect_organism_from_ids(ids_clean), error = function(e) NA_character_)
+    if (!is.na(detected_org) && detected_org != organism) {
+      warning(sprintf(
+        "Organisme '%s' selectionne mais les identifiants ressemblent a '%s' (ex: %s) -- organisme corrige automatiquement.",
+        organism, detected_org, paste(head(ids_clean, 3), collapse = ", ")))
+      organism <- detected_org
+      orgdb <- if (organism == "human") {
+        if (!requireNamespace("org.Hs.eg.db", quietly = TRUE)) stop("Package 'org.Hs.eg.db' requis.")
+        org.Hs.eg.db::org.Hs.eg.db
+      } else {
+        if (!requireNamespace("org.Mm.eg.db", quietly = TRUE)) stop("Package 'org.Mm.eg.db' requis.")
+        org.Mm.eg.db::org.Mm.eg.db
+      }
+    }
+  }
+
+  expected_pattern <- switch(from_type,
+    ensembl = if (organism == "mouse") "^ENSMUSG[0-9]{6,}" else "^ENSG[0-9]{6,}",
+    entrez  = "^[0-9]+$")
   sample_ids <- head(ids_clean[!is.na(ids_clean)], 200)
   pct_match  <- if (length(sample_ids) > 0) mean(grepl(expected_pattern, sample_ids)) else 0
   if (pct_match < 0.05) {
     stop(sprintf(
-      "Vos identifiants ne ressemblent pas a des ID '%s' (%.0f%% correspondent). Exemple : '%s'.",
-      from_type, pct_match * 100, if (length(sample_ids) > 0) sample_ids[1] else "?"
+      paste0("Vos identifiants ne ressemblent pas a des ID '%s' pour l'organisme '%s' ",
+             "(%.0f%% correspondent au format attendu %s). Exemples : %s."),
+      from_type, organism, pct_match * 100, expected_pattern,
+      paste(head(sample_ids, 5), collapse = ", ")
     ))
   }
   
   map_df <- tryCatch(
     AnnotationDbi::select(orgdb, keys = ids_clean, keytype = from_key, columns = "SYMBOL"),
-    error = function(e) stop("Echec du mapping d'identifiants : ", conditionMessage(e))
+    error = function(e) stop(sprintf(
+      "Echec du mapping d'identifiants (organisme '%s') : %s\nExemples testes : %s.",
+      organism, conditionMessage(e), paste(head(sample_ids, 5), collapse = ", ")))
   )
   map_df <- map_df[!is.na(map_df$SYMBOL), ]
   map_df <- map_df[!duplicated(map_df[[from_key]]), ]
@@ -1232,7 +1263,9 @@ remap_seurat_ids_to_symbol <- function(obj, from_type = "ensembl", organism = "h
   keep       <- !is.na(mapped_symbols)
   n_mapped   <- sum(keep)
   n_unmapped <- sum(!keep)
-  if (n_mapped == 0) stop("Aucun gene n'a pu etre converti en symbole. Verifiez organisme/type source.")
+  if (n_mapped == 0) stop(sprintf(
+    "Aucun gene n'a pu etre converti en symbole (organisme '%s', %d IDs testes). Exemples : %s.",
+    organism, length(ids_clean), paste(head(sample_ids, 5), collapse = ", ")))
   
   mat  <- counts[keep, , drop = FALSE]
   syms <- unname(mapped_symbols[keep])
@@ -1301,6 +1334,41 @@ resolve_sketch_preset <- function(preset, n_total_cells, custom_ncells = NULL) {
   params
 }
 
+#' FindClusters() with automatic fallback to Louvain (algorithm=1)
+#'
+#' Step-3.8B: algorithms 2 (Louvain multilevel) / 3 (SLM) have been observed
+#' to crash on BPCells-backed objects; algorithm 4 (Leiden) additionally
+#' requires a working reticulate/leidenalg Python environment that may not be
+#' installed. Rather than aborting the whole auto-pipeline run, fall back to
+#' standard Louvain with a logged warning -- same pattern already used in the
+#' standalone "1. Pipeline" module (mod_sc_pipeline.R), factored out here so
+#' the auto-pipeline (mod_sc.R) can share it instead of duplicating it.
+#'
+#' @param obj Seurat object, post FindNeighbors().
+#' @param resolution Clustering resolution.
+#' @param algo Algorithm code as passed by the UI selectInput ("1"-"4",
+#'   character or numeric) -- coerced to integer, defaults to 1 if invalid.
+#' @param log_fn Optional function(character) called with a message if a
+#'   fallback to Louvain occurred (caller decides where it goes: log panel,
+#'   showNotification, ...).
+#' @return Seurat object with $seurat_clusters set.
+robust_find_clusters <- function(obj, resolution, algo = 1L, log_fn = NULL) {
+  algo <- suppressWarnings(as.integer(algo %||% 1L))
+  if (is.na(algo)) algo <- 1L
+  tryCatch(
+    Seurat::FindClusters(obj, resolution = resolution, algorithm = algo, verbose = FALSE),
+    error = function(e) {
+      if (algo != 1L) {
+        algo_name <- c("2"="Louvain multilevel","3"="SLM","4"="Leiden")[as.character(algo)]
+        if (!is.null(log_fn))
+          log_fn(sprintf("%s indisponible/a \u00e9chou\u00e9 (%s) \u2014 repli sur Louvain standard.",
+                         algo_name %||% "Algorithme", conditionMessage(e)))
+        Seurat::FindClusters(obj, resolution = resolution, algorithm = 1L, verbose = FALSE)
+      } else stop(e)
+    }
+  )
+}
+
 #' Standardize Seurat reduction names after a sketch-based ProjectData() call
 #'
 #' Seurat's sketch workflow (SketchData -> analyze on "sketch" assay ->
@@ -1349,7 +1417,8 @@ standardize_sketch_reductions <- function(obj, full_pca_name = "pca.full") {
 #' @param mat Numeric/dgCMatrix with genes (Ensembl IDs) as rownames.
 #' @param organism "human" or "mouse".
 #' @return Matrix with unique gene-symbol rownames (duplicates summed via
-#'   Matrix::rowsum).
+#'   base rowsum() on a densified pseudobulk matrix -- see Step-3.8B fix note
+#'   inside the function body).
 map_ensembl_matrix_to_symbol <- function(mat, organism = c("human", "mouse")) {
   organism  <- match.arg(organism)
   orgdb_pkg <- if (organism == "human") "org.Hs.eg.db" else "org.Mm.eg.db"
@@ -1362,7 +1431,7 @@ map_ensembl_matrix_to_symbol <- function(mat, organism = c("human", "mouse")) {
   }
 
   orgdb     <- getExportedValue(orgdb_pkg, orgdb_pkg)
-  clean_ids <- sub("\\..*$", "", rownames(mat))  # drop Ensembl version suffix
+  clean_ids <- trimws(sub("\\..*$", "", rownames(mat)))  # drop Ensembl version suffix
 
   symbols <- AnnotationDbi::mapIds(orgdb, keys = clean_ids, keytype = "ENSEMBL",
                                     column = "SYMBOL", multiVals = "first")
@@ -1370,11 +1439,23 @@ map_ensembl_matrix_to_symbol <- function(mat, organism = c("human", "mouse")) {
   keep <- !is.na(symbols) & nzchar(symbols)
   if (sum(keep) < 200L) {
     stop(sprintf(
-      "Mapping ENSEMBL -> Symbol insuffisant (%d genes mappes, organisme '%s'). V\u00e9rifiez l'organisme.",
-      sum(keep), organism))
+      paste0("Mapping ENSEMBL -> Symbol insuffisant (%d/%d genes mappes, organisme '%s'). ",
+             "Exemples d'identifiants testes : %s. V\u00e9rifiez l'organisme."),
+      sum(keep), length(clean_ids), organism,
+      paste(head(clean_ids, 5), collapse = ", ")))
   }
 
   mat <- mat[keep, , drop = FALSE]
   rownames(mat) <- unname(symbols[keep])
-  Matrix::rowsum(mat, group = rownames(mat), reorder = FALSE)
+
+  # Step-3.8B fix: `Matrix::rowsum()` does not exist (rowsum is a base
+  # function -- Matrix does not export/override it) -- this line crashed
+  # 100% of the time on real data ("'rowsum' n'est un objet exporte depuis
+  # 'namespace:Matrix'"), silently aborting the whole ENSEMBL->Symbol
+  # pseudobulk conversion (caught by the caller's tryCatch, so SingleR then
+  # ran on unconverted ENSEMBL rownames against a Symbol-keyed reference ->
+  # "no common genes"). This matrix is always tiny at this point (genes x
+  # n_clusters, e.g. ~30-40k x <100) -- safe to densify and use base rowsum().
+  mat_dense <- as.matrix(mat)
+  rowsum(mat_dense, group = rownames(mat_dense), reorder = FALSE)
 }
