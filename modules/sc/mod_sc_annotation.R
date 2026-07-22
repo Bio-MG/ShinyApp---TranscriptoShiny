@@ -34,9 +34,9 @@
   # is raised if it conflicts with what the reference choice implies.
   ref_organism <- .refcode_to_organism(refcode)
   detected     <- detect_organism_from_ids(rownames(obj))
-  organism     <- if (!identical(detected, "unknown")) detected else ref_organism
+  organism     <- if (!is.na(detected)) detected else ref_organism
 
-  if (!identical(detected, "unknown") && !identical(detected, ref_organism)) {
+  if (!is.na(detected) && !identical(detected, ref_organism)) {
     warning(sprintf(
       paste0("Organisme d\u00e9tect\u00e9 depuis les identifiants g\u00e8nes ('%s') diff\u00e8re de la ",
              "r\u00e9f\u00e9rence choisie ('%s', organisme attendu '%s'). Conversion ID effectu\u00e9e ",
@@ -132,6 +132,27 @@
         warning(paste("Conversion ENSEMBL -> Symbol (pseudobulk) impossible :", conditionMessage(e)))
         profile_matrix
       })
+  }
+
+  # Step-3.8B: fail loud & actionable BEFORE handing off to SingleR::SingleR(),
+  # which otherwise errors with an opaque "no common genes between 'test' and
+  # 'ref'" that gives the user nothing to act on.
+  n_common <- length(intersect(rownames(profile_matrix), ref_ids))
+  if (n_common == 0) {
+    test_id_type <- tryCatch(detect_gene_id_type(rownames(profile_matrix)), error = function(e) "unknown")
+    ref_id_type  <- tryCatch(detect_gene_id_type(ref_ids), error = function(e) "unknown")
+    stop(sprintf(paste0(
+      "SingleR (pseudobulk) : 0 gene commun entre le test et la reference '%s'.\n",
+      "  Organisme detecte (test) : %s\n",
+      "  Type d'ID test (%s)      : %s\n",
+      "  Type d'ID reference (%s) : %s\n",
+      "  Exemples test : %s\n",
+      "  Exemples ref  : %s"
+    ), refcode, organism %||% "?",
+    test_id_type, paste(head(rownames(profile_matrix), 5), collapse = ", "),
+    ref_id_type,  paste(head(ref_ids, 5), collapse = ", "),
+    paste(head(rownames(profile_matrix), 5), collapse = ", "),
+    paste(head(ref_ids, 5), collapse = ", ")))
   }
 
   pred           <- SingleR::SingleR(test=profile_matrix, ref=ref, labels=ref[[label_col]])
