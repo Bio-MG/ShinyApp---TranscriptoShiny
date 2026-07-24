@@ -44,7 +44,9 @@ mod_spatial_deconv_ui <- function(id) {
             bsicons::bs_icon("info-circle"),
             " RCTD modelise l'expression par une loi de Poisson resolue par ",
             "programmation quadratique — pic RAM attendu sous ~2 Go. Execute ",
-            "en mono-coeur (max_cores=1) pour eviter tout sous-processus imbrique.")
+            "en mono-coeur (max_cores=1) pour eviter tout sous-processus imbrique. ",
+            "Les colonnes du tableau resultat portent directement les noms de type ",
+            "cellulaire de votre reference (ex: 'Astrocytes', 'Neurons_L4').")
       ),
       conditionalPanel(
         condition = sprintf("input['%s'] == 'stdeconvolve'", ns("mode")),
@@ -54,7 +56,14 @@ mod_spatial_deconv_ui <- function(id) {
             bsicons::bs_icon("info-circle"),
             " Allocation de Dirichlet Latente (LDA) : extrait K 'themes' ",
             "d'expression purs sans reference externe. Reduisez K ou le ",
-            "nombre de genes pour accelerer.")
+            "nombre de genes pour accelerer."),
+        div(class = "alert alert-warning", style = "font-size:0.75rem;",
+            bsicons::bs_icon("exclamation-triangle"),
+            " Sans reference, les topiques sont des SIGNATURES D'EXPRESSION numerotees ",
+            "(1, 2, 3...), pas des types cellulaires identifies. Pour rester interpretable, ",
+            "chaque colonne du tableau resultat est etiquetee avec ses 3 genes les plus ",
+            "caracteristiques (ex: 'T3_Gfap.Aqp4.Mbp') — a vous d'interpreter biologiquement ",
+            "chaque signature a partir de ces marqueurs.")
       ),
 
       bslib::input_task_button(ns("btn_deconv"), "Lancer la deconvolution",
@@ -63,8 +72,9 @@ mod_spatial_deconv_ui <- function(id) {
     ),
 
     card(
+      full_screen = TRUE,
       card_header("Proportions par spot/cellule"),
-      plotOutput(ns("deconv_bar_plot"), height = "400px"),
+      plotOutput(ns("deconv_bar_plot"), height = "550px"),
       DT::DTOutput(ns("deconv_table"))
     )
   )
@@ -186,12 +196,28 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
             write_mirai_log(log_file, "Extraction des proportions (theta)...", 4, 5)
             post  <- topicmodels::posterior(lda_model)
             theta <- post$topics
+            beta  <- post$terms   # K x nGenes: P(gene | topic) -- used only to LABEL topics below
             # Same filtering as STdeconvolve::getBetaTheta()/filterTheta() (not
             # exported, reimplemented inline): drop near-zero contributions,
             # renormalize each spot's proportions back to 1.
             theta[theta < 0.05] <- 0
             theta <- theta / rowSums(theta)
             theta[is.na(theta)] <- 0
+
+            # LDA topics are NUMBERED, not biologically named (no reference
+            # was used) -- label each with its top-3 marker genes (highest
+            # P(gene|topic) in `beta`) so "topic 3" becomes something a
+            # biologist can actually read, e.g. "T3_Gfap.Aqp4.Mbp" -- the
+            # same marker-gene convention STdeconvolve's own annotation
+            # workflow uses. Renaming theta's columns directly means every
+            # downstream consumer (viz color-by dropdown, bar plot legend,
+            # DT table headers) inherits the readable label for free, with
+            # no other file needing to know about this.
+            top_marker_genes <- apply(beta, 1, function(row) {
+              ord <- order(row, decreasing = TRUE)
+              paste(colnames(beta)[ord[seq_len(min(3, length(ord)))]], collapse = ".")
+            })
+            colnames(theta) <- paste0("T", seq_len(ncol(theta)), "_", top_marker_genes)
 
             write_mirai_log(log_file, "Termine.", 5, 5)
             data.frame(id = rownames(theta), theta, row.names = NULL, check.names = FALSE)
@@ -246,7 +272,8 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
                        ggplot2::aes(x = id, y = proportion, fill = cell_type)) +
         ggplot2::geom_col() +
         ggplot2::theme_minimal() +
-        ggplot2::theme(axis.text.x = ggplot2::element_blank()) +
+        ggplot2::theme(axis.text.x = ggplot2::element_blank(),
+                       legend.text = ggplot2::element_text(size = 8)) +
         ggplot2::labs(x = "Spots/cellules (echantillon)", y = "Proportion", fill = "Type")
     })
 

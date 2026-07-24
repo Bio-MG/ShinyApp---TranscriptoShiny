@@ -1,6 +1,11 @@
 # =============================================================================
 # modules/import/mod_import_spatial.R — Spatial Import (Visium / Xenium / CosMx)
 # =============================================================================
+# v2 (vignette coverage — Phase 3): added the sketch normalization choice
+# (LogNormalize / SCTransform, opt-in) — see R/utils_spatial_io.R::build_sketch()
+# for where this is actually applied (bounded to the <= max_sketch cells,
+# never the full disk-backed dataset).
+#
 # Loads raw spatial data then immediately hands off to
 # R/utils_spatial_io.R::convert_to_bpcells_and_fov() so global_data$spatial_obj
 # is ALWAYS the lightweight list contract (sketch + bpcells_dir + coords),
@@ -12,9 +17,11 @@
 #
 # Import itself stays synchronous (withProgress spinner, like
 # mod_import_sc.R) — only the heavy downstream analyses (clustering,
-# deconvolution, Moran's I) go through mirai/ExtendedTask. Revisit as an
-# async import if raw datasets grow large enough to make this UI-blocking
-# (evolutivity hook).
+# deconvolution, Moran's I) go through mirai/ExtendedTask. SCTransform (when
+# selected) also runs synchronously here, on the sketch only — see the
+# warning shown in the UI when it's selected. Revisit as an async import if
+# raw datasets grow large enough to make this UI-blocking regardless
+# (evolutivity hook, unchanged from v1).
 # =============================================================================
 
 `%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
@@ -62,6 +69,22 @@ mod_import_spatial_ui <- function(id) {
         hr(),
         numericInput(ns("max_sketch"), "Taille max. du sketch (RAM)",
                      50000, min = 5000, max = 100000, step = 5000),
+
+        radioButtons(ns("norm_method"), "Normalisation du sketch",
+                     choices = c("LogNormalize (rapide, defaut)" = "lognorm",
+                                 "SCTransform (vignette Seurat, plus lourd)" = "sct"),
+                     selected = "lognorm"),
+        conditionalPanel(
+          condition = sprintf("input['%s'] == 'sct'", ns("norm_method")),
+          div(class = "alert alert-warning", style = "font-size:0.75rem;",
+              bsicons::bs_icon("exclamation-triangle"),
+              " SCTransform est significativement plus lourd que LogNormalize et s'execute ",
+              "de maniere SYNCHRONE pendant l'import (pas de mirai a cette etape) — reduisez ",
+              "la taille du sketch ci-dessus (ex: 10 000-20 000) si l'import devient trop long. ",
+              "N'affecte que le sketch (visualisation gene/UMAP) : le clustering spatial ",
+              "(BANKSY-lite) et l'indice de Moran restent en LogNormalize rapide sur les ",
+              "donnees completes, inchanges.")
+        ),
 
         actionButton(ns("btn_import"), "\U1F680 Importer + convertir (BPCells)",
                      class = "btn-success w-100 mt-2", icon = icon("play"))
@@ -125,21 +148,28 @@ mod_import_spatial_server <- function(id, global_data) {
                            nrow(raw_obj), ncol(raw_obj),
                            if (input$technology == "visium") "spots" else "cellules"))
 
-          incProgress(0.4, detail = "Conversion BPCells (disque)...")
+          incProgress(0.3, detail = "Conversion BPCells (disque)...")
+          norm_label <- if (input$norm_method == "sct") "SCTransform" else "LogNormalize"
+          add_log(sprintf("  Normalisation du sketch : %s", norm_label))
+          if (input$norm_method == "sct") {
+            incProgress(0.1, detail = "SCTransform sur le sketch (synchrone, peut prendre du temps)...")
+          }
           spatial_pkg <- convert_to_bpcells_and_fov(
             raw_obj, dataset_id = sample_name, technology = input$technology,
             simplify_tol = input$simplify_tol %||% 20,
-            max_sketch = input$max_sketch
+            max_sketch = input$max_sketch,
+            norm_method = input$norm_method
           )
           add_log(sprintf("  ✓ BPCells: %s", spatial_pkg$bpcells_dir))
-          add_log(sprintf("  ✓ Sketch RAM: %d/%d elements", ncol(spatial_pkg$sketch), spatial_pkg$n_total))
+          add_log(sprintf("  ✓ Sketch RAM: %d/%d elements (normalisation: %s)",
+                           ncol(spatial_pkg$sketch), spatial_pkg$n_total, norm_label))
 
           incProgress(0.9, detail = "Finalisation...")
           global_data$spatial_obj <- spatial_pkg
 
           add_log(sprintf("✅ Import termine : %s (%s)", sample_name, input$technology))
-          showNotification(sprintf("✅ Import spatial reussi : %d elements (%d en sketch RAM)",
-                                    spatial_pkg$n_total, ncol(spatial_pkg$sketch)),
+          showNotification(sprintf("✅ Import spatial reussi : %d elements (%d en sketch RAM, %s)",
+                                    spatial_pkg$n_total, ncol(spatial_pkg$sketch), norm_label),
                             type = "message", duration = 5)
         }, error = function(e) {
           msg <- paste("❌ Erreur import spatial:", conditionMessage(e))
@@ -154,7 +184,15 @@ mod_import_spatial_server <- function(id, global_data) {
     output$nb_genes   <- renderText({ if (is.null(global_data$spatial_obj)) "-" else format(nrow(global_data$spatial_obj$sketch), big.mark = ",") })
     output$status_obj <- renderText({
       if (is.null(global_data$spatial_obj)) "⚪ Inactif"
-      else paste0("🟢 ", global_data$spatial_obj$technology)
+      else {
+        # DefaultAssay of the sketch tells us which normalization actually
+        # ended up being used (SCTransform can silently fall back to
+        # LogNormalize on failure — see build_sketch()) — reflect the truth,
+        # not just what was requested.
+        norm_used  <- tryCatch(Seurat::DefaultAssay(global_data$spatial_obj$sketch), error = function(e) NA)
+        norm_label <- if (identical(norm_used, "SCT")) "SCT" else "LogNorm"
+        paste0("🟢 ", global_data$spatial_obj$technology, " (", norm_label, ")")
+      }
     })
     output$console_log <- renderText({ logs() })
   })
