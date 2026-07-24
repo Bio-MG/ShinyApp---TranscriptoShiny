@@ -1,6 +1,14 @@
 # =============================================================================
 # modules/spatial/mod_spatial.R — Parent Module (router)
 # =============================================================================
+# v3 (UX — compact header): the dataset status banner and the daemon
+# toolbar used to each be a full-width bslib alert box stacked on their own
+# row, eating a big chunk of vertical space above the tabs on every screen.
+# Condensed into ONE slim single-line row (small colored text + icon instead
+# of padded alert boxes) so the tab content gets the room back — nothing was
+# removed, just made less bulky. Same output ids as before (spatial_status_ui,
+# daemon_status_ui), only their rendered markup + position changed.
+#
 # global_data$spatial_obj is the list produced by
 # R/utils_spatial_io.R::convert_to_bpcells_and_fov() —
 #   $sketch (Seurat, <=50k, in-RAM), $bpcells_dir (disk path, full res),
@@ -21,12 +29,19 @@
 mod_spatial_ui <- function(id) {
   ns <- NS(id)
   tagList(
-    uiOutput(ns("spatial_status_ui")),
-
-    div(style = "display:flex;justify-content:flex-end;margin-bottom:6px;",
-        actionButton(ns("btn_reset_daemons"), "\U1F504 Reinitialiser les daemons",
-                     class = "btn-outline-warning btn-sm"),
-        uiOutput(ns("daemon_status_ui"), inline = TRUE)),
+    div(
+      style = paste(
+        "display:flex; align-items:center; justify-content:space-between;",
+        "gap:10px; flex-wrap:wrap; padding:3px 4px; margin-bottom:4px;"
+      ),
+      uiOutput(ns("spatial_status_ui")),
+      div(
+        style = "display:flex; align-items:center; gap:8px;",
+        uiOutput(ns("daemon_status_ui")),
+        actionButton(ns("btn_reset_daemons"), "Reinitialiser les daemons",
+                     class = "btn-outline-warning btn-sm", icon = icon("rotate"))
+      )
+    ),
 
     navset_card_underline(
       id = ns("spatial_nav"),
@@ -63,29 +78,32 @@ mod_spatial_server <- function(id, global_data) {
       current_fov_crop = NULL    # list(fov=, x=c(min,max), y=c(min,max)) for Crop()-based zoom
     )
 
+    # ── Compact one-line dataset status (was: full alert box on its own row) ──
     output$spatial_status_ui <- renderUI({
       if (is.null(global_data$spatial_obj)) {
-        div(class = "alert alert-danger",
-            bsicons::bs_icon("exclamation-triangle"),
-            " Aucune donnee spatiale chargee. Allez dans l'onglet 'Import Donnees > Spatial'.")
+        tags$span(class = "text-danger small",
+                   bsicons::bs_icon("exclamation-triangle"),
+                   " Aucune donnee spatiale chargee — onglet Import Donnees > Spatial.")
       } else {
         obj <- global_data$spatial_obj
         disk_ok <- !is.null(obj$bpcells_dir) && dir.exists(obj$bpcells_dir)
-        div(class = if (disk_ok) "alert alert-success" else "alert alert-warning",
-            bsicons::bs_icon(if (disk_ok) "check-circle" else "exclamation-triangle"),
-            sprintf(" %s (%s) : %s elements au total, %s en memoire (sketch).%s",
-                    obj$project %||% "Objet spatial", obj$technology,
-                    format(obj$n_total, big.mark = ","),
-                    format(ncol(obj$sketch), big.mark = ","),
-                    if (!disk_ok) " Donnees sur disque introuvables — reimportez pour relancer les calculs lourds (clustering/deconvolution)." else ""))
+        tags$span(
+          class = if (disk_ok) "text-success small" else "text-warning small",
+          bsicons::bs_icon(if (disk_ok) "check-circle" else "exclamation-triangle"),
+          sprintf(" %s (%s) — %s elements, %s en RAM (sketch)%s",
+                  obj$project %||% "Objet spatial", obj$technology,
+                  format(obj$n_total, big.mark = ","), format(ncol(obj$sketch), big.mark = ","),
+                  if (!disk_ok) " · disque introuvable, reimportez pour les calculs lourds" else "")
+        )
       }
     })
 
+    # ── Compact daemon status (was: separate row) ─────────────────────────
     output$daemon_status_ui <- renderUI({
       input$btn_reset_daemons  # invalidate after reset
       ready <- tryCatch(spatial_daemons_ready(), error = function(e) FALSE)
-      tags$span(class = "small text-muted", style = "margin-left:8px;align-self:center;",
-                if (ready) "\u2705 daemons mirai actifs" else "\u26aa daemons inactifs")
+      tags$span(class = "small text-muted",
+                if (ready) "\u2705 daemons actifs" else "\u26aa daemons inactifs")
     })
 
     observeEvent(input$btn_reset_daemons, {

@@ -36,41 +36,44 @@ options(shiny.maxRequestSize = 5000 * 1024^2)
 # new package install.packages(c("RANN", "irlba", "topicmodels", "slam"))
 
 required_packages <- c(
-  
-  "shiny", "bslib", "Seurat", "SeuratObject", "ggplot2", "dplyr", "DT", "patchwork", "viridis",
-  
-  "plotly", "bsicons", "future", "shinyFiles", "SingleR", "celldex",
-  
-  "SingleCellExperiment", "harmony", "destiny", "fs", "igraph", "Matrix", "reshape2",
-  
+  "shiny", "bslib", "Seurat", "SeuratObject",
+  "ggplot2", "dplyr", "DT", "patchwork", "viridis",
+  "plotly", "bsicons", "future", "shinyFiles",
+  "SingleR", "celldex", "SingleCellExperiment",
+  "harmony", "destiny", "fs", "igraph", "Matrix", "reshape2",
   "shinyjs", "circlize", "rmarkdown", "zip",
-  
-  # --- Spatial v3 (BPCells + mirai async) ---
-  "mirai",       # daemon pool for clustering/deconvolution/Moran's I (R/utils_spatial_async.R)
-  "sf",          # required by SeuratObject::Simplify()/Crop() (imaging FOV polygons)
-  "leaflet",     # WebGL spatial map (mod_spatial_viz.R), CRS.Simple mode
-  "scattermore", # rasterized fallback / high-density static export
-  "leiden",      # Seurat::FindClusters(algorithm = 4) — Leiden
-  "ape",         # RunMoransI() fallback if Rfast2 is absent (install Rfast2 for speed)
-  "RANN",        # spatial k-NN for the manual "BANKSY-lite" augmentation (mod_spatial_cluster.R)
-  "irlba"        # fast truncated PCA on the augmented feature matrix (falls back to stats::prcomp)
-  
-) 
+  "mirai", "sf", "leaflet", "scattermore",
+  "ape", "RANN", "irlba"
+)
 
+optional_packages <- c(
+  "leaflet.extras2",
+  "leiden",
+  "topicmodels",
+  "slam"
+)
 
-
-bioc_packages <- c("DESeq2", "edgeR", "limma", "ComplexHeatmap")
-
+bioc_packages <- c(
+  "DESeq2", "edgeR", "limma", "ComplexHeatmap"
+)
 
 
 for (pkg in required_packages) {
-  
   if (!require(pkg, character.only = TRUE, quietly = TRUE)) {
-    
-    warning(paste("Paquet manquant :", pkg))
-    
+    warning(sprintf("Paquet requis manquant : %s", pkg))
   }
-  
+}
+
+for (pkg in optional_packages) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    message(sprintf("Paquet optionnel absent : %s", pkg))
+  }
+}
+
+for (pkg in bioc_packages) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    warning(sprintf("Paquet Bioconductor manquant : %s", pkg))
+  }
 }
 
 
