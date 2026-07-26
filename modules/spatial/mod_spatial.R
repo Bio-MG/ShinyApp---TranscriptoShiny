@@ -1,13 +1,17 @@
 # =============================================================================
 # modules/spatial/mod_spatial.R — Parent Module (router)
 # =============================================================================
-# v3 (UX — compact header): the dataset status banner and the daemon
-# toolbar used to each be a full-width bslib alert box stacked on their own
-# row, eating a big chunk of vertical space above the tabs on every screen.
-# Condensed into ONE slim single-line row (small colored text + icon instead
-# of padded alert boxes) so the tab content gets the room back — nothing was
-# removed, just made less bulky. Same output ids as before (spatial_status_ui,
-# daemon_status_ui), only their rendered markup + position changed.
+# v4 (UX feedback): the daemon status/reset row AND the dataset banner used
+# to sit in their own div above the tabs, eating two extra rows of vertical
+# space. Both are now folded INTO the tab strip itself:
+#   - daemon status + reset button -> nav_item()s inside the SAME
+#     navset_card_underline(), pushed flush right via nav_spacer() (native
+#     bslib idiom, same trick page_navbar() uses for right-aligned items).
+#   - dataset banner (project/technology/n_total/sketch size) -> REMOVED
+#     from here entirely, now rendered inside the QC tab itself
+#     (mod_spatial_qc.R's new "Apercu du jeu de donnees" section) since QC
+#     is where a biologist actually wants that context, not permanently
+#     pinned above every tab.
 #
 # global_data$spatial_obj is the list produced by
 # R/utils_spatial_io.R::convert_to_bpcells_and_fov() —
@@ -29,20 +33,6 @@
 mod_spatial_ui <- function(id) {
   ns <- NS(id)
   tagList(
-    div(
-      style = paste(
-        "display:flex; align-items:center; justify-content:space-between;",
-        "gap:10px; flex-wrap:wrap; padding:3px 4px; margin-bottom:4px;"
-      ),
-      uiOutput(ns("spatial_status_ui")),
-      div(
-        style = "display:flex; align-items:center; gap:8px;",
-        uiOutput(ns("daemon_status_ui")),
-        actionButton(ns("btn_reset_daemons"), "Reinitialiser les daemons",
-                     class = "btn-outline-warning btn-sm", icon = icon("rotate"))
-      )
-    ),
-
     navset_card_underline(
       id = ns("spatial_nav"),
 
@@ -56,7 +46,13 @@ mod_spatial_ui <- function(id) {
                 mod_spatial_deconv_ui(ns("deconv"))),
 
       nav_panel("4. Visualisation", icon = icon("eye"),
-                mod_spatial_viz_ui(ns("viz")))
+                mod_spatial_viz_ui(ns("viz"))),
+
+      # ── Right-aligned daemon status/reset, same row as the tab labels ──
+      nav_spacer(),
+      nav_item(uiOutput(ns("daemon_status_ui"))),
+      nav_item(actionButton(ns("btn_reset_daemons"), "Reinitialiser les daemons",
+                             class = "btn-outline-warning btn-sm", icon = icon("rotate")))
     )
   )
 }
@@ -75,34 +71,14 @@ mod_spatial_server <- function(id, global_data) {
       moran_results    = NULL,   # data.frame(gene, moran_i, p_value) — top HVGs only
       cluster_labels   = NULL,   # named character vector: spot/cell id -> cluster id
       deconv_props     = NULL,   # data.frame: id + one column per cell type (proportions)
+      cluster_markers  = NULL,   # data.frame: cluster, gene, avg_log2FC, p_val_adj, ... (regional DE)
       current_fov_crop = NULL    # list(fov=, x=c(min,max), y=c(min,max)) for Crop()-based zoom
     )
 
-    # ── Compact one-line dataset status (was: full alert box on its own row) ──
-    output$spatial_status_ui <- renderUI({
-      if (is.null(global_data$spatial_obj)) {
-        tags$span(class = "text-danger small",
-                   bsicons::bs_icon("exclamation-triangle"),
-                   " Aucune donnee spatiale chargee — onglet Import Donnees > Spatial.")
-      } else {
-        obj <- global_data$spatial_obj
-        disk_ok <- !is.null(obj$bpcells_dir) && dir.exists(obj$bpcells_dir)
-        tags$span(
-          class = if (disk_ok) "text-success small" else "text-warning small",
-          bsicons::bs_icon(if (disk_ok) "check-circle" else "exclamation-triangle"),
-          sprintf(" %s (%s) — %s elements, %s en RAM (sketch)%s",
-                  obj$project %||% "Objet spatial", obj$technology,
-                  format(obj$n_total, big.mark = ","), format(ncol(obj$sketch), big.mark = ","),
-                  if (!disk_ok) " · disque introuvable, reimportez pour les calculs lourds" else "")
-        )
-      }
-    })
-
-    # ── Compact daemon status (was: separate row) ─────────────────────────
     output$daemon_status_ui <- renderUI({
       input$btn_reset_daemons  # invalidate after reset
       ready <- tryCatch(spatial_daemons_ready(), error = function(e) FALSE)
-      tags$span(class = "small text-muted",
+      tags$span(class = "small text-muted", style = "align-self:center;",
                 if (ready) "\u2705 daemons actifs" else "\u26aa daemons inactifs")
     })
 
