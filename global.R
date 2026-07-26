@@ -43,7 +43,7 @@ required_packages <- c(
   "harmony", "destiny", "fs", "igraph", "Matrix", "reshape2",
   "shinyjs", "circlize", "rmarkdown", "zip",
   "mirai", "sf", "leaflet", "scattermore",
-  "ape", "RANN", "irlba"
+  "ape", "RANN", "irlba", "png", "RColorBrewer", "shinyWidgets", "shinycssloaders"
 )
 
 optional_packages <- c(

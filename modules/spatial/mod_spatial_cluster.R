@@ -1,6 +1,17 @@
 # =============================================================================
 # modules/spatial/mod_spatial_cluster.R — Spatial clustering ("BANKSY-lite")
 # =============================================================================
+# v2 (Phase 3 — regional differential expression): added FindMarkers/
+# FindAllMarkers "par cluster" (vignette equivalent: FindMarkers() between
+# regions/clusters). Runs in its own mirai daemon, reopening the BPCells
+# matrix from disk and subsetting to the SAME (bpcells column) ids the
+# clustering itself used (pass_idx) — deliberately NOT run on the sketch:
+# the sketch is an INDEPENDENT random subsample of the full dataset, so its
+# ids only partially overlap with shared_rv$cluster_labels (whose names are
+# full-resolution bpcells ids) -- reusing bpcells_dir+pass_idx guarantees
+# perfect alignment between expression data and cluster identity, same
+# pattern as moran_task/deconv_task below/elsewhere in this module family.
+#
 # REWRITE (post-test-3): SeuratWrappers::RunBanksy() / Banksy::computeHarmonics()
 # tries to spawn nested parallel worker processes from inside the mirai
 # daemon (parallel::makeCluster-style) -- fragile in general, and observed to
@@ -55,13 +66,31 @@ mod_spatial_cluster_ui <- function(id) {
 
       bslib::input_task_button(ns("btn_cluster"), "Lancer Clustering Spatial",
                                 icon = icon("shapes")),
-      verbatimTextOutput(ns("cluster_progress_text"), placeholder = TRUE)
+      verbatimTextOutput(ns("cluster_progress_text"), placeholder = TRUE),
+
+      hr(),
+      h6("Marqueurs differentiels par cluster", style = "font-weight:bold;"),
+      div(class = "alert alert-light", style = "font-size:0.75rem;",
+          bsicons::bs_icon("cpu"),
+          " Equivalent de FindMarkers() applique a chaque cluster contre tous les ",
+          "autres (test de Wilcoxon) — necessite un clustering deja calcule ci-dessus. ",
+          "Asynchrone (mirai), sur les memes elements (QC-filtres) que le clustering."),
+      numericInput(ns("logfc_threshold"), "Seuil log2FC minimum", 0.25, min = 0, max = 5, step = 0.05),
+      numericInput(ns("min_pct"), "% cellules exprimant le gene (min)", 0.1, min = 0, max = 1, step = 0.05),
+      bslib::input_task_button(ns("btn_find_markers"), "Rechercher les marqueurs",
+                                icon = icon("magnifying-glass-chart")),
+      verbatimTextOutput(ns("markers_progress_text"), placeholder = TRUE)
     ),
 
-    card(
-      card_header("Resultat"),
-      uiOutput(ns("cluster_summary")),
-      DT::DTOutput(ns("cluster_sizes_table"))
+    navset_card_underline(
+      nav_panel("Resume clustering",
+                uiOutput(ns("cluster_summary")),
+                DT::DTOutput(ns("cluster_sizes_table"))),
+      nav_panel("Marqueurs par cluster (FindMarkers)",
+                div(class = "alert alert-light small mb-2",
+                    "Top marqueurs (triés par log2FC decroissant, p-adj < 0.05) par cluster — ",
+                    "utilisez ces genes pour interpreter biologiquement chaque domaine spatial."),
+                card(full_screen = TRUE, DT::DTOutput(ns("markers_table"))))
     )
   )
 }
@@ -203,6 +232,92 @@ mod_spatial_cluster_server <- function(id, global_data, shared_rv) {
       tab <- as.data.frame(table(cluster = shared_rv$cluster_labels), stringsAsFactors = FALSE)
       colnames(tab) <- c("Cluster", "Effectif")
       DT::datatable(tab, options = list(pageLength = 15), rownames = FALSE)
+    })
+
+    # ── Regional differential expression: FindAllMarkers, one cluster vs rest ──
+    markers_log_file <- spatial_log_path(session, "cluster_markers")
+    markers_tracker  <- create_reactive_tracker(session, markers_log_file)
+
+    markers_task <- ExtendedTask$new(function(bpcells_dir, pass_idx, cluster_labels,
+                                               logfc_threshold, min_pct, log_file) {
+      mirai::mirai(
+        {
+          write_mirai_log(log_file, "Ouverture de la matrice BPCells...", 1, 4)
+          mat <- BPCells::open_matrix_dir(bpcells_dir)
+          if (!is.null(pass_idx)) mat <- mat[, pass_idx, drop = FALSE]
+
+          write_mirai_log(log_file, "Alignement des labels de cluster...", 2, 4)
+          common_ids <- intersect(colnames(mat), names(cluster_labels))
+          if (length(common_ids) < 10) {
+            stop("Trop peu d'elements communs entre la matrice QC-filtree et les labels de cluster ",
+                 "(reimportez ou relancez le clustering si les seuils QC ont change entre-temps).")
+          }
+          mat <- mat[, common_ids, drop = FALSE]
+
+          obj <- Seurat::CreateSeuratObject(counts = mat)
+          obj <- Seurat::NormalizeData(obj, verbose = FALSE)
+          Seurat::Idents(obj) <- factor(cluster_labels[common_ids])
+
+          write_mirai_log(log_file, sprintf("FindAllMarkers (Wilcoxon, %d clusters)...",
+                                             length(unique(cluster_labels[common_ids]))), 3, 4)
+          markers <- Seurat::FindAllMarkers(
+            obj, only.pos = FALSE, logfc.threshold = logfc_threshold, min.pct = min_pct,
+            test.use = "wilcox", verbose = FALSE
+          )
+
+          write_mirai_log(log_file, "Termine.", 4, 4)
+          if (nrow(markers) == 0) {
+            return(data.frame(cluster = character(0), gene = character(0), avg_log2FC = numeric(0),
+                               pct.1 = numeric(0), pct.2 = numeric(0), p_val_adj = numeric(0)))
+          }
+          markers <- markers[order(markers$cluster, -markers$avg_log2FC), ]
+          markers[, c("cluster", "gene", "avg_log2FC", "pct.1", "pct.2", "p_val", "p_val_adj")]
+        },
+        bpcells_dir = bpcells_dir, pass_idx = pass_idx, cluster_labels = cluster_labels,
+        logfc_threshold = logfc_threshold, min_pct = min_pct, log_file = log_file,
+        .timeout = MIRAI_TASK_TIMEOUT_MS
+      )
+    })
+    bslib::bind_task_button(markers_task, "btn_find_markers")
+
+    observeEvent(input$btn_find_markers, {
+      req(global_data$spatial_obj$bpcells_dir, shared_rv$cluster_labels)
+      reset_log(markers_log_file)
+      markers_task$invoke(
+        bpcells_dir     = global_data$spatial_obj$bpcells_dir,
+        pass_idx        = shared_rv$qc_pass_idx,
+        cluster_labels  = shared_rv$cluster_labels,
+        logfc_threshold = input$logfc_threshold,
+        min_pct         = input$min_pct,
+        log_file        = markers_log_file
+      )
+    })
+
+    observeEvent(markers_task$status(), {
+      if (markers_task$status() == "success") {
+        shared_rv$cluster_markers <- markers_task$result()
+        showNotification(sprintf("Marqueurs trouves : %d genes (tous clusters confondus).",
+                                  nrow(shared_rv$cluster_markers)), type = "message", duration = 5)
+      } else if (markers_task$status() == "error") {
+        showNotification(
+          "Erreur (ou depassement du delai) pendant la recherche de marqueurs — voir le log. Essayez 'Reinitialiser les daemons' puis relancez.",
+          type = "error", duration = 12)
+      }
+    })
+
+    output$markers_progress_text <- renderText({
+      lines <- markers_tracker()
+      if (length(lines) == 0) return("En attente...")
+      paste(lines, collapse = "\n")
+    })
+
+    output$markers_table <- DT::renderDT({
+      req(shared_rv$cluster_markers)
+      DT::datatable(shared_rv$cluster_markers,
+                    filter = "top", rownames = FALSE,
+                    options = list(pageLength = 20, scrollX = TRUE)) |>
+        DT::formatRound(c("avg_log2FC", "pct.1", "pct.2"), 3) |>
+        DT::formatSignif(c("p_val", "p_val_adj"), 3)
     })
   })
 }

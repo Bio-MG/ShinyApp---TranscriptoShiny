@@ -454,3 +454,18 @@ compute_qc_metrics_fast <- function(bpcells_dir, mt_pattern = "^MT-", ribo_patte
     row.names = NULL, stringsAsFactors = FALSE
   )
 }
+
+debug_histology <- function(global_data) {
+  hist_data <- global_data$spatial_obj$histology
+  cat("=== Histology Debug ===\n")
+  cat("histology exists:", !is.null(hist_data), "\n")
+  if (!is.null(hist_data)) {
+    cat("names:", paste(names(hist_data), collapse=", "), "\n")
+    cat("raster class:", class(hist_data$raster)[1], "\n")
+    if (is.array(hist_data$raster) || is.matrix(hist_data$raster)) {
+      cat("raster dim:", paste(dim(hist_data$raster), collapse=" x "), "\n")
+    }
+    cat("scale_factors:", paste(names(hist_data$scale_factors), collapse=", "), "\n")
+  }
+  cat("========================\n")
+}
