@@ -1,3 +1,6 @@
+# mod_spatial_viz.R
+# Module d'exploration spatiale avec fond histologique multi-résolution
+
 mod_spatial_viz_ui <- function(id) {
   ns <- NS(id)
   
@@ -77,8 +80,8 @@ mod_spatial_viz_ui <- function(id) {
         condition = sprintf("input['%s'] == true", ns("show_histology")),
         selectInput(
           ns("histology_resolution"), "Résolution du fond",
-          choices = c("Basse résolution (lowres)" = "lowres", "Haute résolution (hires)" = "hires"),
-          selected = "lowres"
+          choices = NULL,          # sera mis à jour dynamiquement côté serveur
+          selected = NULL
         ),
         sliderInput(ns("histology_opacity"), "Opacité de l'image", 0, 1, 0.7, step = 0.05)
       ),
@@ -322,6 +325,64 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     
+    # --------------------------------------------------------------------------
+    # Helper pour extraire les résolutions disponibles
+    # --------------------------------------------------------------------------
+    get_available_resolutions <- function(hist_data) {
+      if (is.null(hist_data)) return(character(0))
+      
+      # Cas 1 : structure avec une liste "images"
+      if (!is.null(hist_data$images) && is.list(hist_data$images)) {
+        return(names(hist_data$images))
+      }
+      
+      # Cas 2 : éléments de premier niveau qui contiennent un raster ou rgba
+      candidates <- names(hist_data)[
+        vapply(hist_data, function(x) {
+          is.list(x) && any(c("raster", "rgba") %in% names(x))
+        }, logical(1))
+      ]
+      if (length(candidates) > 0) return(candidates)
+      
+      # Cas 3 : noms connus (fallback)
+      known <- c("lowres", "hires")
+      known <- known[known %in% names(hist_data)]
+      if (length(known) > 0) return(known)
+      
+      character(0)
+    }
+    
+    # --------------------------------------------------------------------------
+    # Mise à jour dynamique des choix de résolution
+    # --------------------------------------------------------------------------
+    observe({
+      hist_data <- global_data$spatial_obj$histology
+      req(hist_data)
+      
+      res_choices <- get_available_resolutions(hist_data)
+      if (length(res_choices) == 0) {
+        # Si aucune résolution trouvée, on garde les valeurs par défaut
+        res_choices <- c("lowres", "hires")
+      }
+      
+      # Créer des noms lisibles (première lettre en majuscule)
+      names(res_choices) <- tools::toTitleCase(res_choices)
+      
+      updateSelectInput(
+        session,
+        "histology_resolution",
+        choices = res_choices,
+        selected = if (input$histology_resolution %in% res_choices) {
+          input$histology_resolution
+        } else {
+          res_choices[1]
+        }
+      )
+    })
+    
+    # --------------------------------------------------------------------------
+    # Statut de la normalisation du sketch
+    # --------------------------------------------------------------------------
     output$sketch_norm_status_ui <- renderUI({
       req(global_data$spatial_obj$sketch)
       norm_used <- tryCatch(
@@ -336,59 +397,187 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       )
     })
     
+    # --------------------------------------------------------------------------
+    # Overlay histologique (nouvelle version multi-résolution)
+    # --------------------------------------------------------------------------
     histology_overlay <- reactive({
       hist_data <- global_data$spatial_obj$histology
-      if (is.null(hist_data) || is.null(hist_data$raster)) return(NULL)
+      if (is.null(hist_data)) return(NULL)
       
-      sf_lowres <- hist_data$scale_factors$lowres %||% 1
+      requested_resolution <- input$histology_resolution %||% "lowres"
+      
+      hist_img <- tryCatch(
+        get_histology_raster(
+          hist_data = hist_data,
+          resolution = requested_resolution
+        ),
+        error = function(e) {
+          warning(
+            "Lecture du fond histologique echouee : ",
+            conditionMessage(e),
+            call. = FALSE
+          )
+          NULL
+        }
+      )
+      
+      if (
+        is.null(hist_img) ||
+        is.null(hist_img$raw_raster) ||
+        is.null(hist_img$rgba) ||
+        is.null(hist_img$dim) ||
+        length(hist_img$dim) < 2L
+      ) {
+        return(NULL)
+      }
+      
+      scale_factor <- hist_img$scale_factor %||% 1
+      if (!is.finite(scale_factor) || scale_factor <= 0) scale_factor <- 1
+      
       bounds <- list(
-        x = c(0, hist_data$dim[2] / sf_lowres),
-        y = c(0, hist_data$dim[1] / sf_lowres)
+        x = c(0, hist_img$dim[2L] / scale_factor),
+        y = c(0, hist_img$dim[1L] / scale_factor)
       )
       
       data_uri <- tryCatch({
-        rgba_arr <- raster_to_rgba_array(hist_data$raster)
-        raw_png <- png::writePNG(rgba_arr)
+        raw_png <- png::writePNG(hist_img$rgba)
         
         if (requireNamespace("base64enc", quietly = TRUE)) {
-          base64enc::dataURI(raw_png, mime = "image/png")
+          uri <- base64enc::dataURI(raw_png, mime = "image/png")
         } else if (requireNamespace("jsonlite", quietly = TRUE)) {
-          paste0("data:image/png;base64,", jsonlite::base64_enc(raw_png))
+          uri <- paste0(
+            "data:image/png;base64,",
+            jsonlite::base64_enc(raw_png)
+          )
         } else {
           NULL
         }
+        
+        # Nettoyage des retours à la ligne pour Plotly
+        if (!is.null(uri)) {
+          uri <- gsub("[\r\n[:space:]]+", "", uri)
+        }
+        
+        uri
       }, error = function(e) {
-        warning("Encodage de l'image histologique en data URI echoue : ", conditionMessage(e))
+        warning(
+          "Encodage data URI histologique echoue : ",
+          conditionMessage(e),
+          call. = FALSE
+        )
         NULL
       })
       
-      diag <- tryCatch(
-        diagnose_histology_raster(hist_data$raster),
-        error = function(e) NULL
-      )
-      
       list(
-        raster_obj = hist_data$raster,
+        raster_obj = hist_img$raw_raster,
+        rgba = hist_img$rgba,
         data_uri = data_uri,
         bounds = bounds,
-        diag = diag
+        resolution = hist_img$resolution,
+        scale_factor = scale_factor,
+        diag = tryCatch(
+          diagnose_histology_raster(hist_img$raw_raster),
+          error = function(e) NULL
+        )
       )
     })
     
-    observe({
+    # --------------------------------------------------------------------------
+    # Statut de l'histologie (UI)
+    # --------------------------------------------------------------------------
+    output$histology_status_ui <- renderUI({
       req(global_data$spatial_obj)
+      
       hist_data <- global_data$spatial_obj$histology
-      if (is.null(hist_data) || is.null(hist_data$raster)) return()
+      if (is.null(hist_data)) {
+        return(
+          div(
+            class = "alert alert-light",
+            style = "font-size:0.7rem;padding:2px 6px;",
+            "Image histologique indisponible."
+          )
+        )
+      }
       
       ov <- histology_overlay()
-      if (is.null(ov)) return()
-      message("[spatial_viz] ", build_histology_debug_text(ov))
+      
+      if (is.null(ov) || is.null(ov$raster_obj)) {
+        return(
+          div(
+            class = "alert alert-warning",
+            style = "font-size:0.7rem;padding:2px 6px;",
+            "Le fond histologique n'a pas pu etre prepare pour cette resolution."
+          )
+        )
+      }
+      
+      if (is.null(ov$data_uri)) {
+        return(
+          div(
+            class = "alert alert-warning",
+            style = "font-size:0.7rem;padding:2px 6px;",
+            "Fond disponible pour l'export PNG, mais echec de l'encodage Plotly."
+          )
+        )
+      }
+      
+      div(
+        class = "text-muted",
+        style = "font-size:0.65rem;padding:2px 6px;",
+        sprintf(
+          "Fond histologique OK — %s — %d x %d px — %.0f Ko",
+          ov$resolution,
+          dim(ov$raster_obj)[2L],
+          dim(ov$raster_obj)[1L],
+          nchar(ov$data_uri) / 1024
+        )
+      )
     })
     
+    # --------------------------------------------------------------------------
+    # Téléchargement du fond brut (PNG)
+    # --------------------------------------------------------------------------
+    output$dl_histology_raw <- downloadHandler(
+      filename = function() {
+        paste0(
+          "fond_histologique_",
+          input$histology_resolution %||% "lowres",
+          "_",
+          Sys.Date(),
+          ".png"
+        )
+      },
+      content = function(file) {
+        hist_data <- global_data$spatial_obj$histology
+        
+        hist_img <- get_histology_raster(
+          hist_data = hist_data,
+          resolution = input$histology_resolution %||% "lowres"
+        )
+        
+        validate(
+          need(
+            !is.null(hist_img) && !is.null(hist_img$rgba),
+            "Aucune image histologique disponible."
+          )
+        )
+        
+        png::writePNG(hist_img$rgba, file)
+      }
+    )
+    
+    # --------------------------------------------------------------------------
+    # Fonction de construction d'une image Plotly à partir de l'overlay
+    # Renvoie un objet image unique (list) ou NULL
+    # --------------------------------------------------------------------------
+    # ========================================================================
+    #  make_plotly_histology_image (remplacé)
+    # ========================================================================
     make_plotly_histology_image <- function(hist_ov, opacity = 0.7) {
       if (
         is.null(hist_ov) ||
         is.null(hist_ov$data_uri) ||
+        !nzchar(hist_ov$data_uri) ||
         is.null(hist_ov$bounds)
       ) {
         return(NULL)
@@ -396,14 +585,22 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       
       b <- hist_ov$bounds
       
+      xmin <- b$x[1L]
+      xmax <- b$x[2L]
+      ymin <- b$y[1L]
+      ymax <- b$y[2L]
+      
+      # Les points utilisent y_display = -y.
+      # Les coordonnées de l'image Plotly doivent couvrir [-ymax, -ymin].
+      # Avec yanchor = "bottom", y est le bord inférieur de l'image.
       list(
         source = hist_ov$data_uri,
         xref = "x",
         yref = "y",
-        x = b$x[1L],
-        y = -b$y[2L],
-        sizex = diff(b$x),
-        sizey = diff(b$y),
+        x = xmin,
+        y = -ymax,
+        sizex = xmax - xmin,
+        sizey = ymax - ymin,
         xanchor = "left",
         yanchor = "bottom",
         sizing = "stretch",
@@ -412,6 +609,9 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       )
     }
     
+    # ========================================================================
+    #  compute_spatial_ranges (remplacé)
+    # ========================================================================
     compute_spatial_ranges <- function(df_all, hist_ov = NULL, show_hist = FALSE) {
       x_vals <- df_all$x
       y_vals <- -df_all$y
@@ -421,12 +621,13 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         !is.null(hist_ov) &&
         !is.null(hist_ov$bounds)
       ) {
-        x_vals <- c(x_vals, hist_ov$bounds$x)
-        y_vals <- c(
-          y_vals,
-          -hist_ov$bounds$y[2L],
-          -hist_ov$bounds$y[1L]
-        )
+        xmin <- hist_ov$bounds$x[1L]
+        xmax <- hist_ov$bounds$x[2L]
+        ymin <- hist_ov$bounds$y[1L]
+        ymax <- hist_ov$bounds$y[2L]
+        
+        x_vals <- c(x_vals, xmin, xmax)
+        y_vals <- c(y_vals, -ymax, -ymin)
       }
       
       list(
@@ -435,6 +636,9 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       )
     }
     
+    # --------------------------------------------------------------------------
+    # Fonction de diagnostic (déjà présente)
+    # --------------------------------------------------------------------------
     build_histology_debug_text <- function(hist_ov) {
       if (is.null(hist_ov)) return("Histology overlay = NULL")
       d <- hist_ov$diag
@@ -452,82 +656,9 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       )
     }
     
-    output$histology_status_ui <- renderUI({
-      req(global_data$spatial_obj)
-      
-      hist_data <- global_data$spatial_obj$histology
-      if (is.null(hist_data) || is.null(hist_data$raster)) {
-        return(
-          div(
-            class = "alert alert-light",
-            style = "font-size:0.7rem;padding:2px 6px;",
-            "Image histologique indisponible."
-          )
-        )
-      }
-      
-      ov <- histology_overlay()
-      
-      if (is.null(ov) || is.null(ov$data_uri)) {
-        return(
-          div(
-            class = "alert alert-warning",
-            style = "font-size:0.7rem;padding:2px 6px;",
-            "Image presente mais non affichable en previsualisation interactive. L'export PNG reste disponible."
-          )
-        )
-      }
-      
-      d <- ov$diag
-      if (!is.null(d) && isTRUE(d$pct_near_white > 98)) {
-        return(
-          div(
-            class = "alert alert-danger",
-            style = "font-size:0.7rem;padding:2px 6px;",
-            sprintf("Image quasi-blanche detectee (%.1f%% de pixels quasi-blancs).", d$pct_near_white)
-          )
-        )
-      }
-      
-      div(
-        class = "text-muted",
-        style = "font-size:0.65rem;padding:2px 6px;",
-        paste0(
-          "Fond histologique OK — ",
-          round(nchar(ov$data_uri) / 1024), " Ko",
-          if (!is.null(hist_data$resolution)) paste0(" — source: ", hist_data$resolution) else ""
-        )
-      )
-    })
-    
-    output$dl_histology_raw <- downloadHandler(
-      filename = function() paste0("fond_histologique_brut_", Sys.Date(), ".png"),
-      content = function(file) {
-        hist_data <- global_data$spatial_obj$histology
-        validate(need(!is.null(hist_data) && !is.null(hist_data$raster), "Aucune image histologique disponible."))
-        rgba_arr <- tryCatch(raster_to_rgba_array(hist_data$raster), error = function(e) NULL)
-        validate(need(!is.null(rgba_arr), "Echec de la conversion de l'image."))
-        png::writePNG(rgba_arr, file)
-      }
-    )
-    
-    output$combined_help_ui <- renderUI({
-      has_clusters <- !is.null(shared_rv$cluster_labels)
-      has_umap <- !is.null(umap_df())
-      
-      if (!has_clusters && !has_umap) {
-        tagList(
-          strong("Mode expert pret, mais incomplet. "),
-          "Lancez d'abord un clustering spatial puis calculez le PCA+UMAP du sketch."
-        )
-      } else {
-        tagList(
-          strong("Mode expert actif. "),
-          "Utilisez le lasso ou le rectangle dans l'un des deux panneaux."
-        )
-      }
-    })
-    
+    # --------------------------------------------------------------------------
+    # Mise à jour de la liste des gènes
+    # --------------------------------------------------------------------------
     observeEvent(global_data$spatial_obj, {
       req(global_data$spatial_obj$sketch)
       updateSelectizeInput(
@@ -538,12 +669,18 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       )
     }, ignoreInit = TRUE)
     
+    # --------------------------------------------------------------------------
+    # UI du type cellulaire pour la déconvolution
+    # --------------------------------------------------------------------------
     output$deconv_celltype_ui <- renderUI({
       req(shared_rv$deconv_props)
       cts <- setdiff(colnames(shared_rv$deconv_props), "id")
       selectInput(ns("deconv_celltype"), NULL, choices = cts)
     })
     
+    # --------------------------------------------------------------------------
+    # Données à afficher (plot_df)
+    # --------------------------------------------------------------------------
     plot_df <- reactive({
       req(global_data$spatial_obj$sketch, global_data$spatial_obj$coords)
       sk_ids <- colnames(global_data$spatial_obj$sketch)
@@ -584,6 +721,9 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       df[stats::complete.cases(df[, c("x", "y")]), ]
     })
     
+    # --------------------------------------------------------------------------
+    # Échelle d'opacité pour l'expression génique
+    # --------------------------------------------------------------------------
     scale_alpha_by_value <- function(v, alpha_range = c(0.15, 1)) {
       rng <- suppressWarnings(range(v[is.finite(v)]))
       if (!all(is.finite(rng)) || diff(rng) == 0) return(rep(alpha_range[2], length(v)))
@@ -592,6 +732,9 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       alpha_range[1] + norm * diff(alpha_range)
     }
     
+    # --------------------------------------------------------------------------
+    # Tri des labels de clusters
+    # --------------------------------------------------------------------------
     sort_cluster_labels <- function(x) {
       x <- unique(stats::na.omit(as.character(x)))
       if (length(x) == 0) return(x)
@@ -604,6 +747,9 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       stats::setNames(grDevices::hcl.colors(length(lv), palette = "Dark 3"), lv)
     }
     
+    # --------------------------------------------------------------------------
+    # Calcul des couleurs selon le mode
+    # --------------------------------------------------------------------------
     color_values <- function(df) {
       n <- nrow(df)
       if (n == 0L) return(character(0))
@@ -668,6 +814,9 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       cols
     }
     
+    # --------------------------------------------------------------------------
+    # Carte spatiale interactive (Plotly)
+    # --------------------------------------------------------------------------
     output$spatial_preview_plot <- plotly::renderPlotly({
       df <- plot_df()
       req(nrow(df) > 0)
@@ -772,41 +921,69 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       p
     })
     
+    # --------------------------------------------------------------------------
+    # Construction du rendu statique (ggplot) – corrigé pour utiliser le raster
+    # --------------------------------------------------------------------------
     build_raster_plot <- function(df) {
       use_alpha_scale <- identical(input$color_by, "gene") &&
         isTRUE(input$scale_alpha_by_expr) &&
         is.numeric(df$value)
       
       p <- if (use_alpha_scale) {
-        ggplot2::ggplot(df, ggplot2::aes(x = x, y = -y, color = value, alpha = value))
+        ggplot2::ggplot(
+          df,
+          ggplot2::aes(x = x, y = -y, color = value, alpha = value)
+        )
       } else {
-        ggplot2::ggplot(df, ggplot2::aes(x = x, y = -y, color = value))
+        ggplot2::ggplot(
+          df,
+          ggplot2::aes(x = x, y = -y, color = value)
+        )
       }
       
       hist_ov <- histology_overlay()
-      show_hist <- !is.null(hist_ov) && isTRUE(input$show_histology)
+      
+      show_hist <- isTRUE(input$show_histology) &&
+        !is.null(hist_ov) &&
+        !is.null(hist_ov$raster_obj) &&
+        !is.null(hist_ov$bounds)
+      
       if (show_hist) {
         b <- hist_ov$bounds
+        
         p <- p + ggplot2::annotation_raster(
-          hist_ov$raster_obj,
-          xmin = b$x[1], xmax = b$x[2],
-          ymin = -b$y[2], ymax = -b$y[1],
+          raster = hist_ov$raster_obj,
+          xmin = b$x[1L],
+          xmax = b$x[2L],
+          ymin = -b$y[2L],
+          ymax = -b$y[1L],
           interpolate = TRUE
         )
       }
       
-      pt_alpha <- input$pt_opacity %||% 0.85
-      if (!requireNamespace("scattermore", quietly = TRUE)) {
+      point_alpha <- input$pt_opacity %||% 0.85
+      
+      if (requireNamespace("scattermore", quietly = TRUE)) {
         p <- if (use_alpha_scale) {
-          p + ggplot2::geom_point(size = input$pt_radius / 4)
+          p + scattermore::geom_scattermore(
+            pointsize = input$pt_radius
+          )
         } else {
-          p + ggplot2::geom_point(size = input$pt_radius / 4, alpha = pt_alpha)
+          p + scattermore::geom_scattermore(
+            pointsize = input$pt_radius,
+            alpha = point_alpha
+          )
         }
       } else {
         p <- if (use_alpha_scale) {
-          p + scattermore::geom_scattermore(pointsize = input$pt_radius)
+          p + ggplot2::geom_point(
+            size = input$pt_radius / 4
+          )
         } else {
-          p + scattermore::geom_scattermore(pointsize = input$pt_radius, alpha = pt_alpha)
+          p + ggplot2::geom_point(
+            size = input$pt_radius / 4,
+            alpha = point_alpha
+          )
         }
       }
       
@@ -822,27 +999,31 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         hist_ov = hist_ov,
         show_hist = show_hist
       )
-      p <- p + ggplot2::coord_fixed(
-        xlim = spatial_ranges$x,
-        ylim = spatial_ranges$y,
-        expand = FALSE
-      )
       
-      p + ggplot2::theme_void() +
-        (if (is.numeric(df$value)) {
-          ggplot2::scale_color_viridis_c(na.value = "#CCCCCC")
-        } else {
-          ggplot2::scale_color_manual(
-            values = stats::setNames(
-              grDevices::hcl.colors(length(unique(stats::na.omit(df$value))), "Dark 3"),
-              sort(unique(stats::na.omit(df$value)))
-            ),
-            na.value = "#CCCCCC"
-          )
-        }) +
-        ggplot2::labs(color = input$color_by)
+      p <- p +
+        ggplot2::coord_fixed(
+          xlim = spatial_ranges$x,
+          ylim = spatial_ranges$y,
+          expand = FALSE
+        ) +
+        ggplot2::theme_void()
+      
+      if (is.numeric(df$value)) {
+        p + ggplot2::scale_color_viridis_c(na.value = "#CCCCCC")
+      } else {
+        labels <- sort_cluster_labels(df$value)
+        palette <- cluster_palette(labels)
+        
+        p + ggplot2::scale_color_manual(
+          values = palette,
+          na.value = "#CCCCCC"
+        )
+      }
     }
     
+    # --------------------------------------------------------------------------
+    # Aperçu statique (export PNG)
+    # --------------------------------------------------------------------------
     output$static_export_preview <- renderPlot({
       req(isTRUE(input$show_static_export_preview))
       
@@ -868,6 +1049,9 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       print(p)
     }, res = 110)
     
+    # --------------------------------------------------------------------------
+    # Téléchargement PNG
+    # --------------------------------------------------------------------------
     output$dl_png <- downloadHandler(
       filename = function() paste0("carte_spatiale_", input$color_by, "_", Sys.Date(), ".png"),
       content = function(file) {
@@ -884,6 +1068,9 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       }
     )
     
+    # --------------------------------------------------------------------------
+    # Téléchargement CSV
+    # --------------------------------------------------------------------------
     output$dl_csv <- downloadHandler(
       filename = function() paste0("carte_spatiale_", input$color_by, "_", Sys.Date(), ".csv"),
       content = function(file) {
@@ -893,6 +1080,9 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       }
     )
     
+    # --------------------------------------------------------------------------
+    # UMAP asynchrone
+    # --------------------------------------------------------------------------
     log_file <- spatial_log_path(session, "sketch_umap")
     tracker <- create_reactive_tracker(session, log_file)
     
@@ -957,6 +1147,9 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       paste(lines, collapse = "\n")
     })
     
+    # --------------------------------------------------------------------------
+    # Graphique UMAP
+    # --------------------------------------------------------------------------
     output$umap_plot <- plotly::renderPlotly({
       req(umap_df())
       emb <- umap_df()
@@ -982,6 +1175,9 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         )
     })
     
+    # --------------------------------------------------------------------------
+    # Mode expert : sélection liée
+    # --------------------------------------------------------------------------
     observeEvent(shared_rv$cluster_labels, {
       req(shared_rv$cluster_labels)
       updateSelectizeInput(
@@ -1124,6 +1320,9 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       )
     })
     
+    # --------------------------------------------------------------------------
+    # Vue combinée : spatial
+    # --------------------------------------------------------------------------
     output$combined_spatial_plot <- plotly::renderPlotly({
       df <- combined_spatial_df()
       req(nrow(df) > 0L)
@@ -1153,16 +1352,17 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         !is.null(hist_ov$data_uri) &&
         isTRUE(input$show_histology)
       
-      img <- if (show_hist) {
-        list(
-          make_plotly_histology_image(
-            hist_ov = hist_ov,
-            opacity = input$histology_opacity %||% 0.7
-          )
+      # Construction de l'image unique, puis empaquetage dans une liste
+      hist_image <- if (show_hist) {
+        make_plotly_histology_image(
+          hist_ov = hist_ov,
+          opacity = input$histology_opacity %||% 0.7
         )
       } else {
         NULL
       }
+      
+      img <- if (!is.null(hist_image)) list(hist_image) else NULL
       
       ranges <- compute_spatial_ranges(
         df_all = df,
@@ -1247,6 +1447,9 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       plotly::event_register(p, "plotly_selected")
     })
     
+    # --------------------------------------------------------------------------
+    # Vue combinée : UMAP
+    # --------------------------------------------------------------------------
     output$combined_umap_plot <- plotly::renderPlotly({
       df <- combined_umap_df()
       req(nrow(df) > 0)
@@ -1300,6 +1503,9 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       p
     })
     
+    # --------------------------------------------------------------------------
+    # ROI
+    # --------------------------------------------------------------------------
     roi_ids <- reactiveVal(NULL)
     
     observeEvent(input$btn_isolate_roi, {
@@ -1475,6 +1681,9 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       p
     })
     
+    # --------------------------------------------------------------------------
+    # Marqueurs ROI (asynchrones)
+    # --------------------------------------------------------------------------
     roi_log_file <- spatial_log_path(session, "roi_markers")
     roi_tracker <- create_reactive_tracker(session, roi_log_file)
     
@@ -1611,5 +1820,6 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         saveRDS(sub_obj, file)
       }
     )
+    
   })
 }
