@@ -31,6 +31,19 @@
 # of hanging forever, so the UI always eventually gets actionable feedback.
 MIRAI_TASK_TIMEOUT_MS <- 20 * 60 * 1000  # 20 minutes
 
+# Label Transfer (mod_spatial_deconv.R, mode="labeltransfer") runs TWO
+# SCTransform calls (reference + query) plus FindTransferAnchors/TransferData
+# — reported to hit the shared 20-minute ceiling even on a moderately-sized
+# reference (e.g. allen_cortex.rds from the Seurat vignette) on CPU-only
+# hardware, especially without the optional `glmGamPoi` package (SCTransform
+# falls back to a much slower per-gene GLM engine — see mod_spatial_deconv.R,
+# which now warns in the task log when it is missing). Given a genuinely
+# longer-running-by-design task, use a longer, dedicated ceiling rather than
+# raising the shared one (which would also let genuinely-stuck
+# clustering/deconvolution/Moran tasks run twice as long before being
+# caught).
+LABEL_TRANSFER_TIMEOUT_MS <- 45 * 60 * 1000  # 45 minutes
+
 #' Initialize the mirai daemon pool used by all spatial async tasks
 #'
 #' Idempotent: safe to call multiple times (e.g. defensively from a module
@@ -46,7 +59,8 @@ MIRAI_TASK_TIMEOUT_MS <- 20 * 60 * 1000  # 20 minutes
 #' @return invisible(TRUE) on success, invisible(FALSE) if mirai is missing.
 init_spatial_daemons <- function(n_daemons = 6,
                                   source_files = c("R/utils_spatial_async.R",
-                                                    "R/utils_spatial_io.R")) {
+                                                    "R/utils_spatial_io.R",
+                                                    "R/utils_spatial_multi.R")) {
   if (!requireNamespace("mirai", quietly = TRUE)) {
     warning("Package 'mirai' manquant : les calculs spatiaux asynchrones (clustering, ",
             "deconvolution, indice de Moran) seront indisponibles. Installez-le via ",

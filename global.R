@@ -22,7 +22,9 @@
 
 # Charge les librairies et définit les options globales
 
-
+if (file.exists("R/utils_spatial_io.R")) {
+  source("R/utils_spatial_io.R")
+}
 
 # --- 1. MEMOIRE & OPTIONS ---
 

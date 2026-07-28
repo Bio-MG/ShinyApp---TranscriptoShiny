@@ -1,6 +1,23 @@
 # =============================================================================
 # modules/spatial/mod_spatial.R — Parent Module (router)
 # =============================================================================
+# v6 (Phase 4 — "Working with multiple slices", vignette parity): added a
+# 5th top-level tab, "Multi-echantillons" (mod_spatial_multi.R), plus an
+# active-dataset switcher in the header row. global_data gained
+# $spatial_datasets (named list, one entry per imported dataset, see
+# app.R/mod_import_spatial.R) and $active_spatial_dataset. $spatial_obj
+# itself is UNCHANGED in shape — it always points at whichever ONE dataset
+# is currently "active" — so tabs 1-4 (QC/Clustering/Deconvolution/
+# Visualisation) needed ZERO code changes; switching the active dataset
+# here is indistinguishable, from their point of view, from having
+# reimported that dataset.
+#
+# v5 (Phase 3 — ROI/crop): shared_rv gained roi_ids / roi_bbox / roi_markers
+# for the new "ROI isolee" panel in mod_spatial_viz.R (lasso/rectangle
+# selection -> isolated region + comparative view + regional markers). No
+# other change here — the new fields just need to exist on the shared bus;
+# mod_spatial_viz.R owns all the logic that reads/writes them.
+#
 # v4 (UX feedback): the daemon status/reset row AND the dataset banner used
 # to sit in their own div above the tabs, eating two extra rows of vertical
 # space. Both are now folded INTO the tab strip itself:
@@ -48,8 +65,12 @@ mod_spatial_ui <- function(id) {
       nav_panel("4. Visualisation", icon = icon("eye"),
                 mod_spatial_viz_ui(ns("viz"))),
 
-      # ── Right-aligned daemon status/reset, same row as the tab labels ──
+      nav_panel("5. Multi-echantillons", icon = icon("layer-group"),
+                mod_spatial_multi_ui(ns("multi"))),
+
+      # ── Right-aligned active-dataset switcher + daemon status/reset ────
       nav_spacer(),
+      nav_item(uiOutput(ns("active_dataset_ui"))),
       nav_item(uiOutput(ns("daemon_status_ui"))),
       nav_item(actionButton(ns("btn_reset_daemons"), "Reinitialiser les daemons",
                              class = "btn-outline-warning btn-sm", icon = icon("rotate")))
@@ -70,9 +91,15 @@ mod_spatial_server <- function(id, global_data) {
       qc_pass_idx      = NULL,   # integer indices (into bpcells_dir columns) passing thresholds
       moran_results    = NULL,   # data.frame(gene, moran_i, p_value) — top HVGs only
       cluster_labels   = NULL,   # named character vector: spot/cell id -> cluster id
-      deconv_props     = NULL,   # data.frame: id + one column per cell type (proportions)
+      deconv_props     = NULL,   # data.frame: id + one column per cell type (proportions or
+                                  # label-transfer prediction scores — same contract either way,
+                                  # see mod_spatial_deconv.R "labeltransfer" mode)
       cluster_markers  = NULL,   # data.frame: cluster, gene, avg_log2FC, p_val_adj, ... (regional DE)
-      current_fov_crop = NULL    # list(fov=, x=c(min,max), y=c(min,max)) for Crop()-based zoom
+      current_fov_crop = NULL,   # list(fov=, x=c(min,max), y=c(min,max)) for Crop()-based zoom
+      # ── Phase 3 — ROI ("Subset out anatomical regions", vignette parity) ──
+      roi_ids          = NULL,   # character vector: ids isolated via lasso/rectangle (mod_spatial_viz.R)
+      roi_bbox          = NULL,  # list(x=c(min,max), y=c(min,max)) of the isolated ROI
+      roi_markers       = NULL   # data.frame: gene, avg_log2FC, pct.1, pct.2, p_val, p_val_adj (ROI vs reste)
     )
 
     output$daemon_status_ui <- renderUI({
@@ -91,10 +118,53 @@ mod_spatial_server <- function(id, global_data) {
       }
     })
 
+    # ── Active-dataset switcher (Phase 4 — multi-echantillons) ────────────
+    # Tabs 1-4 (QC/Clustering/Deconvolution/Visualisation) only ever read
+    # global_data$spatial_obj — they have NO idea multiple datasets can be
+    # imported. This dropdown is the ONE place that repoints $spatial_obj at
+    # a different entry of global_data$spatial_datasets, so switching here
+    # is exactly equivalent (from tabs 1-4's point of view) to having
+    # reimported that dataset. See mod_import_spatial.R for how
+    # $spatial_datasets gets populated on each import.
+    output$active_dataset_ui <- renderUI({
+      ds_names <- names(global_data$spatial_datasets)
+      if (length(ds_names) < 2) return(NULL)  # nothing to switch between yet
+      tags$span(
+        style = "display:flex; align-items:center; gap:6px;",
+        tags$span(class = "small text-muted", "Actif :"),
+        selectInput(ns("active_dataset_select"), NULL, choices = ds_names,
+                    selected = global_data$active_spatial_dataset %||% ds_names[1],
+                    width = "180px")
+      )
+    })
+
+    observeEvent(input$active_dataset_select, {
+      req(input$active_dataset_select %in% names(global_data$spatial_datasets))
+      if (identical(input$active_dataset_select, global_data$active_spatial_dataset)) return()
+      global_data$active_spatial_dataset <- input$active_dataset_select
+      global_data$spatial_obj <- global_data$spatial_datasets[[input$active_dataset_select]]
+      # Reset per-dataset derived state (QC thresholds, clusters, etc. from
+      # the PREVIOUS active dataset do not apply to this one) — same clean
+      # slate as a fresh import, consistent with every module downstream
+      # expecting shared_rv to describe the CURRENTLY active dataset only.
+      shared_rv$qc_metrics      <- NULL
+      shared_rv$qc_pass_idx     <- NULL
+      shared_rv$moran_results   <- NULL
+      shared_rv$cluster_labels  <- NULL
+      shared_rv$deconv_props    <- NULL
+      shared_rv$cluster_markers <- NULL
+      shared_rv$roi_ids         <- NULL
+      shared_rv$roi_bbox        <- NULL
+      shared_rv$roi_markers     <- NULL
+      showNotification(sprintf("Echantillon actif : %s", input$active_dataset_select),
+                        type = "message", duration = 4)
+    })
+
     mod_spatial_qc_server("qc", global_data, shared_rv)
     mod_spatial_cluster_server("cluster", global_data, shared_rv)
     mod_spatial_deconv_server("deconv", global_data, shared_rv)
     mod_spatial_viz_server("viz", global_data, shared_rv)
+    mod_spatial_multi_server("multi", global_data, shared_rv)
 
     observeEvent(input$spatial_nav, { shared_rv$active_tab <- input$spatial_nav })
   })

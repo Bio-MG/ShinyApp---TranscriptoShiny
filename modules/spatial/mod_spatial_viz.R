@@ -71,12 +71,26 @@ mod_spatial_viz_ui <- function(id) {
       sliderInput(ns("pt_opacity"), "Opacite des points (hors mode Gene)", 0.1, 1, 0.85, step = 0.05),
       
       hr(),
+      
       checkboxInput(ns("show_histology"), "Afficher l'image histologique (fond de coupe)", value = TRUE),
       conditionalPanel(
-        condition = sprintf("input['%s']", ns("show_histology")),
-        sliderInput(ns("histology_opacity"), "Opacite de l'image", 0, 1, 0.7, step = 0.05)
+        condition = sprintf("input['%s'] == true", ns("show_histology")),
+        selectInput(
+          ns("histology_resolution"), "Résolution du fond",
+          choices = c("Basse résolution (lowres)" = "lowres", "Haute résolution (hires)" = "hires"),
+          selected = "lowres"
+        ),
+        sliderInput(ns("histology_opacity"), "Opacité de l'image", 0, 1, 0.7, step = 0.05)
       ),
+      
       uiOutput(ns("histology_status_ui")),
+      conditionalPanel(
+        condition = sprintf("input['%s'] == true", ns("show_histology")),
+        downloadButton(
+          ns("dl_histology_raw"), "\U0001F41B Fond brut (debug PNG)",
+          class = "btn-sm btn-outline-secondary w-100 mb-1"
+        )
+      ),
       
       div(
         class = "border-top pt-2 mt-2",
@@ -98,10 +112,28 @@ mod_spatial_viz_ui <- function(id) {
         "Carte spatiale",
         card(
           full_screen = TRUE,
-          style = "min-height: 78vh;",
+          style = "min-height: 70vh;",
           plotly::plotlyOutput(
             ns("spatial_preview_plot"),
-            height = "calc(100vh - 220px)"
+            height = "calc(100vh - 260px)"
+          )
+        ),
+        card(
+          class = "mt-3 mb-3",
+          card_header("Aperçu statique (export PNG)"),
+          card_body(
+            checkboxInput(
+              ns("show_static_export_preview"),
+              "Afficher un aperçu statique (même moteur que l'export PNG)",
+              value = FALSE
+            ),
+            conditionalPanel(
+              condition = sprintf("input['%s'] == true", ns("show_static_export_preview")),
+              plotOutput(
+                ns("static_export_preview"),
+                height = "600px"
+              )
+            )
           )
         )
       ),
@@ -123,7 +155,8 @@ mod_spatial_viz_ui <- function(id) {
         div(
           class = "alert alert-light mb-2",
           style = "font-size:0.82rem;",
-          uiOutput(ns("combined_help_ui"))
+          uiOutput(ns("combined_help_ui")),
+          uiOutput(ns("highlight_debug_ui"))
         ),
         div(
           class = "d-flex flex-wrap gap-2 align-items-end mb-3",
@@ -148,6 +181,14 @@ mod_spatial_viz_ui <- function(id) {
               "Effacer la selection lasso",
               class = "btn btn-outline-secondary"
             )
+          ),
+          div(
+            style = "min-width: 220px;",
+            actionButton(
+              ns("btn_isolate_roi"),
+              "\U0001F50D Isoler cette selection (ROI)",
+              class = "btn btn-primary"
+            )
           )
         ),
         layout_columns(
@@ -171,10 +212,109 @@ mod_spatial_viz_ui <- function(id) {
             )
           )
         )
+      ),
+      
+      nav_panel(
+        "5. ROI isolee",
+        
+        div(
+          class = "mb-3",
+          uiOutput(ns("roi_summary_ui"))
+        ),
+        
+        div(
+          class = "container-fluid px-0",
+          
+          div(
+            class = "row g-3 align-items-stretch mb-3",
+            
+            div(
+              class = "col-12 col-xl-6 d-flex",
+              card(
+                full_screen = TRUE,
+                class = "w-100",
+                style = "height: min(68vh, 720px); min-height: 520px;",
+                card_header("Vue zoomee (ROI)"),
+                card_body(
+                  class = "p-0",
+                  style = "height: calc(min(68vh, 720px) - 52px); min-height: 468px; overflow: hidden;",
+                  plotly::plotlyOutput(
+                    ns("roi_zoom_plot"),
+                    height = "100%"
+                  )
+                )
+              )
+            ),
+            
+            div(
+              class = "col-12 col-xl-6 d-flex",
+              card(
+                full_screen = TRUE,
+                class = "w-100",
+                style = "height: min(68vh, 720px); min-height: 520px;",
+                card_header("Contexte (carte complete)"),
+                card_body(
+                  class = "p-0",
+                  style = "height: calc(min(68vh, 720px) - 52px); min-height: 468px; overflow: hidden;",
+                  plotly::plotlyOutput(
+                    ns("roi_context_plot"),
+                    height = "100%"
+                  )
+                )
+              )
+            )
+          ),
+          
+          div(
+            class = "row g-3",
+            div(
+              class = "col-12",
+              card(
+                card_header("Marqueurs differentiels (ROI vs Reste)"),
+                card_body(
+                  div(
+                    class = "alert alert-light small mb-3",
+                    bsicons::bs_icon("info-circle"),
+                    " Selectionnez une ROI depuis la Vue combinee, puis lancez le test ",
+                    "Wilcoxon asynchrone contre le reste des spots."
+                  ),
+                  
+                  div(
+                    class = "d-flex flex-wrap align-items-center gap-2 mb-3",
+                    bslib::input_task_button(
+                      ns("btn_roi_markers"),
+                      "Chercher les marqueurs",
+                      icon = icon("magnifying-glass-chart")
+                    ),
+                    downloadButton(
+                      ns("dl_roi_object"),
+                      "\U0001F4E5 Telecharger le sous-objet (.rds)",
+                      class = "btn-outline-secondary"
+                    ),
+                    actionButton(
+                      ns("btn_clear_roi"),
+                      "Vider la ROI",
+                      class = "btn-outline-danger"
+                    )
+                  ),
+                  
+                  div(
+                    class = "bg-light border rounded p-2 mb-3",
+                    style = "max-height: 110px; overflow-y: auto; white-space: pre-wrap; font-family: monospace; font-size: 0.75rem;",
+                    verbatimTextOutput(
+                      ns("roi_markers_progress_text"),
+                      placeholder = TRUE
+                    )
+                  ),
+                  
+                  DT::DTOutput(ns("roi_markers_table"))
+                )
+              )
+            )
+          )
+        )
       )
     )
-    
-    
   )
 }
 
@@ -184,115 +324,109 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     
     output$sketch_norm_status_ui <- renderUI({
       req(global_data$spatial_obj$sketch)
-      norm_used <- tryCatch(Seurat::DefaultAssay(global_data$spatial_obj$sketch), error = function(e) NA)
+      norm_used <- tryCatch(
+        Seurat::DefaultAssay(global_data$spatial_obj$sketch),
+        error = function(e) NA
+      )
       label <- if (identical(norm_used, "SCT")) "SCTransform" else "LogNormalize"
-      div(class = "alert alert-light", style = "font-size:0.7rem;padding:2px 8px;",
-          sprintf("Normalisation du sketch : %s", label))
+      div(
+        class = "alert alert-light",
+        style = "font-size:0.7rem;padding:2px 8px;",
+        sprintf("Normalisation du sketch : %s", label)
+      )
     })
     
-    # ── Histology background (Visium only) ────────────────────────────────
     histology_overlay <- reactive({
       hist_data <- global_data$spatial_obj$histology
       if (is.null(hist_data) || is.null(hist_data$raster)) return(NULL)
       
       sf_lowres <- hist_data$scale_factors$lowres %||% 1
-      bounds <- list(x = c(0, hist_data$dim[2] / sf_lowres),
-                     y = c(0, hist_data$dim[1] / sf_lowres))
+      bounds <- list(
+        x = c(0, hist_data$dim[2] / sf_lowres),
+        y = c(0, hist_data$dim[1] / sf_lowres)
+      )
       
       data_uri <- tryCatch({
-        if (!requireNamespace("jsonlite", quietly = TRUE)) {
-          warning("Package 'jsonlite' absent : fond histologique indisponible en previsualisation interactive.")
-          return(NULL)
+        rgba_arr <- raster_to_rgba_array(hist_data$raster)
+        raw_png <- png::writePNG(rgba_arr)
+        
+        if (requireNamespace("base64enc", quietly = TRUE)) {
+          base64enc::dataURI(raw_png, mime = "image/png")
+        } else if (requireNamespace("jsonlite", quietly = TRUE)) {
+          paste0("data:image/png;base64,", jsonlite::base64_enc(raw_png))
+        } else {
+          NULL
         }
-        # FIX: rasterizing to PNG was leaving the graphics device OPEN if
-        # grid.raster() errored (dev.off() below it never ran) -- an R
-        # process has ONE global device stack, so a dangling device here
-        # would silently corrupt every OTHER plot in the session (QC
-        # histograms, ggplot exports, etc.), not just this one. Scoping
-        # on.exit() inside its own function guarantees the device closes
-        # no matter what happens. Also: bg="transparent" is not reliably
-        # supported by every graphics backend (notably Windows' default
-        # device) -- bg="white" is universally safe; Plotly's own
-        # `opacity` on the image layer still gives the desired see-through
-        # effect regardless of whether the PNG itself has alpha.
-        render_png <- function() {
-          tmp <- tempfile(fileext = ".png")
-          grDevices::png(tmp, width = hist_data$dim[2], height = hist_data$dim[1], bg = "white")
-          on.exit(grDevices::dev.off(), add = TRUE)
-          grid::grid.raster(hist_data$raster, width = 1, height = 1)
-          tmp
-        }
-        tmp_png <- render_png()
-        raw_png <- readBin(tmp_png, "raw", file.info(tmp_png)$size)
-        unlink(tmp_png)
-        paste0("data:image/png;base64,", jsonlite::base64_enc(raw_png))
       }, error = function(e) {
-        warning("Rendu PNG/base64 de l'image histologique echoue : ", conditionMessage(e))
+        warning("Encodage de l'image histologique en data URI echoue : ", conditionMessage(e))
         NULL
       })
       
-      list(raster_obj = hist_data$raster, data_uri = data_uri, bounds = bounds)
+      diag <- tryCatch(
+        diagnose_histology_raster(hist_data$raster),
+        error = function(e) NULL
+      )
+      
+      list(
+        raster_obj = hist_data$raster,
+        data_uri = data_uri,
+        bounds = bounds,
+        diag = diag
+      )
     })
     
     observe({
       req(global_data$spatial_obj)
-      
       hist_data <- global_data$spatial_obj$histology
-      if (is.null(hist_data) || is.null(hist_data$raster)) {
-        return()
-      }
+      if (is.null(hist_data) || is.null(hist_data$raster)) return()
       
       ov <- histology_overlay()
-      if (is.null(ov)) {
-        message("[spatial_viz] histology_overlay encore NULL apres disponibilite histology")
-        return()
-      }
-      
+      if (is.null(ov)) return()
       message("[spatial_viz] ", build_histology_debug_text(ov))
     })
     
-    
-    # ── Helpers Plotly / Histology ───────────────────────────────────────
-    
     make_plotly_histology_image <- function(hist_ov, opacity = 0.7) {
-      if (is.null(hist_ov) || is.null(hist_ov$data_uri) || is.null(hist_ov$bounds)) {
+      if (
+        is.null(hist_ov) ||
+        is.null(hist_ov$data_uri) ||
+        is.null(hist_ov$bounds)
+      ) {
         return(NULL)
       }
       
       b <- hist_ov$bounds
-      xmin <- b$x[1]
-      xmax <- b$x[2]
-      ymin <- b$y[1]
-      ymax <- b$y[2]
       
-      list(list(
+      list(
         source = hist_ov$data_uri,
         xref = "x",
         yref = "y",
-        
-        # On affiche les points dans le repère (x, -y).
-        # L'image doit donc être ancrée dans ce même repère.
-        x = xmin,
-        y = -ymax,
-        
-        sizex = xmax - xmin,
-        sizey = ymax - ymin,
-        
+        x = b$x[1L],
+        y = -b$y[2L],
+        sizex = diff(b$x),
+        sizey = diff(b$y),
         xanchor = "left",
         yanchor = "bottom",
         sizing = "stretch",
         opacity = opacity,
         layer = "below"
-      ))
+      )
     }
     
     compute_spatial_ranges <- function(df_all, hist_ov = NULL, show_hist = FALSE) {
       x_vals <- df_all$x
       y_vals <- -df_all$y
       
-      if (isTRUE(show_hist) && !is.null(hist_ov) && !is.null(hist_ov$bounds)) {
+      if (
+        isTRUE(show_hist) &&
+        !is.null(hist_ov) &&
+        !is.null(hist_ov$bounds)
+      ) {
         x_vals <- c(x_vals, hist_ov$bounds$x)
-        y_vals <- c(y_vals, -hist_ov$bounds$y[1], -hist_ov$bounds$y[2])
+        y_vals <- c(
+          y_vals,
+          -hist_ov$bounds$y[2L],
+          -hist_ov$bounds$y[1L]
+        )
       }
       
       list(
@@ -303,14 +437,20 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     
     build_histology_debug_text <- function(hist_ov) {
       if (is.null(hist_ov)) return("Histology overlay = NULL")
+      d <- hist_ov$diag
       paste0(
         "Histology debug | data_uri: ", !is.null(hist_ov$data_uri),
         " | raster dims: ", paste(dim(hist_ov$raster_obj), collapse = " x "),
         " | x=[", paste(round(hist_ov$bounds$x, 2), collapse = ", "), "]",
-        " | y=[", paste(round(hist_ov$bounds$y, 2), collapse = ", "), "]"
+        " | y=[", paste(round(hist_ov$bounds$y, 2), collapse = ", "), "]",
+        if (!is.null(d)) {
+          sprintf(
+            " | pct_near_white=%.1f%% | n_unique_colors=%d | mean_rgb=[%s]",
+            d$pct_near_white, d$n_unique_colors, paste(d$mean_rgb, collapse = ",")
+          )
+        } else ""
       )
-    } 
-    
+    }
     
     output$histology_status_ui <- renderUI({
       req(global_data$spatial_obj)
@@ -321,7 +461,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
           div(
             class = "alert alert-light",
             style = "font-size:0.7rem;padding:2px 6px;",
-            "Image histologique indisponible (technologie non-Visium, ou image absente/non extraite pour ce jeu de donnees)."
+            "Image histologique indisponible."
           )
         )
       }
@@ -333,7 +473,18 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
           div(
             class = "alert alert-warning",
             style = "font-size:0.7rem;padding:2px 6px;",
-            "Image presente mais non affichable en previsualisation interactive (encodage PNG/base64 echoue — voir avertissements console R). L'export PNG reste disponible."
+            "Image presente mais non affichable en previsualisation interactive. L'export PNG reste disponible."
+          )
+        )
+      }
+      
+      d <- ov$diag
+      if (!is.null(d) && isTRUE(d$pct_near_white > 98)) {
+        return(
+          div(
+            class = "alert alert-danger",
+            style = "font-size:0.7rem;padding:2px 6px;",
+            sprintf("Image quasi-blanche detectee (%.1f%% de pixels quasi-blancs).", d$pct_near_white)
           )
         )
       }
@@ -343,12 +494,22 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         style = "font-size:0.65rem;padding:2px 6px;",
         paste0(
           "Fond histologique OK — ",
-          round(nchar(ov$data_uri) / 1024), " Ko ; ",
-          "x=[", round(ov$bounds$x[1]), ", ", round(ov$bounds$x[2]), "] ; ",
-          "y=[", round(ov$bounds$y[1]), ", ", round(ov$bounds$y[2]), "]"
+          round(nchar(ov$data_uri) / 1024), " Ko",
+          if (!is.null(hist_data$resolution)) paste0(" — source: ", hist_data$resolution) else ""
         )
       )
     })
+    
+    output$dl_histology_raw <- downloadHandler(
+      filename = function() paste0("fond_histologique_brut_", Sys.Date(), ".png"),
+      content = function(file) {
+        hist_data <- global_data$spatial_obj$histology
+        validate(need(!is.null(hist_data) && !is.null(hist_data$raster), "Aucune image histologique disponible."))
+        rgba_arr <- tryCatch(raster_to_rgba_array(hist_data$raster), error = function(e) NULL)
+        validate(need(!is.null(rgba_arr), "Echec de la conversion de l'image."))
+        png::writePNG(rgba_arr, file)
+      }
+    )
     
     output$combined_help_ui <- renderUI({
       has_clusters <- !is.null(shared_rv$cluster_labels)
@@ -356,33 +517,25 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       
       if (!has_clusters && !has_umap) {
         tagList(
-          strong("Mode expert prêt, mais incomplet. "),
-          "Lancez d'abord un clustering spatial puis calculez le PCA+UMAP du sketch. ",
-          "Ensuite, vous pourrez sélectionner des cellules au lasso dans un panneau et voir la même sélection dans l'autre."
-        )
-      } else if (!has_clusters) {
-        tagList(
-          strong("UMAP disponible. "),
-          "Il manque encore les clusters spatiaux pour activer l'exploration croisée complète."
-        )
-      } else if (!has_umap) {
-        tagList(
-          strong("Clusters disponibles. "),
-          "Calculez maintenant le PCA+UMAP du sketch pour activer la sélection liée spatiale/UMAP."
+          strong("Mode expert pret, mais incomplet. "),
+          "Lancez d'abord un clustering spatial puis calculez le PCA+UMAP du sketch."
         )
       } else {
         tagList(
           strong("Mode expert actif. "),
-          "Utilisez le lasso ou le rectangle dans l'un des deux panneaux pour suivre une population dans l'autre; ",
-          "vous pouvez aussi isoler un ou plusieurs clusters sans perdre l'affichage couplé."
+          "Utilisez le lasso ou le rectangle dans l'un des deux panneaux."
         )
       }
     })
     
-    # ── Populate gene / cell-type selectors ─────────────────────────────
     observeEvent(global_data$spatial_obj, {
       req(global_data$spatial_obj$sketch)
-      updateSelectizeInput(session, "gene", choices = rownames(global_data$spatial_obj$sketch), server = TRUE)
+      updateSelectizeInput(
+        session,
+        "gene",
+        choices = rownames(global_data$spatial_obj$sketch),
+        server = TRUE
+      )
     }, ignoreInit = TRUE)
     
     output$deconv_celltype_ui <- renderUI({
@@ -391,39 +544,43 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       selectInput(ns("deconv_celltype"), NULL, choices = cts)
     })
     
-    # ── Build per-sketch-cell plotting data.frame ────────────────────────
     plot_df <- reactive({
       req(global_data$spatial_obj$sketch, global_data$spatial_obj$coords)
       sk_ids <- colnames(global_data$spatial_obj$sketch)
       coords <- global_data$spatial_obj$coords
       df <- coords[match(sk_ids, coords$id), c("id", "x", "y")]
       
-      df$value <- tryCatch(switch(input$color_by,
-                                  "cluster" = {
-                                    req(shared_rv$cluster_labels)
-                                    as.character(shared_rv$cluster_labels[df$id])
-                                  },
-                                  "deconv" = {
-                                    req(shared_rv$deconv_props, input$deconv_celltype)
-                                    m <- match(df$id, shared_rv$deconv_props$id)
-                                    shared_rv$deconv_props[[input$deconv_celltype]][m]
-                                  },
-                                  "qc" = {
-                                    req(shared_rv$qc_metrics)
-                                    m <- match(df$id, shared_rv$qc_metrics$id)
-                                    shared_rv$qc_metrics[[input$qc_metric]][m]
-                                  },
-                                  "gene" = {
-                                    req(input$gene)
-                                    sk <- global_data$spatial_obj$sketch
-                                    if (!"data" %in% SeuratObject::Layers(sk)) sk <- Seurat::NormalizeData(sk, verbose = FALSE)
-                                    as.numeric(SeuratObject::LayerData(sk, layer = "data")[input$gene, df$id])
-                                  }
-      ), error = function(e) {
-        if (inherits(e, "shiny.silent.error")) stop(e)
-        warning("plot_df(): echec du calcul de couleur (", conditionMessage(e), ") — points affiches en gris.")
-        rep(NA_real_, nrow(df))
-      })
+      df$value <- tryCatch(
+        switch(input$color_by,
+               "cluster" = {
+                 req(shared_rv$cluster_labels)
+                 as.character(shared_rv$cluster_labels[df$id])
+               },
+               "deconv" = {
+                 req(shared_rv$deconv_props, input$deconv_celltype)
+                 m <- match(df$id, shared_rv$deconv_props$id)
+                 shared_rv$deconv_props[[input$deconv_celltype]][m]
+               },
+               "qc" = {
+                 req(shared_rv$qc_metrics)
+                 m <- match(df$id, shared_rv$qc_metrics$id)
+                 shared_rv$qc_metrics[[input$qc_metric]][m]
+               },
+               "gene" = {
+                 req(input$gene)
+                 sk <- global_data$spatial_obj$sketch
+                 if (!"data" %in% SeuratObject::Layers(sk)) {
+                   sk <- Seurat::NormalizeData(sk, verbose = FALSE)
+                 }
+                 as.numeric(SeuratObject::LayerData(sk, layer = "data")[input$gene, df$id])
+               }
+        ),
+        error = function(e) {
+          if (inherits(e, "shiny.silent.error")) stop(e)
+          rep(NA_real_, nrow(df))
+        }
+      )
+      
       df[stats::complete.cases(df[, c("x", "y")]), ]
     })
     
@@ -435,19 +592,18 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       alpha_range[1] + norm * diff(alpha_range)
     }
     
-    # ── Unlimited discrete palette for plotly's `color=~cluster` mapping ──
-    # plotly::plot_ly()'s DEFAULT discrete palette is RColorBrewer::Set2,
-    # capped at 8 colors — BANKSY-lite routinely produces more clusters than
-    # that, which throws "n too large" warnings and silently recycles colors
-    # (two different clusters end up the SAME color). grDevices::hcl.colors()
-    # has no such cap. Pass this explicitly to every plot_ly(color=~cluster).
+    sort_cluster_labels <- function(x) {
+      x <- unique(stats::na.omit(as.character(x)))
+      if (length(x) == 0) return(x)
+      if (all(grepl("^[0-9]+$", x))) x[order(as.integer(x))] else sort(x)
+    }
+    
     cluster_palette <- function(cluster_vec) {
-      lv <- sort(unique(stats::na.omit(as.character(cluster_vec))))
+      lv <- sort_cluster_labels(cluster_vec)
       if (length(lv) == 0) return(NULL)
       stats::setNames(grDevices::hcl.colors(length(lv), palette = "Dark 3"), lv)
     }
     
-    # ── Robust Color Mapping ─────────────────────────────────────────────
     color_values <- function(df) {
       n <- nrow(df)
       if (n == 0L) return(character(0))
@@ -455,33 +611,24 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       add_alpha <- function(cols, alpha) {
         cols <- as.character(cols)
         alpha <- as.numeric(alpha)
-        
-        if (length(alpha) != length(cols)) {
-          alpha <- rep(1, length(cols))
-        }
-        
+        if (length(alpha) != length(cols)) alpha <- rep(1, length(cols))
         cols[is.na(cols) | !nzchar(cols)] <- "#CCCCCC"
         alpha[!is.finite(alpha)] <- 1
         alpha <- pmax(0, pmin(1, alpha))
         
         rgb <- grDevices::col2rgb(cols, alpha = FALSE)
-        rgb_hex <- grDevices::rgb(
+        grDevices::rgb(
           red = rgb[1, ],
           green = rgb[2, ],
           blue = rgb[3, ],
           alpha = round(alpha * 255),
           maxColorValue = 255
         )
-        
-        as.character(rgb_hex)
       }
       
       if (is.numeric(df$value)) {
         valid <- is.finite(df$value)
-        
-        if (!any(valid)) {
-          return(rep("#CCCCCC", n))
-        }
+        if (!any(valid)) return(rep("#CCCCCC", n))
         
         domain <- range(df$value[valid])
         pal <- leaflet::colorNumeric(
@@ -489,7 +636,6 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
           domain = domain,
           na.color = "#CCCCCC"
         )
-        
         cols <- as.character(pal(df$value))
         cols[!valid | is.na(cols) | !nzchar(cols)] <- "#CCCCCC"
         
@@ -497,28 +643,31 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
           alpha <- scale_alpha_by_value(df$value, input$alpha_range %||% c(0.15, 1))
           return(add_alpha(cols, alpha))
         }
-        
         return(cols)
       }
       
-      levels <- sort(unique(stats::na.omit(as.character(df$value))))
+      vals <- as.character(df$value)
+      vals[is.na(vals) | !nzchar(vals)] <- NA_character_
       
-      if (length(levels) == 0L) {
-        return(rep("#CCCCCC", n))
+      if (identical(input$color_by, "cluster")) {
+        pal <- cluster_palette(vals)
+        cols <- unname(pal[vals])
+        cols[is.na(cols) | !nzchar(cols)] <- "#CCCCCC"
+        return(cols)
       }
       
-      pal <- leaflet::colorFactor(
-        palette = grDevices::hcl.colors(length(levels), palette = "Dark 3"),
-        domain = levels,
-        na.color = "#CCCCCC"
-      )
+      lv <- sort(unique(stats::na.omit(vals)))
+      if (length(lv) == 0L) return(rep("#CCCCCC", n))
       
-      cols <- as.character(pal(as.character(df$value)))
+      pal <- stats::setNames(
+        grDevices::hcl.colors(length(lv), palette = "Dark 3"),
+        lv
+      )
+      cols <- unname(pal[vals])
       cols[is.na(cols) | !nzchar(cols)] <- "#CCCCCC"
       cols
     }
     
-    # ── Plotly Spatial Preview (Fallback / Interactive) ──────────────────
     output$spatial_preview_plot <- plotly::renderPlotly({
       df <- plot_df()
       req(nrow(df) > 0)
@@ -527,18 +676,16 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       df_plot$y_display <- -df_plot$y
       df_plot$colour <- color_values(df_plot)
       
-      max_preview_cells <- 150000L
+      hist_ov <- histology_overlay()
+      show_hist <- !is.null(hist_ov) && !is.null(hist_ov$data_uri) && isTRUE(input$show_histology)
+      
+      max_preview_cells <- if (isTRUE(show_hist)) 40000L else 150000L
       if (nrow(df_plot) > max_preview_cells) {
         set.seed(1)
         df_plot <- df_plot[sample.int(nrow(df_plot), max_preview_cells), , drop = FALSE]
       }
       
-      hist_ov <- histology_overlay()
-      show_hist <- !is.null(hist_ov) &&
-        !is.null(hist_ov$data_uri) &&
-        isTRUE(input$show_histology)
-      
-      plot_images <- if (show_hist) {
+      img_single <- if (show_hist) {
         make_plotly_histology_image(
           hist_ov = hist_ov,
           opacity = input$histology_opacity %||% 0.7
@@ -547,18 +694,22 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         NULL
       }
       
+      plot_images <- if (!is.null(img_single)) list(img_single) else NULL
+      
       spatial_ranges <- compute_spatial_ranges(
         df_all = df,
         hist_ov = hist_ov,
         show_hist = show_hist
       )
       
+      trace_type <- if (isTRUE(show_hist)) "scatter" else "scattergl"
+      
       p <- plotly::plot_ly(
         data = df_plot,
         x = ~x,
         y = ~y_display,
         key = ~id,
-        type = "scattergl",
+        type = trace_type,
         mode = "markers",
         marker = list(
           color = ~colour,
@@ -569,7 +720,9 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
           "ID: ", id,
           "<br>x: ", round(x, 1),
           "<br>y: ", round(-y_display, 1),
-          "<br>Valeur: ", ifelse(is.na(value), "NA", as.character(round(as.numeric(value), 3)))
+          "<br>Valeur: ", ifelse(is.na(value), "NA",
+                                 if (is.numeric(value)) round(value, 3) else as.character(value)
+          )
         ),
         hoverinfo = "text",
         source = ns("spatial_preview_src")
@@ -578,6 +731,8 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
           dragmode = "pan",
           margin = list(l = 10, r = 10, t = 10, b = 10),
           images = plot_images,
+          plot_bgcolor = "rgba(0,0,0,0)",
+          paper_bgcolor = "rgba(0,0,0,0)",
           xaxis = list(
             title = "",
             zeroline = FALSE,
@@ -599,12 +754,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         isTRUE(input$show_cluster_labels) &&
         is.character(df_plot$value)
       ) {
-        centroids <- stats::aggregate(
-          cbind(x, y_display) ~ value,
-          data = df_plot,
-          FUN = mean
-        )
-        
+        centroids <- stats::aggregate(cbind(x, y_display) ~ value, data = df_plot, FUN = mean)
         p <- p |>
           plotly::add_annotations(
             x = centroids$x,
@@ -618,12 +768,15 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
           )
       }
       
-      plotly::event_register(p, "plotly_selected")
+      p <- plotly::event_register(p, "plotly_selected")
+      p
     })
     
-    # ── Scattermore Fallback ─────────────────────────────────────────────
     build_raster_plot <- function(df) {
-      use_alpha_scale <- identical(input$color_by, "gene") && isTRUE(input$scale_alpha_by_expr) && is.numeric(df$value)
+      use_alpha_scale <- identical(input$color_by, "gene") &&
+        isTRUE(input$scale_alpha_by_expr) &&
+        is.numeric(df$value)
+      
       p <- if (use_alpha_scale) {
         ggplot2::ggplot(df, ggplot2::aes(x = x, y = -y, color = value, alpha = value))
       } else {
@@ -631,43 +784,106 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       }
       
       hist_ov <- histology_overlay()
-      if (!is.null(hist_ov) && isTRUE(input$show_histology)) {
+      show_hist <- !is.null(hist_ov) && isTRUE(input$show_histology)
+      if (show_hist) {
         b <- hist_ov$bounds
-        p <- p + ggplot2::annotation_raster(hist_ov$raster_obj,
-                                            xmin = b$x[1], xmax = b$x[2],
-                                            ymin = -b$y[2], ymax = -b$y[1],
-                                            interpolate = TRUE)
+        p <- p + ggplot2::annotation_raster(
+          hist_ov$raster_obj,
+          xmin = b$x[1], xmax = b$x[2],
+          ymin = -b$y[2], ymax = -b$y[1],
+          interpolate = TRUE
+        )
       }
       
       pt_alpha <- input$pt_opacity %||% 0.85
       if (!requireNamespace("scattermore", quietly = TRUE)) {
-        p <- if (use_alpha_scale) p + ggplot2::geom_point(size = input$pt_radius / 4)
-        else p + ggplot2::geom_point(size = input$pt_radius / 4, alpha = pt_alpha)
+        p <- if (use_alpha_scale) {
+          p + ggplot2::geom_point(size = input$pt_radius / 4)
+        } else {
+          p + ggplot2::geom_point(size = input$pt_radius / 4, alpha = pt_alpha)
+        }
       } else {
-        p <- if (use_alpha_scale) p + scattermore::geom_scattermore(pointsize = input$pt_radius)
-        else p + scattermore::geom_scattermore(pointsize = input$pt_radius, alpha = pt_alpha)
-      }
-      if (use_alpha_scale) {
-        p <- p + ggplot2::scale_alpha_continuous(range = input$alpha_range %||% c(0.15, 1), guide = "none")
+        p <- if (use_alpha_scale) {
+          p + scattermore::geom_scattermore(pointsize = input$pt_radius)
+        } else {
+          p + scattermore::geom_scattermore(pointsize = input$pt_radius, alpha = pt_alpha)
+        }
       }
       
-      p + ggplot2::coord_fixed() + ggplot2::theme_void() +
-        (if (is.numeric(df$value)) ggplot2::scale_color_viridis_c(na.value = "#CCCCCC")
-         else ggplot2::scale_color_manual(values = stats::setNames(
-           grDevices::hcl.colors(length(unique(stats::na.omit(df$value))), "Dark 3"),
-           sort(unique(stats::na.omit(df$value)))), na.value = "#CCCCCC")) +
+      if (use_alpha_scale) {
+        p <- p + ggplot2::scale_alpha_continuous(
+          range = input$alpha_range %||% c(0.15, 1),
+          guide = "none"
+        )
+      }
+      
+      spatial_ranges <- compute_spatial_ranges(
+        df_all = df,
+        hist_ov = hist_ov,
+        show_hist = show_hist
+      )
+      p <- p + ggplot2::coord_fixed(
+        xlim = spatial_ranges$x,
+        ylim = spatial_ranges$y,
+        expand = FALSE
+      )
+      
+      p + ggplot2::theme_void() +
+        (if (is.numeric(df$value)) {
+          ggplot2::scale_color_viridis_c(na.value = "#CCCCCC")
+        } else {
+          ggplot2::scale_color_manual(
+            values = stats::setNames(
+              grDevices::hcl.colors(length(unique(stats::na.omit(df$value))), "Dark 3"),
+              sort(unique(stats::na.omit(df$value)))
+            ),
+            na.value = "#CCCCCC"
+          )
+        }) +
         ggplot2::labs(color = input$color_by)
     }
     
-    # ── Exports ────────────────────────────────────────────────────────
+    output$static_export_preview <- renderPlot({
+      req(isTRUE(input$show_static_export_preview))
+      
+      if (exists("build_static_spatial_ggplot", mode = "function")) {
+        p <- build_static_spatial_ggplot(
+          spatial_obj = global_data$spatial_obj,
+          color_by    = input$color_by,
+          gene        = input$gene,
+          qc_metric   = input$qc_metric,
+          pt_size     = input$pt_radius,
+          pt_alpha    = input$pt_opacity,
+          show_hist   = input$show_histology,
+          hist_res    = input$histology_resolution %||% "lowres",
+          hist_alpha  = input$histology_opacity
+        )
+      } else {
+        df <- plot_df()
+        req(nrow(df) > 0)
+        p <- build_raster_plot(df)
+      }
+      
+      req(p)
+      print(p)
+    }, res = 110)
+    
     output$dl_png <- downloadHandler(
       filename = function() paste0("carte_spatiale_", input$color_by, "_", Sys.Date(), ".png"),
       content = function(file) {
         df <- plot_df()
         validate(need(nrow(df) > 0, "Aucune donnee a exporter."))
-        ggplot2::ggsave(file, plot = build_raster_plot(df), width = 8, height = 8, dpi = 200, bg = "white")
+        ggplot2::ggsave(
+          file,
+          plot = build_raster_plot(df),
+          width = 8,
+          height = 8,
+          dpi = 200,
+          bg = "white"
+        )
       }
     )
+    
     output$dl_csv <- downloadHandler(
       filename = function() paste0("carte_spatiale_", input$color_by, "_", Sys.Date(), ".csv"),
       content = function(file) {
@@ -677,9 +893,8 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       }
     )
     
-    # ── Sketch PCA + UMAP — ASYNC (ExtendedTask + mirai) ─────────────────
     log_file <- spatial_log_path(session, "sketch_umap")
-    tracker  <- create_reactive_tracker(session, log_file)
+    tracker <- create_reactive_tracker(session, log_file)
     
     umap_task <- ExtendedTask$new(function(sketch_path, log_file) {
       mirai::mirai(
@@ -687,7 +902,6 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
           write_mirai_log(log_file, "Chargement du sketch...", 1, 5)
           sk <- readRDS(sketch_path)
           
-          # Check if already normalized via SCTransform at import time
           already_sct <- identical(Seurat::DefaultAssay(sk), "SCT")
           
           if (already_sct) {
@@ -711,7 +925,9 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
           emb$id <- rownames(emb)
           emb
         },
-        sketch_path = sketch_path, log_file = log_file, .timeout = MIRAI_TASK_TIMEOUT_MS
+        sketch_path = sketch_path,
+        log_file = log_file,
+        .timeout = MIRAI_TASK_TIMEOUT_MS
       )
     })
     bslib::bind_task_button(umap_task, "btn_compute_umap")
@@ -725,14 +941,13 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     })
     
     umap_df <- reactiveVal(NULL)
+    
     observeEvent(umap_task$status(), {
       if (umap_task$status() == "success") {
         umap_df(umap_task$result())
         showNotification("UMAP calcule.", type = "message", duration = 3)
       } else if (umap_task$status() == "error") {
-        showNotification(
-          "Erreur (ou depassement du delai) pendant le calcul UMAP — voir le log.",
-          type = "error", duration = 10)
+        showNotification("Erreur pendant le calcul UMAP.", type = "error", duration = 10)
       }
     })
     
@@ -747,149 +962,253 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       emb <- umap_df()
       emb$cluster <- if (!is.null(shared_rv$cluster_labels)) {
         as.character(shared_rv$cluster_labels[emb$id])
-      } else "sketch"
+      } else {
+        "sketch"
+      }
       
-      plotly::plot_ly(emb, x = ~dim1, y = ~dim2, color = ~cluster, colors = cluster_palette(emb$cluster),
-                      type = "scattergl", mode = "markers",
-                      marker = list(size = 5, opacity = 0.7)) |>
-        plotly::layout(margin = list(l = 20, r = 20, t = 20, b = 20),
-                       autosize = TRUE)
+      plotly::plot_ly(
+        emb,
+        x = ~dim1,
+        y = ~dim2,
+        color = ~cluster,
+        colors = cluster_palette(emb$cluster),
+        type = "scattergl",
+        mode = "markers",
+        marker = list(size = 5, opacity = 0.7)
+      ) |>
+        plotly::layout(
+          margin = list(l = 20, r = 20, t = 20, b = 20),
+          autosize = TRUE
+        )
     })
-    
-    # ── "Vue combinee" — Linked UMAP + Spatial Scatter (Plotly) ──────────
-    # ── "Vue combinee" — Linked UMAP + Spatial Scatter (Plotly) ──────────
     
     observeEvent(shared_rv$cluster_labels, {
       req(shared_rv$cluster_labels)
       updateSelectizeInput(
         session,
         "highlight_clusters",
-        choices = sort(unique(shared_rv$cluster_labels)),
+        choices = sort_cluster_labels(shared_rv$cluster_labels),
         server = FALSE
       )
     }, ignoreInit = FALSE)
     
-    linked_selection <- reactiveVal(NULL)
+    linked_selection <- reactiveVal(character(0))
     
-    observe({
-      req(shared_rv$cluster_labels)
-      ed <- plotly::event_data(
-        event = "plotly_selected",
-        source = ns("spatial_src"),
-        session = session,
-        priority = "event"
+    selected_event_ids <- function(source_id) {
+      ev <- tryCatch(
+        plotly::event_data(
+          event = "plotly_selected",
+          source = source_id,
+          session = session,
+          priority = "event"
+        ),
+        error = function(e) NULL
       )
       
-      if (is.null(ed) || nrow(ed) == 0) {
-        return()
+      if (is.null(ev) || nrow(ev) == 0L || !"key" %in% colnames(ev)) {
+        return(character(0))
       }
       
-      linked_selection(as.character(ed$key))
-    })
+      unique(as.character(ev$key[!is.na(ev$key)]))
+    }
     
-    observe({
-      req(umap_df())
-      ed <- plotly::event_data(
+    observeEvent(
+      plotly::event_data(
         event = "plotly_selected",
-        source = ns("umap_src"),
+        source = ns("combined_spatial_src"),
         session = session,
         priority = "event"
-      )
-      
-      if (is.null(ed) || nrow(ed) == 0) {
-        return()
-      }
-      
-      linked_selection(as.character(ed$key))
-    })
+      ),
+      {
+        ids <- selected_event_ids(ns("combined_spatial_src"))
+        if (length(ids) > 0L) linked_selection(ids)
+      },
+      ignoreInit = TRUE
+    )
     
-    observeEvent(input$btn_clear_selection, {
-      linked_selection(NULL)
-    })
+    observeEvent(
+      plotly::event_data(
+        event = "plotly_selected",
+        source = ns("combined_umap_src"),
+        session = session,
+        priority = "event"
+      ),
+      {
+        ids <- selected_event_ids(ns("combined_umap_src"))
+        if (length(ids) > 0L) linked_selection(ids)
+      },
+      ignoreInit = TRUE
+    )
     
     observeEvent(input$highlight_clusters, {
-      if (length(input$highlight_clusters) > 0) {
-        linked_selection(NULL)
+      selected_clusters <- as.character(input$highlight_clusters %||% character(0))
+      
+      if (length(selected_clusters) == 0L) {
+        linked_selection(character(0))
+        return()
       }
+      
+      req(shared_rv$cluster_labels)
+      
+      ids <- names(shared_rv$cluster_labels)[
+        as.character(shared_rv$cluster_labels) %in% selected_clusters
+      ]
+      
+      linked_selection(unique(as.character(ids)))
+    }, ignoreInit = TRUE)
+    
+    observeEvent(input$btn_clear_selection, {
+      linked_selection(character(0))
+      updateSelectizeInput(
+        session,
+        "highlight_clusters",
+        selected = character(0),
+        server = FALSE
+      )
     })
     
     highlighted_ids <- reactive({
-      req(shared_rv$cluster_labels)
-      
-      if (length(input$highlight_clusters) > 0) {
-        names(shared_rv$cluster_labels)[shared_rv$cluster_labels %in% input$highlight_clusters]
-      } else {
-        linked_selection()
-      }
+      unique(as.character(linked_selection() %||% character(0)))
     })
     
     apply_highlight_alpha <- function(df) {
-      hl <- highlighted_ids()
-      if (is.null(hl) || length(hl) == 0) {
+      ids <- highlighted_ids()
+      
+      if (length(ids) == 0L) {
         return(rep(0.85, nrow(df)))
       }
-      ifelse(df$id %in% hl, 0.95, 0.08)
+      
+      ifelse(df$id %in% ids, 0.95, 0.08)
     }
     
     combined_spatial_df <- reactive({
-      req(global_data$spatial_obj$sketch, global_data$spatial_obj$coords, shared_rv$cluster_labels)
+      df <- plot_df()
+      req(nrow(df) > 0L)
       
-      sk_ids <- colnames(global_data$spatial_obj$sketch)
-      coords <- global_data$spatial_obj$coords
+      df$cluster <- if (!is.null(shared_rv$cluster_labels)) {
+        as.character(shared_rv$cluster_labels[df$id])
+      } else {
+        NA_character_
+      }
       
-      df <- coords[match(sk_ids, coords$id), c("id", "x", "y")]
-      df$cluster <- as.character(shared_rv$cluster_labels[df$id])
+      df
+    })
+    
+    combined_umap_df <- reactive({
+      req(umap_df())
+      emb <- umap_df()
+      emb$cluster <- if (!is.null(shared_rv$cluster_labels)) {
+        as.character(shared_rv$cluster_labels[emb$id])
+      } else {
+        NA_character_
+      }
+      emb
+    })
+    
+    output$highlight_debug_ui <- renderUI({
+      hl <- highlighted_ids()
+      if (length(hl) == 0) return(NULL)
       
-      df[stats::complete.cases(df[, c("x", "y")]) & !is.na(df$cluster), ]
+      n_spatial <- sum(combined_spatial_df()$id %in% hl)
+      n_umap <- if (!is.null(umap_df())) sum(combined_umap_df()$id %in% hl) else NA
+      
+      div(
+        class = "text-info style-sm mt-1",
+        style = "font-size:0.75rem;",
+        sprintf(
+          "\u2139\ufe0f %d cellule(s) selectionnee(s) / isolee(s) (Spatial: %s, UMAP: %s)",
+          length(hl),
+          paste0(n_spatial, " pts"),
+          if (is.na(n_umap)) "non calcule" else paste0(n_umap, " pts")
+        )
+      )
     })
     
     output$combined_spatial_plot <- plotly::renderPlotly({
       df <- combined_spatial_df()
-      req(nrow(df) > 0)
+      req(nrow(df) > 0L)
+      
+      df$y_display <- -df$y
+      df$colour <- color_values(df)
+      
+      alpha_vec <- apply_highlight_alpha(df)
+      
+      add_alpha <- function(hex_col, alpha) {
+        hex_col <- ifelse(is.na(hex_col) | !nzchar(hex_col), "#CCCCCC", hex_col)
+        rgb_mat <- grDevices::col2rgb(hex_col, alpha = FALSE)
+        
+        grDevices::rgb(
+          red = rgb_mat[1L, ],
+          green = rgb_mat[2L, ],
+          blue = rgb_mat[3L, ],
+          alpha = pmax(0, pmin(255, round(alpha * 255))),
+          maxColorValue = 255
+        )
+      }
+      
+      df$colour <- add_alpha(df$colour, alpha_vec)
       
       hist_ov <- histology_overlay()
       show_hist <- !is.null(hist_ov) &&
         !is.null(hist_ov$data_uri) &&
         isTRUE(input$show_histology)
       
-      plot_images <- if (show_hist) {
-        make_plotly_histology_image(
-          hist_ov = hist_ov,
-          opacity = input$histology_opacity %||% 0.7
+      img <- if (show_hist) {
+        list(
+          make_plotly_histology_image(
+            hist_ov = hist_ov,
+            opacity = input$histology_opacity %||% 0.7
+          )
         )
       } else {
         NULL
       }
       
-      spatial_ranges <- compute_spatial_ranges(
+      ranges <- compute_spatial_ranges(
         df_all = df,
         hist_ov = hist_ov,
         show_hist = show_hist
       )
       
+      trace_type <- if (show_hist) "scatter" else "scattergl"
+      
       p <- plotly::plot_ly(
         data = df,
         x = ~x,
-        y = ~-y,
-        color = ~cluster,
-        colors = cluster_palette(df$cluster),
+        y = ~y_display,
         key = ~id,
-        type = "scattergl",
+        type = trace_type,
         mode = "markers",
         marker = list(
-          size = 5,
-          opacity = apply_highlight_alpha(df)
+          color = ~colour,
+          size = input$pt_radius,
+          opacity = 1
         ),
-        source = ns("spatial_src")
+        text = ~paste0(
+          "ID : ", id,
+          "<br>Valeur : ",
+          ifelse(
+            is.na(value),
+            "NA",
+            if (is.numeric(value)) round(value, 3) else as.character(value)
+          ),
+          "<br>Cluster : ",
+          ifelse(is.na(cluster), "NA", cluster)
+        ),
+        hoverinfo = "text",
+        source = ns("combined_spatial_src")
       ) |>
         plotly::layout(
           dragmode = "lasso",
-          images = plot_images,
+          margin = list(l = 10, r = 10, t = 10, b = 10),
+          images = img,
+          plot_bgcolor = "rgba(0,0,0,0)",
+          paper_bgcolor = "rgba(0,0,0,0)",
           xaxis = list(
             title = "",
             zeroline = FALSE,
             showgrid = FALSE,
-            range = spatial_ranges$x
+            range = ranges$x
           ),
           yaxis = list(
             title = "",
@@ -897,46 +1216,400 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
             showgrid = FALSE,
             scaleanchor = "x",
             scaleratio = 1,
-            range = spatial_ranges$y
+            range = ranges$y
           )
         )
+      
+      if (
+        identical(input$color_by, "cluster") &&
+        isTRUE(input$show_cluster_labels) &&
+        any(!is.na(df$cluster))
+      ) {
+        centroids <- stats::aggregate(
+          cbind(x, y_display) ~ cluster,
+          data = df[!is.na(df$cluster), , drop = FALSE],
+          FUN = mean
+        )
+        
+        p <- p |>
+          plotly::add_annotations(
+            x = centroids$x,
+            y = centroids$y_display,
+            text = centroids$cluster,
+            showarrow = FALSE,
+            font = list(size = 11, color = "#1A1A1A"),
+            bgcolor = "rgba(255,255,255,0.65)",
+            bordercolor = "#666666",
+            borderwidth = 0.5
+          )
+      }
       
       plotly::event_register(p, "plotly_selected")
     })
     
     output$combined_umap_plot <- plotly::renderPlotly({
-      req(umap_df())
+      df <- combined_umap_df()
+      req(nrow(df) > 0)
       
-      emb <- umap_df()
-      emb$cluster <- if (!is.null(shared_rv$cluster_labels)) {
-        as.character(shared_rv$cluster_labels[emb$id])
-      } else {
-        "sketch"
+      pal <- cluster_palette(df$cluster)
+      alpha_vec <- apply_highlight_alpha(df)
+      
+      encode_rgba <- function(hex_col, alpha) {
+        hex_col <- ifelse(is.na(hex_col) | !nzchar(hex_col), "#CCCCCC", hex_col)
+        rgb_mat <- grDevices::col2rgb(hex_col, alpha = FALSE)
+        sprintf(
+          "rgba(%d,%d,%d,%.3f)",
+          rgb_mat[1, 1], rgb_mat[2, 1], rgb_mat[3, 1], alpha
+        )
       }
       
+      df$colour <- mapply(function(cl, a) {
+        hex <- if (!is.na(cl) && cl %in% names(pal)) pal[[cl]] else "#CCCCCC"
+        encode_rgba(hex, a)
+      }, df$cluster, alpha_vec)
+      
       p <- plotly::plot_ly(
-        data = emb,
-        x = ~dim1,
-        y = ~dim2,
-        color = ~cluster,
-        colors = cluster_palette(emb$cluster),
-        key = ~id,
-        type = "scattergl",
-        mode = "markers",
-        marker = list(
-          size = 5,
-          opacity = apply_highlight_alpha(emb)
-        ),
-        source = ns("umap_src")
+        source = ns("combined_umap_src")
       ) |>
         plotly::layout(
           dragmode = "lasso",
-          xaxis = list(title = "", zeroline = FALSE, showgrid = FALSE),
-          yaxis = list(title = "", zeroline = FALSE, showgrid = FALSE)
+          margin = list(l = 10, r = 10, t = 10, b = 10),
+          xaxis = list(title = "UMAP_1", zeroline = FALSE, showgrid = FALSE),
+          yaxis = list(title = "UMAP_2", zeroline = FALSE, showgrid = FALSE)
         )
       
-      plotly::event_register(p, "plotly_selected")
+      for (cl in sort_cluster_labels(df$cluster)) {
+        df_cl <- df[df$cluster == cl, , drop = FALSE]
+        p <- p |>
+          plotly::add_trace(
+            data = df_cl,
+            x = ~dim1,
+            y = ~dim2,
+            key = ~id,
+            type = "scattergl",
+            mode = "markers",
+            name = cl,
+            legendgroup = cl,
+            marker = list(color = ~colour, size = 5),
+            text = ~paste0("ID: ", id, "<br>Cluster: ", cluster),
+            hoverinfo = "text"
+          )
+      }
+      
+      p <- plotly::event_register(p, "plotly_selected")
+      p
     })
     
+    roi_ids <- reactiveVal(NULL)
+    
+    observeEvent(input$btn_isolate_roi, {
+      hl <- highlighted_ids()
+      if (length(hl) == 0) {
+        showNotification("Aucune selection a isoler. Utilisez le lasso.", type = "warning")
+        return()
+      }
+      roi_ids(hl)
+      showNotification(sprintf("ROI isolee (%d cellules).", length(hl)), type = "message")
+    })
+    
+    observeEvent(input$btn_clear_roi, {
+      roi_ids(NULL)
+      shared_rv$roi_ids <- NULL
+    })
+    
+    roi_df <- reactive({
+      ids <- roi_ids()
+      req(ids, length(ids) > 0)
+      df <- combined_spatial_df()
+      df[df$id %in% ids, , drop = FALSE]
+    })
+    
+    output$roi_summary_ui <- renderUI({
+      ids <- roi_ids()
+      if (is.null(ids) || length(ids) == 0) {
+        return(
+          div(
+            class = "alert alert-warning mb-3",
+            bsicons::bs_icon("exclamation-triangle"),
+            " Aucune ROI isolee."
+          )
+        )
+      }
+      
+      total <- if (!is.null(global_data$spatial_obj$sketch)) ncol(global_data$spatial_obj$sketch) else NA
+      pct <- if (!is.na(total) && total > 0) round(length(ids) / total * 100, 1) else NA
+      
+      div(
+        class = "alert alert-success mb-3 d-flex justify-content-between align-items-center",
+        div(
+          strong(sprintf("ROI active : %d spots", length(ids))),
+          if (!is.na(pct)) sprintf(" — %.1f%%", pct) else ""
+        )
+      )
+    })
+    
+    output$roi_zoom_plot <- plotly::renderPlotly({
+      df_roi <- roi_df()
+      req(nrow(df_roi) > 0)
+      df_roi$y_display <- -df_roi$y
+      
+      hist_ov <- histology_overlay()
+      show_hist <- !is.null(hist_ov) && !is.null(hist_ov$data_uri) && isTRUE(input$show_histology)
+      trace_type <- if (isTRUE(show_hist)) "scatter" else "scattergl"
+      
+      img_single <- if (show_hist) {
+        make_plotly_histology_image(hist_ov = hist_ov, opacity = input$histology_opacity %||% 0.7)
+      } else {
+        NULL
+      }
+      plot_images <- if (!is.null(img_single)) list(img_single) else NULL
+      
+      xr <- range(df_roi$x, na.rm = TRUE)
+      yr <- range(df_roi$y_display, na.rm = TRUE)
+      xdiff <- max(diff(xr), 10)
+      ydiff <- max(diff(yr), 10)
+      x_range <- c(xr[1] - xdiff * 0.1, xr[2] + xdiff * 0.1)
+      y_range <- c(yr[1] - ydiff * 0.1, yr[2] + ydiff * 0.1)
+      
+      pal <- cluster_palette(df_roi$cluster)
+      
+      p <- plotly::plot_ly() |>
+        plotly::layout(
+          margin = list(l = 10, r = 10, t = 10, b = 10),
+          images = plot_images,
+          plot_bgcolor = "rgba(0,0,0,0)",
+          paper_bgcolor = "rgba(0,0,0,0)",
+          xaxis = list(title = "", zeroline = FALSE, showgrid = FALSE, range = x_range),
+          yaxis = list(title = "", zeroline = FALSE, showgrid = FALSE, scaleanchor = "x", scaleratio = 1, range = y_range)
+        )
+      
+      for (cl in sort_cluster_labels(df_roi$cluster)) {
+        sub_df <- df_roi[df_roi$cluster == cl, , drop = FALSE]
+        hex_col <- if (!is.na(cl) && cl %in% names(pal)) pal[[cl]] else "#CCCCCC"
+        p <- p |>
+          plotly::add_trace(
+            data = sub_df,
+            x = ~x,
+            y = ~y_display,
+            key = ~id,
+            type = trace_type,
+            mode = "markers",
+            name = cl,
+            legendgroup = cl,
+            marker = list(color = hex_col, size = input$pt_radius),
+            text = ~paste0("ID: ", id, "<br>Cluster: ", cluster),
+            hoverinfo = "text"
+          )
+      }
+      p
+    })
+    
+    output$roi_context_plot <- plotly::renderPlotly({
+      df_all <- combined_spatial_df()
+      req(nrow(df_all) > 0)
+      ids_roi <- roi_ids()
+      req(ids_roi)
+      
+      df_all$y_display <- -df_all$y
+      df_all$is_roi <- df_all$id %in% ids_roi
+      
+      hist_ov <- histology_overlay()
+      show_hist <- !is.null(hist_ov) && !is.null(hist_ov$data_uri) && isTRUE(input$show_histology)
+      trace_type <- if (isTRUE(show_hist)) "scatter" else "scattergl"
+      
+      img_single <- if (show_hist) {
+        make_plotly_histology_image(hist_ov = hist_ov, opacity = input$histology_opacity %||% 0.7)
+      } else {
+        NULL
+      }
+      plot_images <- if (!is.null(img_single)) list(img_single) else NULL
+      
+      spatial_ranges <- compute_spatial_ranges(df_all = df_all, hist_ov = hist_ov, show_hist = show_hist)
+      
+      p <- plotly::plot_ly() |>
+        plotly::layout(
+          margin = list(l = 10, r = 10, t = 10, b = 10),
+          images = plot_images,
+          plot_bgcolor = "rgba(0,0,0,0)",
+          paper_bgcolor = "rgba(0,0,0,0)",
+          xaxis = list(title = "", zeroline = FALSE, showgrid = FALSE, range = spatial_ranges$x),
+          yaxis = list(title = "", zeroline = FALSE, showgrid = FALSE, scaleanchor = "x", scaleratio = 1, range = spatial_ranges$y)
+        )
+      
+      df_bg <- df_all[!df_all$is_roi, , drop = FALSE]
+      if (nrow(df_bg) > 0) {
+        p <- p |>
+          plotly::add_trace(
+            data = df_bg,
+            x = ~x,
+            y = ~y_display,
+            type = trace_type,
+            mode = "markers",
+            name = "Reste",
+            marker = list(color = "rgba(180, 180, 180, 0.3)", size = max(1, input$pt_radius - 2)),
+            hoverinfo = "none"
+          )
+      }
+      
+      df_fg <- df_all[df_all$is_roi, , drop = FALSE]
+      if (nrow(df_fg) > 0) {
+        pal <- cluster_palette(df_fg$cluster)
+        for (cl in sort_cluster_labels(df_fg$cluster)) {
+          sub_df <- df_fg[df_fg$cluster == cl, , drop = FALSE]
+          hex_col <- if (!is.na(cl) && cl %in% names(pal)) pal[[cl]] else "#e41a1c"
+          p <- p |>
+            plotly::add_trace(
+              data = sub_df,
+              x = ~x,
+              y = ~y_display,
+              key = ~id,
+              type = trace_type,
+              mode = "markers",
+              name = paste0("ROI: ", cl),
+              marker = list(color = hex_col, size = input$pt_radius + 1),
+              text = ~paste0("ID: ", id, "<br>Cluster: ", cluster),
+              hoverinfo = "text"
+            )
+        }
+      }
+      p
+    })
+    
+    roi_log_file <- spatial_log_path(session, "roi_markers")
+    roi_tracker <- create_reactive_tracker(session, roi_log_file)
+    
+    roi_markers_task <- ExtendedTask$new(function(sketch_path, roi_ids, log_file) {
+      mirai::mirai(
+        {
+          write_mirai_log(log_file, "Chargement du sketch...", 1, 4)
+          sk <- readRDS(sketch_path)
+          
+          write_mirai_log(log_file, "Preparation du test...", 2, 4)
+          if (!"data" %in% SeuratObject::Layers(sk)) {
+            sk <- Seurat::NormalizeData(sk, verbose = FALSE)
+          }
+          
+          sk$roi_group <- ifelse(colnames(sk) %in% roi_ids, "ROI", "Reste")
+          sk$roi_group <- factor(sk$roi_group, levels = c("ROI", "Reste"))
+          
+          write_mirai_log(log_file, "Calcul FindMarkers...", 3, 4)
+          Seurat::Idents(sk) <- "roi_group"
+          res <- Seurat::FindMarkers(
+            sk,
+            ident.1 = "ROI",
+            ident.2 = "Reste",
+            test.use = "wilcox",
+            logfc.threshold = 0.25,
+            min.pct = 0.1,
+            verbose = FALSE
+          )
+          
+          write_mirai_log(log_file, "Termine.", 4, 4)
+          res$gene <- rownames(res)
+          res
+        },
+        sketch_path = sketch_path,
+        roi_ids = roi_ids,
+        log_file = log_file,
+        .timeout = MIRAI_TASK_TIMEOUT_MS
+      )
+    })
+    bslib::bind_task_button(roi_markers_task, "btn_roi_markers")
+    
+    observeEvent(input$btn_roi_markers, {
+      ids <- roi_ids()
+      req(ids, length(ids) > 0, global_data$spatial_obj$sketch)
+      reset_log(roi_log_file)
+      tmp <- tempfile(fileext = ".rds")
+      saveRDS(global_data$spatial_obj$sketch, tmp)
+      roi_markers_task$invoke(sketch_path = tmp, roi_ids = ids, log_file = roi_log_file)
+    })
+    
+    roi_markers_res <- reactiveVal(NULL)
+    
+    observeEvent(roi_markers_task$status(), {
+      if (identical(roi_markers_task$status(), "success")) {
+        result <- roi_markers_task$result()
+        roi_markers_res(result)
+        
+        if (is.null(result) || nrow(result) == 0L) {
+          showNotification(
+            "Calcul termine, mais aucun gene ne passe les seuils definis.",
+            type = "warning",
+            duration = 8
+          )
+        } else {
+          showNotification(
+            sprintf("%d marqueurs ROI calcules.", nrow(result)),
+            type = "message",
+            duration = 4
+          )
+        }
+      }
+      
+      if (identical(roi_markers_task$status(), "error")) {
+        showNotification(
+          "Erreur lors du calcul des marqueurs ROI. Consultez le journal.",
+          type = "error",
+          duration = 10
+        )
+      }
+    })
+    
+    output$roi_markers_progress_text <- renderText({
+      lines <- roi_tracker()
+      if (length(lines) == 0) return("En attente...")
+      paste(lines, collapse = "\n")
+    })
+    
+    output$roi_markers_table <- DT::renderDT({
+      res <- roi_markers_res()
+      
+      validate(
+        need(
+          !is.null(res) && nrow(res) > 0L,
+          "Aucun marqueur a afficher. Lancez le calcul ou ajustez les seuils."
+        )
+      )
+      
+      p_cols <- intersect(c("p_val", "p_val_adj"), colnames(res))
+      effect_cols <- intersect(c("avg_log2FC", "avg_logFC", "pct.1", "pct.2"), colnames(res))
+      
+      order_col <- match("p_val_adj", colnames(res))
+      if (is.na(order_col)) order_col <- 1L
+      
+      tbl <- DT::datatable(
+        res,
+        rownames = FALSE,
+        class = "compact stripe hover",
+        options = list(
+          pageLength = 15,
+          lengthMenu = c(10, 15, 25, 50),
+          scrollX = TRUE,
+          autoWidth = TRUE,
+          order = list(list(order_col - 1L, "asc"))
+        )
+      )
+      
+      if (length(effect_cols) > 0L) {
+        tbl <- DT::formatRound(tbl, columns = effect_cols, digits = 3)
+      }
+      
+      if (length(p_cols) > 0L) {
+        tbl <- DT::formatSignif(tbl, columns = p_cols, digits = 3)
+      }
+      
+      tbl
+    })
+    
+    output$dl_roi_object <- downloadHandler(
+      filename = function() paste0("spatial_roi_subset_", Sys.Date(), ".rds"),
+      content = function(file) {
+        ids <- roi_ids()
+        validate(need(!is.null(ids) && length(ids) > 0, "Aucune ROI selectionnee."))
+        sub_obj <- materialize_seurat_subset(global_data$spatial_obj, cellids = ids)
+        saveRDS(sub_obj, file)
+      }
+    )
   })
 }
