@@ -1,6 +1,15 @@
 # =============================================================================
 # modules/import/mod_import_spatial.R — Spatial Import (Visium / Xenium / CosMx)
 # =============================================================================
+# v3 (Phase 4 — multi-echantillons): each successful import now ADDS to
+# global_data$spatial_datasets (named list, key = sample name) instead of
+# silently overwriting any previous import, and becomes the "active" dataset
+# (global_data$active_spatial_dataset + global_data$spatial_obj, which keeps
+# pointing at exactly one entry of $spatial_datasets — see mod_spatial.R's
+# active-dataset switcher). Re-importing under an EXISTING sample name still
+# replaces that one entry (with a warning), matching the previous
+# re-import-overwrites behavior for a single dataset.
+#
 # v2 (vignette coverage — Phase 3): added the sketch normalization choice
 # (LogNormalize / SCTransform, opt-in) — see R/utils_spatial_io.R::build_sketch()
 # for where this is actually applied (bounded to the <= max_sketch cells,
@@ -17,11 +26,9 @@
 #
 # Import itself stays synchronous (withProgress spinner, like
 # mod_import_sc.R) — only the heavy downstream analyses (clustering,
-# deconvolution, Moran's I) go through mirai/ExtendedTask. SCTransform (when
-# selected) also runs synchronously here, on the sketch only — see the
-# warning shown in the UI when it's selected. Revisit as an async import if
-# raw datasets grow large enough to make this UI-blocking regardless
-# (evolutivity hook, unchanged from v1).
+# deconvolution, Moran's I, multi-sample integration) go through mirai/
+# ExtendedTask. SCTransform (when selected) also runs synchronously here, on
+# the sketch only — see the warning shown in the UI when it's selected.
 # =============================================================================
 
 `%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
@@ -43,7 +50,9 @@ mod_import_spatial_ui <- function(id) {
         div(class = "alert alert-light", style = "font-size:0.8rem;",
             bsicons::bs_icon("lightbulb"),
             " Selectionnez le dossier racine contenant les fichiers bruts ",
-            "(ex: dossier 'outs' pour Visium/Xenium 10X, ou dossier CosMx AtoMx)."),
+            "(ex: dossier 'outs' pour Visium/Xenium 10X, ou dossier CosMx AtoMx). Chaque import ",
+            "s'ajoute a la liste des echantillons (onglet Spatial > \"5. Multi-echantillons\") ",
+            "plutot que de remplacer le precedent."),
 
         textInput(ns("sample_name"), "Nom de l'echantillon", placeholder = "Ex: Tumor_slice1"),
 
@@ -165,12 +174,30 @@ mod_import_spatial_server <- function(id, global_data) {
                            ncol(spatial_pkg$sketch), spatial_pkg$n_total, norm_label))
 
           incProgress(0.9, detail = "Finalisation...")
+
+          # Phase 4 (multi-echantillons) : AJOUTE au conteneur plutot que
+          # d'ecraser silencieusement un import precedent d'un AUTRE
+          # echantillon. Re-importer sous un nom DEJA utilise remplace
+          # toujours cette entree specifique (comportement inchange pour un
+          # seul echantillon), avec un avertissement explicite.
+          if (sample_name %in% names(global_data$spatial_datasets)) {
+            add_log(sprintf("  \u26a0 Un echantillon nomme '%s' existait deja — remplace.", sample_name))
+            showNotification(sprintf("\u26a0\ufe0f Echantillon '%s' deja existant — remplace.", sample_name),
+                              type = "warning", duration = 6)
+          }
+          global_data$spatial_datasets[[sample_name]] <- spatial_pkg
+          global_data$active_spatial_dataset <- sample_name
           global_data$spatial_obj <- spatial_pkg
 
-          add_log(sprintf("✅ Import termine : %s (%s)", sample_name, input$technology))
-          showNotification(sprintf("✅ Import spatial reussi : %d elements (%d en sketch RAM, %s)",
-                                    spatial_pkg$n_total, ncol(spatial_pkg$sketch), norm_label),
-                            type = "message", duration = 5)
+          add_log(sprintf("✅ Import termine : %s (%s) — %d echantillon(s) au total",
+                           sample_name, input$technology, length(global_data$spatial_datasets)))
+          showNotification(sprintf("✅ Import spatial reussi : %d elements (%d en sketch RAM, %s)%s",
+                                    spatial_pkg$n_total, ncol(spatial_pkg$sketch), norm_label,
+                                    if (length(global_data$spatial_datasets) > 1) {
+                                      sprintf(" — %d echantillons charges, voir 'Multi-echantillons'",
+                                              length(global_data$spatial_datasets))
+                                    } else ""),
+                            type = "message", duration = 6)
         }, error = function(e) {
           msg <- paste("❌ Erreur import spatial:", conditionMessage(e))
           add_log(msg); showNotification(msg, type = "error", duration = 10)

@@ -17,6 +17,10 @@ source("helpers_pathway.R")
 # rappelé plus tard (voir mod_spatial.R, appel défensif dans le module).
 source("R/utils_spatial_async.R")
 source("R/utils_spatial_io.R")
+# Phase 4 (multi-echantillons) — pure helper, depends only on
+# write_mirai_log() (utils_spatial_async.R, sourced above); no Shiny
+# reactivity, safe to source alongside the other two.
+source("R/utils_spatial_multi.R")
 tryCatch(
   init_spatial_daemons(n_daemons = 6),
   error = function(e) warning("Initialisation des daemons mirai (spatial) impossible : ", conditionMessage(e))
@@ -46,11 +50,12 @@ source("modules/bulk/mod_bulk_pathways.R")
 source("modules/bulk/mod_bulk_report.R")
 source("modules/bulk/mod_bulk.R")
 
-# --- Spatial (parent + 4 sous-modules enfants) ---
+# --- Spatial (parent + 5 sous-modules enfants) ---
 source("modules/spatial/mod_spatial_qc.R")
 source("modules/spatial/mod_spatial_cluster.R")
 source("modules/spatial/mod_spatial_deconv.R")
 source("modules/spatial/mod_spatial_viz.R")
+source("modules/spatial/mod_spatial_multi.R")
 source("modules/spatial/mod_spatial.R")
 
 
@@ -251,7 +256,22 @@ server <- function(input, output, session) {
 
     bulk_obj = NULL,    # Objet Bulk (liste avec counts + metadata)
 
-    spatial_obj = NULL  # Spatial : liste (sketch, bpcells_dir, coords, ...) — voir R/utils_spatial_io.R
+    spatial_obj = NULL,  # Spatial : liste (sketch, bpcells_dir, coords, ...) — voir R/utils_spatial_io.R
+                          # — POINTE TOUJOURS vers l'echantillon "actif" (voir spatial_datasets ci-dessous)
+
+    # Phase 4 (multi-echantillons, mod_spatial_multi.R) : conteneur de TOUS
+    # les echantillons spatiaux importes, un $spatial_obj-shaped element par
+    # nom d'echantillon. spatial_obj (ci-dessus) pointe toujours vers UNE
+    # entree de cette liste (voir mod_import_spatial.R pour le remplissage
+    # et mod_spatial.R pour le selecteur "echantillon actif") — les onglets
+    # 1-4 du module Spatial ne lisent jamais spatial_datasets directement,
+    # uniquement spatial_obj, donc le support multi-echantillons est
+    # entierement additif (zero changement necessaire dans QC/Clustering/
+    # Deconvolution/Visualisation).
+
+    spatial_datasets = list(),
+
+    active_spatial_dataset = NULL
 
   )
 
@@ -354,6 +374,9 @@ server <- function(input, output, session) {
     # global_data$spatial_obj est une LISTE depuis le refactor BPCells (voir
     # R/utils_spatial_io.R) : $sketch (Seurat, RAM) + $bpcells_dir (disque,
     # pleine resolution) + $n_total — ne jamais faire ncol(spatial_obj) direct.
+    # Depuis Phase 4, plusieurs echantillons peuvent etre charges
+    # (global_data$spatial_datasets) — ce panneau resume l'echantillon ACTIF
+    # uniquement ; voir l'onglet "5. Multi-echantillons" pour la vue globale.
 
     spatial_state <- if (is.null(global_data$spatial_obj)) {
 
@@ -369,17 +392,21 @@ server <- function(input, output, session) {
 
       disk_ok  <- !is.null(obj$bpcells_dir) && dir.exists(obj$bpcells_dir)
 
+      n_ds     <- length(global_data$spatial_datasets)
+
       list(
 
         icon   = if (disk_ok) "🟢" else "🟠",
 
         label  = "Spatial",
 
-        detail = sprintf("%s elements (%s en RAM, sketch)%s",
+        detail = sprintf("%s elements (%s en RAM, sketch)%s%s",
 
                          format(n_total, big.mark = ","), format(n_sketch, big.mark = ","),
 
-                         if (!disk_ok) " — disque introuvable" else "")
+                         if (!disk_ok) " — disque introuvable" else "",
+
+                         if (n_ds > 1) sprintf(" — %d echantillons charges", n_ds) else "")
 
       )
 
@@ -431,6 +458,10 @@ server <- function(input, output, session) {
 
   # persistent tools::R_user_dir() location, not tempdir()).
 
+  # NOTE Phase 4 : spatial_datasets/active_spatial_dataset sont maintenant
+  # inclus dans la sauvegarde — sinon recharger une session multi-
+  # echantillons perdrait tout sauf l'echantillon actif.
+
   output$save_session_btn <- downloadHandler(
 
     filename = function() paste0("transcriptoshiny_session_", Sys.Date(), ".rds"),
@@ -444,6 +475,10 @@ server <- function(input, output, session) {
         bulk_obj    = global_data$bulk_obj,
 
         spatial_obj = global_data$spatial_obj,
+
+        spatial_datasets = global_data$spatial_datasets,
+
+        active_spatial_dataset = global_data$active_spatial_dataset,
 
         saved_at    = Sys.time(),
 
@@ -492,6 +527,20 @@ server <- function(input, output, session) {
       global_data$bulk_obj    <- snapshot$bulk_obj
 
       global_data$spatial_obj <- snapshot$spatial_obj
+
+      # Retro-compatible : une session sauvegardee AVANT Phase 4 n'aura pas
+
+      # ces champs -- repli sur une liste a une seule entree (l'ancien
+
+      # $spatial_obj) plutot que de planter ou perdre l'echantillon.
+
+      global_data$spatial_datasets <- snapshot$spatial_datasets %||%
+        (if (!is.null(snapshot$spatial_obj)) {
+          stats::setNames(list(snapshot$spatial_obj), snapshot$spatial_obj$project %||% "Echantillon_1")
+        } else list())
+
+      global_data$active_spatial_dataset <- snapshot$active_spatial_dataset %||%
+        (if (length(global_data$spatial_datasets) > 0) names(global_data$spatial_datasets)[1] else NULL)
 
 
 
@@ -593,7 +642,11 @@ server <- function(input, output, session) {
 
           tags$li(tags$strong("Spatial:"), " Visium / Xenium / CosMx — converti automatiquement en ",
 
-                  "matrice BPCells sur disque + echantillon RAM (\"sketch\")")
+                  "matrice BPCells sur disque + echantillon RAM (\"sketch\"). Importez plusieurs ",
+
+                  "echantillons pour activer l'onglet \"5. Multi-echantillons\" (comparaison/",
+
+                  "integration Harmony conjointe).")
 
         ),
 
@@ -609,7 +662,7 @@ server <- function(input, output, session) {
 
                  tags$strong("2 échantillons ou plus"), 
 
-                 " dans l'onglet Single-Cell."
+                 " dans l'onglet Single-Cell (ou Spatial, voir \"Multi-echantillons\")."
 
         ),
 
@@ -661,7 +714,9 @@ server <- function(input, output, session) {
 
           tags$li(tags$strong("Spatial:"), " QC → Clustering (BANKSY, asynchrone) → Deconvolution ",
 
-                  "(RCTD/STdeconvolve, asynchrone) → Visualisation WebGL")
+                  "(RCTD/Label Transfer/STdeconvolve, asynchrone) → Visualisation WebGL → ",
+
+                  "Multi-echantillons (integration Harmony conjointe, asynchrone)")
 
         ),
 
@@ -677,9 +732,9 @@ server <- function(input, output, session) {
 
           " permet de libérer la mémoire entre les analyses. Pour le Spatial, les calculs ",
 
-          "lourds (clustering, déconvolution) s'exécutent dans des processus séparés (mirai) ",
+          "lourds (clustering, déconvolution, intégration multi-échantillons) s'exécutent dans ",
 
-          "qui ne bloquent jamais votre session."),
+          "des processus séparés (mirai) qui ne bloquent jamais votre session."),
 
         
 
@@ -754,6 +809,10 @@ server <- function(input, output, session) {
     global_data$bulk_obj <- NULL
 
     global_data$spatial_obj <- NULL
+
+    global_data$spatial_datasets <- list()
+
+    global_data$active_spatial_dataset <- NULL
 
     clean_mem()
 

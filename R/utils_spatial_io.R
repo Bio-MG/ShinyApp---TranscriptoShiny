@@ -101,21 +101,47 @@ bpcells_cache_root <- function() {
 #'   the latter two.
 #' @return NULL, or list(raster = <raster matrix, hex colors>,
 #'   scale_factors = <list: spot/fiducial/hires/lowres>, dim = c(nrow, ncol)).
-extract_histology_image <- function(seurat_obj, technology) {
+extract_histology_image <- function(seurat_obj, technology, image_resolution = c("lowres", "hires")) {
   if (!identical(technology, "visium")) return(NULL)
-
+  
+  image_resolution <- match.arg(image_resolution)
+  
   img_name <- tryCatch(Seurat::Images(seurat_obj)[1], error = function(e) NA_character_)
   if (is.na(img_name) || length(img_name) == 0) return(NULL)
-
+  
   tryCatch({
-    img_obj     <- seurat_obj[[img_name]]
-    raster_img  <- Seurat::GetImage(img_obj, mode = "raster")   # small (lowres), matrix of hex colors
-    scale_facts <- Seurat::ScaleFactors(img_obj)                # list: spot, fiducial, hires, lowres
-    list(raster = raster_img, scale_factors = scale_facts, dim = dim(raster_img))
+    img_obj <- seurat_obj[[img_name]]
+    
+    scale_facts <- Seurat::ScaleFactors(img_obj)
+    
+    # Compatible avec le contrat actuel :
+    # - lowres = léger, recommandé en interactif
+    # - hires  = possible si disponible, mais plus lourd RAM / export
+    raster_img <- Seurat::GetImage(
+      img_obj,
+      mode = if (identical(image_resolution, "hires")) "plot" else "raster"
+    )
+    
+    if (inherits(raster_img, "ggplot")) {
+      warning(
+        "GetImage(..., mode='plot') n'a pas renvoyé un raster exploitable directement ; ",
+        "repli automatique sur le mode lowres/raster."
+      )
+      raster_img <- Seurat::GetImage(img_obj, mode = "raster")
+      image_resolution <- "lowres"
+    }
+    
+    list(
+      raster = raster_img,
+      scale_factors = scale_facts,
+      dim = dim(raster_img),
+      resolution = image_resolution
+    )
   }, error = function(e) {
-    warning("Extraction de l'image histologique echouee (", conditionMessage(e),
-            ") — le fond de coupe sera indisponible ; le reste de l'import (spots, ",
-            "comptages) n'est pas affecte.")
+    warning(
+      "Extraction de l'image histologique echouee (", conditionMessage(e),
+      ") — le fond de coupe sera indisponible ; le reste de l'import (spots, comptages) n'est pas affecte."
+    )
     NULL
   })
 }
@@ -186,24 +212,33 @@ convert_to_bpcells_and_fov <- function(seurat_obj, dataset_id,
   # --- 3. Full-resolution coordinates (small: 2-3 numeric columns) — kept
   #        in RAM at the session level, passed as plain data (not a Seurat
   #        object) to mirai daemons that need spatial neighborhoods (BANKSY).
-  coords <- tryCatch({
-    ct <- Seurat::GetTissueCoordinates(seurat_obj)
-    if (!"cell" %in% colnames(ct)) ct$cell <- rownames(ct) %||% colnames(seurat_obj)
-    xy_cols <- intersect(c("x", "y", "imagecol", "imagerow"), colnames(ct))
-    data.frame(id = ct$cell,
-               x  = ct[[xy_cols[1]]],
-               y  = ct[[xy_cols[2]]],
-               fov = if ("fov" %in% colnames(ct)) ct$fov else NA_character_,
-               row.names = NULL, stringsAsFactors = FALSE)
-  }, error = function(e) {
-    warning("GetTissueCoordinates() a echoue : ", conditionMessage(e),
-            " — le clustering spatial (BANKSY) sera indisponible pour ce jeu de donnees.")
-    NULL
-  })
+  #        Uses get_spatial_coords() (name-based column matching + explicit
+  #        full-res scale) — see that function's doc for the rotation-bug
+  #        root cause this fixes.
+  coords <- tryCatch(
+    get_spatial_coords(seurat_obj),
+    error = function(e) {
+      warning("GetTissueCoordinates() a echoue : ", conditionMessage(e),
+              " — le clustering spatial (BANKSY) sera indisponible pour ce jeu de donnees.")
+      NULL
+    }
+  )
+  if (is.null(coords)) {
+    warning("Extraction des coordonnees spatiales impossible (get_spatial_coords() a retourne NULL) — ",
+            "le clustering spatial (BANKSY) sera indisponible pour ce jeu de donnees.")
+  }
 
   # --- 3.5. Histology image (Visium only, vignette parity — see file header
   #        changelog). Small (lowres), kept in RAM alongside coords.
   hist_img <- extract_histology_image(seurat_obj, technology)
+
+  # --- 3.6. Defensive regression guard: warns (does not block import) if
+  #        spots and image ever drift out of alignment, e.g. after a
+  #        Seurat upgrade changes GetTissueCoordinates()'s columns/default
+  #        scale again (see get_spatial_coords() doc).
+  if (!is.null(coords) && !is.null(hist_img)) {
+    check_histology_coord_alignment(coords, hist_img)
+  }
 
   # --- 4. In-RAM sketch for instant plotting / QC previews
   sketch <- build_sketch(seurat_obj, max_cells = max_sketch, assay = assay,
@@ -468,4 +503,472 @@ debug_histology <- function(global_data) {
     cat("scale_factors:", paste(names(hist_data$scale_factors), collapse=", "), "\n")
   }
   cat("========================\n")
+}
+
+#' Convertir une matrice raster (hex ou SpatRaster) en tableau RGBA (dim: H x W x 4)
+#'
+#' @param r Matrice 2D (hex character), SpatRaster ou RasterLayer/Brick
+#' @return Array 3D RGBA de dimensions (Hauteur x Largeur x 4) avec valeurs [0, 1]
+#' Convert a histology raster to an RGBA PNG array
+#'
+#' R matrices are indexed as [row, column] whereas PNG/Plotly images use
+#' [x, y] pixel orientation. The transpose + vertical flip below converts
+#' Seurat's Visium raster into the same orientation as tissue coordinates.
+#'
+#' @param r Matrix of hexadecimal colours, SpatRaster, Raster* object or array.
+#' @return Numeric RGBA array in PNG orientation: height x width x 4.
+#' Convertir une matrice raster (hex ou SpatRaster) en tableau RGBA (dim: H x W x 4)
+#'
+#' IMPORTANT:
+#' Ne PAS transposer / retourner l'image ici. Le raster doit rester dans son
+#' orientation native Seurat, puis être positionné géométriquement dans le
+#' repère spatial au moment du rendu :
+#' - ggplot2::annotation_raster(..., ymin = -ymax, ymax = -ymin)
+#' - Plotly layout(images = ...)
+#'
+#' Toute rotation/flips ici crée un décalage systématique entre image brute,
+#' rendu Plotly et export PNG.
+#'
+#' @param r Matrice 2D (hex character), SpatRaster ou RasterLayer/Brick
+#' @return Array 3D RGBA de dimensions (Hauteur x Largeur x 4) avec valeurs [0, 1]
+# =============================================================================
+# Correction dans R/utils_spatial_io.R
+# =============================================================================
+
+raster_to_rgba_array <- function(r) {
+  if (is.null(r)) return(NULL)
+  
+  # Transposer la matrice 2D pour aligner [imagecol, imagerow] vers [hauteur(Y), largeur(X)]
+  # indispensable pour png::writePNG() et le rendu Plotly.
+  if (is.matrix(r)) {
+    r <- t(r)
+  }
+  
+  # Cas 1 : Matrice 2D de chaînes hexadécimales (Visium Seurat::GetImage)
+  if (is.matrix(r) && is.character(r)) {
+    hex <- as.vector(r)
+    rgb_mat <- grDevices::col2rgb(hex, alpha = FALSE)
+    
+    arr <- array(1, dim = c(nrow(r), ncol(r), 4L))
+    arr[, , 1L] <- matrix(rgb_mat[1L, ] / 255, nrow = nrow(r), ncol = ncol(r))
+    arr[, , 2L] <- matrix(rgb_mat[2L, ] / 255, nrow = nrow(r), ncol = ncol(r))
+    arr[, , 3L] <- matrix(rgb_mat[3L, ] / 255, nrow = nrow(r), ncol = ncol(r))
+    return(arr)
+  }
+  
+  # Cas 2 : Objet terra / SpatRaster
+  if (inherits(r, "SpatRaster")) {
+    arr <- terra::as.array(r)
+    if (length(dim(arr)) == 2L) {
+      arr <- array(arr, dim = c(nrow(arr), ncol(arr), 1L))
+    }
+    if (max(arr, na.rm = TRUE) > 1) arr <- arr / 255
+    
+    out <- array(1, dim = c(dim(arr)[1L], dim(arr)[2L], 4L))
+    k <- min(3L, dim(arr)[3L])
+    out[, , seq_len(k)] <- arr[, , seq_len(k), drop = FALSE]
+    return(out)
+  }
+  
+  # Cas 3 : Objet raster classique (RasterBrick/Stack/Layer)
+  if (inherits(r, c("RasterBrick", "RasterStack", "RasterLayer"))) {
+    arr <- raster::as.array(r)
+    if (length(dim(arr)) == 2L) {
+      arr <- array(arr, dim = c(nrow(arr), ncol(arr), 1L))
+    }
+    if (max(arr, na.rm = TRUE) > 1) arr <- arr / 255
+    
+    out <- array(1, dim = c(dim(arr)[1L], dim(arr)[2L], 4L))
+    k <- min(3L, dim(arr)[3L])
+    out[, , seq_len(k)] <- arr[, , seq_len(k), drop = FALSE]
+    return(out)
+  }
+  
+  # Cas 4 : Tableau 3D direct
+  if (is.array(r) && length(dim(r)) == 3L) {
+    arr <- r
+    if (max(arr, na.rm = TRUE) > 1) arr <- arr / 255
+    
+    out <- array(1, dim = c(dim(arr)[1L], dim(arr)[2L], 4L))
+    k <- min(3L, dim(arr)[3L])
+    out[, , seq_len(k)] <- arr[, , seq_len(k), drop = FALSE]
+    return(out)
+  }
+  
+  stop("Format raster non reconnu : ", class(r)[1L])
+}
+
+#' Diagnostic de la qualité et des valeurs du raster d'histologie
+diagnose_histology_raster <- function(r) {
+  if (is.null(r)) return(NULL)
+  arr <- raster_to_rgba_array(r)
+  if (is.null(arr)) return(NULL)
+  
+  rgb_vals <- arr[,, 1:3]
+  near_white <- (rgb_vals[,,1] > 0.95 & rgb_vals[,,2] > 0.95 & rgb_vals[,,3] > 0.95)
+  pct_white <- mean(near_white) * 100
+  
+  unique_cols <- if (is.matrix(r) && is.character(r)) length(unique(as.vector(r))) else NA
+  
+  list(
+    pct_near_white = round(pct_white, 2),
+    n_unique_colors = unique_cols,
+    mean_rgb = round(c(mean(rgb_vals[,,1]), mean(rgb_vals[,,2]), mean(rgb_vals[,,3])), 3)
+  )
+}
+
+#' Extraction sécurisée des coordonnées spatiales Visium (Seurat v4 et v5)
+#'
+#' FIX (root cause of the reported 90° rotation): `Seurat::GetTissueCoordinates()`
+#' column ORDER/NAMING for VisiumV1 has genuinely differed between Seurat
+#' versions (`cols = c('imagerow','imagecol')` vs `c('imagecol','imagerow')`
+#' depending on the exact release — verified by diffing two fetches of
+#' satijalab/seurat's own source days apart). Reading columns by fixed
+#' POSITION (`tc[[1]]`/`tc[[2]]`, or an `intersect()` whose result order
+#' happens to follow a hardcoded search-vector order) is therefore
+#' version-fragile: on some Seurat versions x/y silently end up swapped,
+#' which — since a swap is exactly a transpose — looks like a 90° rotation
+#' once plotted. This function reads columns by NAME instead ("imagecol" ->
+#' x, "imagerow" -> y, case-insensitive, with an "x"/"y" fallback for
+#' FOV-based technologies), which is correct regardless of column order.
+#'
+#' Also requests FULL-RESOLUTION coordinates explicitly (`scale = NULL`) —
+#' VisiumV1's `GetTissueCoordinates()` defaults to `scale = 'lowres'`
+#' (silently pre-scaled down, ~50-60x smaller than full-res pixels) unless
+#' told otherwise. Every other consumer of `coords` (BPCells full-res
+#' columns, and mod_spatial_viz.R's histology bounds, which reconstruct
+#' full-res image bounds as `dim(raster) / scale_factors$lowres`) assumes
+#' full-resolution units, so this must stay explicit — see
+#' check_histology_coord_alignment() for the regression guard.
+#'
+#' @param spatial_obj Objet Seurat spatial (Visium/Xenium/CosMx).
+#' @return data.frame avec id, x (imagecol / horizontal), y (imagerow /
+#'   vertical), fov — ou NULL si GetTissueCoordinates() echoue.
+get_spatial_coords <- function(spatial_obj) {
+  tc <- tryCatch(Seurat::GetTissueCoordinates(spatial_obj, scale = NULL), error = function(e) NULL)
+  if (is.null(tc)) return(NULL)
+  
+  colnames_tc <- tolower(colnames(tc))
+  
+  #Identification explicite des colonnes X (colonnes / imagecol) et Y (lignes / imagerow)
+  
+  col_x <- if ("imagecol" %in% colnames_tc) {
+    colnames(tc)[which(colnames_tc == "imagecol")]
+  } else if ("x" %in% colnames_tc) {
+    colnames(tc)[which(colnames_tc == "x")]
+  } else {
+    colnames(tc)[2] # fallback Seurat v4 (deuxième colonne = imagecol)
+  }
+  
+  col_y <- if ("imagerow" %in% colnames_tc) {
+    colnames(tc)[which(colnames_tc == "imagerow")]
+  } else if ("y" %in% colnames_tc) {
+    colnames(tc)[which(colnames_tc == "y")]
+  } else {
+    colnames(tc)[1] # fallback Seurat v4 (première colonne = imagerow)
+  }
+  
+  df <- data.frame(
+    id = rownames(tc) %||% tc$cell %||% paste0("spot_", seq_len(nrow(tc))),
+    x = as.numeric(tc[[col_x]]),
+    y = as.numeric(tc[[col_y]]),
+    fov = if ("fov" %in% colnames_tc) tc[[colnames(tc)[which(colnames_tc == "fov")]]] else NA_character_,
+    stringsAsFactors = FALSE
+  )
+  
+  df
+}
+
+#' Sanity-check that spot coordinates and the histology raster share the
+#' same pixel scale (defensive regression guard)
+#'
+#' Compares the spot coordinate bounding box (expected: full-resolution
+#' pixel units, see get_spatial_coords()) against the histology raster's
+#' own full-resolution bounding box (raster dim / lowres scale factor). A
+#' large mismatch (spots collapsed into a tiny corner of the image, or
+#' spilling far outside it) means the two are no longer in the same
+#' coordinate space — most likely a Seurat version regression on
+#' GetTissueCoordinates()'s default scale/columns. Warns only; never blocks
+#' import.
+#'
+#' @param coords data.frame(id, x, y, ...) full-resolution coordinates.
+#' @param hist_img list as returned by extract_histology_image() (raster,
+#'   scale_factors, dim).
+#' @return invisible(TRUE)/(FALSE) — TRUE if aligned within tolerance.
+check_histology_coord_alignment <- function(coords, hist_img) {
+  # Support des deux structures (ancienne et nouvelle API du patch multi-res)
+  sf_lowres <- if (!is.null(hist_img$lowres$scale_factor)) {
+    hist_img$lowres$scale_factor
+  } else if (!is.null(hist_img$scale_factors$lowres)) {
+    hist_img$scale_factors$lowres
+  } else {
+    1
+  }
+  
+  # Récupération de la dimension de l'image
+  img_dim <- if (!is.null(hist_img$lowres$dim)) {
+    hist_img$lowres$dim
+  } else {
+    hist_img$dim
+  }
+  
+  if (is.null(img_dim) || any(is.na(img_dim)) || length(img_dim) < 2) return(invisible(TRUE))
+  
+  img_w <- img_dim[2] / (sf_lowres %||% 1)
+  img_h <- img_dim[1] / (sf_lowres %||% 1)
+  
+  spot_w <- diff(range(coords$x, na.rm = TRUE))
+  spot_h <- diff(range(coords$y, na.rm = TRUE))
+  
+  ratio_w <- spot_w / img_w
+  ratio_h <- spot_h / img_h
+  
+  # Évaluation sécurisée contre les NA/Inf
+  ok <- is.finite(ratio_w) && is.finite(ratio_h) &&
+    ratio_w > 0.02 && ratio_w < 5 && 
+    ratio_h > 0.02 && ratio_h < 5
+  
+  if (is.na(ok) || !ok) {
+    warning(
+      "Incoherence ou verification impossible entre les coordonnees des spots et l'image histologique.",
+      call. = FALSE
+    )
+  }
+  invisible(identical(ok, TRUE))
+}
+
+#' Materialize a small, on-RAM Seurat object for a subset of full-resolution ids
+#'
+#' Phase 3 — "Subset out anatomical regions" (vignette parity) / ROI
+#' workflow: turns a lasso/rectangle spatial selection (mod_spatial_viz.R,
+#' "5. ROI isolee") into an actual, downloadable, self-contained Seurat
+#' object — raw counts only. Reopens the full-resolution BPCells matrix and
+#' subsets to `cell_ids` — the ONLY place in the app that fully
+#' materializes a raw BPCells column-subset into a dense in-RAM object
+#' outside of the (already-bounded) sketch, so callers must keep
+#' `cell_ids` reasonably small (mod_spatial_viz.R only ever calls this on
+#' selections drawn from the sketch, <= max_sketch cells, a safe upper
+#' bound on a 32GB CPU-only workstation).
+#'
+#' @param spatial_obj The full global_data$spatial_obj LIST (sketch,
+#'   bpcells_dir, coords, ...) — NOT a Seurat object, see file header
+#'   CONTRACT. Only $bpcells_dir/$coords/$project are actually used.
+#' @param cell_ids Character vector of ids to keep (full-resolution ids,
+#'   e.g. from $coords$id / the sketch's colnames — both share the same id
+#'   space).
+#' @param project Character, Seurat project name for the new object
+#'   (defaults to spatial_obj$project).
+#' @return A Seurat object (raw counts, single "RNA" assay), <= length(cell_ids) cells.
+materialize_seurat_subset <- function(spatial_obj, cell_ids, project = NULL) {
+  if (!requireNamespace("BPCells", quietly = TRUE)) stop("Package 'BPCells' requis.")
+  if (length(cell_ids) == 0) stop("Aucun identifiant fourni pour la ROI.")
+  bpcells_dir <- spatial_obj$bpcells_dir
+  if (is.null(bpcells_dir) || !dir.exists(bpcells_dir)) {
+    stop("bpcells_dir introuvable sur disque pour ce jeu de donnees.")
+  }
+
+  mat <- BPCells::open_matrix_dir(bpcells_dir)
+  cell_ids <- intersect(cell_ids, colnames(mat))
+  if (length(cell_ids) == 0) stop("Aucun des identifiants de la ROI n'est present dans la matrice BPCells.")
+
+  mat_sub <- mat[, cell_ids, drop = FALSE]
+  counts_dense <- methods::as(mat_sub, "dgCMatrix")  # small, deliberate: this IS the requested subset
+  obj <- Seurat::CreateSeuratObject(counts = counts_dense, project = project %||% spatial_obj$project %||% "ROI")
+
+  coords <- spatial_obj$coords
+  if (!is.null(coords)) {
+    m <- match(colnames(obj), coords$id)
+    obj$roi_x <- coords$x[m]
+    obj$roi_y <- coords$y[m]
+  }
+  obj
+}
+
+# =============================================================================
+# R/utils_spatial_io.R — Extrait révisé pour gestion multi-résolution
+# =============================================================================
+
+#' Extract histology background images (both lowres and hires if available)
+#'
+#' @param seurat_obj Seurat spatial object
+#' @param technology Technology name ("visium", "xenium", etc.)
+#' @return NULL or list containing rasters for lowres/hires and scale factors
+extract_histology_image <- function(seurat_obj, technology) {
+  if (!identical(technology, "visium")) return(NULL)
+  
+  img_name <- tryCatch(Seurat::Images(seurat_obj)[1], error = function(e) NA_character_)
+  if (is.na(img_name) || length(img_name) == 0) return(NULL)
+  
+  tryCatch({
+    img_obj <- seurat_obj[[img_name]]
+    scale_facts <- Seurat::ScaleFactors(img_obj)
+    
+    # 1. Image lowres (défaut léger)
+    raster_lowres <- tryCatch(Seurat::GetImage(img_obj, mode = "raster"), error = function(e) NULL)
+    
+    # 2. Image hires (si disponible dans le conteneur Visium)
+    raster_hires <- tryCatch({
+      # Tente de récupérer la matrice hires si présente
+      if (is.function(img_obj@image$hires)) {
+        img_obj@image$hires
+      } else {
+        Seurat::GetImage(img_obj, mode = "hires")
+      }
+    }, error = function(e) NULL)
+    
+    # Fallback si lowres est indisponible
+    if (is.null(raster_lowres) && !is.null(raster_hires)) {
+      raster_lowres <- raster_hires
+    }
+    
+    list(
+      lowres = list(
+        raster = raster_lowres,
+        scale_factor = scale_facts$lowres %||% 1,
+        dim = if (!is.null(raster_lowres)) dim(raster_lowres) else NULL
+      ),
+      hires = list(
+        raster = raster_hires,
+        scale_factor = scale_facts$hires %||% 1,
+        dim = if (!is.null(raster_hires)) dim(raster_hires) else NULL
+      ),
+      scale_factors = scale_facts,
+      active_resolution = "lowres"
+    )
+  }, error = function(e) {
+    warning("Extraction histologique échouée : ", conditionMessage(e))
+    NULL
+  })
+}
+
+#' Récupérer le raster RGBA et le scale factor selon la résolution choisie
+#'
+#' @param hist_data Le sous-objet global_data$spatial_obj$histology
+#' @param resolution "lowres" ou "hires"
+#' @return list(raster_rgba, scale_factor, dim) ou NULL
+get_histology_raster <- function(hist_data, resolution = c("lowres", "hires")) {
+  if (is.null(hist_data)) return(NULL)
+  resolution <- match.arg(resolution)
+  
+  target <- hist_data[[resolution]]
+  
+  # Repli sur lowres si hires absent
+  if (is.null(target$raster) && resolution == "hires") {
+    target <- hist_data[["lowres"]]
+  }
+  
+  if (is.null(target$raster)) return(NULL)
+  
+  # Conversion en tableau RGBA [Y, X, 4] transposé pour Plotly / png::writePNG
+  rgba_arr <- raster_to_rgba_array(target$raster)
+  
+  list(
+    rgba = rgba_arr,
+    raw_raster = target$raster,
+    scale_factor = target$scale_factor,
+    dim = target$dim
+  )
+}
+
+#' Convertir une matrice raster (hex ou SpatRaster) en tableau RGBA (dim: H x W x 4)
+#' Transposition t(r) incluse pour corriger la rotation Plotly vs ggplot.
+raster_to_rgba_array <- function(r) {
+  if (is.null(r)) return(NULL)
+  
+  # Transposition de la matrice 2D pour aligner [imagecol, imagerow] vers [Y, X]
+  if (is.matrix(r)) {
+    r <- t(r)
+  }
+  
+  if (is.matrix(r) && is.character(r)) {
+    hex <- as.vector(r)
+    rgb_mat <- grDevices::col2rgb(hex, alpha = FALSE)
+    
+    arr <- array(1, dim = c(nrow(r), ncol(r), 4L))
+    arr[, , 1L] <- matrix(rgb_mat[1L, ] / 255, nrow = nrow(r), ncol = ncol(r))
+    arr[, , 2L] <- matrix(rgb_mat[2L, ] / 255, nrow = nrow(r), ncol = ncol(r))
+    arr[, , 3L] <- matrix(rgb_mat[3L, ] / 255, nrow = nrow(r), ncol = ncol(r))
+    return(arr)
+  }
+  
+  if (inherits(r, "SpatRaster")) {
+    arr <- terra::as.array(r)
+    if (length(dim(arr)) == 2L) arr <- array(arr, dim = c(nrow(arr), ncol(arr), 1L))
+    if (max(arr, na.rm = TRUE) > 1) arr <- arr / 255
+    out <- array(1, dim = c(dim(arr)[1L], dim(arr)[2L], 4L))
+    k <- min(3L, dim(arr)[3L])
+    out[, , seq_len(k)] <- arr[, , seq_len(k), drop = FALSE]
+    return(out)
+  }
+  
+  if (inherits(r, c("RasterBrick", "RasterStack", "RasterLayer"))) {
+    arr <- raster::as.array(r)
+    if (length(dim(arr)) == 2L) arr <- array(arr, dim = c(nrow(arr), ncol(arr), 1L))
+    if (max(arr, na.rm = TRUE) > 1) arr <- arr / 255
+    out <- array(1, dim = c(dim(arr)[1L], dim(arr)[2L], 4L))
+    k <- min(3L, dim(arr)[3L])
+    out[, , seq_len(k)] <- arr[, , seq_len(k), drop = FALSE]
+    return(out)
+  }
+  
+  if (is.array(r) && length(dim(r)) == 3L) {
+    arr <- r
+    if (max(arr, na.rm = TRUE) > 1) arr <- arr / 255
+    out <- array(1, dim = c(dim(arr)[1L], dim(arr)[2L], 4L))
+    k <- min(3L, dim(arr)[3L])
+    out[, , seq_len(k)] <- arr[, , seq_len(k), drop = FALSE]
+    return(out)
+  }
+  
+  stop("Format raster non reconnu : ", class(r)[1L])
+}
+
+#' Génère la spécification d'image pour Plotly.js (sans double-nesting ni newlines)
+make_plotly_histology_image <- function(hist_data, resolution = "lowres", opacity = 0.8) {
+  if (is.null(hist_data)) return(NULL)
+  
+  # 1. Extraction rétro-compatible (structure plate vs nouvelle multi-résolution)
+  raster_raw <- if (!is.null(hist_data$lowres$raster) || !is.null(hist_data$hires$raster)) {
+    target <- hist_data[[resolution]] %||% hist_data[["lowres"]]
+    target$raster
+  } else {
+    hist_data$raster # Fallback ancienne structure
+  }
+  
+  scale_factor <- if (!is.null(hist_data$lowres$scale_factor)) {
+    (hist_data[[resolution]] %||% hist_data[["lowres"]])$scale_factor
+  } else if (!is.null(hist_data$scale_factors[[resolution]])) {
+    hist_data$scale_factors[[resolution]]
+  } else {
+    hist_data$scale_factors$lowres %||% 1
+  }
+  
+  if (is.null(raster_raw)) return(NULL)
+  
+  # 2. Conversion RGBA
+  rgba_arr <- raster_to_rgba_array(raster_raw)
+  if (is.null(rgba_arr)) return(NULL)
+  
+  # 3. Encodage PNG Base64 sans retours à la ligne (\n)
+  png_bytes <- png::writePNG(rgba_arr)
+  data_uri <- base64enc::dataURI(png_bytes, mime = "image/png")
+  data_uri <- gsub("[\r\n]", "", data_uri)
+  
+  # 4. Calcul des dimensions réelles en pixels (coordonnées Visium)
+  img_h <- dim(rgba_arr)[1] / scale_factor
+  img_w <- dim(rgba_arr)[2] / scale_factor
+  
+  # 5. Retourne un OBJET UNIQUE (pas une liste de listes)
+  list(
+    source  = data_uri,
+    xref    = "x",
+    yref    = "y",
+    x       = 0,
+    y       = img_h,       # Origine Visium en haut à gauche
+    sizex   = img_w,
+    sizey   = img_h,
+    sizing  = "stretch",
+    opacity = opacity,
+    layer   = "below"
+  )
 }
