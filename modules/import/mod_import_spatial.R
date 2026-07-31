@@ -1,6 +1,18 @@
 # =============================================================================
 # modules/import/mod_import_spatial.R — Spatial Import (Visium / Xenium / CosMx)
 # =============================================================================
+# v4 (audit step 3.9c — histology rotation / background selection): added
+# 3 manual orientation checkboxes (swap X/Y, mirror horizontal, mirror
+# vertical) for Visium, wired to R/utils_spatial_io.R::apply_coord_orientation()
+# via convert_to_bpcells_and_fov(). Also now passes `raw_dir = dir_path()`
+# through so extract_histology_image() can actually find the spatial/
+# folder — a standard VisiumV1 object does not reliably expose that path
+# internally (root cause of "impossible de selectionner tous les fonds
+# disponibles", see utils_spatial_io.R header for the full diagnosis). Both
+# fixes apply ONCE at import time (not per-viz-session) so clustering/
+# Moran/viz/multi-sample all read the same corrected $coords and the same
+# full set of discovered histology backgrounds.
+#
 # v3 (Phase 4 — multi-echantillons): each successful import now ADDS to
 # global_data$spatial_datasets (named list, key = sample name) instead of
 # silently overwriting any previous import, and becomes the "active" dataset
@@ -40,45 +52,56 @@ mod_import_spatial_ui <- function(id) {
     layout_sidebar(
       sidebar = sidebar(
         width = 400, title = "Import Spatial",
-
+        
         radioButtons(ns("technology"), "Technologie",
                      choices = c("Visium (spots)" = "visium",
                                  "Xenium (subcellulaire)" = "xenium",
                                  "CosMx (subcellulaire)" = "cosmx"),
                      selected = "visium"),
-
+        
         div(class = "alert alert-light", style = "font-size:0.8rem;",
             bsicons::bs_icon("lightbulb"),
             " Selectionnez le dossier racine contenant les fichiers bruts ",
             "(ex: dossier 'outs' pour Visium/Xenium 10X, ou dossier CosMx AtoMx). Chaque import ",
             "s'ajoute a la liste des echantillons (onglet Spatial > \"5. Multi-echantillons\") ",
             "plutot que de remplacer le precedent."),
-
+        
         textInput(ns("sample_name"), "Nom de l'echantillon", placeholder = "Ex: Tumor_slice1"),
-
+        
         shinyFiles::shinyDirButton(ns("dir_select"), "\U1F4C1 Choisir le dossier",
-                                    "Selectionner le dossier de donnees spatiales",
-                                    class = "btn-secondary w-100", icon = icon("folder-open")),
+                                   "Selectionner le dossier de donnees spatiales",
+                                   class = "btn-secondary w-100", icon = icon("folder-open")),
         verbatimTextOutput(ns("path_display"), placeholder = TRUE),
-
+        
         conditionalPanel(
           condition = sprintf("input['%s'] == 'visium'", ns("technology")),
           hr(),
           numericInput(ns("min_counts"), "nCount_Spatial minimum", 100, min = 0, step = 10),
-          numericInput(ns("min_features"), "nFeature_Spatial minimum", 200, min = 0, step = 10)
+          numericInput(ns("min_features"), "nFeature_Spatial minimum", 200, min = 0, step = 10),
+          
+          hr(),
+          div(class = "alert alert-light", style = "font-size:0.75rem;",
+              bsicons::bs_icon("compass"),
+              " Si le fond histologique apparait tourne/inverse par rapport aux spots apres ",
+              "import (probleme connu, cause = convention de colonnes GetTissueCoordinates() ",
+              "qui a change entre versions de Seurat), corrigez ici puis re-importez — ",
+              "verifiez visuellement dans l'onglet \"4. Visualisation\" > Carte spatiale."),
+          checkboxInput(ns("orient_swap_xy"), "Inverser X / Y (corrige une rotation de 90\u00b0)", value = FALSE),
+          checkboxInput(ns("orient_flip_x"), "Miroir horizontal", value = FALSE),
+          checkboxInput(ns("orient_flip_y"), "Miroir vertical", value = FALSE)
         ),
-
+        
         conditionalPanel(
           condition = sprintf("input['%s'] != 'visium'", ns("technology")),
           hr(),
           sliderInput(ns("simplify_tol"), "Tolerance de simplification des polygones",
                       1, 100, 20, step = 1)
         ),
-
+        
         hr(),
         numericInput(ns("max_sketch"), "Taille max. du sketch (RAM)",
                      50000, min = 5000, max = 100000, step = 5000),
-
+        
         radioButtons(ns("norm_method"), "Normalisation du sketch",
                      choices = c("LogNormalize (rapide, defaut)" = "lognorm",
                                  "SCTransform (vignette Seurat, plus lourd)" = "sct"),
@@ -94,22 +117,22 @@ mod_import_spatial_ui <- function(id) {
               "(BANKSY-lite) et l'indice de Moran restent en LogNormalize rapide sur les ",
               "donnees completes, inchanges.")
         ),
-
+        
         actionButton(ns("btn_import"), "\U1F680 Importer + convertir (BPCells)",
                      class = "btn-success w-100 mt-2", icon = icon("play"))
       ),
-
+      
       card(
         card_header("Resume de l'objet spatial charge"),
         layout_columns(
           value_box(title = "Spots / Cellules (total disque)", value = textOutput(ns("nb_total")),
-                     showcase = bsicons::bs_icon("grid-3x3"), theme = "primary"),
+                    showcase = bsicons::bs_icon("grid-3x3"), theme = "primary"),
           value_box(title = "Sketch (RAM)", value = textOutput(ns("nb_sketch")),
-                     showcase = bsicons::bs_icon("cpu"), theme = "secondary"),
+                    showcase = bsicons::bs_icon("cpu"), theme = "secondary"),
           value_box(title = "Genes", value = textOutput(ns("nb_genes")),
-                     showcase = bsicons::bs_icon("diagram-3"), theme = "info"),
+                    showcase = bsicons::bs_icon("diagram-3"), theme = "info"),
           value_box(title = "Statut", value = textOutput(ns("status_obj")),
-                     showcase = bsicons::bs_icon("check-circle"), theme = "light")
+                    showcase = bsicons::bs_icon("check-circle"), theme = "light")
         ),
         card_body(h5("Console de Log", class = "text-muted"),
                   verbatimTextOutput(ns("console_log"), placeholder = TRUE))
@@ -122,13 +145,13 @@ mod_import_spatial_ui <- function(id) {
 mod_import_spatial_server <- function(id, global_data) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
-
+    
     logs <- reactiveVal("En attente d'import...")
     add_log <- function(msg) logs(paste0("[", format(Sys.time(), "%H:%M:%S"), "] ", msg, "\n", logs()))
-
+    
     volumes <- c(Home = fs::path_home(), shinyFiles::getVolumes()())
     shinyFiles::shinyDirChoose(input, "dir_select", roots = volumes, session = session)
-
+    
     dir_path <- reactiveVal(NULL)
     observeEvent(input$dir_select, {
       path <- shinyFiles::parseDirPath(volumes, input$dir_select)
@@ -137,44 +160,68 @@ mod_import_spatial_server <- function(id, global_data) {
     output$path_display <- renderText({
       if (is.null(dir_path())) "Aucun dossier selectionne" else dir_path()
     })
-
+    
     observeEvent(input$btn_import, {
       req(dir_path())
       sample_name <- if (nchar(trimws(input$sample_name))) trimws(input$sample_name) else basename(dir_path())
-
+      
       withProgress(message = "Import spatial...", value = 0, {
         tryCatch({
           incProgress(0.1, detail = "Lecture des fichiers bruts...")
           raw_obj <- switch(input$technology,
-            "visium" = load_spatial_visium(dir_path(), sample_name = sample_name,
-                                            min_counts = input$min_counts,
-                                            min_features = input$min_features),
-            "xenium" = Seurat::LoadXenium(dir_path(), fov = "fov"),
-            "cosmx"  = Seurat::LoadNanostring(dir_path(), fov = "fov", assay = "Nanostring"),
-            stop("Technologie inconnue.")
+                            "visium" = load_spatial_visium(dir_path(), sample_name = sample_name,
+                                                           min_counts = input$min_counts,
+                                                           min_features = input$min_features),
+                            "xenium" = Seurat::LoadXenium(dir_path(), fov = "fov"),
+                            "cosmx"  = Seurat::LoadNanostring(dir_path(), fov = "fov", assay = "Nanostring"),
+                            stop("Technologie inconnue.")
           )
           add_log(sprintf("  ✓ Objet brut charge : %d genes x %d %s",
-                           nrow(raw_obj), ncol(raw_obj),
-                           if (input$technology == "visium") "spots" else "cellules"))
-
+                          nrow(raw_obj), ncol(raw_obj),
+                          if (input$technology == "visium") "spots" else "cellules"))
+          
           incProgress(0.3, detail = "Conversion BPCells (disque)...")
           norm_label <- if (input$norm_method == "sct") "SCTransform" else "LogNormalize"
           add_log(sprintf("  Normalisation du sketch : %s", norm_label))
           if (input$norm_method == "sct") {
             incProgress(0.1, detail = "SCTransform sur le sketch (synchrone, peut prendre du temps)...")
           }
+          
+          # FIX (audit step 3.9c): pass the ACTUAL folder the user picked
+          # (raw_dir) so extract_histology_image() can find spatial/ itself
+          # -- a standard VisiumV1 object does not reliably carry this path
+          # internally, see utils_spatial_io.R header for the full
+          # diagnosis. Also thread the manual orientation correction
+          # through (Visium only -- these inputs don't exist in the DOM for
+          # xenium/cosmx, so input$orient_* is NULL there and isTRUE(NULL)
+          # safely defaults to FALSE).
+          orient_applied <- isTRUE(input$orient_swap_xy) || isTRUE(input$orient_flip_x) || isTRUE(input$orient_flip_y)
+          if (orient_applied) {
+            add_log(sprintf("  Correction manuelle d'orientation : swap_xy=%s, flip_x=%s, flip_y=%s",
+                            isTRUE(input$orient_swap_xy), isTRUE(input$orient_flip_x), isTRUE(input$orient_flip_y)))
+          }
+          
           spatial_pkg <- convert_to_bpcells_and_fov(
             raw_obj, dataset_id = sample_name, technology = input$technology,
             simplify_tol = input$simplify_tol %||% 20,
             max_sketch = input$max_sketch,
-            norm_method = input$norm_method
+            norm_method = input$norm_method,
+            raw_dir = dir_path(),
+            swap_xy = isTRUE(input$orient_swap_xy),
+            flip_x  = isTRUE(input$orient_flip_x),
+            flip_y  = isTRUE(input$orient_flip_y)
           )
           add_log(sprintf("  ✓ BPCells: %s", spatial_pkg$bpcells_dir))
           add_log(sprintf("  ✓ Sketch RAM: %d/%d elements (normalisation: %s)",
-                           ncol(spatial_pkg$sketch), spatial_pkg$n_total, norm_label))
-
+                          ncol(spatial_pkg$sketch), spatial_pkg$n_total, norm_label))
+          if (!is.null(spatial_pkg$histology)) {
+            n_fonds <- length(spatial_pkg$histology$images %||% list())
+            add_log(sprintf("  \u2713 %d fond(s) histologique(s) detecte(s) (voir selecteur de resolution, onglet Visualisation).",
+                            n_fonds))
+          }
+          
           incProgress(0.9, detail = "Finalisation...")
-
+          
           # Phase 4 (multi-echantillons) : AJOUTE au conteneur plutot que
           # d'ecraser silencieusement un import precedent d'un AUTRE
           # echantillon. Re-importer sous un nom DEJA utilise remplace
@@ -183,28 +230,28 @@ mod_import_spatial_server <- function(id, global_data) {
           if (sample_name %in% names(global_data$spatial_datasets)) {
             add_log(sprintf("  \u26a0 Un echantillon nomme '%s' existait deja — remplace.", sample_name))
             showNotification(sprintf("\u26a0\ufe0f Echantillon '%s' deja existant — remplace.", sample_name),
-                              type = "warning", duration = 6)
+                             type = "warning", duration = 6)
           }
           global_data$spatial_datasets[[sample_name]] <- spatial_pkg
           global_data$active_spatial_dataset <- sample_name
           global_data$spatial_obj <- spatial_pkg
-
+          
           add_log(sprintf("✅ Import termine : %s (%s) — %d echantillon(s) au total",
-                           sample_name, input$technology, length(global_data$spatial_datasets)))
+                          sample_name, input$technology, length(global_data$spatial_datasets)))
           showNotification(sprintf("✅ Import spatial reussi : %d elements (%d en sketch RAM, %s)%s",
-                                    spatial_pkg$n_total, ncol(spatial_pkg$sketch), norm_label,
-                                    if (length(global_data$spatial_datasets) > 1) {
-                                      sprintf(" — %d echantillons charges, voir 'Multi-echantillons'",
-                                              length(global_data$spatial_datasets))
-                                    } else ""),
-                            type = "message", duration = 6)
+                                   spatial_pkg$n_total, ncol(spatial_pkg$sketch), norm_label,
+                                   if (length(global_data$spatial_datasets) > 1) {
+                                     sprintf(" — %d echantillons charges, voir 'Multi-echantillons'",
+                                             length(global_data$spatial_datasets))
+                                   } else ""),
+                           type = "message", duration = 6)
         }, error = function(e) {
           msg <- paste("❌ Erreur import spatial:", conditionMessage(e))
           add_log(msg); showNotification(msg, type = "error", duration = 10)
         })
       })
     })
-
+    
     # ── Outputs ────────────────────────────────────────────────────────
     output$nb_total  <- renderText({ if (is.null(global_data$spatial_obj)) "-" else format(global_data$spatial_obj$n_total, big.mark = ",") })
     output$nb_sketch  <- renderText({ if (is.null(global_data$spatial_obj)) "-" else format(ncol(global_data$spatial_obj$sketch), big.mark = ",") })

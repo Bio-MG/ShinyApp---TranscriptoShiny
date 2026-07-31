@@ -19,6 +19,20 @@
 # live Shiny state into the daemon. The per-section spatial maps below the
 # integration button are cheap (sketch + coords, already in RAM) and render
 # synchronously, exactly like every other "instant preview" in this app.
+#
+# v1.1 (audit step 3.9b — multi-sample bugfix): output$dataset_picker_ui's
+# sprintf() call had its format string accidentally split into TWO separate
+# character arguments (missing string concatenation) instead of one
+# continuous "%d ...(onglet Import > Spatial)..." string. sprintf() then
+# tried to fill the lone "%d" placeholder with the first EXTRA argument —
+# "Spatial) pour utiliser cette page." — a character string, which is
+# exactly what produced the reported error: "format incorrect '%d' ;
+# utilisez le format %s pour les objets caracteres". Only reproducible with
+# 0 or 1 dataset(s) imported (the `length(ds_names) < 2` branch), which is
+# why it slipped through earlier single-sample testing. See also
+# mod_spatial.R v6.1 for a second, related bug (missing `ns <- session$ns`
+# in the PARENT module) found in the same audit pass — both only manifest
+# once multi-sample import is actually exercised.
 # =============================================================================
 
 `%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
@@ -99,9 +113,12 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
     output$dataset_picker_ui <- renderUI({
       ds_names <- names(global_data$spatial_datasets)
       if (length(ds_names) < 2) {
+        # FIX (audit step 3.9b): format string was previously split into two
+        # separate string arguments instead of one -- see file header.
         return(div(class = "alert alert-warning", style = "font-size:0.8rem;",
-                    sprintf("%d echantillon(s) importe(s) — importez-en au moins 2 (onglet Import > ",
-                            "Spatial) pour utiliser cette page.", length(ds_names))))
+                    sprintf(paste0("%d echantillon(s) importe(s) — importez-en au moins 2 ",
+                                   "(onglet Import > Spatial) pour utiliser cette page."),
+                            length(ds_names))))
       }
       checkboxGroupInput(ns("selected_datasets"), "Echantillons a comparer",
                          choices = ds_names, selected = ds_names)

@@ -232,73 +232,56 @@ prepare_bulk_object <- function(counts_matrix, metadata = NULL, project_name = "
 
 
 load_spatial_visium <- function(visium_dir, sample_name = "Spatial_Sample", 
-
                                 min_counts = 100, min_features = 200) {
-
   if (!dir.exists(file.path(visium_dir, "spatial"))) {
-
     stop("Dossier 'spatial' introuvable dans ", visium_dir)
-
   }
-
   
-
+  # FIX (audit step 3.12) : ne plus exiger "filtered_feature_bc_matrix.h5"
+  # en dur -- detecte le .h5 present, priorise filtered_ > raw_ > autre.
+  # Compatible avec les depots GEO/renommes et une premiere marche vers
+  # Visium HD (dossiers de bin ne contiennent parfois qu'un raw_*.h5).
+  h5_files <- list.files(visium_dir, pattern = "\\.h5$", full.names = FALSE, ignore.case = TRUE)
+  h5_filename <- if (length(h5_files) == 0) {
+    "filtered_feature_bc_matrix.h5"  # laisse Load10X_Spatial() produire son propre message d'erreur clair
+  } else if (any(grepl("^filtered_feature_bc_matrix", h5_files, ignore.case = TRUE))) {
+    h5_files[grepl("^filtered_feature_bc_matrix", h5_files, ignore.case = TRUE)][1]
+  } else if (any(grepl("^raw_feature_bc_matrix", h5_files, ignore.case = TRUE))) {
+    warning("Seul un fichier 'raw_feature_bc_matrix.h5' a ete trouve (pas de version filtree) — ",
+            "les spots hors-tissu ne seront pas exclus automatiquement.", call. = FALSE)
+    h5_files[grepl("^raw_feature_bc_matrix", h5_files, ignore.case = TRUE)][1]
+  } else {
+    h5_files[1]
+  }
+  
   spatial_obj <- tryCatch({
-
     Load10X_Spatial(
-
       data.dir = visium_dir,
-
-      filename = "filtered_feature_bc_matrix.h5",
-
+      filename = h5_filename,
       assay = "Spatial",
-
       slice = sample_name,
-
       filter.matrix = TRUE
-
     )
-
   }, error = function(e) {
-
     if (dir.exists(file.path(visium_dir, "filtered_feature_bc_matrix"))) {
-
       Load10X_Spatial(
-
         data.dir = visium_dir,
-
         assay = "Spatial",
-
         slice = sample_name,
-
         filter.matrix = TRUE
-
       )
-
     } else {
-
-      stop("Impossible de charger les données Visium : ", e$message)
-
+      stop("Impossible de charger les donnees Visium (fichier tente : '", h5_filename, "') : ", e$message)
     }
-
   })
-
   
-
   spatial_obj$orig.ident <- sample_name
-
   
-
   spatial_obj <- subset(spatial_obj, 
-
                         subset = nCount_Spatial >= min_counts & 
-
                           nFeature_Spatial >= min_features)
-
   
-
   return(spatial_obj)
-
 }
 
 
