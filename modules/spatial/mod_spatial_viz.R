@@ -1,5 +1,13 @@
 # mod_spatial_viz.R
 # Module d'exploration spatiale avec fond histologique multi-résolution
+#
+# v2 (audit step 3.9c): "Carte spatiale" tab now shows the interactive
+# Plotly map and the static PNG-preview plot SIDE BY SIDE (layout_columns,
+# same pattern as the "Vue combinee" tab) instead of stacked, and the
+# preview defaults to VISIBLE (was hidden behind an unchecked checkbox) —
+# fixes "le plot de previsualisation PNG ne s'affiche pas a cote du cluster
+# spatial plotly pour comparer". The checkbox is kept so people with very
+# large sketches can hide it again to save render time.
 
 mod_spatial_viz_ui <- function(id) {
   ns <- NS(id)
@@ -102,6 +110,34 @@ mod_spatial_viz_ui <- function(id) {
       ),
       
       hr(),
+      # v4 (audit step 3.12): DEBUG-ONLY tool, collapsed by default. The
+      # real root cause turned out to be the LOWRES background itself
+      # (undersized/misaligned depending on Seurat version -- see
+      # R/utils_spatial_io.R::extract_histology_image()), now fixed by
+      # reading tissue_hires_image.png + scalefactors_json.json directly
+      # from disk and defaulting to it. This toggle is kept only as an
+      # escape hatch for a dataset/version where that still isn't enough --
+      # it is NOT a permanent correction and should not need to be used in
+      # normal operation. Scoped to the Plotly-rendering outputs only
+      # (spatial_preview_plot, combined_spatial_plot, roi_zoom_plot,
+      # roi_context_plot); PNG export, BANKSY clustering and Moran's I are
+      # never affected by it.
+      tags$details(
+        tags$summary(style = "cursor:pointer; font-size:0.72rem; color:#888;",
+                     "Outil de diagnostic (debug) : orientation Plotly"),
+        div(class = "mt-1",
+            checkboxInput(
+              ns("plotly_orient_fix"),
+              "Corriger l'orientation dans la vue interactive Plotly",
+              value = FALSE
+            ),
+            div(class = "text-muted", style = "font-size:0.65rem;",
+                "A utiliser seulement si le fond hires choisi ci-dessus semble encore tourne. ",
+                "N'affecte JAMAIS l'export PNG ni le clustering/Moran.")
+        )
+      ),
+      
+      hr(),
       bslib::input_task_button(
         ns("btn_compute_umap"),
         "Calculer PCA + UMAP (sketch)",
@@ -113,28 +149,49 @@ mod_spatial_viz_ui <- function(id) {
     navset_card_underline(
       nav_panel(
         "Carte spatiale",
-        card(
-          full_screen = TRUE,
-          style = "min-height: 70vh;",
-          plotly::plotlyOutput(
-            ns("spatial_preview_plot"),
-            height = "calc(100vh - 260px)"
-          )
-        ),
-        card(
-          class = "mt-3 mb-3",
-          card_header("Aperçu statique (export PNG)"),
-          card_body(
-            checkboxInput(
-              ns("show_static_export_preview"),
-              "Afficher un aperçu statique (même moteur que l'export PNG)",
-              value = FALSE
-            ),
-            conditionalPanel(
-              condition = sprintf("input['%s'] == true", ns("show_static_export_preview")),
-              plotOutput(
-                ns("static_export_preview"),
-                height = "600px"
+        layout_columns(
+          col_widths = c(7, 5),
+          
+          card(
+            full_screen = TRUE,
+            style = "min-height: 72vh;",
+            card_header("Carte interactive (Plotly)"),
+            card_body(
+              class = "p-0",
+              plotly::plotlyOutput(
+                ns("spatial_preview_plot"),
+                height = "72vh"
+              )
+            )
+          ),
+          
+          card(
+            full_screen = TRUE,
+            style = "min-height: 72vh;",
+            card_header("Aperçu dynamique — export PNG"),
+            card_body(
+              checkboxInput(
+                ns("show_static_export_preview"),
+                "Afficher l'aperçu PNG",
+                value = TRUE
+              ),
+              
+              div(
+                class = "text-muted mb-2",
+                style = "font-size: 0.72rem;",
+                "Même moteur que le bouton Export PNG. ",
+                "Le fond est temporairement masqué, sans crash, pendant un changement de résolution invalide."
+              ),
+              
+              conditionalPanel(
+                condition = sprintf(
+                  "input['%s'] == true",
+                  ns("show_static_export_preview")
+                ),
+                plotOutput(
+                  ns("static_export_preview"),
+                  height = "calc(72vh - 105px)"
+                )
               )
             )
           )
@@ -362,7 +419,15 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       res_choices <- get_available_resolutions(hist_data)
       if (length(res_choices) == 0) {
         # Si aucune résolution trouvée, on garde les valeurs par défaut
-        res_choices <- c("lowres", "hires")
+        res_choices <- c("hires", "lowres")
+      }
+      
+      # FIX (audit step 3.12) : hires en premier / par defaut -- confirme
+      # fiable en test utilisateur (lowres apparaissait systematiquement
+      # trop petit/decale, voir R/utils_spatial_io.R::extract_histology_image()
+      # pour le diagnostic complet). lowres reste choisissable manuellement.
+      if ("hires" %in% res_choices) {
+        res_choices <- c("hires", setdiff(res_choices, "hires"))
       }
       
       # Créer des noms lisibles (première lettre en majuscule)
@@ -404,7 +469,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       hist_data <- global_data$spatial_obj$histology
       if (is.null(hist_data)) return(NULL)
       
-      requested_resolution <- input$histology_resolution %||% "lowres"
+      requested_resolution <- input$histology_resolution %||% "hires"
       
       hist_img <- tryCatch(
         get_histology_raster(
@@ -541,7 +606,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       filename = function() {
         paste0(
           "fond_histologique_",
-          input$histology_resolution %||% "lowres",
+          input$histology_resolution %||% "hires",
           "_",
           Sys.Date(),
           ".png"
@@ -552,7 +617,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         
         hist_img <- get_histology_raster(
           hist_data = hist_data,
-          resolution = input$histology_resolution %||% "lowres"
+          resolution = input$histology_resolution %||% "hires"
         )
         
         validate(
@@ -626,14 +691,151 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         ymin <- hist_ov$bounds$y[1L]
         ymax <- hist_ov$bounds$y[2L]
         
-        x_vals <- c(x_vals, xmin, xmax)
-        y_vals <- c(y_vals, -ymax, -ymin)
+        # FIX (audit step 3.12): a resolution switch can momentarily produce
+        # non-finite or degenerate bounds (0-width/height) while the new
+        # histology_overlay() is recomputing -- feeding those into
+        # coord_fixed() crashed the static PNG preview (graphics::plot.new
+        # error reported by user). Skip the histology contribution to the
+        # range for that one frame rather than propagating garbage; the
+        # points' own bounds are always used as a safe minimum.
+        bounds_ok <- all(is.finite(c(xmin, xmax, ymin, ymax))) && xmax > xmin && ymax > ymin
+        if (bounds_ok) {
+          x_vals <- c(x_vals, xmin, xmax)
+          y_vals <- c(y_vals, -ymax, -ymin)
+        }
       }
       
       list(
         x = range(x_vals, na.rm = TRUE),
         y = range(y_vals, na.rm = TRUE)
       )
+    }
+    
+    # --------------------------------------------------------------------------
+    # Correctif d'orientation SCOPE PLOTLY UNIQUEMENT (audit step 3.11)
+    # --------------------------------------------------------------------------
+    # Applies ONLY where called explicitly below (spatial_preview_plot,
+    # combined_spatial_df -> combined_spatial_plot/roi_zoom_plot/
+    # roi_context_plot). Does NOT touch plot_df() itself, so build_raster_plot()
+    # (static_export_preview + dl_png) and $coords (BANKSY/Moran, read
+    # directly from global_data$spatial_obj$coords, never from this module)
+    # are unaffected -- see sidebar checkbox comment for the diagnosis that
+    # led here.
+    swap_for_plotly <- function(df) {
+      if (!isTRUE(input$plotly_orient_fix)) return(df)
+      tmp <- df$x
+      df$x <- df$y
+      df$y <- tmp
+      df
+    }
+    
+    histology_overlay_plotly <- reactive({
+      ov <- histology_overlay()
+      if (is.null(ov) || !isTRUE(input$plotly_orient_fix)) return(ov)
+      b <- ov$bounds
+      ov$bounds <- list(x = b$y, y = b$x)
+      ov
+    })
+    
+    
+    
+    # --------------------------------------------------------------------------
+    # Safe histology helpers for static ggplot rendering
+    # --------------------------------------------------------------------------
+    
+    is_valid_histology_overlay <- function(hist_ov) {
+      if (is.null(hist_ov) || is.null(hist_ov$bounds) || is.null(hist_ov$rgba)) {
+        return(FALSE)
+      }
+      
+      b <- hist_ov$bounds
+      rgba_dim <- dim(hist_ov$rgba)
+      
+      if (
+        length(rgba_dim) != 3L ||
+        rgba_dim[1L] < 1L ||
+        rgba_dim[2L] < 1L ||
+        rgba_dim[3L] < 3L
+      ) {
+        return(FALSE)
+      }
+      
+      if (
+        is.null(b$x) ||
+        is.null(b$y) ||
+        length(b$x) != 2L ||
+        length(b$y) != 2L
+      ) {
+        return(FALSE)
+      }
+      
+      all(is.finite(c(b$x, b$y))) &&
+        b$x[2L] > b$x[1L] &&
+        b$y[2L] > b$y[1L]
+    }
+    
+    #' Convert an RGBA image to a ggplot-compatible raster safely
+    #'
+    #' @param hist_ov Histology overlay returned by histology_overlay().
+    #' @param max_pixels Maximum number of pixels accepted for static rendering.
+    #' @return A raster object or NULL.
+    safe_static_histology_raster <- function(hist_ov, max_pixels = 25000000L) {
+      if (!is_valid_histology_overlay(hist_ov)) {
+        return(NULL)
+      }
+      
+      rgba <- hist_ov$rgba
+      image_dim <- dim(rgba)
+      n_pixels <- as.double(image_dim[1L]) * as.double(image_dim[2L])
+      
+      # Avoid allocating a very large character raster in RAM.
+      if (!is.finite(n_pixels) || n_pixels < 1 || n_pixels > max_pixels) {
+        return(NULL)
+      }
+      
+      tryCatch({
+        red <- pmin(1, pmax(0, rgba[, , 1L]))
+        green <- pmin(1, pmax(0, rgba[, , 2L]))
+        blue <- pmin(1, pmax(0, rgba[, , 3L]))
+        
+        alpha <- if (image_dim[3L] >= 4L) {
+          pmin(1, pmax(0, rgba[, , 4L]))
+        } else {
+          matrix(1, nrow = image_dim[1L], ncol = image_dim[2L])
+        }
+        
+        grDevices::as.raster(
+          grDevices::rgb(
+            red = as.vector(red),
+            green = as.vector(green),
+            blue = as.vector(blue),
+            alpha = as.vector(alpha)
+          )
+        ) |>
+          matrix(nrow = image_dim[1L], ncol = image_dim[2L])
+      }, error = function(e) {
+        NULL
+      })
+    }
+    
+    #' Guarantee finite non-degenerate coordinate ranges for ggplot/Plotly
+    #'
+    #' @param x Numeric vector.
+    #' @param fallback Numeric length-two fallback range.
+    #' @return Numeric length-two range.
+    safe_plot_range <- function(x, fallback = c(0, 1)) {
+      out <- suppressWarnings(range(x[is.finite(x)], na.rm = TRUE))
+      
+      if (length(out) != 2L || !all(is.finite(out))) {
+        return(fallback)
+      }
+      
+      if (identical(out[1L], out[2L])) {
+        delta <- max(abs(out[1L]) * 0.02, 1)
+        out <- out + c(-delta, delta)
+      }
+      
+      out
     }
     
     # --------------------------------------------------------------------------
@@ -820,12 +1022,13 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     output$spatial_preview_plot <- plotly::renderPlotly({
       df <- plot_df()
       req(nrow(df) > 0)
+      df <- swap_for_plotly(df)
       
       df_plot <- df
       df_plot$y_display <- -df_plot$y
       df_plot$colour <- color_values(df_plot)
       
-      hist_ov <- histology_overlay()
+      hist_ov <- histology_overlay_plotly()
       show_hist <- !is.null(hist_ov) && !is.null(hist_ov$data_uri) && isTRUE(input$show_histology)
       
       max_preview_cells <- if (isTRUE(show_hist)) 40000L else 150000L
@@ -924,7 +1127,29 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     # --------------------------------------------------------------------------
     # Construction du rendu statique (ggplot) – corrigé pour utiliser le raster
     # --------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
+    # Shared static plot builder: preview and exported PNG use the same object
+    # --------------------------------------------------------------------------
+    
     build_raster_plot <- function(df) {
+      validate(
+        shiny::need(is.data.frame(df) && nrow(df) > 0L, "Aucune coordonnée spatiale exploitable."),
+        shiny::need(
+          all(c("x", "y", "value") %in% colnames(df)),
+          "Les colonnes x, y ou value sont absentes."
+        )
+      )
+      
+      df <- df[
+        is.finite(df$x) & is.finite(df$y),
+        ,
+        drop = FALSE
+      ]
+      
+      validate(
+        shiny::need(nrow(df) > 0L, "Aucune coordonnée spatiale finie à afficher.")
+      )
+      
       use_alpha_scale <- identical(input$color_by, "gene") &&
         isTRUE(input$scale_alpha_by_expr) &&
         is.numeric(df$value)
@@ -942,17 +1167,29 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       }
       
       hist_ov <- histology_overlay()
+      static_raster <- if (isTRUE(input$show_histology)) {
+        safe_static_histology_raster(hist_ov)
+      } else {
+        NULL
+      }
       
-      show_hist <- isTRUE(input$show_histology) &&
-        !is.null(hist_ov) &&
-        !is.null(hist_ov$raster_obj) &&
-        !is.null(hist_ov$bounds)
+      show_hist <- !is.null(static_raster) && is_valid_histology_overlay(hist_ov)
+      
+      if (isTRUE(input$show_histology) && !show_hist) {
+        # Deliberately do not stop the preview: spots remain visible while a
+        # resolution is being recomputed or when a raster is too large for RAM.
+        showNotification(
+          "Fond histologique temporairement indisponible pour l'aperçu PNG ; les spots restent affichés.",
+          type = "warning",
+          duration = 4
+        )
+      }
       
       if (show_hist) {
         b <- hist_ov$bounds
         
         p <- p + ggplot2::annotation_raster(
-          raster = hist_ov$raster_obj,
+          raster = static_raster,
           xmin = b$x[1L],
           xmax = b$x[2L],
           ymin = -b$y[2L],
@@ -996,9 +1233,12 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       
       spatial_ranges <- compute_spatial_ranges(
         df_all = df,
-        hist_ov = hist_ov,
+        hist_ov = if (show_hist) hist_ov else NULL,
         show_hist = show_hist
       )
+      
+      spatial_ranges$x <- safe_plot_range(spatial_ranges$x)
+      spatial_ranges$y <- safe_plot_range(spatial_ranges$y)
       
       p <- p +
         ggplot2::coord_fixed(
@@ -1009,7 +1249,9 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         ggplot2::theme_void()
       
       if (is.numeric(df$value)) {
-        p + ggplot2::scale_color_viridis_c(na.value = "#CCCCCC")
+        p + ggplot2::scale_color_viridis_c(
+          na.value = "#CCCCCC"
+        )
       } else {
         labels <- sort_cluster_labels(df$value)
         palette <- cluster_palette(labels)
@@ -1022,32 +1264,91 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     }
     
     # --------------------------------------------------------------------------
-    # Aperçu statique (export PNG)
+    # Shared static plot reactive
     # --------------------------------------------------------------------------
-    output$static_export_preview <- renderPlot({
+    
+    static_export_plot <- reactive({
       req(isTRUE(input$show_static_export_preview))
       
-      if (exists("build_static_spatial_ggplot", mode = "function")) {
-        p <- build_static_spatial_ggplot(
-          spatial_obj = global_data$spatial_obj,
-          color_by    = input$color_by,
-          gene        = input$gene,
-          qc_metric   = input$qc_metric,
-          pt_size     = input$pt_radius,
-          pt_alpha    = input$pt_opacity,
-          show_hist   = input$show_histology,
-          hist_res    = input$histology_resolution %||% "lowres",
-          hist_alpha  = input$histology_opacity
-        )
-      } else {
-        df <- plot_df()
-        req(nrow(df) > 0)
-        p <- build_raster_plot(df)
-      }
+      df <- plot_df()
+      req(nrow(df) > 0L)
       
-      req(p)
-      print(p)
-    }, res = 110)
+      tryCatch(
+        build_raster_plot(df),
+        error = function(e) {
+          if (!inherits(e, "shiny.silent.error")) {
+            showNotification(
+              paste(
+                "Aperçu PNG non généré :",
+                conditionMessage(e)
+              ),
+              type = "warning",
+              duration = 6
+            )
+          }
+          
+          NULL
+        }
+      )
+    })
+    
+    # --------------------------------------------------------------------------
+    # Static PNG preview
+    # --------------------------------------------------------------------------
+    
+    output$static_export_preview <- renderPlot(
+      {
+        p <- static_export_plot()
+        
+        validate(
+          shiny::need(
+            !is.null(p),
+            "Préparation de l'aperçu PNG…"
+          )
+        )
+        
+        print(p)
+      },
+      res = 110,
+      bg = "white",
+      execOnResize = FALSE
+    )
+    
+    # --------------------------------------------------------------------------
+    # PNG export: same rendering engine as the on-screen preview
+    # --------------------------------------------------------------------------
+    
+    output$dl_png <- downloadHandler(
+      filename = function() {
+        paste0(
+          "carte_spatiale_",
+          input$color_by,
+          "_",
+          input$histology_resolution %||% "sans_fond",
+          "_",
+          Sys.Date(),
+          ".png"
+        )
+      },
+      content = function(file) {
+        df <- plot_df()
+        
+        validate(
+          shiny::need(nrow(df) > 0L, "Aucune donnée à exporter.")
+        )
+        
+        p <- build_raster_plot(df)
+        
+        ggplot2::ggsave(
+          filename = file,
+          plot = p,
+          width = 8,
+          height = 8,
+          dpi = 200,
+          bg = "white"
+        )
+      }
+    )
     
     # --------------------------------------------------------------------------
     # Téléchargement PNG
@@ -1280,6 +1581,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     combined_spatial_df <- reactive({
       df <- plot_df()
       req(nrow(df) > 0L)
+      df <- swap_for_plotly(df)  # every consumer of this reactive is Plotly-only
       
       df$cluster <- if (!is.null(shared_rv$cluster_labels)) {
         as.character(shared_rv$cluster_labels[df$id])
@@ -1347,7 +1649,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       
       df$colour <- add_alpha(df$colour, alpha_vec)
       
-      hist_ov <- histology_overlay()
+      hist_ov <- histology_overlay_plotly()
       show_hist <- !is.null(hist_ov) &&
         !is.null(hist_ov$data_uri) &&
         isTRUE(input$show_histology)
@@ -1508,6 +1810,21 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     # --------------------------------------------------------------------------
     roi_ids <- reactiveVal(NULL)
     
+    # FIX (audit step 3.12 -- multi-echantillons dans l'onglet 4): switching
+    # the active dataset (mod_spatial.R's selector) already resets shared_rv
+    # (QC/clusters/deconv/ROI), but this module's OWN local state -- umap_df
+    # (computed for the PREVIOUS dataset's sketch) and roi_ids (indices into
+    # the PREVIOUS dataset's coordinates) -- was never reset, so switching
+    # datasets could silently show a stale UMAP or an ROI overlay that no
+    # longer corresponds to the newly active dataset's spots. Reset both
+    # here so tab "4. Visualisation" is always coherent with whichever
+    # dataset is currently active, exactly like every other tab.
+    observeEvent(global_data$active_spatial_dataset, {
+      umap_df(NULL)
+      roi_ids(NULL)
+      shared_rv$roi_ids <- NULL
+    }, ignoreInit = TRUE)
+    
     observeEvent(input$btn_isolate_roi, {
       hl <- highlighted_ids()
       if (length(hl) == 0) {
@@ -1559,7 +1876,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       req(nrow(df_roi) > 0)
       df_roi$y_display <- -df_roi$y
       
-      hist_ov <- histology_overlay()
+      hist_ov <- histology_overlay_plotly()
       show_hist <- !is.null(hist_ov) && !is.null(hist_ov$data_uri) && isTRUE(input$show_histology)
       trace_type <- if (isTRUE(show_hist)) "scatter" else "scattergl"
       
@@ -1619,7 +1936,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       df_all$y_display <- -df_all$y
       df_all$is_roi <- df_all$id %in% ids_roi
       
-      hist_ov <- histology_overlay()
+      hist_ov <- histology_overlay_plotly()
       show_hist <- !is.null(hist_ov) && !is.null(hist_ov$data_uri) && isTRUE(input$show_histology)
       trace_type <- if (isTRUE(show_hist)) "scatter" else "scattergl"
       

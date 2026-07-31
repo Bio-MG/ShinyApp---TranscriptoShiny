@@ -12,6 +12,16 @@
 # here is indistinguishable, from their point of view, from having
 # reimported that dataset.
 #
+# v6.1 (audit step 3.9b — multi-sample bugfix): `ns <- session$ns` was
+# NEVER assigned in this module's moduleServer() body. output$active_dataset_ui
+# below calls ns("active_dataset_select") -- this only executes once
+# length(spatial_datasets) >= 2, i.e. EXACTLY the multi-sample scenario --
+# so it silently worked with 0/1 dataset and threw "object 'ns' not found"
+# the moment a 2nd sample was imported. Root-caused during the same audit
+# pass that fixed the sprintf() bug in mod_spatial_multi.R's
+# dataset_picker_ui (malformed format string, same symptom class: only
+# reproducible with >=2 datasets loaded).
+#
 # v5 (Phase 3 — ROI/crop): shared_rv gained roi_ids / roi_bbox / roi_markers
 # for the new "ROI isolee" panel in mod_spatial_viz.R (lasso/rectangle
 # selection -> isolated region + comparative view + regional markers). No
@@ -52,38 +62,44 @@ mod_spatial_ui <- function(id) {
   tagList(
     navset_card_underline(
       id = ns("spatial_nav"),
-
+      
       nav_panel("1. QC & Autocorrelation", icon = icon("filter"),
                 mod_spatial_qc_ui(ns("qc"))),
-
+      
       nav_panel("2. Clustering (BANKSY-lite)", icon = icon("shapes"),
                 mod_spatial_cluster_ui(ns("cluster"))),
-
+      
       nav_panel("3. Deconvolution", icon = icon("puzzle-piece"),
                 mod_spatial_deconv_ui(ns("deconv"))),
-
+      
       nav_panel("4. Visualisation", icon = icon("eye"),
                 mod_spatial_viz_ui(ns("viz"))),
-
+      
       nav_panel("5. Multi-echantillons", icon = icon("layer-group"),
                 mod_spatial_multi_ui(ns("multi"))),
-
+      
       # ── Right-aligned active-dataset switcher + daemon status/reset ────
       nav_spacer(),
       nav_item(uiOutput(ns("active_dataset_ui"))),
       nav_item(uiOutput(ns("daemon_status_ui"))),
       nav_item(actionButton(ns("btn_reset_daemons"), "Reinitialiser les daemons",
-                             class = "btn-outline-warning btn-sm", icon = icon("rotate")))
+                            class = "btn-outline-warning btn-sm", icon = icon("rotate")))
     )
   )
 }
 
 mod_spatial_server <- function(id, global_data) {
   moduleServer(id, function(input, output, session) {
-
+    # FIX (audit step 3.9b): this was missing entirely. output$active_dataset_ui
+    # below needs ns() to build the id of its dynamically-inserted
+    # selectInput() -- without this line R throws "object 'ns' not found"
+    # as soon as that output actually renders (i.e. as soon as a 2nd
+    # spatial dataset gets imported).
+    ns <- session$ns
+    
     # Defensive: no-op if already initialized (see app.R for the primary call).
     if (!spatial_daemons_ready()) init_spatial_daemons(n_daemons = 6)
-
+    
     # ── Shared reactive bus for all child modules ─────────────────────────
     shared_rv <- reactiveValues(
       active_tab       = "1. QC & Autocorrelation",
@@ -92,8 +108,8 @@ mod_spatial_server <- function(id, global_data) {
       moran_results    = NULL,   # data.frame(gene, moran_i, p_value) — top HVGs only
       cluster_labels   = NULL,   # named character vector: spot/cell id -> cluster id
       deconv_props     = NULL,   # data.frame: id + one column per cell type (proportions or
-                                  # label-transfer prediction scores — same contract either way,
-                                  # see mod_spatial_deconv.R "labeltransfer" mode)
+      # label-transfer prediction scores — same contract either way,
+      # see mod_spatial_deconv.R "labeltransfer" mode)
       cluster_markers  = NULL,   # data.frame: cluster, gene, avg_log2FC, p_val_adj, ... (regional DE)
       current_fov_crop = NULL,   # list(fov=, x=c(min,max), y=c(min,max)) for Crop()-based zoom
       # ── Phase 3 — ROI ("Subset out anatomical regions", vignette parity) ──
@@ -101,14 +117,14 @@ mod_spatial_server <- function(id, global_data) {
       roi_bbox          = NULL,  # list(x=c(min,max), y=c(min,max)) of the isolated ROI
       roi_markers       = NULL   # data.frame: gene, avg_log2FC, pct.1, pct.2, p_val, p_val_adj (ROI vs reste)
     )
-
+    
     output$daemon_status_ui <- renderUI({
       input$btn_reset_daemons  # invalidate after reset
       ready <- tryCatch(spatial_daemons_ready(), error = function(e) FALSE)
       tags$span(class = "small text-muted", style = "align-self:center;",
                 if (ready) "\u2705 daemons actifs" else "\u26aa daemons inactifs")
     })
-
+    
     observeEvent(input$btn_reset_daemons, {
       ok <- tryCatch(reset_spatial_daemons(6), error = function(e) FALSE)
       if (isTRUE(ok)) {
@@ -117,7 +133,7 @@ mod_spatial_server <- function(id, global_data) {
         showNotification("Echec de la reinitialisation des daemons — voir la console R.", type = "error", duration = 8)
       }
     })
-
+    
     # ── Active-dataset switcher (Phase 4 — multi-echantillons) ────────────
     # Tabs 1-4 (QC/Clustering/Deconvolution/Visualisation) only ever read
     # global_data$spatial_obj — they have NO idea multiple datasets can be
@@ -137,7 +153,7 @@ mod_spatial_server <- function(id, global_data) {
                     width = "180px")
       )
     })
-
+    
     observeEvent(input$active_dataset_select, {
       req(input$active_dataset_select %in% names(global_data$spatial_datasets))
       if (identical(input$active_dataset_select, global_data$active_spatial_dataset)) return()
@@ -157,15 +173,15 @@ mod_spatial_server <- function(id, global_data) {
       shared_rv$roi_bbox        <- NULL
       shared_rv$roi_markers     <- NULL
       showNotification(sprintf("Echantillon actif : %s", input$active_dataset_select),
-                        type = "message", duration = 4)
+                       type = "message", duration = 4)
     })
-
+    
     mod_spatial_qc_server("qc", global_data, shared_rv)
     mod_spatial_cluster_server("cluster", global_data, shared_rv)
     mod_spatial_deconv_server("deconv", global_data, shared_rv)
     mod_spatial_viz_server("viz", global_data, shared_rv)
     mod_spatial_multi_server("multi", global_data, shared_rv)
-
+    
     observeEvent(input$spatial_nav, { shared_rv$active_tab <- input$spatial_nav })
   })
 }

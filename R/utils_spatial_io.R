@@ -7,34 +7,45 @@
 # Seurat::LoadNanostring()). Produces the on-disk BPCells matrix + the
 # lightweight list that gets stored in global_data$spatial_obj.
 #
-# v3 (vignette coverage — Phase 3): build_sketch()/convert_to_bpcells_and_fov()
-# gained an optional `norm_method = "sct"` (SCTransform, vignette default) —
-# OPT-IN, off by default (norm_method="lognorm" unchanged). Applied only to
-# the already-subsampled (<= max_cells) sketch, never the full disk-backed
-# dataset, to keep it tractable on a 32GB CPU-only workstation with import
-# still synchronous (no mirai — see mod_import_spatial.R header). Every
-# downstream reader (gene coloring, Top-SVG grid, sketch PCA+UMAP) already
-# reads via DefaultAssay(sketch) without hardcoding an assay name, so no
-# other file needed to change for this to work end-to-end.
+# v5 (audit step 3.9c — histology rotation / background selection):
 #
-# v4 (multi‑resolution histology patch): unified extract_histology_image(),
-# get_histology_raster(), raster_to_rgba_array() with no transposition/flip
-# inside the raster converter — all geometry alignment is delegated to the
-# rendering layer (ggplot2::annotation_raster() and Plotly images layout).
-# =============================================================================
-# =============================================================================
-# R/utils_spatial_io.R — BPCells conversion + FOV standardization
-# =============================================================================
-# v4 (multi‑resolution histology patch): unified extract_histology_image(),
-# get_histology_raster(), raster_to_rgba_array() with no transposition/flip
-# inside the raster converter — all geometry alignment is delegated to the
-# rendering layer (ggplot2::annotation_raster() and Plotly images layout).
-# =============================================================================
-
-# =============================================================================
-# R/utils_spatial_io.R — BPCells conversion + FOV standardization
-# =============================================================================
-# v4 (multi‑resolution histology patch): unified extract_histology_image(),
+#   1. FIX (background selection): get_visium_spatial_dir() tried to locate
+#      the Visium spatial/ folder from the VisiumV1 object's own @image /
+#      @misc slots. Root cause of "impossible de selectionner tous les
+#      fonds disponibles" -- a standard VisiumV1 object (Load10X_Spatial())
+#      stores the RASTER ARRAY itself in @image (not a character path), and
+#      has NO @misc slot at all. get_visium_spatial_dir() therefore always
+#      returned NULL, the directory scan in extract_histology_image() never
+#      ran, and only the 2 Seurat-native rasters (lowres/hires) ever made it
+#      into the dropdown -- explaining "toujours les memes 2 fonds, memes
+#      dimensions". Fix: extract_histology_image() now accepts an explicit
+#      `raw_dir` (the folder the user actually picked in the import UI,
+#      already available there) and uses it FIRST; the old slot-sniffing
+#      stays as a best-effort fallback for callers that don't pass raw_dir.
+#      Also de-duplicates: a scanned "tissue_lowres_image.*"/"tissue_hires_image.*"
+#      is now skipped when the Seurat-native lowres/hires entry already
+#      covers it (previously created a confusing "lowres_file" duplicate
+#      with identical dimensions right next to "lowres").
+#
+#   2. FIX (90-degree rotation): GetTissueCoordinates.VisiumV1()'s column
+#      ORDER convention (cols=c('imagerow','imagecol') vs
+#      c('imagecol','imagerow')) has demonstrably changed between Seurat
+#      releases (verified against both an older CRAN doc snapshot and the
+#      current satijalab.org reference -- they disagree). get_spatial_coords()
+#      already resolves columns BY NAME to be as version-robust as possible,
+#      but a wrong result for a given installed version can still happen and
+#      is not reliably guessable from static code alone. Rather than ship a
+#      3rd unverified automatic heuristic, this adds an explicit, one-click,
+#      visually-verifiable MANUAL correction (apply_coord_orientation() ---
+#      swap_xy / flip_x / flip_y, wired up from 3 checkboxes in
+#      mod_import_spatial.R) applied ONCE at import time to $coords. Because
+#      every downstream consumer (histology overlay, BANKSY-lite's physical
+#      k-NN graph, Moran's I, ROI, multi-sample maps) reads the SAME $coords,
+#      a wrong orientation is not just cosmetic -- fixing it once here fixes
+#      it everywhere, and getting it right matters for BANKSY's neighbor
+#      graph, not just the picture.
+#
+# v4 (multi-resolution histology patch): unified extract_histology_image(),
 # get_histology_raster(), raster_to_rgba_array() with no transposition/flip
 # inside the raster converter — all geometry alignment is delegated to the
 # rendering layer (ggplot2::annotation_raster() and Plotly images layout).
@@ -62,8 +73,16 @@ bpcells_cache_root <- function() {
 #'
 #' @param seurat_obj A Visium Seurat object.
 #' @param technology Technology name.
+#' @param raw_dir Optional character path to the ROOT folder the user picked
+#'   in the import UI (the "outs" folder, or directly its "spatial"
+#'   subfolder). Passed explicitly by the caller (mod_import_spatial.R
+#'   already has this path from shinyFiles) because a standard VisiumV1
+#'   object does NOT reliably carry it anywhere internally accessible (see
+#'   file header, v5 fix #1) -- this is the PRIMARY way spatial_dir gets
+#'   resolved now; the old slot-sniffing (get_visium_spatial_dir()) is kept
+#'   only as a best-effort fallback for callers that omit raw_dir.
 #' @return NULL or a multi-resolution histology list with an $images slot.
-extract_histology_image <- function(seurat_obj, technology) {
+extract_histology_image <- function(seurat_obj, technology, raw_dir = NULL) {
   if (!identical(technology, "visium")) {
     return(NULL)
   }
@@ -125,6 +144,12 @@ extract_histology_image <- function(seurat_obj, technology) {
     })
   }
   
+  # FIX (v5, best-effort fallback only -- see file header): a standard
+  # VisiumV1 object generally does NOT expose a usable path via @image
+  # (that slot holds the raster array itself) or @misc (slot doesn't
+  # exist), so this almost always returns NULL in practice. Kept only for
+  # callers/objects that happen to carry this info; extract_histology_image()
+  # prefers the caller-supplied `raw_dir` instead (see below).
   get_visium_spatial_dir <- function(obj, image_obj) {
     candidates <- character(0)
     
@@ -171,60 +196,125 @@ extract_histology_image <- function(seurat_obj, technology) {
   
   tryCatch({
     img_obj <- seurat_obj[[img_name]]
-    scale_factors <- Seurat::ScaleFactors(img_obj)
     
-    raster_lowres <- tryCatch(
-      Seurat::GetImage(img_obj, mode = "raster"),
-      error = function(e) NULL
-    )
+    # FIX (v5): prefer the caller-supplied raw_dir (the folder the user
+    # actually picked at import) over slot-sniffing, which structurally
+    # cannot work for a standard VisiumV1 object (see header).
+    spatial_dir <- NULL
+    if (!is.null(raw_dir) && nzchar(raw_dir)) {
+      candidate_spatial <- file.path(raw_dir, "spatial")
+      if (dir.exists(candidate_spatial)) {
+        spatial_dir <- candidate_spatial
+      } else if (dir.exists(raw_dir) &&
+                 length(list.files(raw_dir, pattern = "\\.(png|jpg|jpeg|tif|tiff|jp2|j2k|jpf)$",
+                                    ignore.case = TRUE)) > 0L) {
+        # user pointed shinyFiles directly at the spatial/ folder itself
+        spatial_dir <- raw_dir
+      }
+    }
+    if (is.null(spatial_dir)) {
+      spatial_dir <- get_visium_spatial_dir(seurat_obj, img_obj)
+    }
     
-    raster_hires <- tryCatch({
-      if ("image" %in% methods::slotNames(img_obj)) {
-        image_slot <- methods::slot(img_obj, "image")
-        
-        if (is.list(image_slot) && !is.null(image_slot$hires)) {
-          image_slot$hires
+    # v6 (audit step 3.12 -- background resolution/alignment): user testing
+    # found that ONLY tissue_hires_image.png aligned correctly with the
+    # spots; tissue_lowres_image.png (and anything else) appeared undersized
+    # / offset. Root cause: Seurat::GetImage()/Seurat::ScaleFactors() go
+    # through the object's own internal raster storage, which does not
+    # reliably match the ORIGINAL file on disk (dimensions/scale) for every
+    # Seurat version -- same family of version-dependent quirk already found
+    # for GetTissueCoordinates() (see get_spatial_coords()). Reading
+    # scalefactors_json.json + the PNG files DIRECTLY from disk sidesteps
+    # this entirely, and is what actually worked in testing. This is now the
+    # PRIMARY path whenever spatial_dir is known; Seurat-native extraction
+    # (GetImage()/ScaleFactors()) is kept only as a fallback for datasets/
+    # callers without a resolvable raw_dir.
+    json_scale_factors <- NULL
+    if (!is.null(spatial_dir)) {
+      json_path <- file.path(spatial_dir, "scalefactors_json.json")
+      if (file.exists(json_path)) {
+        json_scale_factors <- tryCatch({
+          if (requireNamespace("jsonlite", quietly = TRUE)) {
+            jsonlite::fromJSON(json_path)
+          } else {
+            warning("Package 'jsonlite' absent : lecture de scalefactors_json.json ignoree ",
+                    "(repli sur Seurat::ScaleFactors(), potentiellement moins fiable). ",
+                    "Installez-le via install.packages('jsonlite').", call. = FALSE)
+            NULL
+          }
+        }, error = function(e) NULL)
+      }
+    }
+    
+    read_disk_image <- function(name_pattern, scale_factor) {
+      if (is.null(spatial_dir)) return(NULL)
+      f <- list.files(spatial_dir, pattern = name_pattern, full.names = TRUE, ignore.case = TRUE)
+      if (length(f) == 0L) return(NULL)
+      raster_file <- read_histology_file(f[1L])
+      if (is.null(raster_file)) return(NULL)
+      list(
+        raster = raster_file,
+        scale_factor = scale_factor %||% 1,
+        dim = dim(raster_file),
+        source = normalizePath(f[1L], winslash = "/", mustWork = FALSE)
+      )
+    }
+    
+    images <- list()
+    if (!is.null(json_scale_factors)) {
+      hi <- read_disk_image("^tissue_hires_image\\.", json_scale_factors$tissue_hires_scalef)
+      lo <- read_disk_image("^tissue_lowres_image\\.", json_scale_factors$tissue_lowres_scalef)
+      if (!is.null(hi)) images$hires  <- hi
+      if (!is.null(lo)) images$lowres <- lo
+    }
+    
+    # FALLBACK: Seurat-native extraction, only for whichever of lowres/hires
+    # wasn't already populated from disk above (no raw_dir, JSON missing, or
+    # non-standard folder layout).
+    scale_factors <- tryCatch(Seurat::ScaleFactors(img_obj), error = function(e) NULL)
+    if (is.null(images$lowres)) {
+      raster_lowres <- tryCatch(Seurat::GetImage(img_obj, mode = "raster"), error = function(e) NULL)
+      if (!is.null(raster_lowres)) {
+        images$lowres <- list(
+          raster = raster_lowres, scale_factor = scale_factors$lowres %||% 1,
+          dim = dim(raster_lowres),
+          source = "Seurat::GetImage(mode='raster') [repli -- source disque preferee si disponible]"
+        )
+      }
+    }
+    if (is.null(images$hires)) {
+      raster_hires <- tryCatch({
+        if ("image" %in% methods::slotNames(img_obj)) {
+          image_slot <- methods::slot(img_obj, "image")
+          if (is.list(image_slot) && !is.null(image_slot$hires)) image_slot$hires
+          else Seurat::GetImage(img_obj, mode = "hires")
         } else {
           Seurat::GetImage(img_obj, mode = "hires")
         }
-      } else {
-        Seurat::GetImage(img_obj, mode = "hires")
+      }, error = function(e) NULL)
+      if (!is.null(raster_hires)) {
+        images$hires <- list(
+          raster = raster_hires, scale_factor = scale_factors$hires %||% NA_real_,
+          dim = dim(raster_hires),
+          source = "Seurat::GetImage(mode='hires') [repli]"
+        )
       }
-    }, error = function(e) NULL)
-    
-    if (is.null(raster_lowres) && !is.null(raster_hires)) {
-      raster_lowres <- raster_hires
-      scale_factors$lowres <- scale_factors$hires %||% 1
     }
     
-    if (is.null(raster_lowres)) {
+    if (length(images) == 0L) {
       warning(
-        "Aucune image histologique lowres exploitable n'a ete extraite.",
+        "Aucune image histologique exploitable n'a ete extraite (ni depuis le dossier, ni depuis l'objet Seurat).",
         call. = FALSE
       )
       return(NULL)
     }
-    
-    images <- list(
-      lowres = list(
-        raster = raster_lowres,
-        scale_factor = scale_factors$lowres %||% 1,
-        dim = dim(raster_lowres),
-        source = "Seurat::GetImage(mode = 'raster')"
-      )
-    )
-    
-    if (!is.null(raster_hires)) {
-      images$hires <- list(
-        raster = raster_hires,
-        scale_factor = scale_factors$hires %||% NA_real_,
-        dim = dim(raster_hires),
-        source = "Seurat::GetImage(mode = 'hires')"
-      )
+    if (is.null(images$lowres) && !is.null(images$hires)) {
+      images$lowres <- images$hires  # legacy consumers (this app) expect $lowres to always exist
     }
     
-    spatial_dir <- get_visium_spatial_dir(seurat_obj, img_obj)
-    
+    # --- Fichiers additionnels dans spatial/ (fiducials, detected_tissue,
+    # custom) -- lowres/hires standards deja couverts ci-dessus (disque ou
+    # repli Seurat), jamais dupliques ici.
     if (!is.null(spatial_dir) && dir.exists(spatial_dir)) {
       image_files <- list.files(
         spatial_dir,
@@ -233,59 +323,28 @@ extract_histology_image <- function(seurat_obj, technology) {
         full.names = TRUE
       )
       
-      if (length(image_files) > 0L) {
-        for (path in image_files) {
-          file_name <- basename(path)
-          file_stem <- tools::file_path_sans_ext(file_name)
-          
-          is_lowres <- grepl("lowres", file_stem, ignore.case = TRUE)
-          is_hires <- grepl("hires|highres", file_stem, ignore.case = TRUE)
-          
-          key <- if (is_lowres) {
-            "lowres_file"
-          } else if (is_hires) {
-            "hires_file"
-          } else {
-            paste0(
-              "file_",
-              gsub("[^A-Za-z0-9_]+", "_", tolower(file_stem))
-            )
-          }
-          
-          if (key %in% names(images)) {
-            key <- paste0(
-              key,
-              "_",
-              sprintf("%02d", sum(startsWith(names(images), key)) + 1L)
-            )
-          }
-          
-          raster_file <- read_histology_file(path)
-          
-          if (is.null(raster_file)) {
-            next
-          }
-          
-          file_dim <- dim(raster_file)
-          
-          # Registration automatique uniquement pour les images Visium
-          # lowres/hires. Les fichiers additionnels conservent par défaut
-          # le repère full-resolution : 1 pixel image = 1 unité spatiale.
-          file_scale_factor <- if (is_lowres) {
-            scale_factors$lowres %||% 1
-          } else if (is_hires) {
-            scale_factors$hires %||% 1
-          } else {
-            1
-          }
-          
-          images[[key]] <- list(
-            raster = raster_file,
-            scale_factor = file_scale_factor,
-            dim = file_dim,
-            source = normalizePath(path, winslash = "/", mustWork = FALSE)
-          )
+      for (path in image_files) {
+        file_name <- basename(path)
+        file_stem <- tools::file_path_sans_ext(file_name)
+        
+        is_lowres <- grepl("^tissue_lowres_image", file_stem, ignore.case = TRUE)
+        is_hires  <- grepl("^tissue_hires_image", file_stem, ignore.case = TRUE)
+        if (is_lowres || is_hires) next
+        
+        key <- paste0("file_", gsub("[^A-Za-z0-9_]+", "_", tolower(file_stem)))
+        if (key %in% names(images)) {
+          key <- paste0(key, "_", sprintf("%02d", sum(startsWith(names(images), key)) + 1L))
         }
+        
+        raster_file <- read_histology_file(path)
+        if (is.null(raster_file)) next
+        
+        images[[key]] <- list(
+          raster = raster_file,
+          scale_factor = 1,  # repere full-resolution par defaut pour les fichiers non-standards
+          dim = dim(raster_file),
+          source = normalizePath(path, winslash = "/", mustWork = FALSE)
+        )
       }
     }
     
@@ -293,8 +352,10 @@ extract_histology_image <- function(seurat_obj, technology) {
       images = images,
       lowres = images$lowres,
       hires = images$hires %||% NULL,
-      scale_factors = scale_factors,
-      active_resolution = "lowres",
+      scale_factors = json_scale_factors %||% scale_factors,
+      # v6: hires devient la resolution PAR DEFAUT (voir diagnostic ci-dessus)
+      # -- lowres reste selectionnable manuellement pour un apercu rapide.
+      active_resolution = if ("hires" %in% names(images)) "hires" else "lowres",
       spatial_dir = spatial_dir
     )
   }, error = function(e) {
@@ -376,9 +437,12 @@ diagnose_histology_raster <- function(r) {
 #' Get one histology image and its spatial scale
 #'
 #' @param hist_data Histology object returned by extract_histology_image().
-#' @param resolution Requested resolution: "lowres" or "hires" or any key from hist_data$images.
+#' @param resolution Requested resolution: "hires" (default, confirmed
+#'   reliable) or "lowres" (quick preview only -- see
+#'   extract_histology_image() header, audit step 3.12, for why lowres is no
+#'   longer the default) or any key from hist_data$images.
 #' @return NULL or list(raw_raster, rgba, scale_factor, dim, resolution).
-get_histology_raster <- function(hist_data, resolution = "lowres") {
+get_histology_raster <- function(hist_data, resolution = "hires") {
   if (is.null(hist_data)) {
     return(NULL)
   }
@@ -408,7 +472,9 @@ get_histology_raster <- function(hist_data, resolution = "lowres") {
   }
   
   if (!resolution %in% names(available_images)) {
-    resolution <- if ("lowres" %in% names(available_images)) {
+    resolution <- if ("hires" %in% names(available_images)) {
+      "hires"
+    } else if ("lowres" %in% names(available_images)) {
       "lowres"
     } else {
       names(available_images)[1L]
@@ -440,6 +506,16 @@ get_histology_raster <- function(hist_data, resolution = "lowres") {
 #' FIX (root cause of the reported 90° rotation): `Seurat::GetTissueCoordinates()`
 #' column ORDER/NAMING for VisiumV1 has genuinely differed between Seurat
 #' versions. This function reads columns by NAME instead of position.
+#'
+#' NOTE (audit step 3.9c): this name-based resolution is the most robust
+#' static guess we can make, but Seurat's own column-order convention for
+#' GetTissueCoordinates.VisiumV1() is CONFIRMED to have changed between
+#' releases (cols=c('imagerow','imagecol') in some, c('imagecol','imagerow')
+#' in others -- verified against two disagreeing official doc snapshots). If
+#' it still comes out wrong for a given installed version, use
+#' apply_coord_orientation() below (wired to 3 checkboxes in
+#' mod_import_spatial.R) rather than editing this function's guess again --
+#' see that function's header for why.
 #'
 #' @param spatial_obj Objet Seurat spatial (Visium/Xenium/CosMx).
 #' @return data.frame avec id, x (imagecol / horizontal), y (imagerow /
@@ -475,6 +551,58 @@ get_spatial_coords <- function(spatial_obj) {
   )
   
   df
+}
+
+#' Manually correct spot coordinate orientation (swap / mirror)
+#'
+#' See file header (v5, fix #2) and get_spatial_coords()'s note for the full
+#' rationale: Seurat's own GetTissueCoordinates.VisiumV1() column-order
+#' convention is confirmed to differ between releases, so rather than ship
+#' another unverified automatic heuristic, this exposes the correction as an
+#' explicit, one-click, visually-verifiable MANUAL control (3 checkboxes in
+#' mod_import_spatial.R: swap_xy / flip_x / flip_y).
+#'
+#' Applied ONCE at import time to $coords (see convert_to_bpcells_and_fov()),
+#' NOT per-viz-session -- every downstream consumer (histology overlay,
+#' BANKSY-lite's physical k-NN graph in mod_spatial_cluster.R, Moran's I,
+#' ROI, multi-sample section maps) reads the SAME $coords, so a wrong
+#' orientation silently corrupts spatial clustering too, not just the
+#' picture. Fixing it once here fixes it everywhere.
+#'
+#' @param coords data.frame(id, x, y, fov) as returned by get_spatial_coords().
+#' @param swap_xy Logical, swap the x and y columns (corrects a 90-degree-type mismatch).
+#' @param flip_x Logical, mirror horizontally.
+#' @param flip_y Logical, mirror vertically.
+#' @param img_width,img_height Optional numeric, full-resolution histology
+#'   image dimensions in pixels. When available, mirroring reflects around
+#'   the IMAGE extent rather than just the point cloud's own bounding box
+#'   (more correct when the tissue doesn't fill the whole capture area).
+#'   Falls back to the point cloud's own range when NULL (e.g. Xenium/CosMx,
+#'   or Visium with no histology extracted).
+#' @return coords, geometry corrected. Unchanged if all three flags are FALSE.
+apply_coord_orientation <- function(coords, swap_xy = FALSE, flip_x = FALSE, flip_y = FALSE,
+                                     img_width = NULL, img_height = NULL) {
+  if (is.null(coords) || nrow(coords) == 0 || !(isTRUE(swap_xy) || isTRUE(flip_x) || isTRUE(flip_y))) {
+    return(coords)
+  }
+  
+  if (isTRUE(swap_xy)) {
+    tmp <- coords$x
+    coords$x <- coords$y
+    coords$y <- tmp
+    tmp_dim <- img_width
+    img_width <- img_height
+    img_height <- tmp_dim
+  }
+  if (isTRUE(flip_x)) {
+    w <- img_width %||% diff(range(coords$x, na.rm = TRUE))
+    coords$x <- w - coords$x
+  }
+  if (isTRUE(flip_y)) {
+    h <- img_height %||% diff(range(coords$y, na.rm = TRUE))
+    coords$y <- h - coords$y
+  }
+  coords
 }
 
 #' Sanity-check that spot coordinates and the histology raster share the
@@ -537,13 +665,20 @@ check_histology_coord_alignment <- function(coords, hist_img) {
 #' @param simplify_tol Numeric tolerance passed to Seurat::Simplify().
 #' @param max_sketch Integer, max cells/spots kept in the in-RAM sketch.
 #' @param norm_method "lognorm" (default) or "sct".
+#' @param raw_dir Optional character, the ROOT folder the user picked in the
+#'   import UI -- passed through to extract_histology_image() so it can
+#'   reliably find spatial/ (see that function's header, v5 fix #1).
+#' @param swap_xy,flip_x,flip_y Logical, manual coordinate-orientation
+#'   correction -- see apply_coord_orientation() (v5 fix #2).
 #' @return List — see file header CONTRACT.
 convert_to_bpcells_and_fov <- function(seurat_obj, dataset_id,
                                        technology = c("visium", "xenium", "cosmx"),
                                        assay = NULL,
                                        simplify_tol = 20,
                                        max_sketch = 50000,
-                                       norm_method = c("lognorm", "sct")) {
+                                       norm_method = c("lognorm", "sct"),
+                                       raw_dir = NULL,
+                                       swap_xy = FALSE, flip_x = FALSE, flip_y = FALSE) {
   technology  <- match.arg(technology)
   norm_method <- match.arg(norm_method)
   if (!requireNamespace("BPCells", quietly = TRUE)) {
@@ -569,7 +704,13 @@ convert_to_bpcells_and_fov <- function(seurat_obj, dataset_id,
     seurat_obj <- .simplify_all_fovs(seurat_obj, tol = simplify_tol)
   }
   
-  # --- 3. Full-resolution coordinates.
+  # --- 3. Histology image (multi-resolution). Extracted BEFORE coordinates
+  # (order swapped in v5) so a manual orientation fix below can mirror
+  # around the actual image extent rather than just the point cloud's own
+  # bounding box.
+  hist_img <- extract_histology_image(seurat_obj, technology, raw_dir = raw_dir)
+  
+  # --- 4. Full-resolution coordinates.
   coords <- tryCatch(
     get_spatial_coords(seurat_obj),
     error = function(e) {
@@ -583,8 +724,19 @@ convert_to_bpcells_and_fov <- function(seurat_obj, dataset_id,
             "le clustering spatial (BANKSY) sera indisponible pour ce jeu de donnees.")
   }
   
-  # --- 4. Histology image (multi‑resolution).
-  hist_img <- extract_histology_image(seurat_obj, technology)
+  # --- 4b. Manual orientation correction (v5 fix #2) — applied ONCE here so
+  # clustering/Moran/viz/multi-sample all share the same corrected geometry.
+  if (!is.null(coords) && (isTRUE(swap_xy) || isTRUE(flip_x) || isTRUE(flip_y))) {
+    img_w <- NULL; img_h <- NULL
+    ref_img <- hist_img$lowres %||% (if (!is.null(hist_img$images) && length(hist_img$images) > 0) hist_img$images[[1]] else NULL)
+    if (!is.null(ref_img) && !is.null(ref_img$dim)) {
+      sf <- ref_img$scale_factor %||% 1
+      img_w <- ref_img$dim[2] / sf
+      img_h <- ref_img$dim[1] / sf
+    }
+    coords <- apply_coord_orientation(coords, swap_xy = swap_xy, flip_x = flip_x, flip_y = flip_y,
+                                      img_width = img_w, img_height = img_h)
+  }
   
   if (!is.null(coords) && !is.null(hist_img)) {
     check_histology_coord_alignment(coords, hist_img)
