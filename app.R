@@ -25,6 +25,7 @@ tryCatch(
   init_spatial_daemons(n_daemons = 6),
   error = function(e) warning("Initialisation des daemons mirai (spatial) impossible : ", conditionMessage(e))
 )
+source("R/utils_spatial_niche.R")
 
 source("modules/import/mod_import_sc.R")
 source("modules/import/mod_import_bulk.R")
@@ -56,6 +57,7 @@ source("modules/spatial/mod_spatial_cluster.R")
 source("modules/spatial/mod_spatial_deconv.R")
 source("modules/spatial/mod_spatial_viz.R")
 source("modules/spatial/mod_spatial_multi.R")
+source("modules/spatial/mod_spatial_niche.R")
 source("modules/spatial/mod_spatial.R")
 
 
