@@ -58,9 +58,10 @@ LABEL_TRANSFER_TIMEOUT_MS <- 45 * 60 * 1000  # 45 minutes
 #'   inside every daemon (relative to the app's working directory).
 #' @return invisible(TRUE) on success, invisible(FALSE) if mirai is missing.
 init_spatial_daemons <- function(n_daemons = 6,
-                                  source_files = c("R/utils_spatial_async.R",
-                                                    "R/utils_spatial_io.R",
-                                                    "R/utils_spatial_multi.R")) {
+                                 source_files = c("R/utils_spatial_async.R",
+                                                  "R/utils_spatial_io.R",
+                                                  "R/utils_spatial_multi.R",
+                                                  "R/utils_spatial_niche.R")) {
   if (!requireNamespace("mirai", quietly = TRUE)) {
     warning("Package 'mirai' manquant : les calculs spatiaux asynchrones (clustering, ",
             "deconvolution, indice de Moran) seront indisponibles. Installez-le via ",

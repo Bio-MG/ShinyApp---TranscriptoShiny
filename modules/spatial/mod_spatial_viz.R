@@ -24,6 +24,7 @@ mod_spatial_viz_ui <- function(id) {
           "Metrique QC" = "qc",
           "Cluster spatial" = "cluster",
           "Type cellulaire (deconvolution)" = "deconv",
+          "Niche spatiale" = "niche",
           "Gene" = "gene"
         ),
         selected = "qc"
@@ -894,6 +895,11 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
                "cluster" = {
                  req(shared_rv$cluster_labels)
                  as.character(shared_rv$cluster_labels[df$id])
+               },
+               #ajout niche labels
+               "niche" = {
+                 req(shared_rv$niche_labels)
+                 as.character(shared_rv$niche_labels[df$id])
                },
                "deconv" = {
                  req(shared_rv$deconv_props, input$deconv_celltype)

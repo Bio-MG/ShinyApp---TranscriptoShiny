@@ -55,6 +55,13 @@
 # bad state for every future task routed to it (daemons are long-lived).
 # This button tears the pool down and respawns it fresh, without needing to
 # restart R.
+#
+# v7 (Phase 5 — niches spatiales): added a 6th top-level tab,
+# "Niches spatiales" (mod_spatial_niche.R, seurat5_spatial_vignette_2.Rmd
+# parity — BuildNicheAssay()). shared_rv gained niche_labels/niche_composition,
+# reset on active-dataset switch alongside every other per-dataset field
+# below. mod_spatial_viz.R (tab 4) reads shared_rv$niche_labels as one more
+# color_by option ("niche") — see that module's own small addition.
 # =============================================================================
 
 mod_spatial_ui <- function(id) {
@@ -77,6 +84,9 @@ mod_spatial_ui <- function(id) {
       
       nav_panel("5. Multi-echantillons", icon = icon("layer-group"),
                 mod_spatial_multi_ui(ns("multi"))),
+
+      nav_panel("6. Niches spatiales", icon = icon("diagram-project"),
+                mod_spatial_niche_ui(ns("niche"))),
       
       # ── Right-aligned active-dataset switcher + daemon status/reset ────
       nav_spacer(),
@@ -115,7 +125,13 @@ mod_spatial_server <- function(id, global_data) {
       # ── Phase 3 — ROI ("Subset out anatomical regions", vignette parity) ──
       roi_ids          = NULL,   # character vector: ids isolated via lasso/rectangle (mod_spatial_viz.R)
       roi_bbox          = NULL,  # list(x=c(min,max), y=c(min,max)) of the isolated ROI
-      roi_markers       = NULL   # data.frame: gene, avg_log2FC, pct.1, pct.2, p_val, p_val_adj (ROI vs reste)
+      roi_markers       = NULL,  # data.frame: gene, avg_log2FC, pct.1, pct.2, p_val, p_val_adj (ROI vs reste)
+      # ── Phase 5 — Niches spatiales (BuildNicheAssay-lite, mod_spatial_niche.R) ──
+      niche_labels      = NULL,  # named character vector: id -> niche id ("N1".."N<k>"), same
+      # shape as cluster_labels so mod_spatial_viz.R can treat it as just
+      # another color_by option.
+      niche_composition = NULL   # data.frame(niche, <one column per cluster/cell type>) — mean
+      # neighborhood composition per niche (interpretation aid).
     )
     
     output$daemon_status_ui <- renderUI({
@@ -172,6 +188,8 @@ mod_spatial_server <- function(id, global_data) {
       shared_rv$roi_ids         <- NULL
       shared_rv$roi_bbox        <- NULL
       shared_rv$roi_markers     <- NULL
+      shared_rv$niche_labels      <- NULL
+      shared_rv$niche_composition <- NULL
       showNotification(sprintf("Echantillon actif : %s", input$active_dataset_select),
                        type = "message", duration = 4)
     })
@@ -181,6 +199,7 @@ mod_spatial_server <- function(id, global_data) {
     mod_spatial_deconv_server("deconv", global_data, shared_rv)
     mod_spatial_viz_server("viz", global_data, shared_rv)
     mod_spatial_multi_server("multi", global_data, shared_rv)
+    mod_spatial_niche_server("niche", global_data, shared_rv)
     
     observeEvent(input$spatial_nav, { shared_rv$active_tab <- input$spatial_nav })
   })
