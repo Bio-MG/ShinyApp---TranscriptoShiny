@@ -52,7 +52,8 @@ optional_packages <- c(
   "leaflet.extras2",
   "leiden",
   "topicmodels",
-  "slam"
+  "slam",
+  "schard"
 )
 
 bioc_packages <- c(
@@ -99,6 +100,9 @@ has_limma <- requireNamespace("limma", quietly = TRUE)
 #   remotes::install_github("bnprks/BPCells/r")     # backend disque (obligatoire)
 #   remotes::install_github("dmcable/spacexr")      # RCTD (deconvolution avec reference)
 #   install.packages(c("STdeconvolve", "topicmodels", "slam"))  # LDA (deconvolution sans reference)
+#   remotes::install_github("cellgeni/schard")      # lecture .h5ad robuste (reference
+#                                                    # de deconvolution + import Single-Cell,
+#                                                    # voir helpers_io.R::load_single_cell_data())
 #
 # Optionnels, non requis par le pipeline par defaut :
 #   remotes::install_github("prabhakarlab/Banksy", ref = "devel")
@@ -112,8 +116,22 @@ has_stdeconvolve <- requireNamespace("STdeconvolve", quietly = TRUE) &&
 has_leafgl       <- requireNamespace("leafgl", quietly = TRUE)
 has_mirai        <- requireNamespace("mirai", quietly = TRUE)
 has_rann         <- requireNamespace("RANN", quietly = TRUE)
+# Phase 5 : lecteur .h5ad robuste (reference de deconvolution RCTD/Label
+# Transfer + import Single-Cell) — voir helpers_io.R::load_single_cell_data().
+# Optionnel : a defaut, l'app retombe sur SeuratDisk (moins fiable pour
+# AnnData) si celui-ci est installe, sinon .h5ad est simplement indisponible.
+has_schard       <- requireNamespace("schard", quietly = TRUE)
+# Phase 5 : requis pour lire les .parquet des exports Visium HD "binned"
+# (tissue_positions.parquet sous binned_outputs/square_0XXum/spatial/) —
+# voir helpers_io.R::load_spatial_visium_hd(), qui verifie aussi ce point
+# lui-meme avant d'importer (message clair plutot que l'erreur Seurat brute
+# "Please install arrow to read parquet files"). Souvent difficile a
+# installer depuis les sources sous Windows sans toolchain complet — si
+# aucun binaire CRAN n'est disponible pour votre version de R, essayez :
+# install.packages("arrow", repos = c("https://apache.r-universe.dev", getOption("repos")))
+has_arrow        <- requireNamespace("arrow", quietly = TRUE)
 
-for (dep in c("bpcells", "spacexr", "stdeconvolve", "leafgl", "mirai", "rann")) {
+for (dep in c("bpcells", "spacexr", "stdeconvolve", "leafgl", "mirai", "rann", "schard", "arrow")) {
   if (!get(paste0("has_", dep))) {
     message(sprintf("[spatial] Package(s) pour '%s' non installe(s) — fonctionnalite associee indisponible tant que non installee (voir commentaire ci-dessus pour la commande d'installation).", dep))
   }

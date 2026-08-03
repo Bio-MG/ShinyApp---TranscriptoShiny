@@ -1,6 +1,74 @@
 # =============================================================================
 # modules/spatial/mod_spatial_deconv.R — Cell-type Deconvolution / Label Transfer
 # =============================================================================
+# v6 (Chantier 2 refonte — reference reactive-state consolidation + daemon
+# fix): two INDEPENDENT root causes were found for "RCTD/Label Transfer
+# always fail, STdeconvolve always works":
+#
+#   1. STRUCTURAL (this is why it failed 100% of the time, regardless of
+#      reference quality): R/utils_spatial_async.R's init_spatial_daemons()
+#      never included helpers_io.R/helpers_sc.R in the files preloaded into
+#      each mirai daemon — only R/utils_spatial_*.R. The RCTD and Label
+#      Transfer daemon bodies below call load_single_cell_data() +
+#      prepare_seurat_object() to re-read the staged reference file INSIDE
+#      the daemon (by design — see the "hard rule compliance" note further
+#      down): those two functions were simply undefined in that process,
+#      so every run failed with a raw "could not find function" error deep
+#      in the daemon, surfaced only as the generic ExtendedTask failure
+#      notification. STdeconvolve needs neither function (no reference),
+#      which is exactly why it alone kept working. Fixed in
+#      R/utils_spatial_async.R (source_files now includes both files) —
+#      this file's own change is to make a *recurrence* of this class of
+#      bug loud instead of silent: both calls are now wrapped in tryCatch()
+#      with an explicit write_mirai_log() + stop() naming the missing
+#      function, so if a future refactor removes the daemon preload again,
+#      the log says exactly why instead of a bare ExtendedTask error.
+#
+#   2. UX/ROBUSTNESS (this is what made troubleshooting attempt #1 above
+#      hard to pin down): the reference upload state was correct in
+#      isolation but only surfaced itself AT CLICK TIME, and a FAILED
+#      re-upload (e.g. a second, bad file after a first good one) left the
+#      previous successful ref_state$obj in place — so the click-time guard
+#      could pass on a stale reference the user believed had just failed.
+#      ref_state now carries an explicit $status ("empty"/"loading"/
+#      "error"/"loaded") + $message, is unconditionally RESET at the start
+#      of every upload/recheck attempt (no more stale success surviving a
+#      failed re-upload), and a single reference_is_ready() reactive is the
+#      ONE place that decides "can we dispatch RCTD/Label Transfer" — used
+#      by both a persistent sidebar badge (visible the moment something
+#      goes wrong, not just on click) and the dispatch guard itself. A new
+#      "Revérifier la reference" button re-runs the parse/convert/metadata
+#      steps from the already-staged file without requiring a re-upload —
+#      isolates reference PREPARATION problems from RCTD/Label Transfer
+#      ALGORITHM problems, per the "chemin de test" requirement.
+#
+# v5 (Phase 5 — reported real-world failure): two issues surfaced testing
+# against a real external reference (cell2location's integrated lymphoid
+# organ scRNA-seq reference, .h5ad):
+#   1. Reference upload only accepted .rds (a pre-saved Seurat object) — any
+#      other standard format (.h5ad/.h5/.loom) had no path in. Reference
+#      loading now goes through helpers_io.R::load_single_cell_data() +
+#      prepare_seurat_object() (the SAME helpers the main Single-Cell import
+#      module already uses) instead of a hardcoded readRDS() — "universalize"
+#      the reference importer for free by reusing existing, shared code
+#      rather than duplicating format-specific logic here. See
+#      helpers_io.R's own v-next changelog for the .h5ad reader change
+#      (now prefers 'schard' over the fragile SeuratDisk convert round-trip).
+#   2. RCTD (spacexr::create.RCTD()) hard-requires >= 25 cells per cell type
+#      in the reference (its own CELL_MIN_INSTANCE constant) and previously
+#      failed deep inside the mirai daemon with a cryptic message
+#      ("process_cell_type_info error: need a minimum of 25 cells...") —
+#      the user only discovered this via the R console, not the app UI. Now
+#      surfaced as: (a) a live per-cell-type count table + warning as soon as
+#      a cell-type column is picked, (b) an opt-in "merge rare types into
+#      'Autre'" checkbox (default ON) applied before saving the trimmed
+#      reference, and (c) a hard pre-flight check right before invoking RCTD
+#      that blocks with a clear, actionable French message instead of
+#      dispatching a doomed daemon task. Label Transfer has no such hard
+#      minimum (FindTransferAnchors/TransferData tolerate small classes,
+#      just with noisier scores for them) so it is NOT blocked, only shown
+#      the same informational table.
+#
 # v4 (reported timeout with allen_cortex.rds): Label Transfer gained a fast
 # LogNormalize path (now the default) alongside SCTransform (vignette-exact,
 # opt-in), an `ncells` control for SCTransform (the vignette's own speedup:
@@ -39,6 +107,7 @@
 # Install:
 #   remotes::install_github("dmcable/spacexr")                        # RCTD
 #   install.packages(c("STdeconvolve", "topicmodels", "slam"))        # or via Bioc/GitHub
+#   remotes::install_github("cellgeni/schard")            # lecture .h5ad robuste (reference)
 #   (Label Transfer needs no extra package: FindTransferAnchors()/
 #   TransferData()/SCTransform() all ship with Seurat itself; optionally
 #   install Bioconductor's glmGamPoi for a faster SCTransform.)
@@ -54,6 +123,21 @@
 # daemons do not inherit the app's plan(multisession) by default.
 # =============================================================================
 
+# RCTD's own hard minimum (spacexr::process_cell_type_info() ->
+# CELL_MIN_INSTANCE) — mirrored here (not importable, spacexr has no
+# exported constant) so the app can warn/block BEFORE dispatching a doomed
+# daemon task, using the exact number spacexr itself enforces.
+RCTD_CELL_MIN_INSTANCE <- 25L
+
+# Minimum shared reference/query genes below which FindTransferAnchors()
+# either fails outright or produces meaningless anchors (near-zero overlap
+# most often means mismatched gene-ID conventions between reference and
+# spatial data -- symbols vs Ensembl IDs, or human vs mouse casing). Not a
+# Seurat-imposed constant (unlike RCTD_CELL_MIN_INSTANCE) -- a conservative
+# app-level guard to fail clearly instead of letting FindTransferAnchors()
+# either error cryptically or silently return near-random anchors.
+LABEL_TRANSFER_MIN_SHARED_GENES <- 50L
+
 mod_spatial_deconv_ui <- function(id) {
   ns <- NS(id)
   layout_sidebar(
@@ -67,12 +151,19 @@ mod_spatial_deconv_ui <- function(id) {
                    selected = "rctd"),
 
       # ── Reference upload: shared by RCTD and Label Transfer (both need
-      #    an annotated scRNA-seq reference; only the algorithm differs) ──
+      #    an annotated scRNA-seq reference; only the algorithm differs).
+      #    Accepts anything helpers_io.R::load_single_cell_data() supports
+      #    (Phase 5: .rds Seurat objects, but also .h5ad/.h5/.loom now that
+      #    the reference importer routes through that shared helper). ──
       conditionalPanel(
         condition = sprintf("input['%s'] == 'rctd' || input['%s'] == 'labeltransfer'", ns("mode"), ns("mode")),
-        fileInput(ns("ref_file"), "Reference scRNA-seq (.rds, objet Seurat annote)",
-                  accept = ".rds"),
-        uiOutput(ns("ref_celltype_col_ui"))
+        fileInput(ns("ref_file"), "Reference scRNA-seq (.rds Seurat, .h5ad, .h5, .loom)",
+                  accept = c(".rds", ".h5ad", ".h5", ".loom")),
+        # Persistent status badge (Chantier 2 refonte) -- visible the
+        # moment something goes wrong, not only after clicking "Lancer".
+        uiOutput(ns("ref_status_badge_ui")),
+        uiOutput(ns("ref_celltype_col_ui")),
+        uiOutput(ns("ref_celltype_summary_ui"))
       ),
 
       conditionalPanel(
@@ -82,8 +173,10 @@ mod_spatial_deconv_ui <- function(id) {
             " RCTD modelise l'expression par une loi de Poisson resolue par ",
             "programmation quadratique — pic RAM attendu sous ~2 Go. Execute ",
             "en mono-coeur (max_cores=1) pour eviter tout sous-processus imbrique. ",
-            "Les colonnes du tableau resultat portent directement les noms de type ",
-            "cellulaire de votre reference (ex: 'Astrocytes', 'Neurons_L4').")
+            "Necessite au moins 25 cellules par type dans la reference (limite ",
+            "propre a RCTD — voir le recapitulatif ci-dessus). Les colonnes du ",
+            "tableau resultat portent directement les noms de type cellulaire ",
+            "de votre reference (ex: 'Astrocytes', 'Neurons_L4').")
       ),
       conditionalPanel(
         condition = sprintf("input['%s'] == 'labeltransfer'", ns("mode")),
@@ -97,7 +190,7 @@ mod_spatial_deconv_ui <- function(id) {
                        3000, min = 500, max = 10000, step = 500),
           div(class = "alert alert-warning", style = "font-size:0.75rem;",
               bsicons::bs_icon("exclamation-triangle"),
-              " SCTransform() est signifcativement plus lent sans le package 'glmGamPoi' ",
+              " SCTransform() est signifcativement plus lente sans le package 'glmGamPoi' ",
               "(non installe par defaut) — installez-le via ",
               "BiocManager::install('glmGamPoi') pour accelerer nettement cette etape. ",
               "'ncells' reprend l'astuce de la vignette Seurat elle-meme : apprend le ",
@@ -113,13 +206,9 @@ mod_spatial_deconv_ui <- function(id) {
             "pure). Trouve des paires cellule/spot similaires (\"ancres\") apres normalisation ",
             "de la reference et de la requete, puis transfere un score de probabilite ",
             "par type cellulaire a chaque spot — les colonnes du tableau resultat portent, ",
-            "comme pour RCTD, les noms de type cellulaire de votre reference."),
-        div(class = "alert alert-warning", style = "font-size:0.75rem;",
-            bsicons::bs_icon("exclamation-triangle"),
-            " Plus lourd que RCTD (deux normalisations + PCA + recherche d'ancres) — reservez ",
-            "aux jeux de donnees raisonnables (quelques dizaines de milliers de spots ",
-            "QC-filtres au maximum) ou reduisez d'abord via les seuils QC (onglet 1). ",
-            "Delai etendu a 45 min pour cette methode specifiquement (au lieu de 20 min).")
+            "comme pour RCTD, les noms de type cellulaire de votre reference. Pas de minimum ",
+            "de cellules impose (contrairement a RCTD), mais un type tres rare donnera un ",
+            "score plus bruite.")
       ),
       conditionalPanel(
         condition = sprintf("input['%s'] == 'stdeconvolve'", ns("mode")),
@@ -160,38 +249,275 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
     log_file <- spatial_log_path(session, "deconv")
     tracker  <- create_reactive_tracker(session, log_file)
 
-    # ── Reference upload: trim to (counts, cell_types), write a small .rds ──
-    # Shared by RCTD and Label Transfer — both consume the same trimmed
-    # reference shape, just run different algorithms on it inside the daemon.
-    ref_path <- reactiveVal(NULL)
+    # ── Consolidated reference state (Chantier 2 refonte) ──────────────────
+    # ONE reactiveValues, ONE lifecycle. `status` is the single source of
+    # truth for both the persistent badge and the dispatch guard:
+    #   "empty"   -> nothing uploaded yet
+    #   "loading" -> a stage-1..4 pipeline run is currently in flight
+    #   "error"   -> the last attempt failed; $message explains why. obj/
+    #                staged_path are ALWAYS cleared on error (no stale
+    #                success can survive a failed re-upload/recheck).
+    #   "loaded"  -> obj/staged_path are valid; ref_path() (the small,
+    #                trimmed file the daemon actually reads) may still be
+    #                NULL for a few hundred ms while the observe() block
+    #                below reacts to the freshly-rendered celltype_col
+    #                input -- see reference_is_ready().
+    ref_state <- reactiveValues(
+      obj = NULL, staged_path = NULL, orig_ext = NULL,
+      status = "empty", message = NULL
+    )
+    ref_path      <- reactiveVal(NULL)
     ref_meta_cols <- reactiveVal(character(0))
+
+    # Package-version suffix appended to error notifications that look like
+    # the known SeuratObject v5 "GetAssayData()/slot defunct" class of
+    # error -- most often caused by a THIRD-PARTY reader (schard,
+    # SeuratDisk...) internally still calling the old pre-5.0 API against a
+    # SeuratObject build where `slot=` was fully removed (not just
+    # deprecated-with-warning). Surfacing versions inline means the next
+    # failure is diagnosable from the notification alone, no console access
+    # needed.
+    .version_hint <- function(msg) {
+      if (!grepl("GetAssayData|slot.*defunct|defunct.*slot", msg, ignore.case = TRUE)) return("")
+      sprintf(" [Seurat %s | SeuratObject %s | schard %s | SeuratDisk %s]",
+              tryCatch(as.character(utils::packageVersion("Seurat")), error = function(e) "?"),
+              tryCatch(as.character(utils::packageVersion("SeuratObject")), error = function(e) "?"),
+              tryCatch(as.character(utils::packageVersion("schard")), error = function(e) "absent"),
+              tryCatch(as.character(utils::packageVersion("SeuratDisk")), error = function(e) "absent"))
+    }
+
+    # ── Reference parse/convert pipeline, factored out so it can run from
+    # EITHER a fresh upload OR the "Revérifier la reference" button without
+    # duplicating the 4 stages. Always starts by RESETTING ref_state to a
+    # clean "loading" slate -- a failed run can never leave a PREVIOUS
+    # successful obj/staged_path in place looking falsely ready.
+    run_reference_pipeline <- function(staged_path, orig_ext) {
+      ref_state$obj         <- NULL
+      ref_state$staged_path <- NULL
+      ref_state$status      <- "loading"
+      ref_state$message     <- NULL
+      ref_meta_cols(character(0))
+      ref_path(NULL)
+
+      withProgress(message = "Preparation de la reference...", value = 0, {
+        incProgress(0.15, detail = sprintf("Lecture (.%s)...", if (nzchar(orig_ext)) orig_ext else "?"))
+        raw_ref <- tryCatch(load_single_cell_data(staged_path), error = function(e) {
+          msg <- conditionMessage(e)
+          ref_state$status  <- "error"
+          ref_state$message <- sprintf("Lecture (.%s) : %s%s", orig_ext, msg, .version_hint(msg))
+          showNotification(paste("Reference — erreur de lecture :", msg), type = "error", duration = 15)
+          NULL
+        })
+        if (is.null(raw_ref)) return(invisible(FALSE))
+
+        incProgress(0.4, detail = "Conversion en objet Seurat...")
+        ref_obj <- tryCatch(prepare_seurat_object(raw_ref, project_name = "Reference"), error = function(e) {
+          msg <- conditionMessage(e)
+          ref_state$status  <- "error"
+          ref_state$message <- sprintf("Conversion Seurat : %s%s", msg, .version_hint(msg))
+          showNotification(paste("Reference — erreur de conversion :", msg), type = "error", duration = 15)
+          NULL
+        })
+        if (is.null(ref_obj)) return(invisible(FALSE))
+        if (!inherits(ref_obj, "Seurat")) {
+          ref_state$status  <- "error"
+          ref_state$message <- "Le fichier n'a pas pu etre converti en objet Seurat."
+          showNotification("Reference — le fichier n'a pas pu etre converti en objet Seurat.",
+                            type = "error", duration = 10)
+          return(invisible(FALSE))
+        }
+
+        incProgress(0.3, detail = "Lecture des metadonnees...")
+        meta_cols <- tryCatch(colnames(ref_obj@meta.data), error = function(e) {
+          ref_state$status  <- "error"
+          ref_state$message <- paste("Lecture metadata :", conditionMessage(e))
+          showNotification(paste("Reference — erreur de lecture metadata :", conditionMessage(e)),
+                            type = "error", duration = 10)
+          NULL
+        })
+        if (is.null(meta_cols)) return(invisible(FALSE))
+
+        # Single atomic success update -- obj/staged_path/status always set
+        # TOGETHER, never partially.
+        ref_state$obj         <- ref_obj
+        ref_state$staged_path <- staged_path
+        ref_state$orig_ext    <- orig_ext
+        ref_state$status      <- "loaded"
+        ref_state$message     <- NULL
+        ref_meta_cols(meta_cols)
+        incProgress(0.15, detail = "Termine.")
+        showNotification(sprintf("Reference chargee : %d cellules x %d genes (.%s).",
+                                  ncol(ref_obj), nrow(ref_obj), if (nzchar(orig_ext)) orig_ext else "?"),
+                          type = "message", duration = 5)
+        invisible(TRUE)
+      })
+    }
 
     observeEvent(input$ref_file, {
       req(input$ref_file)
-      tryCatch({
-        ref_obj <- readRDS(input$ref_file$datapath)
-        if (!inherits(ref_obj, "Seurat")) stop("Le fichier de reference doit contenir un objet Seurat.")
-        ref_meta_cols(colnames(ref_obj@meta.data))
-        session$userData$spatial_deconv_ref_obj <- ref_obj
+      # Re-stage upload under its ORIGINAL extension. Shiny's upload
+      # datapath is not guaranteed to carry it in every version, and
+      # load_single_cell_data() dispatches on tools::file_ext() — cheap
+      # (one file.copy(), no in-RAM duplication of the reference itself).
+      orig_ext <- tolower(tools::file_ext(input$ref_file$name))
+      staged_path <- tryCatch({
+        if (nzchar(orig_ext)) {
+          p <- tempfile(fileext = paste0(".", orig_ext))
+          file.copy(input$ref_file$datapath, p, overwrite = TRUE)
+          p
+        } else {
+          input$ref_file$datapath
+        }
       }, error = function(e) {
-        showNotification(paste("Erreur reference:", conditionMessage(e)), type = "error", duration = 8)
+        ref_state$status  <- "error"
+        ref_state$message <- paste("Copie du fichier :", conditionMessage(e))
+        showNotification(paste("Reference — erreur de copie du fichier :", conditionMessage(e)),
+                          type = "error", duration = 10)
+        NULL
       })
+      req(staged_path)
+      run_reference_pipeline(staged_path, orig_ext)
+    })
+
+    observeEvent(input$btn_recheck_ref, {
+      path <- ref_state$staged_path %||% NULL
+      ext  <- ref_state$orig_ext %||% ""
+      if (is.null(path)) {
+        showNotification("Aucun fichier a revérifier — uploadez d'abord une reference.",
+                          type = "warning", duration = 6)
+        return()
+      }
+      run_reference_pipeline(path, ext)
+    })
+
+    # ── Single source of truth: "can we dispatch RCTD/Label Transfer?" ────
+    # Used by BOTH the persistent badge and the click-time guard, so the two
+    # can never disagree.
+    reference_is_ready <- reactive({
+      identical(ref_state$status, "loaded") && !is.null(ref_path())
+    })
+
+    output$ref_status_badge_ui <- renderUI({
+      st <- ref_state$status
+      badge <- switch(st,
+        "empty" = div(class = "alert alert-light", style = "font-size:0.75rem; margin-bottom:4px;",
+                      bsicons::bs_icon("circle"), " Aucune reference chargee."),
+        "loading" = div(class = "alert alert-info", style = "font-size:0.75rem; margin-bottom:4px;",
+                        bsicons::bs_icon("hourglass-split"), " Chargement de la reference en cours..."),
+        "error" = div(class = "alert alert-danger", style = "font-size:0.75rem; margin-bottom:4px;",
+                      bsicons::bs_icon("x-circle"),
+                      sprintf(" Erreur : %s", ref_state$message %||% "cause inconnue")),
+        "loaded" = if (reference_is_ready()) {
+          div(class = "alert alert-success", style = "font-size:0.75rem; margin-bottom:4px;",
+              bsicons::bs_icon("check-circle"),
+              sprintf(" Reference prete : %d cellules x %d genes.",
+                      ncol(ref_state$obj), nrow(ref_state$obj)))
+        } else {
+          div(class = "alert alert-warning", style = "font-size:0.75rem; margin-bottom:4px;",
+              bsicons::bs_icon("exclamation-triangle"),
+              " Reference chargee — choisissez la colonne 'type cellulaire' ci-dessous ",
+              "pour finaliser la preparation.")
+        },
+        div(class = "alert alert-light", style = "font-size:0.75rem;", "Statut inconnu.")
+      )
+      tagList(
+        badge,
+        if (identical(st, "error") || identical(st, "loaded")) {
+          actionLink(ns("btn_recheck_ref"), "\U1F504 Revérifier la reference (sans re-upload)",
+                     style = "font-size:0.72rem;")
+        }
+      )
     })
 
     output$ref_celltype_col_ui <- renderUI({
-      req(length(ref_meta_cols()) > 0)
-      selectInput(ns("ref_celltype_col"), "Colonne 'type cellulaire'", choices = ref_meta_cols())
+      req(ref_state$obj, length(ref_meta_cols()) > 0)
+      ref_obj <- ref_state$obj
+      cols <- ref_meta_cols()
+      # FIX (Phase 5, real-world reference had 45 metadata columns): sort
+      # candidates by descending level count and drop columns that cannot
+      # plausibly be a cell-type annotation -- <2 levels (e.g. "orig.ident",
+      # everything the same value) or >200 levels (e.g. a continuous score
+      # or a near-per-cell ID) -- so a genuinely useful, fine-grained
+      # annotation surfaces FIRST instead of the alphabetically/positionally
+      # first column (which defaulted to "orig.ident" == 1 level == an
+      # instant RCTD failure in practice). Never leaves the selector empty:
+      # falls back to the unfiltered list if nothing passes the heuristic.
+      n_levels <- vapply(cols, function(cn) length(unique(ref_obj@meta.data[[cn]])), integer(1))
+      useful <- cols[n_levels >= 2 & n_levels <= 200]
+      useful <- useful[order(-n_levels[useful])]
+      choices <- if (length(useful) > 0) useful else cols
+      tagList(
+        selectInput(ns("ref_celltype_col"), "Colonne 'type cellulaire'", choices = choices),
+        checkboxInput(ns("merge_rare_types"),
+                      "Fusionner les types rares (< 25 cellules) en 'Autre'",
+                      value = TRUE)
+      )
     })
 
-    observeEvent(input$ref_celltype_col, {
-      req(session$userData$spatial_deconv_ref_obj, input$ref_celltype_col)
-      ref_obj <- session$userData$spatial_deconv_ref_obj
+    # ── Live per-cell-type counts: informs the merge-rare-types checkbox
+    # and surfaces RCTD's 25-cell minimum BEFORE the user hits "Lancer" ────
+    ref_celltype_counts <- reactive({
+      req(ref_state$obj, input$ref_celltype_col)
+      ct <- as.character(ref_state$obj@meta.data[[input$ref_celltype_col]])
+      tab <- as.data.frame(table(ct), stringsAsFactors = FALSE)
+      colnames(tab) <- c("Type cellulaire", "Effectif")
+      tab[order(-tab$Effectif), ]
+    })
+
+    output$ref_celltype_summary_ui <- renderUI({
+      tab <- tryCatch(ref_celltype_counts(), error = function(e) NULL)
+      req(tab)
+      rare <- tab[tab$Effectif < RCTD_CELL_MIN_INSTANCE, , drop = FALSE]
+      tagList(
+        if (nrow(rare) > 0) {
+          div(class = "alert alert-warning", style = "font-size:0.72rem;",
+              bsicons::bs_icon("exclamation-triangle"),
+              sprintf(" %d type(s) sous %d cellules : %s.", nrow(rare), RCTD_CELL_MIN_INSTANCE,
+                      paste(sprintf("%s (%d)", rare$`Type cellulaire`, rare$Effectif), collapse = ", ")),
+              " RCTD echouera sur ces types tant qu'ils ne sont pas fusionnes/exclus ",
+              "(voir la case a cocher ci-dessus) ou qu'une colonne moins fine n'est choisie.")
+        },
+        div(style = "max-height:160px; overflow-y:auto;",
+            DT::DTOutput(ns("ref_celltype_table")))
+      )
+    })
+    output$ref_celltype_table <- DT::renderDT({
+      DT::datatable(ref_celltype_counts(), rownames = FALSE,
+                    options = list(pageLength = 6, dom = "tp"))
+    })
+
+    # Builds/updates the trimmed reference saved to disk — reacts to BOTH
+    # the column choice and the merge-rare toggle (plain observe() tracks
+    # every reactive read in its body, no need to list dependencies
+    # explicitly). Every dependency here is a REAL reactiveValues field
+    # (ref_state$obj / ref_state$staged_path).
+    #
+    # Saves only the TINY (staged_path, cell_types) pair -- NEVER the counts
+    # matrix itself on the main Shiny thread (that used to take ~34s / ~211
+    # Mo on a realistic reference, a full UI freeze). The daemon re-reads
+    # and re-extracts counts itself, via the same
+    # load_single_cell_data()/prepare_seurat_object() helpers used at
+    # upload time (helpers_io.R + helpers_sc.R — preloaded on every daemon,
+    # see R/utils_spatial_async.R's source_files, fixed in this refonte).
+    observe({
+      req(ref_state$obj, ref_state$staged_path, input$ref_celltype_col)
+      ref_obj <- ref_state$obj
       tryCatch({
-        counts <- SeuratObject::LayerData(ref_obj, layer = "counts")
-        cell_types <- factor(ref_obj@meta.data[[input$ref_celltype_col]])
-        names(cell_types) <- colnames(ref_obj)
+        cell_types_raw <- as.character(ref_obj@meta.data[[input$ref_celltype_col]])
+        names(cell_types_raw) <- colnames(ref_obj)
+
+        if (isTRUE(input$merge_rare_types)) {
+          tab <- table(cell_types_raw)
+          rare_types <- names(tab)[tab < RCTD_CELL_MIN_INSTANCE]
+          if (length(rare_types) > 0) {
+            cell_types_raw[cell_types_raw %in% rare_types] <- "Autre"
+          }
+        }
+        cell_types <- factor(cell_types_raw)
+
         tmp <- tempfile(fileext = ".rds")
-        saveRDS(list(counts = counts, cell_types = cell_types), tmp)
+        saveRDS(list(staged_path = ref_state$staged_path,
+                     cell_types  = cell_types), tmp)
         ref_path(tmp)
       }, error = function(e) {
         showNotification(paste("Erreur preparation reference:", conditionMessage(e)), type = "error", duration = 8)
@@ -204,6 +530,36 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
                                               lt_npcs, lt_norm_method, lt_ncells, log_file) {
       mirai::mirai(
         {
+          # Wraps a load_single_cell_data()/prepare_seurat_object() reload
+          # in a clear, named failure -- if either function is undefined
+          # (the exact bug this refonte fixes in R/utils_spatial_async.R),
+          # this now names the missing function explicitly in the log
+          # instead of leaving a bare, unexplained daemon crash.
+          .reload_reference <- function(ref_path_local) {
+            ref_meta <- tryCatch(readRDS(ref_path_local), error = function(e) {
+              stop("Lecture du fichier de reference trimme (", ref_path_local, ") impossible : ",
+                   conditionMessage(e))
+            })
+            if (!exists("load_single_cell_data", mode = "function")) {
+              stop("Fonction 'load_single_cell_data' introuvable dans ce daemon -- ",
+                   "helpers_io.R/helpers_sc.R ne sont pas (ou plus) preloades ",
+                   "(voir R/utils_spatial_async.R::init_spatial_daemons(), argument source_files).")
+            }
+            if (!exists("prepare_seurat_object", mode = "function")) {
+              stop("Fonction 'prepare_seurat_object' introuvable dans ce daemon -- ",
+                   "helpers_io.R/helpers_sc.R ne sont pas (ou plus) preloades ",
+                   "(voir R/utils_spatial_async.R::init_spatial_daemons(), argument source_files).")
+            }
+            raw_ref <- tryCatch(load_single_cell_data(ref_meta$staged_path), error = function(e) {
+              stop("load_single_cell_data() a echoue sur '", ref_meta$staged_path, "' : ",
+                   conditionMessage(e))
+            })
+            ref_seurat <- tryCatch(prepare_seurat_object(raw_ref, project_name = "Reference"), error = function(e) {
+              stop("prepare_seurat_object() a echoue : ", conditionMessage(e))
+            })
+            list(seurat = ref_seurat, cell_types = ref_meta$cell_types)
+          }
+
           write_mirai_log(log_file, "Ouverture de la matrice BPCells...", 1, 5)
           mat <- BPCells::open_matrix_dir(bpcells_dir)
           if (!is.null(pass_idx)) mat <- mat[, pass_idx, drop = FALSE]
@@ -235,9 +591,13 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
             if (!requireNamespace("spacexr", quietly = TRUE)) {
               stop("Package 'spacexr' requis (remotes::install_github('dmcable/spacexr')).")
             }
-            write_mirai_log(log_file, "Preparation de la reference scRNA-seq...", 2, 5)
-            ref_data <- readRDS(ref_path)
-            reference <- spacexr::Reference(counts = ref_data$counts, cell_types = ref_data$cell_types)
+            write_mirai_log(log_file, "Chargement de la reference scRNA-seq (depuis le fichier stage)...", 2, 5)
+            reloaded    <- .reload_reference(ref_path)
+            ref_seurat  <- reloaded$seurat
+            ref_counts  <- SeuratObject::LayerData(ref_seurat, layer = "counts")
+            write_mirai_log(log_file, sprintf("Reference relue : %d cellules x %d genes.",
+                                               ncol(ref_seurat), nrow(ref_seurat)), 2, 5)
+            reference   <- spacexr::Reference(counts = ref_counts, cell_types = reloaded$cell_types)
 
             write_mirai_log(log_file, "Construction du 'puck' spatial (SpatialRNA)...", 3, 5)
             counts_dense <- methods::as(mat, "dgCMatrix")  # small: already QC-subset, single technical materialization
@@ -268,13 +628,15 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
               write_mirai_log(log_file, "Preparation de la reference (LogNormalize, rapide)...", 2, 5)
             }
 
-            ref_data <- readRDS(ref_path)
-            ref_obj  <- Seurat::CreateSeuratObject(counts = ref_data$counts)
-            ref_obj$cell_type <- as.character(ref_data$cell_types)[match(colnames(ref_obj), names(ref_data$cell_types))]
+            reloaded <- .reload_reference(ref_path)
+            ref_obj  <- reloaded$seurat
+            ref_obj$cell_type <- as.character(reloaded$cell_types)[match(colnames(ref_obj), names(reloaded$cell_types))]
             ref_obj  <- subset(ref_obj, cells = colnames(ref_obj)[!is.na(ref_obj$cell_type)])
             if (ncol(ref_obj) < 10) {
               stop("Reference trop petite apres filtrage des annotations manquantes (< 10 cellules annotees).")
             }
+            write_mirai_log(log_file, sprintf("Reference relue : %d cellules x %d genes.",
+                                               ncol(ref_obj), nrow(ref_obj)), 2, 5)
 
             if (use_sct) {
               ref_obj <- sctransform_sequential(ref_obj, ncells = lt_ncells)
@@ -283,7 +645,16 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
               ref_obj <- Seurat::FindVariableFeatures(ref_obj, verbose = FALSE)
               ref_obj <- Seurat::ScaleData(ref_obj, verbose = FALSE)
             }
-            ref_obj <- Seurat::RunPCA(ref_obj, npcs = 30, verbose = FALSE)
+            # npcs deliberately generous (50, the UI's own max for lt_npcs)
+            # rather than tied to the query's n_pc computed below: this
+            # RunPCA() result is NOT what FindTransferAnchors() actually
+            # uses for its own internal reference PCA (it recomputes one
+            # itself unless `reference.reduction` is passed, which we don't
+            # do -- verified against Seurat's own FindTransferAnchors()
+            # docs). Kept mainly so ref_obj carries a usable ["pca"] for any
+            # future diagnostic/plot; a fixed generous ceiling avoids ever
+            # being the accidental bottleneck if that assumption changes.
+            ref_obj <- Seurat::RunPCA(ref_obj, npcs = 50, verbose = FALSE)
 
             write_mirai_log(log_file, sprintf(
               "Preparation de la requete spatiale (%s)...",
@@ -299,6 +670,25 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
             }
             n_pc  <- max(2, min(lt_npcs, ncol(query) - 1, nrow(query) - 1, 50))
             query <- Seurat::RunPCA(query, npcs = n_pc, verbose = FALSE)
+
+            # Preflight: near-zero reference/query gene overlap most often
+            # means mismatched ID conventions (symbols vs Ensembl, human vs
+            # mouse) -- FindTransferAnchors() either errors cryptically or
+            # silently returns near-meaningless anchors in that case. Fail
+            # clearly instead, BEFORE the expensive anchor search.
+            shared_genes <- intersect(rownames(ref_obj), rownames(query))
+            if (length(shared_genes) < LABEL_TRANSFER_MIN_SHARED_GENES) {
+              stop(sprintf(
+                paste0(
+                  "Seulement %d gene(s) commun(s) entre la reference et les donnees spatiales ",
+                  "(minimum requis : %d). Causes probables : conventions d'identifiants differentes ",
+                  "(symboles vs Ensembl) ou organismes differents (humain/souris) entre la reference ",
+                  "et les donnees spatiales. Verifiez rownames(reference) vs rownames(objet spatial)."
+                ),
+                length(shared_genes), LABEL_TRANSFER_MIN_SHARED_GENES
+              ), call. = FALSE)
+            }
+            write_mirai_log(log_file, sprintf("%d genes communs reference/requete.", length(shared_genes)), 3, 5)
 
             write_mirai_log(log_file, sprintf("FindTransferAnchors (methode %s)...",
                                                if (use_sct) "SCT" else "LogNormalize"), 4, 5)
@@ -403,7 +793,57 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
 
     observeEvent(input$btn_deconv, {
       req(global_data$spatial_obj$bpcells_dir, global_data$spatial_obj$coords)
-      if (input$mode %in% c("rctd", "labeltransfer")) req(ref_path())
+
+      # Single source of truth (reference_is_ready()) -- if it's FALSE,
+      # ref_state$status/$message already say exactly why (also shown live
+      # in the persistent badge above, not just here at click time).
+      if (input$mode %in% c("rctd", "labeltransfer")) {
+        if (!reference_is_ready()) {
+          reason <- switch(ref_state$status,
+            "empty"   = "aucune reference chargee (section 'Reference scRNA-seq')",
+            "loading" = "chargement de la reference encore en cours -- patientez puis reessayez",
+            "error"   = sprintf("la reference a echoue au chargement (%s)", ref_state$message %||% "cause inconnue"),
+            "loaded"  = if (is.null(input$ref_celltype_col) || !nzchar(input$ref_celltype_col)) {
+              "aucune colonne 'type cellulaire' selectionnee"
+            } else {
+              "preparation de la reference pas encore terminee (patientez 1-2s apres avoir choisi la colonne, puis reessayez)"
+            },
+            "cause inconnue"
+          )
+          showNotification(paste0("Chargez d'abord une reference scRNA-seq complete : ", reason),
+                            type = "warning", duration = 14)
+          return()
+        }
+      }
+
+      # FIX (Phase 5): RCTD hard-fails deep inside the daemon if any cell
+      # type has < 25 cells (spacexr::process_cell_type_info()) — check
+      # BEFORE dispatching so the user gets an immediate, actionable
+      # message in the app instead of a cryptic error only visible in the
+      # R console (exactly what was reported). Label Transfer has no such
+      # hard minimum, so it is not blocked here.
+      if (identical(input$mode, "rctd")) {
+        ref_check <- tryCatch(readRDS(ref_path()), error = function(e) NULL)
+        if (is.null(ref_check)) {
+          showNotification("Reference introuvable ou illisible — reimportez le fichier de reference.",
+                            type = "error", duration = 8)
+          return()
+        }
+        tab <- table(as.character(ref_check$cell_types))
+        too_small <- names(tab)[tab < RCTD_CELL_MIN_INSTANCE]
+        if (length(too_small) > 0) {
+          showNotification(sprintf(
+            "RCTD necessite au moins %d cellules par type dans la reference. Type(s) insuffisant(s) : %s. ",
+            RCTD_CELL_MIN_INSTANCE,
+            paste(sprintf("%s (%d)", too_small, as.integer(tab[too_small])), collapse = ", ")
+          ), type = "error", duration = 14)
+          showNotification(
+            "Cochez 'Fusionner les types rares en Autre' (sidebar) ou choisissez une colonne ",
+            "d'annotation moins fine, puis relancez.", type = "warning", duration = 14)
+          return()
+        }
+      }
+
       reset_log(log_file)
       deconv_task$invoke(
         bpcells_dir    = global_data$spatial_obj$bpcells_dir,
