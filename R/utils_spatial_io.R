@@ -7,6 +7,26 @@
 # Seurat::LoadNanostring()). Produces the on-disk BPCells matrix + the
 # lightweight list that gets stored in global_data$spatial_obj.
 #
+# v6.1 (Chantier 1 refonte — HD import robustness, paired with the
+# helpers_io.R rewrite): two small, targeted additions, both defensive/
+# additive (zero behavior change for any dataset that already worked):
+#   1. get_spatial_coords() now falls back to obj$coord_x / obj$coord_y
+#      meta.data columns when Seurat::GetTissueCoordinates() errors or
+#      returns NULL. This is the coordinate contract produced by
+#      helpers_io.R::load_spatial_visium_hd_manual() — the arrow-free
+#      degraded Visium HD binned loader, used only when the 'arrow' package
+#      is unavailable and a native Seurat HD object (with a proper image/
+#      coordinate slot) could not be built.
+#   2. extract_histology_image()'s early-return used to require
+#      Seurat::Images(seurat_obj) to be non-empty. An object built by
+#      load_spatial_visium_hd_manual() has NO registered image at all (by
+#      design — see that function's header), which used to make histology
+#      silently unavailable for that path even though every actual pixel
+#      read in this function already goes through `raw_dir` directly (see
+#      v5/v6 history below), never through the object's own image slot.
+#      The guard now also accepts a usable `raw_dir` as an alternative to a
+#      registered image name.
+#
 # v5 (audit step 3.9c — histology rotation / background selection):
 #
 #   1. FIX (background selection): get_visium_spatial_dir() tried to locate
@@ -92,7 +112,15 @@ extract_histology_image <- function(seurat_obj, technology, raw_dir = NULL) {
     error = function(e) NA_character_
   )
   
-  if (is.na(img_name) || !nzchar(img_name)) {
+  has_registered_image <- !is.na(img_name) && nzchar(img_name)
+  has_raw_dir <- !is.null(raw_dir) && nzchar(raw_dir) && dir.exists(raw_dir)
+  
+  # v6.1: an object built by helpers_io.R::load_spatial_visium_hd_manual()
+  # (arrow-free degraded HD loader) has NO registered image at all, by
+  # design. Every pixel this function actually reads comes from `raw_dir`
+  # directly (see the disk-first v6 rewrite below) -- a missing image slot
+  # is only a real dead end when raw_dir is ALSO unusable.
+  if (!has_registered_image && !has_raw_dir) {
     return(NULL)
   }
   
@@ -195,7 +223,7 @@ extract_histology_image <- function(seurat_obj, technology, raw_dir = NULL) {
   }
   
   tryCatch({
-    img_obj <- seurat_obj[[img_name]]
+    img_obj <- if (has_registered_image) seurat_obj[[img_name]] else NULL
     
     # FIX (v5): prefer the caller-supplied raw_dir (the folder the user
     # actually picked at import) over slot-sniffing, which structurally
@@ -212,7 +240,7 @@ extract_histology_image <- function(seurat_obj, technology, raw_dir = NULL) {
         spatial_dir <- raw_dir
       }
     }
-    if (is.null(spatial_dir)) {
+    if (is.null(spatial_dir) && has_registered_image) {
       spatial_dir <- get_visium_spatial_dir(seurat_obj, img_obj)
     }
     
@@ -228,7 +256,8 @@ extract_histology_image <- function(seurat_obj, technology, raw_dir = NULL) {
     # this entirely, and is what actually worked in testing. This is now the
     # PRIMARY path whenever spatial_dir is known; Seurat-native extraction
     # (GetImage()/ScaleFactors()) is kept only as a fallback for datasets/
-    # callers without a resolvable raw_dir.
+    # callers without a resolvable raw_dir (and requires a registered image
+    # to even attempt).
     json_scale_factors <- NULL
     if (!is.null(spatial_dir)) {
       json_path <- file.path(spatial_dir, "scalefactors_json.json")
@@ -270,9 +299,12 @@ extract_histology_image <- function(seurat_obj, technology, raw_dir = NULL) {
     
     # FALLBACK: Seurat-native extraction, only for whichever of lowres/hires
     # wasn't already populated from disk above (no raw_dir, JSON missing, or
-    # non-standard folder layout).
-    scale_factors <- tryCatch(Seurat::ScaleFactors(img_obj), error = function(e) NULL)
-    if (is.null(images$lowres)) {
+    # non-standard folder layout) -- and only possible at all when the
+    # object actually has a registered image to query.
+    scale_factors <- if (has_registered_image) {
+      tryCatch(Seurat::ScaleFactors(img_obj), error = function(e) NULL)
+    } else NULL
+    if (is.null(images$lowres) && has_registered_image) {
       raster_lowres <- tryCatch(Seurat::GetImage(img_obj, mode = "raster"), error = function(e) NULL)
       if (!is.null(raster_lowres)) {
         images$lowres <- list(
@@ -282,7 +314,7 @@ extract_histology_image <- function(seurat_obj, technology, raw_dir = NULL) {
         )
       }
     }
-    if (is.null(images$hires)) {
+    if (is.null(images$hires) && has_registered_image) {
       raster_hires <- tryCatch({
         if ("image" %in% methods::slotNames(img_obj)) {
           image_slot <- methods::slot(img_obj, "image")
@@ -517,12 +549,34 @@ get_histology_raster <- function(hist_data, resolution = "hires") {
 #' mod_import_spatial.R) rather than editing this function's guess again --
 #' see that function's header for why.
 #'
+#' v6.1: added a fallback for objects with NO Seurat image/coordinate slot
+#' at all -- helpers_io.R::load_spatial_visium_hd_manual() (the arrow-free
+#' degraded Visium HD binned loader) exposes coordinates as plain
+#' obj$coord_x / obj$coord_y meta.data columns instead, since it never
+#' builds a Seurat image object (see that function's header for why). Used
+#' ONLY when GetTissueCoordinates() genuinely has nothing to offer -- zero
+#' behavior change for every dataset that already had a working image slot.
+#'
 #' @param spatial_obj Objet Seurat spatial (Visium/Xenium/CosMx).
 #' @return data.frame avec id, x (imagecol / horizontal), y (imagerow /
-#'   vertical), fov — ou NULL si GetTissueCoordinates() echoue.
+#'   vertical), fov — ou NULL si aucune source de coordonnees n'est disponible.
 get_spatial_coords <- function(spatial_obj) {
   tc <- tryCatch(Seurat::GetTissueCoordinates(spatial_obj, scale = NULL), error = function(e) NULL)
-  if (is.null(tc)) return(NULL)
+  
+  if (is.null(tc) || nrow(tc) == 0) {
+    # v6.1 fallback: manual-loader coordinate contract (coord_x/coord_y).
+    meta <- spatial_obj@meta.data
+    if (all(c("coord_x", "coord_y") %in% colnames(meta))) {
+      return(data.frame(
+        id  = colnames(spatial_obj),
+        x   = as.numeric(meta$coord_x),
+        y   = as.numeric(meta$coord_y),
+        fov = NA_character_,
+        stringsAsFactors = FALSE
+      ))
+    }
+    return(NULL)
+  }
   
   colnames_tc <- tolower(colnames(tc))
   

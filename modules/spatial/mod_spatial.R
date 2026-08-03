@@ -87,13 +87,24 @@ mod_spatial_ui <- function(id) {
 
       nav_panel("6. Niches spatiales", icon = icon("diagram-project"),
                 mod_spatial_niche_ui(ns("niche"))),
-      
-      # ── Right-aligned active-dataset switcher + daemon status/reset ────
+
+      # v9 (Phase 5 — fix "onglet 6 gache une ligne entiere"): a separate
+      # full-width header row above the tab strip (v8) reliably fixed the
+      # 6th-tab-invisible bug but always ate one blank row of vertical
+      # space, even when it had almost nothing to show (1 dataset -> no
+      # switcher, just badge+button). Folded back into the tab strip, but
+      # as a SINGLE compact nav_menu() dropdown ("Session") instead of 3
+      # separate nav_item()s (v4) — one small trigger, not three items, so
+      # the strip stays narrow enough for all 6 tabs even on a cramped
+      # viewport (e.g. RStudio's Viewer pane) while costing zero extra rows.
       nav_spacer(),
-      nav_item(uiOutput(ns("active_dataset_ui"))),
-      nav_item(uiOutput(ns("daemon_status_ui"))),
-      nav_item(actionButton(ns("btn_reset_daemons"), "Reinitialiser les daemons",
-                            class = "btn-outline-warning btn-sm", icon = icon("rotate")))
+      bslib::nav_menu(
+        title = tagList(icon("gear"), "Session"), align = "right",
+        nav_item(uiOutput(ns("active_dataset_ui"))),
+        nav_item(uiOutput(ns("daemon_status_ui"))),
+        nav_item(actionButton(ns("btn_reset_daemons"), "Reinitialiser les daemons",
+                              class = "btn-outline-warning btn-sm w-100 mt-1", icon = icon("rotate")))
+      )
     )
   )
 }

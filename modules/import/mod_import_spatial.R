@@ -1,6 +1,60 @@
 # =============================================================================
 # modules/import/mod_import_spatial.R — Spatial Import (Visium / Xenium / CosMx)
 # =============================================================================
+# v6 (Chantier 1 refonte — HD import robustness): the previous version
+# derived "is this an HD folder / which bin sizes exist" from
+# is_visium_hd_dir() + list_visium_hd_bin_sizes(), and separately whether
+# the *flat* HD layout existed anywhere. Because of a since-fixed
+# duplicate-definition bug in helpers_io.R, is_visium_hd_dir() had silently
+# regressed to ONLY detecting the binned_outputs/ layout — the flat/
+# feature-slice layout was invisible to this module even though the
+# detection logic below LOOKED complete. This module now reads a SINGLE
+# reactive, `visium_mode()`, driven by helpers_io.R::get_visium_import_mode()
+# — the same single source of truth the loaders themselves use — so the UI
+# and the actual import call can never disagree about which of the 3 modes
+# ("visium" / "visium_hd_binned" / "visium_hd_flat") applies:
+#   - "visium_hd_flat" now shows its OWN clear red banner (not "binning
+#     introuvable", which was misleading for this genuinely-unsupported
+#     format) and the Importer button, if clicked, fails immediately with
+#     the same clear message (helpers_io.R refuses this mode itself before
+#     ever attempting Load10X_Spatial() — defense in depth, not just a UI
+#     warning that could be bypassed by a stale render).
+#   - "visium_hd_binned" keeps the existing arrow-availability banner + bin
+#     size selector, now also mentioning the lightweight 'nanoparquet'
+#     alternative and this app's own degraded arrow-free loader (still
+#     works without arrow, coordinates + counts only, see
+#     helpers_io.R::load_spatial_visium_hd_manual()).
+#
+# v5 (Phase 5 — Visium HD): auto-detects a Visium HD dataset (presence of a
+# `binned_outputs/` folder under the picked directory, see
+# helpers_io.R::is_visium_hd_dir()) as soon as a folder is chosen with
+# "Visium" selected, and — if detected — swaps in a bin-size selector
+# (8um/16um only, see load_spatial_visium_hd()'s header for why 2um is
+# intentionally NOT offered) and routes the import through
+# load_spatial_visium_hd() instead of the classic load_spatial_visium().
+# Deliberately NOT a new top-level "technology" radio choice: detection is
+# automatic (one less decision for a non-expert biologist), and HD still
+# produces the exact same spatial_obj CONTRACT (sketch + bpcells_dir +
+# coords + histology) as classic Visium — QC/Clustering/Deconvolution/
+# Visualisation/Multi-echantillons needed ZERO changes.
+#
+# Histology for HD: passes `raw_dir` = the ROOT "outs" folder (the SAME
+# folder the user picked — unchanged from the classic path) rather than the
+# bin-specific `binned_outputs/square_0XXum/` subfolder. This is
+# deliberate, not an oversight: 10x's own Visium HD output makes
+# `binned_outputs/square_0XXum/spatial/tissue_*_image.png` a SYMLINK back
+# to the root `outs/spatial/` copy, and that symlink has been reported
+# broken/unreadable in several real-world exports (see e.g.
+# satijalab/seurat issue #9533/#9688) — Load10X_Spatial()'s own image
+# loader inherits that fragility (helpers_io.R's loader now also
+# auto-repairs this before calling Load10X_Spatial(), see
+# repair_hd_symlinked_images()). Reading directly from the root
+# `outs/spatial/` folder (this app's own disk-first histology path, see
+# R/utils_spatial_io.R's v5/v6 history) sidesteps the symlink entirely: the
+# root copy is the canonical, non-symlinked source, and its scale factors
+# apply to the same underlying microscopy image regardless of which bin
+# size was loaded.
+#
 # v4 (audit step 3.9c — histology rotation / background selection): added
 # 3 manual orientation checkboxes (swap X/Y, mirror horizontal, mirror
 # vertical) for Visium, wired to R/utils_spatial_io.R::apply_coord_orientation()
@@ -62,7 +116,8 @@ mod_import_spatial_ui <- function(id) {
         div(class = "alert alert-light", style = "font-size:0.8rem;",
             bsicons::bs_icon("lightbulb"),
             " Selectionnez le dossier racine contenant les fichiers bruts ",
-            "(ex: dossier 'outs' pour Visium/Xenium 10X, ou dossier CosMx AtoMx). Chaque import ",
+            "(ex: dossier 'outs' pour Visium/Xenium 10X, ou dossier CosMx AtoMx). Visium HD ",
+            "(dossier contenant 'binned_outputs/') est detecte automatiquement. Chaque import ",
             "s'ajoute a la liste des echantillons (onglet Spatial > \"5. Multi-echantillons\") ",
             "plutot que de remplacer le precedent."),
         
@@ -76,6 +131,9 @@ mod_import_spatial_ui <- function(id) {
         conditionalPanel(
           condition = sprintf("input['%s'] == 'visium'", ns("technology")),
           hr(),
+
+          uiOutput(ns("hd_mode_banner_ui")),
+
           numericInput(ns("min_counts"), "nCount_Spatial minimum", 100, min = 0, step = 10),
           numericInput(ns("min_features"), "nFeature_Spatial minimum", 200, min = 0, step = 10),
           
@@ -160,25 +218,137 @@ mod_import_spatial_server <- function(id, global_data) {
     output$path_display <- renderText({
       if (is.null(dir_path())) "Aucun dossier selectionne" else dir_path()
     })
+
+    # ── Visium import mode: SINGLE source of truth (Chantier 1 refonte) ───
+    # get_visium_import_mode() (helpers_io.R) is the exact same function the
+    # loaders themselves call before deciding what to do — the UI can never
+    # show a banner for a mode different from the one that will actually be
+    # loaded. Re-evaluated any time the picked folder OR technology changes.
+    visium_mode <- reactive({
+      req(dir_path(), identical(input$technology, "visium"))
+      get_visium_import_mode(dir_path())
+    })
+
+    hd_bins <- reactive({
+      req(identical(visium_mode(), "visium_hd_binned"))
+      list_visium_hd_bin_sizes(dir_path())
+    })
+
+    output$hd_mode_banner_ui <- renderUI({
+      mode <- tryCatch(visium_mode(), error = function(e) NA_character_)
+      if (is.na(mode) || identical(mode, "visium")) return(NULL)
+
+      if (identical(mode, "visium_hd_flat")) {
+        return(div(
+          class = "alert alert-danger", style = "font-size:0.78rem;",
+          bsicons::bs_icon("exclamation-octagon"),
+          " Format non pris en charge : ce dossier contient un .h5 \"feature slice\"/imagerie ",
+          "Visium HD (ex: '..._spatial.h5'), pas une matrice de comptage par spot/bin — l'import ",
+          "echouera si vous cliquez sur \"Importer\". Reexportez au format Space Ranger standard ",
+          "('outs/binned_outputs/square_0XXum/' pour du HD, ou 'filtered_feature_bc_matrix.h5' + ",
+          "'spatial/' pour du Visium classique)."
+        ))
+      }
+
+      # mode == "visium_hd_binned"
+      bins <- hd_bins()
+      has_arrow <- requireNamespace("arrow", quietly = TRUE)
+      has_nanoparquet <- requireNamespace("nanoparquet", quietly = TRUE)
+
+      tagList(
+        div(class = "alert alert-info", style = "font-size:0.78rem;",
+            bsicons::bs_icon("grid-3x3-gap"),
+            " Visium HD detecte ('binned_outputs/'). Choisissez UNE resolution a importer — ",
+            "reimportez ce meme dossier pour ajouter l'autre resolution comme echantillon ",
+            "distinct (onglet Spatial > \"5. Multi-echantillons\")."),
+
+        if (length(bins) == 0) {
+          div(class = "alert alert-warning", style = "font-size:0.75rem;",
+              bsicons::bs_icon("exclamation-triangle"),
+              " Dossier 'binned_outputs/' detecte mais aucun binning 8um/16um exploitable n'y a ",
+              "ete trouve (fichier .h5 manquant sous square_008um/ ou square_016um/).")
+        },
+
+        if (!has_arrow && !has_nanoparquet) {
+          div(class = "alert alert-danger", style = "font-size:0.75rem;",
+              bsicons::bs_icon("exclamation-octagon"),
+              " Ni 'arrow' ni 'nanoparquet' installes — necessaires pour lire les positions de bins ",
+              "(tissue_positions.parquet). L'import utilisera un chargeur degrade (coordonnees + ",
+              "comptages uniquement, PAS de fond histologique) si un fichier .csv de positions est ",
+              "aussi present ; sinon il echouera avec un message clair. Pour un import complet, ",
+              "installez l'un des deux : ", tags$code("install.packages('nanoparquet')"),
+              " (leger, recommande sous Windows) ou ",
+              tags$code("install.packages('arrow', repos = c('https://apache.r-universe.dev', getOption('repos')))"),
+              ".")
+        } else if (!has_arrow && has_nanoparquet) {
+          div(class = "alert alert-warning", style = "font-size:0.72rem;",
+              bsicons::bs_icon("info-circle"),
+              " Package 'arrow' absent mais 'nanoparquet' present : import complet toujours possible, ",
+              "via un lecteur Parquet plus leger.")
+        },
+
+        if (length(bins) > 0) {
+          selectInput(ns("hd_bin_size"), "Resolution de binning",
+                      choices = stats::setNames(bins, paste0(bins, " \u00b5m")),
+                      selected = if (16 %in% bins) 16 else bins[1])
+        }
+      )
+    })
     
     observeEvent(input$btn_import, {
       req(dir_path())
       sample_name <- if (nchar(trimws(input$sample_name))) trimws(input$sample_name) else basename(dir_path())
+
+      mode <- if (identical(input$technology, "visium")) {
+        tryCatch(get_visium_import_mode(dir_path()), error = function(e) "visium")
+      } else {
+        NA_character_
+      }
+      is_hd <- identical(mode, "visium_hd_binned")
       
       withProgress(message = "Import spatial...", value = 0, {
         tryCatch({
+          # Fail fast, before touching any progress UI, for the one mode we
+          # know in advance can never succeed -- same message the loader
+          # itself would raise, but skips a pointless withProgress cycle.
+          if (identical(mode, "visium_hd_flat")) {
+            stop(.hd_flat_unsupported_message(), call. = FALSE)
+          }
+          if (is_hd && (is.null(input$hd_bin_size) || !nzchar(input$hd_bin_size))) {
+            stop("Aucune resolution de binning selectionnee (voir le panneau Visium HD ci-dessus).",
+                 call. = FALSE)
+          }
+
           incProgress(0.1, detail = "Lecture des fichiers bruts...")
           raw_obj <- switch(input$technology,
-                            "visium" = load_spatial_visium(dir_path(), sample_name = sample_name,
-                                                           min_counts = input$min_counts,
-                                                           min_features = input$min_features),
+                            "visium" = {
+                              if (is_hd) {
+                                add_log(sprintf("  Visium HD detecte -- import du binning %sum.", input$hd_bin_size))
+                                load_spatial_visium_hd(dir_path(), bin_size = as.integer(input$hd_bin_size),
+                                                       sample_name = sample_name,
+                                                       min_counts = input$min_counts,
+                                                       min_features = input$min_features)
+                              } else {
+                                load_spatial_visium(dir_path(), sample_name = sample_name,
+                                                    min_counts = input$min_counts,
+                                                    min_features = input$min_features)
+                              }
+                            },
                             "xenium" = Seurat::LoadXenium(dir_path(), fov = "fov"),
                             "cosmx"  = Seurat::LoadNanostring(dir_path(), fov = "fov", assay = "Nanostring"),
                             stop("Technologie inconnue.")
           )
-          add_log(sprintf("  ✓ Objet brut charge : %d genes x %d %s",
+          if (isTRUE(attr(raw_obj, "ts_manual_hd_loader"))) {
+            add_log(paste0(
+              "  \u26a0 Chargeur HD degrade utilise (pas de package Parquet complet) : ",
+              "coordonnees et comptages disponibles, PAS de fond histologique natif ",
+              "pour cet echantillon (le fond depuis 'spatial/' racine reste tente separement)."
+            ))
+          }
+          add_log(sprintf("  ✓ Objet brut charge : %d genes x %d %s%s",
                           nrow(raw_obj), ncol(raw_obj),
-                          if (input$technology == "visium") "spots" else "cellules"))
+                          if (input$technology == "visium") "spots" else "cellules",
+                          if (is_hd) sprintf(" (bin %sum)", input$hd_bin_size) else ""))
           
           incProgress(0.3, detail = "Conversion BPCells (disque)...")
           norm_label <- if (input$norm_method == "sct") "SCTransform" else "LogNormalize"
@@ -194,7 +364,10 @@ mod_import_spatial_server <- function(id, global_data) {
           # diagnosis. Also thread the manual orientation correction
           # through (Visium only -- these inputs don't exist in the DOM for
           # xenium/cosmx, so input$orient_* is NULL there and isTRUE(NULL)
-          # safely defaults to FALSE).
+          # safely defaults to FALSE). For Visium HD, raw_dir is STILL the
+          # root "outs" folder (not the bin-specific subfolder) — see this
+          # file's header for why (symlinked per-bin histology images are a
+          # documented Visium HD fragility point; the root copy is canonical).
           orient_applied <- isTRUE(input$orient_swap_xy) || isTRUE(input$orient_flip_x) || isTRUE(input$orient_flip_y)
           if (orient_applied) {
             add_log(sprintf("  Correction manuelle d'orientation : swap_xy=%s, flip_x=%s, flip_y=%s",
@@ -218,6 +391,11 @@ mod_import_spatial_server <- function(id, global_data) {
             n_fonds <- length(spatial_pkg$histology$images %||% list())
             add_log(sprintf("  \u2713 %d fond(s) histologique(s) detecte(s) (voir selecteur de resolution, onglet Visualisation).",
                             n_fonds))
+          } else if (is_hd) {
+            add_log(paste0(
+              "  \u26a0 Aucun fond histologique detecte pour cet echantillon HD (verifiez que le ",
+              "dossier racine contient bien 'spatial/')."
+            ))
           }
           
           incProgress(0.9, detail = "Finalisation...")
@@ -236,8 +414,10 @@ mod_import_spatial_server <- function(id, global_data) {
           global_data$active_spatial_dataset <- sample_name
           global_data$spatial_obj <- spatial_pkg
           
-          add_log(sprintf("✅ Import termine : %s (%s) — %d echantillon(s) au total",
-                          sample_name, input$technology, length(global_data$spatial_datasets)))
+          add_log(sprintf("✅ Import termine : %s (%s%s) — %d echantillon(s) au total",
+                          sample_name, input$technology,
+                          if (is_hd) sprintf(" HD %sum", input$hd_bin_size) else "",
+                          length(global_data$spatial_datasets)))
           showNotification(sprintf("✅ Import spatial reussi : %d elements (%d en sketch RAM, %s)%s",
                                    spatial_pkg$n_total, ncol(spatial_pkg$sketch), norm_label,
                                    if (length(global_data$spatial_datasets) > 1) {
