@@ -1,32 +1,50 @@
 # =============================================================================
 # R/utils_spatial_async.R — mirai daemon pool + reactivePoll progress tracking
 # =============================================================================
-# v3 (Chantier 2 refonte — deconvolution daemon fix): `source_files` used to
-# list ONLY R/utils_spatial_*.R (io/multi/niche). Any daemon task that calls
-# load_single_cell_data() / prepare_seurat_object() — mod_spatial_deconv.R's
-# RCTD and Label Transfer reference-loading step, both re-reading the staged
-# reference file from disk inside the daemon — had NO access to those
-# functions (they live in helpers_io.R's neighbor helpers_sc.R, sourced on
-# the MAIN Shiny process by app.R but never shipped into the daemon pool).
-# Every RCTD/Label Transfer run therefore failed deep inside the daemon with
-# a raw "could not find function" error, surfaced only as a generic
-# ExtendedTask failure notification — the single biggest reason those two
-# modes looked "randomly broken" while STdeconvolve (which needs neither
-# function) kept working. helpers_io.R and helpers_sc.R are now preloaded
-# on every daemon, same as the existing R/utils_spatial_*.R files.
+# v4 (Chantier 3 refonte — daemon preload hardening). Two problems found on
+# top of the reference-pipeline architecture fix (see
+# R/utils_spatial_reference.R and mod_spatial_deconv.R):
+#
+#   1. source_files used RELATIVE paths, resolved fresh inside each daemon
+#      by that daemon's OWN getwd() at the time source() runs -- if a daemon
+#      process ever starts with a different working directory than the main
+#      Shiny process, preload silently fails file-by-file with only a
+#      message() nobody sees (daemons print to their own stdout, not the
+#      user-facing Shiny UI). Paths are now resolved to ABSOLUTE paths ONCE,
+#      in the main process (which knows its own getwd() reliably), before
+#      being shipped into mirai::everywhere().
+#
+#   2. There was no verification step: init_spatial_daemons() declared the
+#      pool "ready" the instant mirai::daemons(n) returned, regardless of
+#      whether the preload (everywhere()) actually succeeded on every
+#      worker. This is exactly the class of bug that made "RCTD/Label
+#      Transfer always fail" so hard to diagnose from the UI -- the daemon
+#      badge said "actifs" the whole time. init_spatial_daemons() now runs
+#      .verify_spatial_daemons() right after preload and records a real
+#      ready/degraded state (spatial_daemon_status()), with a short
+#      human-readable diagnostic (spatial_daemon_diagnostics_text()) the UI
+#      can surface directly (see mod_spatial.R's daemon badge).
+#
+#   3. helpers_io.R / helpers_sc.R are REMOVED from the default
+#      source_files. They existed here only so mod_spatial_deconv.R's old
+#      daemon-side reference reload (load_single_cell_data()/
+#      prepare_seurat_object()) could find those functions -- functions
+#      that, in this codebase's actual helpers_sc.R, do not exist. Now that
+#      reference parsing happens once on the main process and the daemon
+#      only reads a self-contained prepared artifact (base R + BPCells), no
+#      spatial daemon task needs either file anymore. Removing the false
+#      dependency is the point of this fix, not an incidental cleanup.
+#
+# v3 (Chantier 2 refonte — deconvolution daemon fix, superseded by v4 above):
+# `source_files` used to list ONLY R/utils_spatial_*.R (io/multi/niche).
+# helpers_io.R and helpers_sc.R were added at that time to fix RCTD/Label
+# Transfer's daemon-side reference reload — v4 above removes that need
+# entirely instead, which is the more robust fix requested for Chantier 3.
 #
 # v2 (post-test-3): added .timeout support (mirai() has a native `.timeout`
 # arg — a hung task now errors out after MIRAI_TASK_TIMEOUT_MS instead of
 # blocking forever) and reset_spatial_daemons() (recover a poisoned pool
-# from the UI, no R restart needed). Root cause of "stuck" tasks in earlier
-# tests: several bioinformatics packages (Banksy, spacexr/RCTD, STdeconvolve)
-# try to spawn NESTED parallel worker processes (parallel::makeCluster /
-# BiocParallel::SnowParam) from inside an already-isolated mirai daemon --
-# fragile in general, and observed to hang outright on a Windows project
-# path containing spaces/brackets. See mod_spatial_cluster.R /
-# mod_spatial_deconv.R for how each daemon body now avoids that class of bug
-# (custom implementation / forcing single-core paths) -- the timeout here is
-# the last line of defense regardless of root cause.
+# from the UI, no R restart needed).
 #
 # Daemons are process-level (shared by every Shiny session running in this R
 # process), so init_spatial_daemons() is idempotent — it only spawns workers
@@ -36,9 +54,15 @@
 # calls on every single task).
 # =============================================================================
 
+`%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
+
 .spatial_async_env <- new.env(parent = emptyenv())
-.spatial_async_env$daemons_ready <- FALSE
-.spatial_async_env$n_daemons     <- 6L
+.spatial_async_env$daemons_ready    <- FALSE
+.spatial_async_env$daemons_verified <- FALSE
+.spatial_async_env$n_daemons        <- 6L
+.spatial_async_env$base_dir         <- NULL
+.spatial_async_env$source_files_abs <- character(0)
+.spatial_async_env$last_diagnostics <- NULL
 
 # Hard ceiling for any single spatial async task (clustering, deconvolution,
 # Moran's I, sketch UMAP) — after this, the ExtendedTask errors out instead
@@ -48,37 +72,26 @@ MIRAI_TASK_TIMEOUT_MS <- 20 * 60 * 1000  # 20 minutes
 # Label Transfer (mod_spatial_deconv.R, mode="labeltransfer") runs TWO
 # SCTransform calls (reference + query) plus FindTransferAnchors/TransferData
 # — reported to hit the shared 20-minute ceiling even on a moderately-sized
-# reference (e.g. allen_cortex.rds from the Seurat vignette) on CPU-only
-# hardware, especially without the optional `glmGamPoi` package (SCTransform
-# falls back to a much slower per-gene GLM engine — see mod_spatial_deconv.R,
-# which now warns in the task log when it is missing). Given a genuinely
-# longer-running-by-design task, use a longer, dedicated ceiling rather than
-# raising the shared one (which would also let genuinely-stuck
-# clustering/deconvolution/Moran tasks run twice as long before being
-# caught).
+# reference on CPU-only hardware, especially without the optional
+# `glmGamPoi` package. Given a genuinely longer-running-by-design task, use
+# a longer, dedicated ceiling rather than raising the shared one.
 LABEL_TRANSFER_TIMEOUT_MS <- 45 * 60 * 1000  # 45 minutes
 
 #' Initialize the mirai daemon pool used by all spatial async tasks
 #'
-#' Idempotent: safe to call multiple times (e.g. defensively from a module
-#' server) — daemons are only spawned once per R process. Pre-loads Seurat +
-#' BPCells and sources this project's helper files on every daemon so heavy
-#' packages/functions do not need to be re-shipped on every mirai() call.
+#' Idempotent: safe to call multiple times — daemons are only spawned once
+#' per R process. Pre-loads Seurat + BPCells and sources this project's
+#' helper files (ABSOLUTE paths, resolved here in the main process) on every
+#' daemon, then runs a post-init verification pass and records the result.
 #'
 #' @param n_daemons Integer, number of persistent background R processes.
-#'   Kept small (default 6) to preserve OS resources on a local workstation
-#'   (CPU-only, 32 Go RAM) — see project hard rules.
-#' @param source_files Character vector of project file paths to source()
-#'   inside every daemon (relative to the app's working directory).
-#'   IMPORTANT (v3): helpers_io.R and helpers_sc.R are included here because
-#'   mod_spatial_deconv.R's RCTD/Label Transfer daemon bodies call
-#'   load_single_cell_data()/prepare_seurat_object() to re-read the staged
-#'   scRNA-seq reference from disk — see this file's v3 changelog above.
+#' @param source_files Character vector of project file paths (relative to
+#'   the app's working directory) to source() inside every daemon. Kept
+#'   deliberately spatial-only — see v4 changelog above for why
+#'   helpers_io.R/helpers_sc.R were removed.
 #' @return invisible(TRUE) on success, invisible(FALSE) if mirai is missing.
 init_spatial_daemons <- function(n_daemons = 6,
-                                 source_files = c("helpers_io.R",
-                                                  "helpers_sc.R",
-                                                  "R/utils_spatial_async.R",
+                                 source_files = c("R/utils_spatial_async.R",
                                                   "R/utils_spatial_io.R",
                                                   "R/utils_spatial_multi.R",
                                                   "R/utils_spatial_niche.R")) {
@@ -91,63 +104,175 @@ init_spatial_daemons <- function(n_daemons = 6,
 
   if (isTRUE(.spatial_async_env$daemons_ready)) return(invisible(TRUE))
 
-  mirai::daemons(n_daemons)
-  .spatial_async_env$n_daemons <- n_daemons
+  # Resolve ABSOLUTE paths ONCE, here (main process, reliable getwd()) --
+  # never re-derived relative to whatever a given daemon's own getwd() is.
+  base_dir <- normalizePath(getwd(), winslash = "/", mustWork = FALSE)
+  abs_files <- normalizePath(file.path(base_dir, source_files), winslash = "/", mustWork = FALSE)
+  .spatial_async_env$base_dir         <- base_dir
+  .spatial_async_env$source_files_abs <- abs_files
+  .spatial_async_env$n_daemons        <- n_daemons
 
-  # Pre-load on every current + future daemon (mirai::everywhere runs once
-  # per worker, not once per task) — keeps individual mirai() bodies short.
-  # Missing files are skipped with a message() printed FROM INSIDE the
-  # daemon (visible in the R console during local development, this
-  # project's stated environment) rather than aborting daemon init
-  # entirely -- a stripped-down deployment without helpers_sc.R should
-  # still get working clustering/Moran/niches; only deconvolution's
-  # reference-reload step needs those two specifically, and that failure
-  # is now also surfaced clearly at the point of use (mod_spatial_deconv.R
-  # wraps its own load_single_cell_data()/prepare_seurat_object() calls in
-  # tryCatch() with an explicit "function introuvable" message).
+  mirai::daemons(n_daemons)
+
   tryCatch({
     mirai::everywhere({
       suppressPackageStartupMessages({
         if (requireNamespace("Seurat", quietly = TRUE))  library(Seurat)
         if (requireNamespace("BPCells", quietly = TRUE)) library(BPCells)
       })
-      for (.f in .source_files) {
+      for (.f in .abs_files) {
         if (file.exists(.f)) {
           source(.f)
         } else {
-          message(sprintf("[spatial daemon] Fichier attendu introuvable (non source) : %s", .f))
+          message(sprintf("[spatial daemon] Fichier attendu introuvable (chemin absolu) : %s", .f))
         }
       }
-    }, .source_files = source_files)
+    }, .abs_files = abs_files)
   }, error = function(e) {
     warning("mirai::everywhere() a echoue lors du preload des daemons : ", conditionMessage(e))
   })
 
-  .spatial_async_env$daemons_ready <- TRUE
-  message(sprintf("[spatial] %d daemon(s) mirai initialises.", n_daemons))
+  # Post-init verification: mark the pool ready ONLY once we know what
+  # actually happened on the workers, not just that daemons(n) returned.
+  verify <- tryCatch(.verify_spatial_daemons(n_daemons),
+                      error = function(e) list(ok = FALSE, missing = conditionMessage(e),
+                                               n_checks = 0L, n_distinct_pids = 0L))
+  .spatial_async_env$daemons_verified <- isTRUE(verify$ok)
+  .spatial_async_env$last_diagnostics <- verify
+  .spatial_async_env$daemons_ready    <- TRUE
+
+  if (isTRUE(verify$ok)) {
+    message(sprintf("[spatial] %d daemon(s) mirai initialises et verifies (%d PID distincts / %d tests).",
+                    n_daemons, verify$n_distinct_pids %||% NA, verify$n_checks %||% NA))
+  } else {
+    warning(sprintf("[spatial] Daemons demarres mais verification post-init EN ECHEC (%s). ",
+                    paste(verify$missing, collapse = "; ")),
+            "Consultez spatial_daemon_diagnostics_text() ou le badge 'Session' de l'onglet Spatial.")
+  }
+
   invisible(TRUE)
 }
 
-#' Are the spatial mirai daemons ready?
+#' Are the spatial mirai daemons started? (pool up, NOT necessarily verified)
 spatial_daemons_ready <- function() isTRUE(.spatial_async_env$daemons_ready)
+
+#' Three-state daemon status for the UI badge
+#'
+#' @return One of "inactive" (pool never started), "degraded" (pool started
+#'   but post-init verification found a problem), "ready" (pool started and
+#'   verified).
+spatial_daemon_status <- function() {
+  if (!isTRUE(.spatial_async_env$daemons_ready)) return("inactive")
+  if (isTRUE(.spatial_async_env$daemons_verified)) return("ready")
+  "degraded"
+}
+
+#' Short, human-readable diagnostic text for the daemon pool
+#'
+#' Intended for direct display in the UI (e.g. inside a collapsed
+#' <details> under the "degraded" badge state) so a preload problem is
+#' visible WITHOUT opening the R console.
+spatial_daemon_diagnostics_text <- function() {
+  d <- .spatial_async_env$last_diagnostics
+  if (is.null(d)) return("Aucun diagnostic disponible -- daemons jamais initialises.")
+
+  files_txt <- if (length(.spatial_async_env$source_files_abs) > 0) {
+    paste(paste0("  - ", .spatial_async_env$source_files_abs), collapse = "\n")
+  } else "  (aucun)"
+
+  txt <- sprintf(
+    "Repertoire de base : %s\nFichiers preloades (chemins absolus) :\n%s\nTests : %s | PIDs distincts : %s | OK : %s",
+    .spatial_async_env$base_dir %||% "?",
+    files_txt,
+    as.character(d$n_checks %||% "?"),
+    as.character(d$n_distinct_pids %||% "?"),
+    isTRUE(d$ok)
+  )
+  if (length(d$missing) > 0) {
+    txt <- paste0(txt, "\nManquant(s)/erreur(s) : ", paste(d$missing, collapse = "; "))
+  }
+  txt
+}
+
+#' Best-effort post-init verification of the daemon preload
+#'
+#' Runs a handful of tiny diagnostic tasks through the pool and checks that
+#' required packages/functions are visible where they should be. Since
+#' mirai::everywhere() applies identically to every current AND future
+#' daemon in the pool (single local machine, same filesystem), a handful of
+#' checks is a strong-enough signal in practice — sequential blocking calls
+#' do not guarantee hitting every distinct daemon PID (a fast idle worker
+#' can serve more than its "share"), so this also reports how many DISTINCT
+#' PIDs it reached, as a diagnostic rather than a hard coverage guarantee.
+#'
+#' @param n_daemons Integer, pool size (drives how many checks to run).
+#' @return list(ok=, n_checks=, n_distinct_pids=, results=, missing=).
+.verify_spatial_daemons <- function(n_daemons) {
+  n_checks <- max(3L * n_daemons, 6L)
+  results <- vector("list", n_checks)
+  for (i in seq_len(n_checks)) {
+    results[[i]] <- tryCatch(
+      mirai::mirai({
+        list(
+          pid           = Sys.getpid(),
+          wd            = getwd(),
+          has_bpcells   = requireNamespace("BPCells", quietly = TRUE),
+          has_seurat    = requireNamespace("Seurat", quietly = TRUE),
+          has_rann      = requireNamespace("RANN", quietly = TRUE),
+          has_write_log = exists("write_mirai_log", mode = "function"),
+          has_integrate = exists("integrate_spatial_sketches", mode = "function"),
+          has_niches    = exists("compute_spatial_niches", mode = "function")
+        )
+      })[],
+      error = function(e) list(error = conditionMessage(e))
+    )
+  }
+
+  checks <- c("has_bpcells", "has_seurat", "has_rann", "has_write_log", "has_integrate", "has_niches")
+  ok_vec <- vapply(results, function(r) {
+    !is.null(r) && is.null(r$error) && all(vapply(checks, function(chk) isTRUE(r[[chk]]), logical(1)))
+  }, logical(1))
+
+  pids <- unique(vapply(results, function(r) as.character(r$pid %||% NA), character(1)))
+
+  missing <- character(0)
+  bad <- results[!ok_vec]
+  if (length(bad) > 0) {
+    for (chk in checks) {
+      if (any(vapply(bad, function(r) is.null(r$error) && !isTRUE(r[[chk]]), logical(1)))) {
+        missing <- c(missing, chk)
+      }
+    }
+    errs <- unique(unlist(lapply(bad, function(r) r$error)))
+    if (length(errs) > 0) missing <- c(missing, paste0("error: ", errs))
+  }
+
+  list(
+    ok              = all(ok_vec) && length(results) > 0,
+    n_checks        = n_checks,
+    n_distinct_pids = length(stats::na.omit(pids)),
+    results         = results,
+    missing         = unique(missing)
+  )
+}
 
 #' Stop and free the daemon pool (e.g. on app shutdown / testing teardown)
 stop_spatial_daemons <- function() {
   if (isTRUE(.spatial_async_env$daemons_ready) && requireNamespace("mirai", quietly = TRUE)) {
     tryCatch(mirai::daemons(0), error = function(e) NULL)
   }
-  .spatial_async_env$daemons_ready <- FALSE
+  .spatial_async_env$daemons_ready    <- FALSE
+  .spatial_async_env$daemons_verified <- FALSE
   invisible(NULL)
 }
 
 #' Recover a possibly-poisoned daemon pool WITHOUT restarting R
 #'
-#' A daemon whose R process had a package leave bad internal state behind
-#' (e.g. a half-initialized C++/S4 singleton after a failed call) stays bad
-#' for every future task routed to it, since daemons are long-lived — this
-#' tears the whole pool down and respawns fresh processes. Call this from
-#' the UI ("Reinitialiser les daemons") whenever a task fails unexpectedly
-#' or times out.
+#' Tears the whole pool down (mirai::daemons(0), killing every worker
+#' process — no zombie survives a full teardown) and respawns fresh
+#' processes, re-running the same post-init verification as a normal
+#' startup. Call this from the UI ("Reinitialiser les daemons") whenever a
+#' task fails unexpectedly, times out, or the badge shows "degrade".
 #'
 #' @param n_daemons Integer, pool size (default: whatever was last used).
 #' @return invisible(TRUE)/(FALSE), see init_spatial_daemons().
@@ -158,10 +283,6 @@ reset_spatial_daemons <- function(n_daemons = NULL) {
 }
 
 #' Build a stable per-session, per-task log file path
-#'
-#' One fixed path per (session, task) pair — reused/truncated across runs
-#' (see reset_log()) rather than a new tempfile per click, so a single
-#' create_reactive_tracker() can be set up once per module.
 #'
 #' @param session Shiny session object (used for session$token uniqueness).
 #' @param task_name Short slug, e.g. "cluster", "deconv", "moran".
@@ -181,14 +302,9 @@ reset_log <- function(file) {
 
 #' Write a timestamped progress line — call this *inside* a mirai daemon
 #'
-#' Self-contained on purpose (only base R): it runs in a separate R process
-#' with no access to the caller's environment beyond what mirai() explicitly
-#' passes in, which is exactly `file` (and optionally step/total).
-#'
 #' @param file Character path to the log file (same one the tracker reads).
 #' @param message Character, user-facing progress message (French).
-#' @param step,total Optional integers rendered as a "[step/total]" prefix,
-#'   consumed by parse_log_progress() to drive a numeric progress bar.
+#' @param step,total Optional integers rendered as a "[step/total]" prefix.
 write_mirai_log <- function(file, message, step = NULL, total = NULL) {
   prefix <- if (!is.null(step) && !is.null(total)) sprintf("[%d/%d] ", step, total) else ""
   line <- sprintf("%s | %s%s\n", format(Sys.time(), "%H:%M:%S"), prefix, message)
@@ -197,12 +313,8 @@ write_mirai_log <- function(file, message, step = NULL, total = NULL) {
 
 #' reactivePoll-based tracker for a task's log file
 #'
-#' Polls file.mtime() every `interval_ms` (spec: 1000ms) and re-reads the
-#' file only when it actually changed — cheap even for long-running tasks.
-#'
 #' @param session Shiny session.
-#' @param log_file Character path (stable for the module's lifetime — see
-#'   spatial_log_path()).
+#' @param log_file Character path (stable for the module's lifetime).
 #' @param interval_ms Poll interval in milliseconds.
 #' @return A reactive expression returning the log's lines (character vector).
 create_reactive_tracker <- function(session, log_file, interval_ms = 1000) {
