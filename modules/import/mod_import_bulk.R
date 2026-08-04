@@ -324,7 +324,7 @@ mod_import_bulk_ui <- function(id) {
           # ── Panel 4 : NEW — one file per sample ─────────────────────────
           accordion_panel(
             "4. Import multi-fichiers (one file per sample)",
-            icon = icon("files"),
+            icon = icon("copy"), # previous icon("files") = problem
             
             conditionalPanel(
               condition = sprintf("input['%s'] === 'per_sample'", ns("bulk_import_mode")),

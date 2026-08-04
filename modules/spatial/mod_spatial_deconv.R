@@ -1,88 +1,71 @@
 # =============================================================================
 # modules/spatial/mod_spatial_deconv.R — Cell-type Deconvolution / Label Transfer
 # =============================================================================
-# v7 (Chantier 3 refonte — reference pipeline architecture fix). Root cause:
-# this module's daemon-side reference reload called
-# load_single_cell_data()/prepare_seurat_object() -- documented (helpers_io.R
-# header) as living in helpers_sc.R, but NOT actually defined anywhere in
-# this codebase. That is why RCTD/Label Transfer failed with "could not
-# find function", both in the daemon AND, transitively, in this module's own
-# run_reference_pipeline() on the main process. This is fixed by removing
-# the dependency entirely rather than re-adding a preload entry:
+# v8 (round-2 fixes from real-data testing on Allen cortex + human lymph
+# node references):
 #
-#   - run_reference_pipeline() now calls read_reference_scrna()/
-#     prepare_reference_seurat() (R/utils_spatial_reference.R) -- a small,
-#     self-contained multi-format reader (.rds/.h5ad/.h5/.loom), used ONLY
-#     on the main Shiny process.
-#   - Once a cell-type column is chosen, prepare_reference_artifact()
-#     (same file) writes a SELF-CONTAINED on-disk artifact (raw counts +
-#     cell-type labels, dgCMatrix RDS or BPCells dir for very large
-#     references) -- multi-format parsing happens EXACTLY ONCE, here.
-#   - deconv_task's mirai body no longer calls ANY project helper function
-#     to read the reference: `.load_reference_artifact()` (inlined directly
-#     in the daemon body below) uses ONLY base R + BPCells. This removes the
-#     whole class of "daemon preload drift" bug for the reference path --
-#     there is nothing left that a future refactor of helpers_io.R/
-#     helpers_sc.R could silently break.
-#   - A second, same-class latent bug was found and fixed while auditing
-#     this: LABEL_TRANSFER_MIN_SHARED_GENES (a top-level constant of THIS
-#     file) was referenced directly inside the mirai body. mod_spatial_deconv.R
-#     itself was never part of R/utils_spatial_async.R's daemon source_files,
-#     so that reference would ALSO have failed with "object not found" the
-#     first time a Label Transfer run actually hit that code path. It is now
-#     passed explicitly as a named task argument (min_shared_genes), the
-#     same pattern already used for every other value the daemon needs.
+#   1. Artifact preparation is no longer automatic/silent. The previous
+#      observe() block ran prepare_reference_artifact() synchronously on the
+#      main Shiny thread every time an input changed, with a static (non-
+#      incrementing) withProgress() -- on a real ~70k-cell reference this
+#      looked "stuck" (no real progress feedback) and gave no way to verify,
+#      BEFORE clicking "Lancer", that the artifact actually matched the
+#      currently-selected reference. Replaced with an explicit
+#      "1) Preparer la reference (disque)" button + a persistent
+#      confirmation panel (cell/gene counts, backend, cells dropped for
+#      being too rare). Any change to the reference/column/merge/cap inputs
+#      immediately invalidates ref_path() (so a stale artifact can never be
+#      silently reused) without eagerly rebuilding it.
+#   2. RCTD_TIMEOUT_MS: RCTD (doublet_mode="full") can run long independent
+#      of reference size (reported: a 73k-cell / ~20-cell-type reference
+#      exceeded the previous shared 20-minute ceiling) -- now has its own
+#      dedicated ceiling, same pattern as Label Transfer's.
+#   3. max_cells_per_type: optional stratified per-cell-type subsampling
+#      (R/utils_spatial_reference.R::prepare_reference_artifact()) exposed
+#      here as a UI control -- a much better RAM/speed lever for large real
+#      references than shrinking the whole reference uniformly.
+#   4. ref_celltype_counts() rewritten defensively (reported crash:
+#      "'names' attribute [2] must be the same length as the vector [1]"
+#      inside colnames(tab) <- ...): built directly from names()/values()
+#      of table() instead of as.data.frame(table()), plus a guard against a
+#      momentarily-stale ref_celltype_col value during a reference switch.
+#   5. Error notification on deconv_task failure now names the CORRECT
+#      timeout ceiling for whichever mode was actually invoked.
+#
+# v7 (Chantier 3 refonte — reference pipeline architecture fix): reference
+# parsing (read_reference_scrna()/prepare_reference_seurat(),
+# R/utils_spatial_reference.R) happens ONLY on the main Shiny process;
+# nothing in the mirai daemon needs load_single_cell_data()/
+# prepare_seurat_object() (those names are not defined anywhere in this
+# codebase) or any multi-format reader package. The daemon reads a small,
+# self-contained prepared artifact with base R + BPCells only.
 #
 # v6 (Chantier 2 refonte — reference reactive-state consolidation): ref_state
 # carries an explicit $status ("empty"/"loading"/"error"/"loaded") + $message,
 # unconditionally RESET at the start of every upload/recheck attempt, and a
 # single reference_is_ready() reactive is the ONE place that decides "can we
-# dispatch RCTD/Label Transfer" — used by both a persistent sidebar badge and
-# the dispatch guard itself. Unchanged by v7 above (still the right design);
-# only WHAT gets parsed/stored under the hood has changed.
+# dispatch RCTD/Label Transfer".
 #
-# v5 (Phase 5 — real-world failure): reference upload accepts .rds/.h5ad/
-# .h5/.loom (kept, see read_reference_scrna()); RCTD's 25-cell-per-type
-# minimum is surfaced pre-flight instead of failing deep inside the daemon
-# (kept, RCTD_CELL_MIN_INSTANCE below).
+# v5 (Phase 5): reference upload accepts .rds/.h5ad/.h5/.loom; RCTD's
+# 25-cell-per-type minimum surfaced pre-flight.
 #
 # v4 (reported timeout with allen_cortex.rds): Label Transfer's fast
 # LogNormalize path (default) + SCTransform opt-in, ncells control, own
-# longer mirai timeout (LABEL_TRANSFER_TIMEOUT_MS) — all unchanged.
+# longer mirai timeout (LABEL_TRANSFER_TIMEOUT_MS).
 #
-# v3 (Phase 3 — "Integration with single-cell data"): Label Transfer mode,
-# same shared_rv$deconv_props contract as RCTD/STdeconvolve — unchanged.
+# v3 (Phase 3 — "Integration with single-cell data"): Label Transfer mode.
 #
-# REWRITE (post-test-3): RCTD forced to max_cores=1 (spacexr opens its own
-# parallel::makeCluster() otherwise); STdeconvolve bypassed via direct
-# topicmodels::LDA() calls (BiocParallel::SnowParam() otherwise hardcoded
-# inside STdeconvolve::fitLDA()) — both unchanged, not touched by v7.
+# REWRITE (post-test-3): RCTD forced to max_cores=1; STdeconvolve bypassed
+# via direct topicmodels::LDA() calls.
 #
 # Install:
 #   remotes::install_github("dmcable/spacexr")                        # RCTD
 #   install.packages(c("STdeconvolve", "topicmodels", "slam"))        # LDA
 #   remotes::install_github("cellgeni/schard")           # .h5ad reference reader
-#   (Label Transfer needs no extra package beyond Seurat itself; optionally
-#   install Bioconductor's glmGamPoi for a faster SCTransform.)
-#
-# Hard rule compliance: the scRNA-seq reference is never shipped into the
-# daemon as a live Seurat object, and — as of v7 — never as a pointer to the
-# RAW uploaded file either. Only the small PREPARED artifact (counts +
-# cell_types, written once by prepare_reference_artifact()) travels in.
-# SCTransform() is still forced onto a local future::plan("sequential")
-# inside the daemon before being called (defensive, cheap insurance).
+#   (Label Transfer needs no extra package; optionally glmGamPoi for speed.)
 # =============================================================================
 
-# RCTD's own hard minimum (spacexr::process_cell_type_info() ->
-# CELL_MIN_INSTANCE) — mirrored here (not importable, spacexr has no
-# exported constant) so the app can warn/block BEFORE dispatching a doomed
-# daemon task, using the exact number spacexr itself enforces.
 RCTD_CELL_MIN_INSTANCE <- 25L
-
-# Minimum shared reference/query genes below which FindTransferAnchors()
-# either fails outright or produces meaningless anchors. Passed explicitly
-# into the mirai task as `min_shared_genes` (see v7 changelog above) rather
-# than referenced as a free variable inside the daemon body.
 LABEL_TRANSFER_MIN_SHARED_GENES <- 50L
 
 mod_spatial_deconv_ui <- function(id) {
@@ -97,16 +80,10 @@ mod_spatial_deconv_ui <- function(id) {
                                "Sans reference (LDA, type STdeconvolve)" = "stdeconvolve"),
                    selected = "rctd"),
 
-      # ── Reference upload: shared by RCTD and Label Transfer (both need
-      #    an annotated scRNA-seq reference; only the algorithm differs).
-      #    Accepts .rds/.h5ad/.h5/.loom -- see read_reference_scrna()
-      #    (R/utils_spatial_reference.R). ──
       conditionalPanel(
         condition = sprintf("input['%s'] == 'rctd' || input['%s'] == 'labeltransfer'", ns("mode"), ns("mode")),
         fileInput(ns("ref_file"), "Reference scRNA-seq (.rds Seurat, .h5ad, .h5, .loom)",
                   accept = c(".rds", ".h5ad", ".h5", ".loom")),
-        # Persistent status badge (Chantier 2 refonte) -- visible the
-        # moment something goes wrong, not only after clicking "Lancer".
         uiOutput(ns("ref_status_badge_ui")),
         uiOutput(ns("ref_celltype_col_ui")),
         uiOutput(ns("ref_celltype_summary_ui"))
@@ -119,8 +96,7 @@ mod_spatial_deconv_ui <- function(id) {
             " RCTD modelise l'expression par une loi de Poisson resolue par ",
             "programmation quadratique — pic RAM attendu sous ~2 Go. Execute ",
             "en mono-coeur (max_cores=1) pour eviter tout sous-processus imbrique. ",
-            "Necessite au moins 25 cellules par type dans la reference (limite ",
-            "propre a RCTD — voir le recapitulatif ci-dessus). Les colonnes du ",
+            "Necessite au moins 25 cellules par type dans la reference. Les colonnes du ",
             "tableau resultat portent directement les noms de type cellulaire ",
             "de votre reference (ex: 'Astrocytes', 'Neurons_L4').")
       ),
@@ -136,22 +112,17 @@ mod_spatial_deconv_ui <- function(id) {
                        3000, min = 500, max = 10000, step = 500),
           div(class = "alert alert-warning", style = "font-size:0.75rem;",
               bsicons::bs_icon("exclamation-triangle"),
-              " SCTransform() est signifcativement plus lente sans le package 'glmGamPoi' ",
+              " SCTransform() est significativement plus lente sans le package 'glmGamPoi' ",
               "(non installe par defaut) — installez-le via ",
               "BiocManager::install('glmGamPoi') pour accelerer nettement cette etape. ",
-              "'ncells' reprend l'astuce de la vignette Seurat elle-meme : apprend le ",
-              "modele de bruit sur un sous-echantillon (3000 par defaut) tout en ",
-              "normalisant l'ensemble des cellules — reduit le temps de calcul sans perte ",
-              "de qualite notable.")
+              "Sur une reference de plusieurs dizaines de milliers de cellules sans ce ",
+              "package, comptez potentiellement > 30-45 min : reduisez plutot le nombre de ",
+              "cellules par type (case a cocher ci-dessus, section reference) avant de lancer.")
         ),
         numericInput(ns("lt_npcs"), "Composantes PCA (requete spatiale)", 30, min = 5, max = 50, step = 5),
         div(class = "alert alert-light", style = "font-size:0.75rem;",
             bsicons::bs_icon("info-circle"),
-            " FindTransferAnchors()/TransferData() (vignette Seurat Spatial — methode ",
-            "d'integration \"par ancres\", souvent recommandee plutot que la deconvolution ",
-            "pure). Trouve des paires cellule/spot similaires (\"ancres\") apres normalisation ",
-            "de la reference et de la requete, puis transfere un score de probabilite ",
-            "par type cellulaire a chaque spot — les colonnes du tableau resultat portent, ",
+            " FindTransferAnchors()/TransferData() — les colonnes du tableau resultat portent, ",
             "comme pour RCTD, les noms de type cellulaire de votre reference. Pas de minimum ",
             "de cellules impose (contrairement a RCTD), mais un type tres rare donnera un ",
             "score plus bruite.")
@@ -163,18 +134,14 @@ mod_spatial_deconv_ui <- function(id) {
         div(class = "alert alert-light", style = "font-size:0.75rem;",
             bsicons::bs_icon("info-circle"),
             " Allocation de Dirichlet Latente (LDA) : extrait K 'themes' ",
-            "d'expression purs sans reference externe. Reduisez K ou le ",
-            "nombre de genes pour accelerer."),
+            "d'expression purs sans reference externe."),
         div(class = "alert alert-warning", style = "font-size:0.75rem;",
             bsicons::bs_icon("exclamation-triangle"),
-            " Sans reference, les topiques sont des SIGNATURES D'EXPRESSION numerotees ",
-            "(1, 2, 3...), pas des types cellulaires identifies. Pour rester interpretable, ",
-            "chaque colonne du tableau resultat est etiquetee avec ses 3 genes les plus ",
-            "caracteristiques (ex: 'T3_Gfap.Aqp4.Mbp') — a vous d'interpreter biologiquement ",
-            "chaque signature a partir de ces marqueurs.")
+            " Sans reference, chaque colonne du tableau resultat est etiquetee avec ses 3 genes ",
+            "les plus caracteristiques (ex: 'T3_Gfap.Aqp4.Mbp') — a interpreter biologiquement.")
       ),
 
-      bslib::input_task_button(ns("btn_deconv"), "Lancer la deconvolution",
+      bslib::input_task_button(ns("btn_deconv"), "2) Lancer la deconvolution",
                                 icon = icon("puzzle-piece")),
       verbatimTextOutput(ns("deconv_progress_text"), placeholder = TRUE)
     ),
@@ -195,21 +162,14 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
     log_file <- spatial_log_path(session, "deconv")
     tracker  <- create_reactive_tracker(session, log_file)
 
-    # ── Consolidated reference state (Chantier 2 refonte, unchanged by v7) ─
-    # "empty"   -> nothing uploaded yet
-    # "loading" -> a stage-1..4 pipeline run is currently in flight
-    # "error"   -> the last attempt failed; $message explains why. obj/
-    #              staged_path are ALWAYS cleared on error.
-    # "loaded"  -> obj/staged_path are valid; ref_path() (the prepared
-    #              artifact the daemon actually reads) may still be NULL for
-    #              a moment while the observe() block below reacts to the
-    #              freshly-rendered celltype_col input -- see reference_is_ready().
     ref_state <- reactiveValues(
       obj = NULL, staged_path = NULL, orig_ext = NULL,
       status = "empty", message = NULL
     )
-    ref_path      <- reactiveVal(NULL)
-    ref_meta_cols <- reactiveVal(character(0))
+    ref_path        <- reactiveVal(NULL)
+    ref_artifact_info <- reactiveVal(NULL)   # v8: confirmation panel data
+    ref_meta_cols   <- reactiveVal(character(0))
+    last_deconv_mode <- reactiveVal(NULL)    # v8: for mode-aware error text
 
     .version_hint <- function(msg) {
       if (!grepl("GetAssayData|slot.*defunct|defunct.*slot", msg, ignore.case = TRUE)) return("")
@@ -220,15 +180,6 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
               tryCatch(as.character(utils::packageVersion("SeuratDisk")), error = function(e) "absent"))
     }
 
-    # ── Reference parse/convert pipeline (main process ONLY) ───────────────
-    # v7: read_reference_scrna()/prepare_reference_seurat()
-    # (R/utils_spatial_reference.R) replace the previously-referenced
-    # load_single_cell_data()/prepare_seurat_object() -- those names were
-    # documented as living in helpers_sc.R but are not actually defined
-    # there in this codebase (root cause of "could not find function", both
-    # here and, more importantly, inside the mirai daemon). Nothing here
-    # ever runs inside a daemon; the daemon only ever reads the prepared
-    # artifact built by the observe() block further down.
     run_reference_pipeline <- function(staged_path, orig_ext) {
       ref_state$obj         <- NULL
       ref_state$staged_path <- NULL
@@ -236,6 +187,7 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
       ref_state$message     <- NULL
       ref_meta_cols(character(0))
       ref_path(NULL)
+      ref_artifact_info(NULL)
 
       withProgress(message = "Preparation de la reference...", value = 0, {
         incProgress(0.15, detail = sprintf("Lecture (.%s)...", if (nzchar(orig_ext)) orig_ext else "?"))
@@ -339,13 +291,13 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
         "loaded" = if (reference_is_ready()) {
           div(class = "alert alert-success", style = "font-size:0.75rem; margin-bottom:4px;",
               bsicons::bs_icon("check-circle"),
-              sprintf(" Reference prete : %d cellules x %d genes.",
+              sprintf(" Reference chargee : %d cellules x %d genes.",
                       ncol(ref_state$obj), nrow(ref_state$obj)))
         } else {
           div(class = "alert alert-warning", style = "font-size:0.75rem; margin-bottom:4px;",
               bsicons::bs_icon("exclamation-triangle"),
-              " Reference chargee — choisissez la colonne 'type cellulaire' ci-dessous ",
-              "pour finaliser la preparation.")
+              " Reference chargee — choisissez la colonne 'type cellulaire' puis cliquez ",
+              "'1) Preparer la reference (disque)' ci-dessous.")
         },
         div(class = "alert alert-light", style = "font-size:0.75rem;", "Statut inconnu.")
       )
@@ -369,16 +321,95 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
       tagList(
         selectInput(ns("ref_celltype_col"), "Colonne 'type cellulaire'", choices = choices),
         checkboxInput(ns("merge_rare_types"),
-                      "Fusionner les types rares (< 25 cellules) en 'Autre'",
-                      value = TRUE)
+                      sprintf("Fusionner/exclure les types rares (< %d cellules)", RCTD_CELL_MIN_INSTANCE),
+                      value = TRUE),
+        checkboxInput(ns("cap_ref_cells"),
+                      "Limiter le nombre de cellules par type (RAM/vitesse)", value = TRUE),
+        conditionalPanel(
+          condition = sprintf("input['%s']", ns("cap_ref_cells")),
+          numericInput(ns("max_cells_per_type"), "Max cellules par type", 500, min = 25, max = 5000, step = 25)
+        ),
+        div(class = "text-muted", style = "font-size:0.68rem;",
+            "Sous-echantillonnage stratifie (chaque type garde sa proportion relative) — ",
+            "accelere nettement RCTD/Label Transfer sur une grosse reference (ex: >50k cellules)."),
+        actionButton(ns("btn_prepare_ref"), "1) Preparer la reference (disque)",
+                     icon = icon("database"), class = "btn-sm btn-outline-primary w-100 mt-2"),
+        uiOutput(ns("ref_artifact_status_ui"))
       )
     })
 
+    # v8: any change to what WOULD go into the artifact invalidates the
+    # current one immediately (cheap) -- guarantees ref_path() can never
+    # silently point at a reference/column/setting combination different
+    # from what is currently selected in the UI. Rebuilding itself only
+    # happens on the explicit button click below.
+    observeEvent(list(ref_state$obj, input$ref_celltype_col, input$merge_rare_types,
+                       input$cap_ref_cells, input$max_cells_per_type), {
+      ref_path(NULL)
+      ref_artifact_info(NULL)
+    }, ignoreInit = TRUE, ignoreNULL = FALSE)
+
+    observeEvent(input$btn_prepare_ref, {
+      req(ref_state$obj, input$ref_celltype_col)
+      ref_obj <- ref_state$obj
+      withProgress(message = "Preparation de l'artifact de reference...", value = 0.1, {
+        incProgress(0.2, detail = "Filtrage / fusion des types rares...")
+        result <- tryCatch({
+          artifact <- prepare_reference_artifact(
+            ref_obj            = ref_obj,
+            celltype_col       = input$ref_celltype_col,
+            merge_rare_types   = isTRUE(input$merge_rare_types),
+            min_cells_per_type = RCTD_CELL_MIN_INSTANCE,
+            max_cells_per_type = if (isTRUE(input$cap_ref_cells)) input$max_cells_per_type else NA_integer_
+          )
+          incProgress(0.6, detail = "Ecriture sur disque...")
+          artifact
+        }, error = function(e) {
+          showNotification(paste("Erreur preparation reference:", conditionMessage(e)), type = "error", duration = 10)
+          NULL
+        })
+        if (!is.null(result)) {
+          ref_path(result$path)
+          ref_artifact_info(result)
+          incProgress(0.1, detail = "Termine.")
+          showNotification(sprintf(
+            "Reference preparee : %d cellules x %d genes (backend: %s).%s",
+            result$n_cells, result$n_genes, result$backend,
+            if (result$n_dropped_rare > 0) sprintf(" %d cellule(s) trop rare(s) exclue(s).", result$n_dropped_rare) else ""
+          ), type = "message", duration = 6)
+        }
+      })
+    })
+
+    output$ref_artifact_status_ui <- renderUI({
+      info <- ref_artifact_info()
+      if (is.null(info)) {
+        return(div(class = "alert alert-light", style = "font-size:0.72rem; margin-top:4px;",
+                   bsicons::bs_icon("info-circle"),
+                   " Reference pas encore preparee pour la deconvolution — cliquez ci-dessus."))
+      }
+      div(class = "alert alert-success", style = "font-size:0.72rem; margin-top:4px;",
+          bsicons::bs_icon("check-circle"),
+          sprintf(" Pret : %d cellules x %d genes (backend: %s).%s",
+                  info$n_cells, info$n_genes, info$backend,
+                  if (info$n_dropped_rare > 0) sprintf(" %d cellule(s) exclue(s) (trop rares).", info$n_dropped_rare) else ""))
+    })
+
+    # v8: rebuilt directly from names()/values() of table() -- immune to
+    # the "wrong column count" edge case that crashed this output
+    # previously ("'names' attribute [2] must be the same length as the
+    # vector [1]") -- plus a guard against a momentarily-stale
+    # ref_celltype_col value right after switching to a new reference file.
     ref_celltype_counts <- reactive({
       req(ref_state$obj, input$ref_celltype_col)
+      req(input$ref_celltype_col %in% colnames(ref_state$obj@meta.data))
       ct <- as.character(ref_state$obj@meta.data[[input$ref_celltype_col]])
-      tab <- as.data.frame(table(ct), stringsAsFactors = FALSE)
-      colnames(tab) <- c("Type cellulaire", "Effectif")
+      ct <- ct[!is.na(ct) & nzchar(ct)]
+      validate(need(length(ct) > 0, "Aucune valeur non vide dans cette colonne."))
+      tab_counts <- table(ct)
+      tab <- data.frame(`Type cellulaire` = names(tab_counts),
+                        Effectif          = as.integer(tab_counts),
+                        check.names = FALSE, stringsAsFactors = FALSE)
       tab[order(-tab$Effectif), ]
     })
 
@@ -392,8 +423,8 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
               bsicons::bs_icon("exclamation-triangle"),
               sprintf(" %d type(s) sous %d cellules : %s.", nrow(rare), RCTD_CELL_MIN_INSTANCE,
                       paste(sprintf("%s (%d)", rare$`Type cellulaire`, rare$Effectif), collapse = ", ")),
-              " RCTD echouera sur ces types tant qu'ils ne sont pas fusionnes/exclus ",
-              "(voir la case a cocher ci-dessus) ou qu'une colonne moins fine n'est choisie.")
+              " Avec 'Fusionner/exclure les types rares' coche, ces cellules seront regroupees ",
+              "sous 'Autre' puis, si ce groupe reste trop petit, exclues de la reference.")
         },
         div(style = "max-height:160px; overflow-y:auto;",
             DT::DTOutput(ns("ref_celltype_table")))
@@ -404,31 +435,6 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
                     options = list(pageLength = 6, dom = "tp"))
     })
 
-    # ── Build the self-contained, daemon-ready reference artifact ─────────
-    # v7: this used to save ONLY a pointer (staged_path + cell_types) and
-    # let the daemon re-parse the RAW file itself. prepare_reference_artifact()
-    # (R/utils_spatial_reference.R) now writes the actual counts + labels to
-    # disk HERE, on the main process -- see that function's header for the
-    # backend choice (dgCMatrix RDS vs BPCells dir above bpcells_threshold).
-    observe({
-      req(ref_state$obj, input$ref_celltype_col)
-      ref_obj <- ref_state$obj
-      withProgress(message = "Preparation de l'artifact de reference (disque)...", value = 0.5, {
-        tryCatch({
-          artifact <- prepare_reference_artifact(
-            ref_obj            = ref_obj,
-            celltype_col       = input$ref_celltype_col,
-            merge_rare_types   = isTRUE(input$merge_rare_types),
-            min_cells_per_type = RCTD_CELL_MIN_INSTANCE
-          )
-          ref_path(artifact$path)
-        }, error = function(e) {
-          ref_path(NULL)
-          showNotification(paste("Erreur preparation reference:", conditionMessage(e)), type = "error", duration = 8)
-        })
-      })
-    })
-
     # ── Async deconvolution/integration task (mode chosen at invoke time) ──
     deconv_task <- ExtendedTask$new(function(bpcells_dir, pass_idx, coords, mode,
                                               ref_path, n_topics, n_top_od,
@@ -436,11 +442,6 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
                                               min_shared_genes, log_file) {
       mirai::mirai(
         {
-          # v7: self-contained artifact loader -- ONLY base R + BPCells, no
-          # project helper function and no multi-format reader package
-          # required inside the daemon. `manifest_path` points either at a
-          # plain dgCMatrix RDS or a BPCells on-disk directory (written by
-          # prepare_reference_artifact() on the main process).
           .load_reference_artifact <- function(manifest_path) {
             manifest <- tryCatch(readRDS(manifest_path), error = function(e) {
               stop("Lecture du manifest de reference impossible (", manifest_path, ") : ",
@@ -480,9 +481,6 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
             write_mirai_log(log_file, "Chargement de la reference preparee (artifact disque)...", 2, 5)
             reloaded   <- .load_reference_artifact(ref_path)
             ref_counts <- reloaded$counts
-            # spacexr::Reference() expects an in-memory (sparse) matrix --
-            # materialize only here, at point of use (same "small enough at
-            # this point" pattern already used for the spatial puck below).
             if (!inherits(ref_counts, c("dgCMatrix", "matrix"))) {
               ref_counts <- methods::as(ref_counts, "dgCMatrix")
             }
@@ -491,14 +489,14 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
             reference <- spacexr::Reference(counts = ref_counts, cell_types = reloaded$cell_types)
 
             write_mirai_log(log_file, "Construction du 'puck' spatial (SpatialRNA)...", 3, 5)
-            counts_dense <- methods::as(mat, "dgCMatrix")  # small: already QC-subset, single technical materialization
+            counts_dense <- methods::as(mat, "dgCMatrix")
             puck <- spacexr::SpatialRNA(coords = coords_df, counts = counts_dense)
 
             write_mirai_log(log_file, "RCTD (mode full, mono-coeur — pas de sous-processus imbrique)...", 4, 5)
             rctd <- spacexr::create.RCTD(puck, reference, max_cores = 1)
             rctd <- spacexr::run.RCTD(rctd, doublet_mode = "full")
             w <- as.matrix(rctd@results$weights)
-            w <- sweep(w, 1, rowSums(w), "/")  # normalize to proportions
+            w <- sweep(w, 1, rowSums(w), "/")
 
             write_mirai_log(log_file, "Termine.", 5, 5)
             data.frame(id = rownames(w), w, row.names = NULL, check.names = FALSE)
@@ -550,20 +548,13 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
             n_pc  <- max(2, min(lt_npcs, ncol(query) - 1, nrow(query) - 1, 50))
             query <- Seurat::RunPCA(query, npcs = n_pc, verbose = FALSE)
 
-            # Preflight: near-zero reference/query gene overlap most often
-            # means mismatched ID conventions -- fail clearly instead of
-            # letting FindTransferAnchors() error cryptically or return
-            # near-meaningless anchors. `min_shared_genes` is passed in
-            # explicitly (see v7 changelog) rather than read as a free
-            # top-level variable, which would not exist inside this daemon.
             shared_genes <- intersect(rownames(ref_obj), rownames(query))
             if (length(shared_genes) < min_shared_genes) {
               stop(sprintf(
                 paste0(
                   "Seulement %d gene(s) commun(s) entre la reference et les donnees spatiales ",
                   "(minimum requis : %d). Causes probables : conventions d'identifiants differentes ",
-                  "(symboles vs Ensembl) ou organismes differents (humain/souris) entre la reference ",
-                  "et les donnees spatiales. Verifiez rownames(reference) vs rownames(objet spatial)."
+                  "(symboles vs Ensembl) ou organismes differents (humain/souris)."
                 ),
                 length(shared_genes), min_shared_genes
               ), call. = FALSE)
@@ -585,8 +576,6 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
 
             write_mirai_log(log_file, "Termine.", 5, 5)
             pred_mat <- t(as.matrix(SeuratObject::LayerData(predictions, layer = "data")))
-            # TransferData() appends a "max" feature (top prediction score per
-            # spot) — not a cell type, drop it so every column is a genuine class.
             pred_mat <- pred_mat[, setdiff(colnames(pred_mat), "max"), drop = FALSE]
             data.frame(id = rownames(pred_mat), pred_mat, row.names = NULL, check.names = FALSE)
 
@@ -598,7 +587,7 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
             }
             write_mirai_log(log_file, "Pretraitement (genes surdisperses)...", 2, 5)
             counts_dense <- as.matrix(methods::as(mat, "dgCMatrix"))
-            storage.mode(counts_dense) <- "integer"  # LDA requires integer counts
+            storage.mode(counts_dense) <- "integer"
             corpus <- STdeconvolve::restrictCorpus(
               counts_dense, alpha = 0.05,
               nTopOD = min(n_top_od, nrow(counts_dense)), verbose = FALSE, plot = FALSE
@@ -615,7 +604,7 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
             write_mirai_log(log_file, "Extraction des proportions (theta)...", 4, 5)
             post  <- topicmodels::posterior(lda_model)
             theta <- post$topics
-            beta  <- post$terms   # K x nGenes: P(gene | topic) -- used only to LABEL topics below
+            beta  <- post$terms
             theta[theta < 0.05] <- 0
             theta <- theta / rowSums(theta)
             theta[is.na(theta)] <- 0
@@ -634,7 +623,13 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
         ref_path = ref_path, n_topics = n_topics, n_top_od = n_top_od,
         lt_npcs = lt_npcs, lt_norm_method = lt_norm_method, lt_ncells = lt_ncells,
         min_shared_genes = min_shared_genes, log_file = log_file,
-        .timeout = if (identical(mode, "labeltransfer")) LABEL_TRANSFER_TIMEOUT_MS else MIRAI_TASK_TIMEOUT_MS
+        # v8: RCTD now also has its own dedicated ceiling (see
+        # R/utils_spatial_async.R::RCTD_TIMEOUT_MS) instead of sharing the
+        # generic 20-minute one.
+        .timeout = switch(mode,
+                          "labeltransfer" = LABEL_TRANSFER_TIMEOUT_MS,
+                          "rctd"          = RCTD_TIMEOUT_MS,
+                          MIRAI_TASK_TIMEOUT_MS)
       )
     })
     bslib::bind_task_button(deconv_task, "btn_deconv")
@@ -651,7 +646,7 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
             "loaded"  = if (is.null(input$ref_celltype_col) || !nzchar(input$ref_celltype_col)) {
               "aucune colonne 'type cellulaire' selectionnee"
             } else {
-              "preparation de la reference pas encore terminee (patientez 1-2s apres avoir choisi la colonne, puis reessayez)"
+              "reference pas encore preparee -- cliquez '1) Preparer la reference (disque)' puis reessayez"
             },
             "cause inconnue"
           )
@@ -661,12 +656,6 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
         }
       }
 
-      # RCTD hard-fails deep inside the daemon if any cell type has < 25
-      # cells (spacexr::process_cell_type_info()) — check BEFORE dispatching.
-      # readRDS(ref_path()) now reads the prepared MANIFEST (see
-      # prepare_reference_artifact()), which still carries a `cell_types`
-      # field with the exact same name/shape as before -- no change needed
-      # to this block.
       if (identical(input$mode, "rctd")) {
         ref_check <- tryCatch(readRDS(ref_path()), error = function(e) NULL)
         if (is.null(ref_check)) {
@@ -683,12 +672,13 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
             paste(sprintf("%s (%d)", too_small, as.integer(tab[too_small])), collapse = ", ")
           ), type = "error", duration = 14)
           showNotification(
-            "Cochez 'Fusionner les types rares en Autre' (sidebar) ou choisissez une colonne ",
-            "d'annotation moins fine, puis relancez.", type = "warning", duration = 14)
+            "Cochez 'Fusionner/exclure les types rares' (sidebar) puis cliquez a nouveau ",
+            "'1) Preparer la reference' avant de relancer.", type = "warning", duration = 14)
           return()
         }
       }
 
+      last_deconv_mode(input$mode)
       reset_log(log_file)
       deconv_task$invoke(
         bpcells_dir      = global_data$spatial_obj$bpcells_dir,
@@ -711,9 +701,14 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
         shared_rv$deconv_props <- deconv_task$result()
         showNotification("Deconvolution terminee.", type = "message", duration = 5)
       } else if (deconv_task$status() == "error") {
-        showNotification(
-          "Erreur (ou depassement du delai de 20 min) pendant la deconvolution — voir le log. Essayez 'Reinitialiser les daemons' dans l'entete Spatial puis relancez.",
-          type = "error", duration = 12)
+        ceiling_txt <- switch(last_deconv_mode() %||% "?",
+                              "labeltransfer" = "45 min",
+                              "rctd"          = "40 min",
+                              "20 min")
+        showNotification(sprintf(
+          "Erreur (ou depassement du delai de %s) pendant la deconvolution — voir le log. Essayez 'Reinitialiser les daemons' dans l'entete Spatial puis relancez.",
+          ceiling_txt
+        ), type = "error", duration = 12)
       }
     })
 

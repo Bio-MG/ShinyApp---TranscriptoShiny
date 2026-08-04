@@ -53,9 +53,13 @@ mod_spatial_ui <- function(id) {
                 mod_spatial_niche_ui(ns("niche"))),
 
       nav_spacer(),
+      # v9 (fix UX) : un <select> imbrique dans un item de menu deroulant
+      # Bootstrap est peu fiable au clic (le menu intercepte/ferme avant que
+      # le <select> n'ouvre son propre popup). Sorti en nav_item() autonome,
+      # directement cliquable, juste a cote du menu "Session".
+      nav_item(uiOutput(ns("active_dataset_ui"))),
       bslib::nav_menu(
         title = tagList(icon("gear"), "Session"), align = "right",
-        nav_item(uiOutput(ns("active_dataset_ui"))),
         nav_item(uiOutput(ns("daemon_status_ui"))),
         nav_item(actionButton(ns("btn_reset_daemons"), "Reinitialiser les daemons",
                               class = "btn-outline-warning btn-sm w-100 mt-1", icon = icon("rotate")))
