@@ -21,6 +21,14 @@ source("R/utils_spatial_io.R")
 # write_mirai_log() (utils_spatial_async.R, sourced above); no Shiny
 # reactivity, safe to source alongside the other two.
 source("R/utils_spatial_multi.R")
+# Chantier 3 (architecture fix — spatial deconvolution reference pipeline):
+# multi-format reference reader (.rds/.h5ad/.h5/.loom) + on-disk artifact
+# preparation for RCTD/Label Transfer. Runs ONLY on the main Shiny process
+# (mod_spatial_deconv.R) — deliberately NOT part of init_spatial_daemons()'s
+# source_files: the mirai daemon now loads the PREPARED artifact with base R
+# + BPCells only, never this file. See its header for the full rationale
+# (fixes "could not find function load_single_cell_data").
+source("R/utils_spatial_reference.R")
 tryCatch(
   init_spatial_daemons(n_daemons = 6),
   error = function(e) warning("Initialisation des daemons mirai (spatial) impossible : ", conditionMessage(e))
@@ -261,16 +269,6 @@ server <- function(input, output, session) {
     spatial_obj = NULL,  # Spatial : liste (sketch, bpcells_dir, coords, ...) — voir R/utils_spatial_io.R
                           # — POINTE TOUJOURS vers l'echantillon "actif" (voir spatial_datasets ci-dessous)
 
-    # Phase 4 (multi-echantillons, mod_spatial_multi.R) : conteneur de TOUS
-    # les echantillons spatiaux importes, un $spatial_obj-shaped element par
-    # nom d'echantillon. spatial_obj (ci-dessus) pointe toujours vers UNE
-    # entree de cette liste (voir mod_import_spatial.R pour le remplissage
-    # et mod_spatial.R pour le selecteur "echantillon actif") — les onglets
-    # 1-4 du module Spatial ne lisent jamais spatial_datasets directement,
-    # uniquement spatial_obj, donc le support multi-echantillons est
-    # entierement additif (zero changement necessaire dans QC/Clustering/
-    # Deconvolution/Visualisation).
-
     spatial_datasets = list(),
 
     active_spatial_dataset = NULL
@@ -305,12 +303,6 @@ server <- function(input, output, session) {
   
 
   # === STATUT DES OBJETS — INDICATEUR DE PROGRESSION GLOBAL (point 8) ===
-
-  # Goes beyond "loaded / not loaded": each module reports a finer-grained
-
-  # state (e.g. Bulk: imported -> filtered -> DE computed) so the user does
-
-  # not need to open every accordion just to check where they left off.
 
   output$global_status_panel <- renderUI({
 
@@ -373,12 +365,6 @@ server <- function(input, output, session) {
 
 
     # ── Spatial state ────────────────────────────────────────────────────
-    # global_data$spatial_obj est une LISTE depuis le refactor BPCells (voir
-    # R/utils_spatial_io.R) : $sketch (Seurat, RAM) + $bpcells_dir (disque,
-    # pleine resolution) + $n_total — ne jamais faire ncol(spatial_obj) direct.
-    # Depuis Phase 4, plusieurs echantillons peuvent etre charges
-    # (global_data$spatial_datasets) — ce panneau resume l'echantillon ACTIF
-    # uniquement ; voir l'onglet "5. Multi-echantillons" pour la vue globale.
 
     spatial_state <- if (is.null(global_data$spatial_obj)) {
 
@@ -437,32 +423,6 @@ server <- function(input, output, session) {
 
 
   # === SAUVEGARDE / CHARGEMENT DE SESSION (point 7) ===
-
-  # Deliberately a single explicit button — NOT automatic — so it never
-
-  # interferes with testthat runs (which never touch global_data or the UI)
-
-  # and never silently overwrites a session the user wants to keep separate.
-
-  # Scope: the FULL global_data (sc_obj + bulk_obj + spatial_obj) rather than
-
-  # a per-module save, because a partial save would silently desync from
-
-  # whatever else is loaded when the user reopens the app.
-
-  # NOTE spatial_obj: only $sketch (in-RAM Seurat) round-trips faithfully in
-
-  # the .rds itself; $bpcells_dir is just a path string — the BPCells cache
-
-  # directory it points to must still exist on disk for clustering/
-
-  # deconvolution to work after reloading (see bpcells_cache_root(), a
-
-  # persistent tools::R_user_dir() location, not tempdir()).
-
-  # NOTE Phase 4 : spatial_datasets/active_spatial_dataset sont maintenant
-  # inclus dans la sauvegarde — sinon recharger une session multi-
-  # echantillons perdrait tout sauf l'echantillon actif.
 
   output$save_session_btn <- downloadHandler(
 
@@ -530,12 +490,6 @@ server <- function(input, output, session) {
 
       global_data$spatial_obj <- snapshot$spatial_obj
 
-      # Retro-compatible : une session sauvegardee AVANT Phase 4 n'aura pas
-
-      # ces champs -- repli sur une liste a une seule entree (l'ancien
-
-      # $spatial_obj) plutot que de planter ou perdre l'echantillon.
-
       global_data$spatial_datasets <- snapshot$spatial_datasets %||%
         (if (!is.null(snapshot$spatial_obj)) {
           stats::setNames(list(snapshot$spatial_obj), snapshot$spatial_obj$project %||% "Echantillon_1")
@@ -563,12 +517,6 @@ server <- function(input, output, session) {
       )
 
 
-
-      # Spatial : avertir si le cache BPCells sur disque n'est plus présent —
-
-      # le sketch reste utilisable pour la visualisation, mais tout nouveau
-
-      # calcul lourd (clustering/deconvolution) nécessitera un réimport.
 
       if (!is.null(snapshot$spatial_obj)) {
 
@@ -853,14 +801,6 @@ server <- function(input, output, session) {
 
 
   # === PARAMÈTRES RAM AJUSTABLES À CHAUD ===
-
-  # Bulk's matrices are small enough that this almost never matters there;
-
-  # this exists primarily for Single-Cell/Spatial sessions with very large
-
-  # objects, where the hardcoded defaults in global.R may need raising
-
-  # (or lowering, on a shared/constrained machine) without restarting R.
 
   observeEvent(input$apply_ram_settings, {
 
