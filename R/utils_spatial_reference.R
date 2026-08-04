@@ -1,51 +1,37 @@
 # =============================================================================
 # R/utils_spatial_reference.R — scRNA-seq reference I/O for spatial deconvolution
 # =============================================================================
-# NEW (Chantier 3 — architecture fix). Root cause being fixed: the spatial
-# deconvolution reference pipeline (mod_spatial_deconv.R, RCTD + Label
-# Transfer) was written assuming two functions --
-# load_single_cell_data() / prepare_seurat_object() -- existed in
-# helpers_sc.R and could be preloaded into the mirai daemon pool. Neither
-# function is actually defined in this codebase's helpers_sc.R. This is not
-# just a missing-preload bug: relying on a daemon being able to re-parse an
-# arbitrary raw reference file (.rds/.h5ad/.h5/.loom, needing schard/
-# SeuratDisk/hdf5r) is fragile by design, regardless of which file sources
-# which function.
-#
-# Fix, in two independent pieces:
-#   1. read_reference_scrna() / prepare_reference_seurat() -- a small,
-#      self-contained multi-format reader. Runs ONLY on the main Shiny
-#      process (called from mod_spatial_deconv.R's run_reference_pipeline()).
-#      Never sourced into a mirai daemon.
-#   2. prepare_reference_artifact() -- once the user has picked the
-#      "cell type" column, this writes a SELF-CONTAINED on-disk artifact
-#      (raw counts + cell-type labels only) that a daemon can load with
-#      NOTHING but base R + BPCells (see the `.load_reference_artifact()`
-#      closure inlined directly inside mod_spatial_deconv.R's mirai body --
-#      deliberately NOT a project helper function either, so there is
-#      nothing left for a future refactor to silently break).
-#
-# Net effect: multi-format parsing happens EXACTLY ONCE, in the main
-# process, at upload/recheck time. Every downstream deconvolution run reads
-# the same small prepared artifact -- no schard/SeuratDisk/hdf5r, and no
-# project helper function, is ever required inside a daemon again.
+# v2 (round-2 fixes from real-data testing):
+#   1. sanitize_celltype_labels() -- spacexr::check_cell_types() rejects any
+#      level containing "/" ("Reference: levels(cell_types) contains a cell
+#      type with name containing prohibited character /"). Real references
+#      routinely have this (Allen cortex 'subclass' == "L2/3 IT"). Sanitized
+#      ONCE here, shared by RCTD + Label Transfer, so both backends produce
+#      the same column names.
+#   2. prepare_reference_artifact(): merging rare types into "Autre" could
+#      previously still leave "Autre" itself below min_cells_per_type when
+#      there was only one (or a few, summing to too few) rare type(s) --
+#      relabeling alone does not fix that. Cells whose merged bucket is
+#      STILL below the minimum are now excluded entirely (reported back via
+#      n_dropped_rare), so ticking "merge rare types" always results in a
+#      reference RCTD can actually run on.
+#   3. New `max_cells_per_type` parameter -- optional stratified per-type
+#      subsampling (same spirit as helpers_sc.R::subsample_seurat_for_analysis())
+#      applied before writing the artifact. Reported real-world timeout was
+#      on a 73k-cell / ~20-cell-type reference; capping per type is a much
+#      better RAM/speed lever than shrinking the whole reference uniformly
+#      (rare types stay represented, common types get capped).
 # =============================================================================
 
 `%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
 
 # -----------------------------------------------------------------------------
-# 1. Multi-format reference reader (main process only)
+# 1. Multi-format reference reader (main process only) -- unchanged from v1
 # -----------------------------------------------------------------------------
 
 #' Read a single-cell reference file (.rds / .h5ad / .h5 / .loom)
-#'
-#' Self-contained: does not depend on any single-cell import helper from
-#' another module. Dispatches purely on file extension.
-#'
-#' @param path Character path to the staged reference file (already copied
-#'   under its original extension by mod_spatial_deconv.R's upload handler).
-#' @return A Seurat object, OR list(counts=, meta=) for prepare_reference_seurat()
-#'   to normalize into one.
+#' @param path Character path to the staged reference file.
+#' @return A Seurat object, OR list(counts=, meta=).
 read_reference_scrna <- function(path) {
   if (!file.exists(path)) stop("Fichier de reference introuvable : ", path)
   ext <- tolower(tools::file_ext(path))
@@ -80,7 +66,7 @@ read_reference_scrna <- function(path) {
       stop("Package 'hdf5r' requis pour lire les fichiers .h5.")
     }
     counts <- Seurat::Read10X_h5(path)
-    if (is.list(counts)) counts <- counts[[1]]  # multi-modal h5 safety net
+    if (is.list(counts)) counts <- counts[[1]]
     return(list(counts = counts, meta = NULL))
   }
 
@@ -98,11 +84,6 @@ read_reference_scrna <- function(path) {
 }
 
 #' Normalize a read_reference_scrna() result into a clean, single-assay Seurat object
-#'
-#' @param raw_ref Output of read_reference_scrna() -- Seurat object OR
-#'   list(counts=, meta=).
-#' @param project_name Character, Seurat project name.
-#' @return A Seurat object (raw counts, layers joined if Seurat v5).
 prepare_reference_seurat <- function(raw_ref, project_name = "Reference") {
   if (inherits(raw_ref, "Seurat")) {
     obj <- raw_ref
@@ -125,31 +106,47 @@ prepare_reference_seurat <- function(raw_ref, project_name = "Reference") {
 }
 
 # -----------------------------------------------------------------------------
-# 2. Self-contained on-disk artifact for the daemon (base R + BPCells only)
+# 2. Cell-type label sanitization (RCTD/Label Transfer compatibility)
+# -----------------------------------------------------------------------------
+
+#' Sanitize cell-type labels for RCTD/Label Transfer compatibility
+#'
+#' spacexr::check_cell_types() rejects any level containing "/" -- confirmed
+#' real-world error: "Reference: levels(cell_types) contains a cell type
+#' with name containing prohibited character /". Applied once, shared by
+#' both RCTD and Label Transfer, so their output columns stay consistent
+#' with each other.
+#'
+#' @param x Character vector of cell-type labels.
+#' @return Character vector, same length, "/" and "\\" replaced with "-".
+sanitize_celltype_labels <- function(x) {
+  gsub("[/\\\\]", "-", x)
+}
+
+# -----------------------------------------------------------------------------
+# 3. Self-contained on-disk artifact for the daemon (base R + BPCells only)
 # -----------------------------------------------------------------------------
 
 #' Prepare a self-contained on-disk artifact for a scRNA-seq reference
 #'
-#' Extracts raw counts + a cell-type label vector from an already-parsed
-#' Seurat reference (main process) and writes them to disk so a mirai daemon
-#' can load them with ONLY base R + BPCells -- no multi-format reader
-#' package, no project helper function. Cells with a missing/empty
-#' cell-type label are dropped here (previously they were passed through as
-#' NA all the way to spacexr::Reference()/TransferData(), which can error or
-#' produce a spurious class).
-#'
 #' @param ref_obj Seurat object (already parsed/validated on the main process).
 #' @param celltype_col Character, metadata column holding the cell-type label.
 #' @param merge_rare_types Logical, merge types with < min_cells_per_type
-#'   cells into "Autre" (mirrors RCTD's own hard minimum).
-#' @param min_cells_per_type Integer threshold for the merge above.
+#'   cells into "Autre". If the merged "Autre" bucket (or any other bucket)
+#'   is STILL below min_cells_per_type afterwards, those cells are dropped
+#'   entirely (not just relabeled) -- see v2 changelog.
+#' @param min_cells_per_type Integer threshold for the merge/drop above.
+#' @param max_cells_per_type Integer or NA. If set (and >0, finite), caps
+#'   each cell type at this many cells via stratified random subsampling
+#'   (RAM/speed safety net for large real-world references). NA/Inf/<=0
+#'   disables (default: no cap).
 #' @param bpcells_threshold Integer cell-count above which counts are written
-#'   as an on-disk BPCells matrix instead of an in-memory dgCMatrix RDS
-#'   (RAM safety for very large external references).
-#' @return list(path = <manifest RDS path>, n_cells=, n_genes=, backend=
-#'   "dgCMatrix"|"bpcells", celltype_counts = table).
+#'   as an on-disk BPCells matrix instead of an in-memory dgCMatrix RDS.
+#' @return list(path=, n_cells=, n_genes=, backend=, n_dropped_rare=,
+#'   celltype_counts=).
 prepare_reference_artifact <- function(ref_obj, celltype_col, merge_rare_types = TRUE,
-                                        min_cells_per_type = 25L, bpcells_threshold = 40000L) {
+                                        min_cells_per_type = 25L, max_cells_per_type = NA_integer_,
+                                        bpcells_threshold = 40000L) {
   if (!inherits(ref_obj, "Seurat")) stop("prepare_reference_artifact() attend un objet Seurat.")
   if (!celltype_col %in% colnames(ref_obj@meta.data)) {
     stop(sprintf("Colonne '%s' absente des metadonnees de la reference.", celltype_col))
@@ -157,6 +154,7 @@ prepare_reference_artifact <- function(ref_obj, celltype_col, merge_rare_types =
 
   cell_types_raw <- as.character(ref_obj@meta.data[[celltype_col]])
   names(cell_types_raw) <- colnames(ref_obj)
+  cell_types_raw <- sanitize_celltype_labels(cell_types_raw)
   cell_types_raw[!nzchar(cell_types_raw %||% "")] <- NA_character_
 
   keep <- !is.na(cell_types_raw)
@@ -165,10 +163,35 @@ prepare_reference_artifact <- function(ref_obj, celltype_col, merge_rare_types =
   }
   cell_types_raw <- cell_types_raw[keep]
 
+  n_dropped_rare <- 0L
   if (isTRUE(merge_rare_types)) {
     tab  <- table(cell_types_raw)
     rare <- names(tab)[tab < min_cells_per_type]
     if (length(rare) > 0) cell_types_raw[cell_types_raw %in% rare] <- "Autre"
+
+    # Relabeling alone does not guarantee "Autre" itself clears the
+    # threshold (e.g. a single 7-cell rare type merged into "Autre" is
+    # still a 7-cell "Autre"). Drop whatever remains too small instead of
+    # handing RCTD a bucket doomed to fail its own preflight check.
+    tab2 <- table(cell_types_raw)
+    still_too_small <- names(tab2)[tab2 < min_cells_per_type]
+    if (length(still_too_small) > 0) {
+      n_dropped_rare <- sum(cell_types_raw %in% still_too_small)
+      cell_types_raw <- cell_types_raw[!(cell_types_raw %in% still_too_small)]
+    }
+  }
+
+  if (length(cell_types_raw) < 10L) {
+    stop("Moins de 10 cellules restantes apres filtrage des types trop rares -- reference inexploitable.")
+  }
+
+  if (!is.null(max_cells_per_type) && !is.na(max_cells_per_type) &&
+      is.finite(max_cells_per_type) && max_cells_per_type > 0) {
+    set.seed(1)
+    keep_names <- unlist(lapply(split(names(cell_types_raw), cell_types_raw), function(ids) {
+      if (length(ids) > max_cells_per_type) sample(ids, max_cells_per_type) else ids
+    }), use.names = FALSE)
+    cell_types_raw <- cell_types_raw[keep_names]
   }
 
   cells_keep <- names(cell_types_raw)
@@ -199,17 +222,19 @@ prepare_reference_artifact <- function(ref_obj, celltype_col, merge_rare_types =
   }
 
   manifest <- list(
-    backend     = backend,
-    counts_path = counts_path,
-    cell_types  = cell_types,
-    genes       = rownames(counts),
-    n_cells     = ncol(counts),
-    n_genes     = nrow(counts),
-    created_at  = Sys.time()
+    backend        = backend,
+    counts_path    = counts_path,
+    cell_types     = cell_types,
+    genes          = rownames(counts),
+    n_cells        = ncol(counts),
+    n_genes        = nrow(counts),
+    n_dropped_rare = n_dropped_rare,
+    created_at     = Sys.time()
   )
   manifest_path <- file.path(artifact_dir, "manifest.rds")
   saveRDS(manifest, manifest_path)
 
   list(path = manifest_path, n_cells = manifest$n_cells, n_genes = manifest$n_genes,
-       backend = backend, celltype_counts = table(cell_types))
+       backend = backend, n_dropped_rare = n_dropped_rare,
+       celltype_counts = table(cell_types))
 }

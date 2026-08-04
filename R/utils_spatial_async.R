@@ -68,7 +68,11 @@
 # Moran's I, sketch UMAP) — after this, the ExtendedTask errors out instead
 # of hanging forever, so the UI always eventually gets actionable feedback.
 MIRAI_TASK_TIMEOUT_MS <- 20 * 60 * 1000  # 20 minutes
-
+# RCTD (mode="rctd", doublet_mode="full") peut aussi tourner longtemps,
+# independamment de la taille de la reference (observe en reel : une
+# reference lymph node ~73k cellules / ~20 types a depasse le plafond
+# partage de 20 min) — plafond dedie, meme logique que Label Transfer.
+RCTD_TIMEOUT_MS <- 40 * 60 * 1000  # 40 minutes
 # Label Transfer (mod_spatial_deconv.R, mode="labeltransfer") runs TWO
 # SCTransform calls (reference + query) plus FindTransferAnchors/TransferData
 # — reported to hit the shared 20-minute ceiling even on a moderately-sized
