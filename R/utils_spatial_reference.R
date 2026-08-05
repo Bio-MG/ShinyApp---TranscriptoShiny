@@ -120,7 +120,18 @@ prepare_reference_seurat <- function(raw_ref, project_name = "Reference") {
 #' @param x Character vector of cell-type labels.
 #' @return Character vector, same length, "/" and "\\" replaced with "-".
 sanitize_celltype_labels <- function(x) {
-  gsub("[/\\\\]", "-", x)
+  # "/" est rejete par spacexr::check_cell_types() (RCTD). "_" est
+  # silencieusement remplace par "-" par la validation interne de Seurat
+  # quand Label Transfer construit son Assay de prediction
+  # (TransferData(prediction.assay=TRUE)) -- la matrice de poids brute de
+  # RCTD ne passe PAS par cette validation, donc sans ce fix, le MEME type
+  # cellulaire logique finit sous deux noms DIFFERENTS selon la methode
+  # utilisee (ex: "T_CD4+_1" via RCTD vs "T-CD4+-1" via Label Transfer),
+  # rendant toute comparaison directe des deux methodes impossible.
+  # Sanitiser "_" ici aussi, une seule fois, a la source commune, rend la
+  # conversion de Seurat un no-op et garantit des noms de colonnes
+  # identiques quelle que soit la methode choisie.
+  gsub("[/_\\\\]", "-", x)
 }
 
 # -----------------------------------------------------------------------------

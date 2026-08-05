@@ -1,17 +1,25 @@
 # =============================================================================
 # modules/spatial/mod_spatial.R — Parent Module (router)
 # =============================================================================
-# v8 (Chantier 3 refonte — daemon badge honesty). The daemon status badge
-# used to be a plain boolean ("actifs"/"inactifs"): as soon as
-# mirai::daemons(n) returned, it said "actifs", even if the preload
-# (mirai::everywhere()) had silently failed on every worker -- exactly the
-# state that made the RCTD/Label Transfer "could not find function" bug
-# invisible from the UI (see R/utils_spatial_async.R v4 and
-# mod_spatial_deconv.R v7 for the underlying fix). The badge is now driven
-# by spatial_daemon_status() (3 states: "ready" / "degraded" / "inactive")
-# and, when degraded, shows a collapsed diagnostic
-# (spatial_daemon_diagnostics_text()) so the problem is visible without
-# opening the R console.
+# v9 (Chantier 3 round-2 — per-dataset result cache). Switching the active
+# dataset used to unconditionally NULL every derived result (QC/clusters/
+# deconv/niche) -- correct the first time a dataset is visited, but wasteful
+# every time the user just wants to flip BACK to a sample already analyzed
+# earlier in the session (reported: "le clustering doit etre recalcule quand
+# on a un multi echantillon quand on veut visualiser"). results_cache() now
+# snapshots shared_rv into an in-memory, SESSION-SCOPED cache keyed by
+# dataset name right before switching away from it, and restores it if
+# present when switching back -- a fresh dataset (never analyzed) still
+# gets the same clean-slate NULLs as before. ROI state (roi_ids/roi_bbox/
+# roi_markers) is deliberately NEVER cached/restored: it is tightly coupled
+# to mod_spatial_viz.R's own local reactive state (umap_df, linked
+# selections), which is not safely restorable from here, so ROI is always
+# reset on a dataset switch, same as before this change. This cache does
+# NOT persist across app restarts / session save-load (out of scope for
+# this round -- see handoff note).
+#
+# v8 (Chantier 3 refonte — daemon badge honesty): 3-state daemon badge
+# (ready/degraded/inactive) + diagnostics.
 #
 # v6 (Phase 4 — "Working with multiple slices"): 5th top-level tab,
 # "Multi-echantillons" (mod_spatial_multi.R), active-dataset switcher.
@@ -48,10 +56,10 @@ mod_spatial_ui <- function(id) {
       
       nav_panel("5. Multi-echantillons", icon = icon("layer-group"),
                 mod_spatial_multi_ui(ns("multi"))),
-
+      
       nav_panel("6. Niches spatiales", icon = icon("diagram-project"),
                 mod_spatial_niche_ui(ns("niche"))),
-
+      
       nav_spacer(),
       # v9 (fix UX) : un <select> imbrique dans un item de menu deroulant
       # Bootstrap est peu fiable au clic (le menu intercepte/ferme avant que
@@ -72,7 +80,6 @@ mod_spatial_server <- function(id, global_data) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     
-    # Defensive: no-op if already initialized (see app.R for the primary call).
     if (!spatial_daemons_ready()) init_spatial_daemons(n_daemons = 6)
     
     # ── Shared reactive bus for all child modules ─────────────────────────
@@ -92,18 +99,30 @@ mod_spatial_server <- function(id, global_data) {
       niche_composition = NULL
     )
     
-    # v8: 3-state badge (ready / degraded / inactive) instead of a boolean --
-    # see file header for why this matters. "degraded" additionally shows a
-    # short diagnostic (which packages/functions were NOT found preloaded on
-    # the daemons) so a preload problem is visible from the UI immediately,
-    # not only after several confusing failed task attempts.
+    # ── v9: per-dataset result cache (session-scoped, in-memory only) ─────
+    results_cache <- reactiveVal(list())
+    
+    .cacheable_fields <- c("qc_metrics", "qc_pass_idx", "moran_results",
+                           "cluster_labels", "deconv_props", "cluster_markers",
+                           "niche_labels", "niche_composition")
+    
+    .snapshot_shared_rv <- function() {
+      stats::setNames(lapply(.cacheable_fields, function(f) shared_rv[[f]]), .cacheable_fields)
+    }
+    .restore_shared_rv <- function(snap) {
+      for (f in .cacheable_fields) shared_rv[[f]] <- snap[[f]] %||% NULL
+    }
+    .clear_shared_rv <- function() {
+      for (f in .cacheable_fields) shared_rv[[f]] <- NULL
+    }
+    
     output$daemon_status_ui <- renderUI({
-      input$btn_reset_daemons  # invalidate after reset
+      input$btn_reset_daemons
       status <- tryCatch(spatial_daemon_status(), error = function(e) "inactive")
       label <- switch(status,
-        "ready"    = "\u2705 daemons actifs (verifies)",
-        "degraded" = "\u26a0\ufe0f daemons actifs -- preload degrade",
-        "\u26aa daemons inactifs"
+                      "ready"    = "\u2705 daemons actifs (verifies)",
+                      "degraded" = "\u26a0\ufe0f daemons actifs -- preload degrade",
+                      "\u26aa daemons inactifs"
       )
       css_class <- switch(status, "ready" = "text-success", "degraded" = "text-warning", "text-muted")
       tagList(
@@ -134,7 +153,6 @@ mod_spatial_server <- function(id, global_data) {
       }
     })
     
-    # ── Active-dataset switcher (Phase 4 — multi-echantillons) ────────────
     output$active_dataset_ui <- renderUI({
       ds_names <- names(global_data$spatial_datasets)
       if (length(ds_names) < 2) return(NULL)
@@ -150,21 +168,38 @@ mod_spatial_server <- function(id, global_data) {
     observeEvent(input$active_dataset_select, {
       req(input$active_dataset_select %in% names(global_data$spatial_datasets))
       if (identical(input$active_dataset_select, global_data$active_spatial_dataset)) return()
+      
+      # v9: snapshot the OUTGOING dataset's results before switching away,
+      # so flipping back later restores them instead of forcing a full
+      # recompute (QC/clustering/deconvolution/niches).
+      old_name <- global_data$active_spatial_dataset
+      if (!is.null(old_name)) {
+        cache <- results_cache()
+        cache[[old_name]] <- .snapshot_shared_rv()
+        results_cache(cache)
+      }
+      
       global_data$active_spatial_dataset <- input$active_dataset_select
       global_data$spatial_obj <- global_data$spatial_datasets[[input$active_dataset_select]]
-      shared_rv$qc_metrics      <- NULL
-      shared_rv$qc_pass_idx     <- NULL
-      shared_rv$moran_results   <- NULL
-      shared_rv$cluster_labels  <- NULL
-      shared_rv$deconv_props    <- NULL
-      shared_rv$cluster_markers <- NULL
-      shared_rv$roi_ids         <- NULL
-      shared_rv$roi_bbox        <- NULL
-      shared_rv$roi_markers     <- NULL
-      shared_rv$niche_labels      <- NULL
-      shared_rv$niche_composition <- NULL
-      showNotification(sprintf("Echantillon actif : %s", input$active_dataset_select),
-                       type = "message", duration = 4)
+      
+      # ROI state stays tied to mod_spatial_viz.R's own local reactive state
+      # (umap_df, linked lasso selection) -- not safely restorable from
+      # here, always reset on a dataset switch (unchanged from before).
+      shared_rv$roi_ids     <- NULL
+      shared_rv$roi_bbox    <- NULL
+      shared_rv$roi_markers <- NULL
+      
+      cached <- results_cache()[[input$active_dataset_select]]
+      if (!is.null(cached)) {
+        .restore_shared_rv(cached)
+        showNotification(sprintf("Echantillon actif : %s (resultats precedents restaures).",
+                                 input$active_dataset_select),
+                         type = "message", duration = 4)
+      } else {
+        .clear_shared_rv()
+        showNotification(sprintf("Echantillon actif : %s", input$active_dataset_select),
+                         type = "message", duration = 4)
+      }
     })
     
     mod_spatial_qc_server("qc", global_data, shared_rv)
