@@ -678,12 +678,19 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
         }
       }
 
+      pass_idx <- safe_pass_idx(shared_rv$qc_pass_idx, global_data$active_spatial_dataset,
+                                global_data$spatial_obj$n_total)
+      if (is.null(pass_idx) && !is.null(shared_rv$qc_pass_idx)) {
+        showNotification("Seuils QC obsoletes pour cet echantillon -- deconvolution lancee sans filtre QC.",
+                         type = "warning", duration = 8)
+      }
       last_deconv_mode(input$mode)
       reset_log(log_file)
       deconv_task$invoke(
         bpcells_dir      = global_data$spatial_obj$bpcells_dir,
-        pass_idx         = shared_rv$qc_pass_idx,
+        pass_idx         = pass_idx,
         coords           = global_data$spatial_obj$coords,
+        
         mode             = input$mode,
         ref_path         = ref_path(),
         n_topics         = input$n_topics,

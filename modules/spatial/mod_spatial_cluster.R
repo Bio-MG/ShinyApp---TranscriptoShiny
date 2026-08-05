@@ -187,17 +187,22 @@ mod_spatial_cluster_server <- function(id, global_data, shared_rv) {
 
     observeEvent(input$btn_cluster, {
       req(global_data$spatial_obj$bpcells_dir, global_data$spatial_obj$coords)
+      pass_idx <- safe_pass_idx(shared_rv$qc_pass_idx, global_data$active_spatial_dataset,
+                                global_data$spatial_obj$n_total)
+      if (is.null(pass_idx) && !is.null(shared_rv$qc_pass_idx)) {
+        showNotification("Seuils QC obsoletes pour cet echantillon -- clustering lance sans filtre QC.",
+                         type = "warning", duration = 8)
+      }
       reset_log(log_file)
       cluster_task$invoke(
         bpcells_dir = global_data$spatial_obj$bpcells_dir,
-        pass_idx    = shared_rv$qc_pass_idx,
+        pass_idx    = pass_idx,
         coords      = global_data$spatial_obj$coords,
         lambda      = input$lambda, k_geom = input$k_geom,
         npcs        = input$npcs, resolution = input$resolution,
         log_file    = log_file
       )
     })
-
     observeEvent(cluster_task$status(), {
       if (cluster_task$status() == "success") {
         shared_rv$cluster_labels <- cluster_task$result()
@@ -282,17 +287,19 @@ mod_spatial_cluster_server <- function(id, global_data, shared_rv) {
 
     observeEvent(input$btn_find_markers, {
       req(global_data$spatial_obj$bpcells_dir, shared_rv$cluster_labels)
+      pass_idx <- safe_pass_idx(shared_rv$qc_pass_idx, global_data$active_spatial_dataset,
+                                global_data$spatial_obj$n_total)
       reset_log(markers_log_file)
       markers_task$invoke(
         bpcells_dir     = global_data$spatial_obj$bpcells_dir,
-        pass_idx        = shared_rv$qc_pass_idx,
+        pass_idx        = pass_idx,
         cluster_labels  = shared_rv$cluster_labels,
         logfc_threshold = input$logfc_threshold,
         min_pct         = input$min_pct,
         log_file        = markers_log_file
       )
     })
-
+    
     observeEvent(markers_task$status(), {
       if (markers_task$status() == "success") {
         shared_rv$cluster_markers <- markers_task$result()

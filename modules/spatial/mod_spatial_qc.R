@@ -199,9 +199,12 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
       df <- shared_rv$qc_metrics
       pass <- with(df, nCount >= input$min_count & nFeature >= input$min_features &
                      (is.na(pct_mt) | pct_mt <= input$max_pct_mt))
-      shared_rv$qc_pass_idx <- which(pass)
+      idx <- which(pass)
+      attr(idx, "dataset") <- global_data$active_spatial_dataset
+      attr(idx, "n_total") <- nrow(df)
+      shared_rv$qc_pass_idx <- idx
       showNotification(sprintf("Seuils appliques : %d/%d elements conserves.",
-                                sum(pass), length(pass)), type = "message", duration = 4)
+                               sum(pass), length(pass)), type = "message", duration = 4)
     })
 
     output$qc_pass_summary <- renderUI({
@@ -264,16 +267,21 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
 
     observeEvent(input$btn_moran, {
       req(global_data$spatial_obj$bpcells_dir, global_data$spatial_obj$coords)
+      pass_idx <- safe_pass_idx(shared_rv$qc_pass_idx, global_data$active_spatial_dataset,
+                                global_data$spatial_obj$n_total)
+      if (is.null(pass_idx) && !is.null(shared_rv$qc_pass_idx)) {
+        showNotification("Seuils QC obsoletes pour cet echantillon -- indice de Moran calcule sans filtre QC.",
+                         type = "warning", duration = 8)
+      }
       reset_log(log_file)
       moran_task$invoke(
         bpcells_dir = global_data$spatial_obj$bpcells_dir,
-        pass_idx    = shared_rv$qc_pass_idx,
+        pass_idx    = pass_idx,
         coords      = global_data$spatial_obj$coords,
         n_hvg       = input$n_hvg_moran,
         log_file    = log_file
       )
     })
-
     observeEvent(moran_task$status(), {
       if (moran_task$status() == "success") {
         shared_rv$moran_results <- moran_task$result()
