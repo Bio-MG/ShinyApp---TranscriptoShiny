@@ -345,3 +345,23 @@ parse_log_progress <- function(log_lines) {
   pct <- if (length(m) == 3) round(100 * as.numeric(m[2]) / as.numeric(m[3])) else NA_real_
   list(text = last, pct = pct)
 }
+#' Defensive guard: validate a QC pass_idx against the currently active dataset
+#'
+#' Root cause fixed: shared_rv$qc_pass_idx computed for a PREVIOUS dataset
+#' could reach a NEW (smaller/different) dataset's BPCells matrix inside a
+#' mirai daemon -> opaque "vctrs::vec_slice" OOB crash. Called on the MAIN
+#' thread right before every async $invoke() consuming pass_idx.
+#'
+#' @param pass_idx Integer vector or NULL (shared_rv$qc_pass_idx), expected
+#'   to carry "dataset"/"n_total" attributes set by mod_spatial_qc.R.
+#' @param dataset_name Character, global_data$active_spatial_dataset.
+#' @param n_total Integer, global_data$spatial_obj$n_total.
+#' @return pass_idx unchanged if valid for this dataset, else NULL.
+safe_pass_idx <- function(pass_idx, dataset_name, n_total) {
+  if (is.null(pass_idx) || length(pass_idx) == 0) return(pass_idx)
+  ds_tag <- attr(pass_idx, "dataset")
+  if (!is.null(ds_tag) && !is.null(dataset_name) && !identical(ds_tag, dataset_name)) return(NULL)
+  if (!is.null(n_total) && is.finite(n_total) &&
+      (max(pass_idx, na.rm = TRUE) > n_total || min(pass_idx, na.rm = TRUE) < 1)) return(NULL)
+  pass_idx
+}

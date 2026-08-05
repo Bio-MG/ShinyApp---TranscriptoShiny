@@ -35,7 +35,7 @@ options(shiny.maxRequestSize = 5000 * 1024^2)
 
 
 # --- 2. PACKAGES (CRAN / Bioconductor — installables via install.packages()/BiocManager) ---
-# new package install.packages(c("RANN", "irlba", "topicmodels", "slam"))
+# new package install.packages(c("RANN", "irlba", "topicmodels", "slam")) , deconvonvolution label transfer : BiocManager::install('glmGamPoi')
 
 required_packages <- c(
   "shiny", "bslib", "Seurat", "SeuratObject",
