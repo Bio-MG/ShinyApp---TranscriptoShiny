@@ -881,6 +881,21 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       selectInput(ns("deconv_celltype"), NULL, choices = cts)
     })
     
+    # FIX (crash "cannot coerce type 'closure'..."): relancer la deconvolution
+    # avec une AUTRE methode change les noms de colonnes (RCTD garde les noms
+    # bruts "T_CD4+_1" ; TransferData() les fait passer par la convention
+    # Seurat qui remplace "_" par "-", ex "T-CD4+-1") -- input$deconv_celltype
+    # cote serveur peut rester bloque sur l'ancienne valeur le temps d'un
+    # aller-retour navigateur. Force une selection valide des que les
+    # colonnes disponibles changent.
+    observeEvent(shared_rv$deconv_props, {
+      cts <- setdiff(colnames(shared_rv$deconv_props), "id")
+      if (length(cts) == 0) return()
+      if (is.null(input$deconv_celltype) || !input$deconv_celltype %in% cts) {
+        updateSelectInput(session, "deconv_celltype", choices = cts, selected = cts[1])
+      }
+    }, ignoreInit = TRUE)
+    
     # --------------------------------------------------------------------------
     # Données à afficher (plot_df)
     # --------------------------------------------------------------------------
@@ -903,6 +918,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
                },
                "deconv" = {
                  req(shared_rv$deconv_props, input$deconv_celltype)
+                 req(input$deconv_celltype %in% colnames(shared_rv$deconv_props))
                  m <- match(df$id, shared_rv$deconv_props$id)
                  shared_rv$deconv_props[[input$deconv_celltype]][m]
                },
