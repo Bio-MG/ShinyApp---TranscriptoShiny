@@ -60,6 +60,20 @@ mod_spatial_qc_ui <- function(id) {
           "n'interrompt pas votre session."),
       numericInput(ns("n_hvg_moran"), "Nombre de genes (HVG)", 1000, min = 100, max = 5000, step = 100),
 
+      tags$details(
+        tags$summary(style = "cursor:pointer; font-size:0.75rem; color:#666;",
+                     "Options avancees (gros jeux de donnees : Visium HD, Slide-seq)"),
+        div(class = "mt-2",
+            div(class = "text-muted", style = "font-size:0.7rem;",
+                "Regroupe les elements sur une grille avant le calcul de Moran's I — accelere ",
+                "fortement le calcul sur un puck Slide-seq (dizaines de milliers de beads) ou du ",
+                "Visium HD, au prix d'une resolution spatiale legerement reduite. Laissez a 0 ",
+                "pour le comportement standard (calcul point-par-point, adapte a Visium classique)."),
+            numericInput(ns("moran_x_cuts"), "x.cuts (0 = desactive)", 0, min = 0, max = 500, step = 10),
+            numericInput(ns("moran_y_cuts"), "y.cuts (0 = desactive)", 0, min = 0, max = 500, step = 10)
+        )
+      ),
+
       bslib::input_task_button(ns("btn_moran"), "Lancer l'autocorrelation spatiale",
                                 icon = icon("wave-square")),
       verbatimTextOutput(ns("moran_progress_text"), placeholder = TRUE)
@@ -77,7 +91,7 @@ mod_spatial_qc_ui <- function(id) {
 
       nav_panel("Distributions QC",
                 card(full_screen = TRUE,
-                     plotOutput(ns("qc_hist_plot"), height = "480px")),
+                     plotOutput(ns("qc_hist_plot"), height = "560px")),
                 card(full_screen = TRUE,
                      card_header("nCount vs nFeature (couleur = %MT)"),
                      plotOutput(ns("qc_scatter_plot"), height = "480px"))),
@@ -175,7 +189,14 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
       p4 <- ggplot2::ggplot(df, ggplot2::aes(x = pct_ribo)) +
         ggplot2::geom_histogram(bins = 50, fill = "#8E44AD") +
         ggplot2::labs(title = "% Ribosomal") + ggplot2::theme_minimal()
-      patchwork::wrap_plots(p1, p2, p3, p4, ncol = 4)
+      # NEW (biologist feedback, Slide-seq real-dataset test): log10(nCount+1)
+      # -- generic across ALL technologies (not Slide-seq-specific), but
+      # especially useful for puck/bead data whose count range is wide
+      # enough that the raw nCount histogram (p1) is hard to read.
+      p5 <- ggplot2::ggplot(df, ggplot2::aes(x = log_nCount)) +
+        ggplot2::geom_histogram(bins = 50, fill = "#F39C12") +
+        ggplot2::labs(title = "log10(nCount + 1)") + ggplot2::theme_minimal()
+      patchwork::wrap_plots(p1, p2, p3, p4, p5, ncol = 5)
     })
 
     # NEW: classic joint QC diagnostic (nCount vs nFeature, colored by %MT) —
@@ -199,12 +220,9 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
       df <- shared_rv$qc_metrics
       pass <- with(df, nCount >= input$min_count & nFeature >= input$min_features &
                      (is.na(pct_mt) | pct_mt <= input$max_pct_mt))
-      idx <- which(pass)
-      attr(idx, "dataset") <- global_data$active_spatial_dataset
-      attr(idx, "n_total") <- nrow(df)
-      shared_rv$qc_pass_idx <- idx
+      shared_rv$qc_pass_idx <- which(pass)
       showNotification(sprintf("Seuils appliques : %d/%d elements conserves.",
-                               sum(pass), length(pass)), type = "message", duration = 4)
+                                sum(pass), length(pass)), type = "message", duration = 4)
     })
 
     output$qc_pass_summary <- renderUI({
@@ -218,7 +236,8 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
     log_file <- spatial_log_path(session, "moran")
     tracker  <- create_reactive_tracker(session, log_file)
 
-    moran_task <- ExtendedTask$new(function(bpcells_dir, pass_idx, coords, n_hvg, log_file) {
+    moran_task <- ExtendedTask$new(function(bpcells_dir, pass_idx, coords, n_hvg,
+                                            x_cuts, y_cuts, log_file) {
       mirai::mirai(
         {
           write_mirai_log(log_file, "Ouverture de la matrice BPCells...", 1, 5)
@@ -238,15 +257,27 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
           coords_df <- coords_df[keep, , drop = FALSE]
           obj <- obj[, rownames(coords_df)]
 
-          write_mirai_log(log_file, sprintf("Calcul de l'indice de Moran sur %d genes...", length(hvgs)), 4, 5)
+          # OPTIONAL grid-binning (x.cuts/y.cuts) -- vignette parity for large
+          # point clouds (Slide-seq pucks, tens of thousands of beads): bins
+          # locations before computing Moran's I instead of point-by-point,
+          # trading a little spatial resolution for a large speedup. NULL/0
+          # (default) preserves the exact prior point-based behavior for
+          # Visium's few thousand spots.
+          use_cuts <- is.finite(x_cuts) && is.finite(y_cuts) && x_cuts > 0 && y_cuts > 0
+          write_mirai_log(log_file, sprintf(
+            "Calcul de l'indice de Moran sur %d genes%s...", length(hvgs),
+            if (use_cuts) sprintf(" (grille %dx%d)", x_cuts, y_cuts) else ""
+          ), 4, 5)
           # Verified against Seurat source: FindSpatiallyVariableFeatures.Assay()
           # / .StdAssay() takes spatial.location directly (no FOV needed), and
           # SVFInfo() retrieves the per-gene statistics table afterwards.
-          assay_res <- Seurat::FindSpatiallyVariableFeatures(
+          svf_args <- list(
             object = obj[["RNA"]], layer = "data", features = hvgs,
             spatial.location = coords_df, selection.method = "moransi",
             nfeatures = length(hvgs), verbose = FALSE
           )
+          if (use_cuts) { svf_args$x.cuts <- x_cuts; svf_args$y.cuts <- y_cuts }
+          assay_res <- do.call(Seurat::FindSpatiallyVariableFeatures, svf_args)
           info <- SeuratObject::SVFInfo(assay_res, method = "moransi")
 
           write_mirai_log(log_file, "Termine.", 5, 5)
@@ -260,28 +291,26 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
           )
         },
         bpcells_dir = bpcells_dir, pass_idx = pass_idx, coords = coords,
-        n_hvg = n_hvg, log_file = log_file, .timeout = MIRAI_TASK_TIMEOUT_MS
+        n_hvg = n_hvg, x_cuts = x_cuts, y_cuts = y_cuts,
+        log_file = log_file, .timeout = MIRAI_TASK_TIMEOUT_MS
       )
     })
     bslib::bind_task_button(moran_task, "btn_moran")
 
     observeEvent(input$btn_moran, {
       req(global_data$spatial_obj$bpcells_dir, global_data$spatial_obj$coords)
-      pass_idx <- safe_pass_idx(shared_rv$qc_pass_idx, global_data$active_spatial_dataset,
-                                global_data$spatial_obj$n_total)
-      if (is.null(pass_idx) && !is.null(shared_rv$qc_pass_idx)) {
-        showNotification("Seuils QC obsoletes pour cet echantillon -- indice de Moran calcule sans filtre QC.",
-                         type = "warning", duration = 8)
-      }
       reset_log(log_file)
       moran_task$invoke(
         bpcells_dir = global_data$spatial_obj$bpcells_dir,
-        pass_idx    = pass_idx,
+        pass_idx    = shared_rv$qc_pass_idx,
         coords      = global_data$spatial_obj$coords,
         n_hvg       = input$n_hvg_moran,
+        x_cuts      = input$moran_x_cuts %||% 0,
+        y_cuts      = input$moran_y_cuts %||% 0,
         log_file    = log_file
       )
     })
+
     observeEvent(moran_task$status(), {
       if (moran_task$status() == "success") {
         shared_rv$moran_results <- moran_task$result()

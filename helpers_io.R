@@ -425,6 +425,47 @@ load_spatial_visium <- function(visium_dir, sample_name = "Spatial_Sample",
   spatial_obj
 }
 
+#' Load the RAW (unfiltered, all barcodes incl. background) Visium matrix
+#'
+#' Companion to load_spatial_visium() — loads raw_feature_bc_matrix.h5
+#' (every barcode under the capture area, including empty/background spots)
+#' SEPARATELY from the filtered matrix. Backs the optional "filtered + raw
+#' simultane" import (see mod_import_spatial.R, checkbox "Importer aussi la
+#' matrice brute"). Primary use case: a future ambient-RNA correction step
+#' (DecontX or similar), which needs the background/empty-droplet profile
+#' that the filtered matrix alone cannot provide (see long-term backlog,
+#' handoff_spatial_bio-mg.md). No QC filtering, no image loading — counts
+#' only. Classic (non-HD) Visium only; HD's bin.size-aware loader does not
+#' expose an equivalent unfiltered matrix through the same code path.
+#'
+#' @param visium_dir Character path to the Visium root folder.
+#' @return Seurat object (raw counts, "Spatial" assay), or NULL if no
+#'   raw_feature_bc_matrix.h5 is found or it fails to read (never fatal —
+#'   the primary filtered-only import still proceeds without it).
+load_spatial_visium_raw <- function(visium_dir) {
+  visium_dir <- normalizePath(enc2utf8(visium_dir), winslash = "/", mustWork = FALSE)
+  h5_files <- list.files(visium_dir, pattern = "^raw_feature_bc_matrix\\.h5$",
+                        full.names = TRUE, ignore.case = TRUE)
+  if (length(h5_files) == 0) return(NULL)
+  if (!requireNamespace("hdf5r", quietly = TRUE)) {
+    warning("Package 'hdf5r' absent — matrice brute (raw) non chargee.", call. = FALSE)
+    return(NULL)
+  }
+  counts <- tryCatch(Seurat::Read10X_h5(h5_files[1]), error = function(e) {
+    warning("Lecture de raw_feature_bc_matrix.h5 echouee : ", conditionMessage(e), call. = FALSE)
+    NULL
+  })
+  if (is.null(counts)) return(NULL)
+  if (is.list(counts)) counts <- counts[[1]]  # multi-modal h5 safety net
+  tryCatch(
+    Seurat::CreateSeuratObject(counts = counts, assay = "Spatial", project = "raw"),
+    error = function(e) {
+      warning("Construction de l'objet raw echouee : ", conditionMessage(e), call. = FALSE)
+      NULL
+    }
+  )
+}
+
 #' Load one Visium HD dataset (binned) or refuse a flat/feature-slice export
 #'
 #' Linear flow: validate inputs -> resolve mode -> refuse flat immediately ->
@@ -537,6 +578,253 @@ load_spatial_visium_hd <- function(visium_dir, bin_size = 8L, sample_name = "Spa
   }
 
   spatial_obj
+}
+
+#' Locate a Slide-seq bead-location file among a candidate file list (internal)
+#'
+#' Tried in priority order (most canonical Slide-seq/Macosko-lab naming
+#' first) so that, if several matches exist, the most likely-correct one
+#' wins deterministically:
+#'   1. "BeadLocationsForR.csv[.gz]" / "BeadLocation.csv[.gz]" (classic
+#'      Slide-seq v1/v2 Broad/Macosko naming).
+#'   2. "*_alignedXYCoords.csv|tsv[.gz]" (Slide-seq v2 Macosko naming —
+#'      frequently HEADERLESS, handled by .read_delimited_table()'s
+#'      header-sniffing below).
+#'   3. "coords.csv|tsv[.gz]" / "positions.csv|tsv[.gz]" (generic).
+#'   4. Any filename containing "location"/"bead" as a last resort.
+#'
+#' @param files Character vector of full file paths (as from list.files(...,
+#'   full.names = TRUE)).
+#' @return Character scalar (a path from `files`), or NA_character_ if none matched.
+.find_slideseq_location_file <- function(files) {
+  bn <- basename(files)
+  patterns <- c(
+    "^BeadLocationsForR\\.csv(\\.gz)?$",
+    "^BeadLocation\\.csv(\\.gz)?$",
+    "_alignedXYCoords\\.(csv|tsv)(\\.gz)?$",
+    "^coords?\\.(csv|tsv)(\\.gz)?$",
+    "^positions?\\.(csv|tsv)(\\.gz)?$",
+    "bead.*location|location.*bead"
+  )
+  for (pat in patterns) {
+    hit <- files[grepl(pat, bn, ignore.case = TRUE)]
+    if (length(hit) > 0) return(hit[1])
+  }
+  NA_character_
+}
+
+#' Locate a Slide-seq counts source among a candidate file list (internal)
+#'
+#' Prefers the 10x-style sparse triplet (matrix.mtx + barcodes.tsv +
+#' features.tsv/genes.tsv — increasingly common for curated/re-processed
+#' public Slide-seq datasets, e.g. GEO re-exports) over a dense DGE table
+#' (MappedDGEForR.csv, dge_matrix.csv/tsv, or any "*dge*"/"*expression*"
+#' .csv|.tsv[.gz] file — the classic Slide-seq pipeline output, genes x
+#' beads, can be large but is handled the same way as Bulk's dense tables).
+#'
+#' @param files Character vector of full file paths.
+#' @return list(kind = "mtx", mtx=, barcodes=, features=) or
+#'   list(kind = "dge", path=). Errors (call.=FALSE) if nothing usable found.
+.find_slideseq_counts <- function(files) {
+  bn <- basename(files)
+  mtx <- files[grepl("^matrix\\.mtx(\\.gz)?$", bn, ignore.case = TRUE)]
+  if (length(mtx) > 0) {
+    bc <- files[grepl("^barcodes\\.tsv(\\.gz)?$", bn, ignore.case = TRUE)]
+    ft <- files[grepl("^(features|genes)\\.tsv(\\.gz)?$", bn, ignore.case = TRUE)]
+    if (length(bc) == 0 || length(ft) == 0) {
+      stop("matrix.mtx trouve mais barcodes.tsv/features.tsv (ou genes.tsv) manquant(s) a cote.",
+           call. = FALSE)
+    }
+    return(list(kind = "mtx", mtx = mtx[1], barcodes = bc[1], features = ft[1]))
+  }
+
+  dge_patterns <- c("^MappedDGEForR\\.(csv|tsv)(\\.gz)?$", "^dge_?matrix\\.(csv|tsv)(\\.gz)?$",
+                    "dge.*\\.(csv|tsv)(\\.gz)?$", "expression.*\\.(csv|tsv)(\\.gz)?$")
+  for (pat in dge_patterns) {
+    hit <- files[grepl(pat, bn, ignore.case = TRUE)]
+    if (length(hit) > 0) return(list(kind = "dge", path = hit[1]))
+  }
+
+  stop("Aucune matrice de comptage trouvee (ni triplet matrix.mtx/barcodes.tsv/features.tsv|genes.tsv, ",
+       "ni fichier DGE dense 'MappedDGEForR.csv', 'dge_matrix.csv/tsv' ou similaire).", call. = FALSE)
+}
+
+#' Read a small delimited table with auto-detected separator AND header
+#' (internal) — handles the real-world Slide-seq location-file variability:
+#' comma vs tab, plain vs .gz, and header vs HEADERLESS (Macosko-lab
+#' "*_alignedXYCoords" files are typically 3 headerless columns).
+#'
+#' @param path Character path (may end in .csv, .tsv, .txt, optionally .gz).
+#' @return data.frame. If no header was detected, columns are named V1..Vn.
+.read_delimited_table <- function(path) {
+  ext_stripped <- sub("\\.gz$", "", path, ignore.case = TRUE)
+  sep <- if (grepl("\\.tsv$|\\.txt$", ext_stripped, ignore.case = TRUE)) "\t" else ","
+
+  first_line <- tryCatch({
+    con <- if (grepl("\\.gz$", path, ignore.case = TRUE)) gzfile(path, "rt") else file(path, "rt")
+    on.exit(close(con), add = TRUE)
+    readLines(con, n = 1)
+  }, error = function(e) "")
+
+  # Extension-based separator guess can be wrong (some exports use .txt for
+  # comma-delimited data) -- if the guessed separator isn't even present on
+  # the first line, try the other common one before giving up.
+  if (nzchar(first_line) && !grepl(sep, first_line, fixed = TRUE)) {
+    sep <- if (identical(sep, "\t")) "," else "\t"
+  }
+
+  fields1 <- if (nzchar(first_line)) strsplit(first_line, sep, fixed = TRUE)[[1]] else character(0)
+  looks_numeric <- function(v) !is.na(suppressWarnings(as.numeric(v)))
+  has_header <- !(length(fields1) >= 3 && (looks_numeric(fields1[2]) || looks_numeric(fields1[3])))
+
+  df <- utils::read.table(path, header = has_header, sep = sep, stringsAsFactors = FALSE,
+                          check.names = FALSE, quote = "\"", comment.char = "")
+  if (!has_header) colnames(df) <- paste0("V", seq_len(ncol(df)))
+  df
+}
+
+#' Detect a Slide-seq / Slide-seqV2 dataset directory (BETA)
+#'
+#' Recognizes either of the two common Slide-seq export layouts (see
+#' .find_slideseq_counts()) PLUS the extended set of bead-location filename
+#' conventions in .find_slideseq_location_file() (BeadLocationsForR,
+#' *_alignedXYCoords, coords/positions, .csv or .tsv, optionally .gz). A
+#' bead-location file is REQUIRED in both cases — Slide-seq has no
+#' histology image; coordinates are the only spatial information available.
+#' Not wired into any auto-detection banner (unlike Visium HD) — kept as an
+#' explicit "Slide-seq" radio choice in mod_import_spatial.R to avoid any
+#' collision with the already-intricate Visium/HD detection logic.
+#'
+#' @param dir_path Character path.
+#' @return Logical.
+is_slideseq_dir <- function(dir_path) {
+  if (!dir.exists(dir_path)) return(FALSE)
+  files <- list.files(dir_path, recursive = TRUE, full.names = TRUE, ignore.case = TRUE)
+  has_locations <- !is.na(.find_slideseq_location_file(files))
+  has_counts <- tryCatch({ .find_slideseq_counts(files); TRUE }, error = function(e) FALSE)
+  has_locations && has_counts
+}
+
+#' Load a Slide-seq / Slide-seqV2 puck (BETA)
+#'
+#' No histology image (Slide-seq has none) — produces a Seurat object whose
+#' downstream spatial_obj (via convert_to_bpcells_and_fov()) has NULL
+#' histology, same code path as the Visium-HD arrow-free manual loader (see
+#' extract_histology_image()'s relaxed guard, R/utils_spatial_io.R). Bead
+#' coordinates are exposed as coord_x/coord_y meta.data columns, reusing
+#' get_spatial_coords()'s EXISTING fallback — zero changes needed anywhere
+#' downstream (BANKSY-lite, Moran's I, ROI, multi-sample all read $coords
+#' the same way regardless of technology; RCTD/Label Transfer in
+#' mod_spatial_deconv.R are ALSO already technology-agnostic — no new code
+#' needed there for Slide-seq to work with either).
+#'
+#' v2 (real-dataset feedback, Slide-seq v2 mouse hippocampus puck): broadened
+#' format coverage (see .find_slideseq_location_file()/.find_slideseq_counts())
+#' and added a barcode-intersection retry (common "-1"/".1" suffix mismatch
+#' between the counts matrix and the location file) plus a diagnostic error
+#' message (overlap %, example barcodes from both sides) when beads still
+#' don't match after the retry.
+#'
+#' @param dir_path Character path to the Slide-seq puck folder.
+#' @param sample_name Character sample name.
+#' @param min_counts,min_features QC thresholds (same convention as Visium).
+#' @return Seurat object, attr(obj, "ts_spatial_mode") == "slideseq".
+load_spatial_slideseq <- function(dir_path, sample_name = "SlideSeq_Sample",
+                                  min_counts = 100, min_features = 200) {
+  dir_path <- normalizePath(enc2utf8(dir_path), winslash = "/", mustWork = FALSE)
+  if (!dir.exists(dir_path)) stop("Le dossier specifie n'existe pas : ", dir_path, call. = FALSE)
+
+  files <- list.files(dir_path, recursive = TRUE, full.names = TRUE, ignore.case = TRUE)
+  if (length(files) == 0) stop("Dossier Slide-seq vide : ", dir_path, call. = FALSE)
+
+  # --- 1. Bead locations (required) ---------------------------------------
+  loc_file <- .find_slideseq_location_file(files)
+  if (is.na(loc_file)) {
+    stop("Fichier de localisation des beads introuvable. Formats reconnus : ",
+         "'BeadLocationsForR.csv', 'BeadLocation.csv', '*_alignedXYCoords.csv/.tsv', ",
+         "'coords.csv/.tsv', 'positions.csv/.tsv' (.gz accepte pour tous).", call. = FALSE)
+  }
+  loc <- tryCatch(.read_delimited_table(loc_file), error = function(e) {
+    stop("Lecture du fichier de localisation ('", basename(loc_file), "') echouee : ",
+         conditionMessage(e), call. = FALSE)
+  })
+  colnames(loc) <- tolower(colnames(loc))
+  bc_col <- intersect(c("barcode", "barcodes", "bead_barcode", "v1"), colnames(loc))[1]
+  x_col  <- intersect(c("xcoord", "x", "x_coord", "coord_x", "v2"), colnames(loc))[1]
+  y_col  <- intersect(c("ycoord", "y", "y_coord", "coord_y", "v3"), colnames(loc))[1]
+  if (is.na(bc_col) && ncol(loc) >= 3) bc_col <- colnames(loc)[1]  # positional fallback
+  if (is.na(x_col)  && ncol(loc) >= 3) x_col  <- colnames(loc)[2]
+  if (is.na(y_col)  && ncol(loc) >= 3) y_col  <- colnames(loc)[3]
+  if (is.na(bc_col) || is.na(x_col) || is.na(y_col)) {
+    stop("Colonnes barcode/x/y non reconnues dans '", basename(loc_file), "' — colonnes trouvees : ",
+         paste(colnames(loc), collapse = ", "), call. = FALSE)
+  }
+  loc <- data.frame(barcode = as.character(loc[[bc_col]]),
+                    x = as.numeric(loc[[x_col]]), y = as.numeric(loc[[y_col]]),
+                    stringsAsFactors = FALSE)
+  loc <- loc[!is.na(loc$barcode) & nzchar(loc$barcode), , drop = FALSE]
+
+  # --- 2. Counts: 10x-style triplet preferred, dense DGE table fallback ---
+  counts_src <- .find_slideseq_counts(files)
+  if (identical(counts_src$kind, "mtx")) {
+    counts <- Seurat::ReadMtx(mtx = counts_src$mtx, cells = counts_src$barcodes,
+                              features = counts_src$features)
+  } else {
+    sep <- if (grepl("\\.tsv(\\.gz)?$", counts_src$path, ignore.case = TRUE)) "\t" else ","
+    dge <- utils::read.table(counts_src$path, header = TRUE, sep = sep, row.names = 1,
+                             check.names = FALSE, stringsAsFactors = FALSE, quote = "\"")
+    counts <- methods::as(as.matrix(dge), "dgCMatrix")
+  }
+
+  # --- 3. Barcode intersection, with one automatic retry + clear diagnostics
+  common <- intersect(colnames(counts), loc$barcode)
+  if (length(common) < 10) {
+    # Common real-world mismatch: one side carries a 10x-style "-1"/".1"
+    # numeric suffix, the other doesn't. Retry once with suffixes stripped
+    # from BOTH sides before giving up.
+    strip_suffix <- function(x) sub("[-.][0-9]+$", "", x)
+    counts_bc_stripped <- strip_suffix(colnames(counts))
+    loc_bc_stripped     <- strip_suffix(loc$barcode)
+    common_stripped <- intersect(counts_bc_stripped, loc_bc_stripped)
+    if (length(common_stripped) >= 10 && length(common_stripped) > length(common)) {
+      colnames(counts) <- counts_bc_stripped
+      loc$barcode <- loc_bc_stripped
+      common <- common_stripped
+    }
+  }
+  if (length(common) < 10) {
+    pct <- if (length(unique(loc$barcode)) > 0) {
+      round(100 * length(common) / length(unique(loc$barcode)), 1)
+    } else 0
+    stop(sprintf(
+      paste0("Seulement %d bead(s) commun(s) entre la matrice de comptage et le fichier de ",
+             "localisation (~%s%% de recouvrement, minimum requis : 10), meme apres tentative ",
+             "de normalisation des suffixes ('-1'/'.1'). Exemples barcodes (matrice) : %s. ",
+             "Exemples barcodes (localisation) : %s. Verifiez que les deux fichiers ",
+             "proviennent bien du meme echantillon."),
+      length(common), pct,
+      paste(utils::head(colnames(counts), 3), collapse = ", "),
+      paste(utils::head(loc$barcode, 3), collapse = ", ")
+    ), call. = FALSE)
+  }
+  counts <- counts[, common, drop = FALSE]
+  rownames(loc) <- loc$barcode
+  loc <- loc[common, , drop = FALSE]
+
+  obj <- Seurat::CreateSeuratObject(counts = counts, assay = "Spatial", project = sample_name)
+  obj$orig.ident <- sample_name
+  obj$coord_x <- as.numeric(loc$x)
+  obj$coord_y <- as.numeric(loc$y)
+
+  count_col <- get_first_qc_col(obj, "nCount_")
+  feat_col  <- get_first_qc_col(obj, "nFeature_")
+  if (!is.na(count_col) && !is.na(feat_col)) {
+    keep <- obj@meta.data[[count_col]] >= min_counts & obj@meta.data[[feat_col]] >= min_features
+    obj <- subset(obj, cells = colnames(obj)[keep])
+  }
+
+  attr(obj, "ts_spatial_mode") <- "slideseq"
+  obj
 }
 
 #' Prepare a spatial Seurat object for downstream use

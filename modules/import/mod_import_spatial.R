@@ -38,6 +38,28 @@
 # coords + histology) as classic Visium — QC/Clustering/Deconvolution/
 # Visualisation/Multi-echantillons needed ZERO changes.
 #
+# v8 (Slide-seq boost — feedback reel dataset hippocampe souris, voir
+#    handoff_spatial_bio-mg.md) : le loader Slide-seq lui-meme (formats,
+#    detection, diagnostics barcodes) est dans helpers_io.R (v2 des fonctions
+#    .find_slideseq_location_file()/.find_slideseq_counts()/load_spatial_slideseq()).
+#    Ce fichier ne change que le panneau d'info (liste exhaustive des formats
+#    reconnus + rappel de ce qui fonctionne deja "gratuitement" pour Slide-seq
+#    sans code specifique : SCTransform, BANKSY-lite a lambda=0, Moran's I
+#    avec x.cuts/y.cuts, RCTD/Label Transfer, multi-pucks).
+#
+# v7 (backlog #4, "carte blanche" session — voir handoff_spatial_bio-mg.md) :
+#   1. "Importer aussi la matrice brute (raw)" — checkbox Visium classique
+#      (non-HD) uniquement : charge EN PLUS raw_feature_bc_matrix.h5 (tous
+#      les barcodes, y compris hors-tissu) dans SA PROPRE matrice BPCells
+#      (helpers_io.R::load_spatial_visium_raw() ->
+#      convert_to_bpcells_and_fov(raw_bg_obj=)). Purement additif : les
+#      champs $raw_bpcells_dir/$n_raw_total ne sont lus par aucun module
+#      existant aujourd'hui — reserve a une future correction de bruit
+#      ambiant (DecontX ou equivalent).
+#   2. Slide-seq (BETA) — nouveau choix de technologie, sans image
+#      histologique (aucune pour cette technologie), voir
+#      helpers_io.R::load_spatial_slideseq().
+#
 # Histology for HD: passes `raw_dir` = the ROOT "outs" folder (the SAME
 # folder the user picked — unchanged from the classic path) rather than the
 # bin-specific `binned_outputs/square_0XXum/` subfolder. This is
@@ -110,7 +132,8 @@ mod_import_spatial_ui <- function(id) {
         radioButtons(ns("technology"), "Technologie",
                      choices = c("Visium (spots)" = "visium",
                                  "Xenium (subcellulaire)" = "xenium",
-                                 "CosMx (subcellulaire)" = "cosmx"),
+                                 "CosMx (subcellulaire)" = "cosmx",
+                                 "Slide-seq (beads, beta)" = "slideseq"),
                      selected = "visium"),
         
         div(class = "alert alert-light", style = "font-size:0.8rem;",
@@ -136,6 +159,20 @@ mod_import_spatial_ui <- function(id) {
 
           numericInput(ns("min_counts"), "nCount_Spatial minimum", 100, min = 0, step = 10),
           numericInput(ns("min_features"), "nFeature_Spatial minimum", 200, min = 0, step = 10),
+
+          checkboxInput(ns("load_raw_also"),
+                        "Importer aussi la matrice brute (raw, spots hors-tissu inclus)",
+                        value = FALSE),
+          conditionalPanel(
+            condition = sprintf("input['%s']", ns("load_raw_also")),
+            div(class = "alert alert-light", style = "font-size:0.72rem;",
+                bsicons::bs_icon("info-circle"),
+                " Charge EN PLUS 'raw_feature_bc_matrix.h5' (tous les barcodes, y compris ",
+                "hors-tissu) dans une matrice BPCells separee — reservee a un futur usage ",
+                "(ex: correction de bruit ambiant). N'affecte AUCUN calcul actuel (QC/",
+                "clustering/deconvolution continuent d'utiliser uniquement la matrice ",
+                "filtree). Non disponible pour Visium HD.")
+          ),
           
           hr(),
           div(class = "alert alert-light", style = "font-size:0.75rem;",
@@ -148,9 +185,49 @@ mod_import_spatial_ui <- function(id) {
           checkboxInput(ns("orient_flip_x"), "Miroir horizontal", value = FALSE),
           checkboxInput(ns("orient_flip_y"), "Miroir vertical", value = FALSE)
         ),
+
+        conditionalPanel(
+          condition = sprintf("input['%s'] == 'slideseq'", ns("technology")),
+          hr(),
+          div(class = "alert alert-warning", style = "font-size:0.78rem;",
+              bsicons::bs_icon("lightbulb"),
+              " Slide-seq (BETA) : counts (MTX ou DGE) + coordonnees des beads (CSV/TSV), ",
+              "sans image histologique (technologie sans imagerie associee)."),
+          tags$details(
+            tags$summary(style = "cursor:pointer; font-size:0.72rem; color:#666;",
+                         "Formats de fichiers reconnus"),
+            tags$ul(style = "font-size:0.72rem; padding-left:1.1rem;",
+              tags$li(tags$b("Comptages"), " \u2014 triplet 10x : ", tags$code("matrix.mtx[.gz]"),
+                      " + ", tags$code("barcodes.tsv[.gz]"), " + ",
+                      tags$code("features.tsv[.gz]"), "/", tags$code("genes.tsv[.gz]"),
+                      ", OU une table dense : ", tags$code("MappedDGEForR.csv"), ", ",
+                      tags$code("dge_matrix.csv/tsv"), " (ou tout fichier '*dge*'/'*expression*', ",
+                      ".csv ou .tsv, .gz accepte)."),
+              tags$li(tags$b("Localisation des beads"), " \u2014 ", tags$code("BeadLocationsForR.csv"),
+                      ", ", tags$code("BeadLocation.csv"), ", ",
+                      tags$code("*_alignedXYCoords.csv/.tsv"), " (Slide-seq v2, souvent SANS ",
+                      "en-tete \u2014 detecte automatiquement), ", tags$code("coords.csv/.tsv"),
+                      ", ", tags$code("positions.csv/.tsv"), " (.gz accepte pour tous)."),
+              tags$li("Un recoupement de barcodes trop faible entre comptages et localisation ",
+                      "(ex: suffixe '-1' present d'un cote seulement) est corrige automatiquement ",
+                      "si possible, sinon signale avec des exemples de barcodes des deux cotes.")
+            )
+          ),
+          div(class = "alert alert-light", style = "font-size:0.7rem;",
+              bsicons::bs_icon("check2-circle"),
+              " Deja disponibles apres import, sans code supplementaire (ces onglets sont ",
+              "generiques a toutes les technologies) : SCTransform (case ci-dessous) ; ",
+              "clustering spatial onglet 2 (Lambda = 0 \u2192 equivalent PCA/UMAP/clusters ",
+              "\"classique\", sans terme de voisinage) ; indice de Moran onglet 1 (options ",
+              "avancees x.cuts/y.cuts pour accelerer sur un gros puck) ; deconvolution RCTD ",
+              "et transfert d'annotations scRNA-seq onglet 3 ; multi-pucks onglet 5."),
+          numericInput(ns("min_counts_ss"), "nCount minimum", 100, min = 0, step = 10),
+          numericInput(ns("min_features_ss"), "nFeature minimum", 200, min = 0, step = 10)
+        ),
         
         conditionalPanel(
-          condition = sprintf("input['%s'] != 'visium'", ns("technology")),
+          condition = sprintf("input['%s'] == 'xenium' || input['%s'] == 'cosmx'",
+                              ns("technology"), ns("technology")),
           hr(),
           sliderInput(ns("simplify_tol"), "Tolerance de simplification des polygones",
                       1, 100, 20, step = 1)
@@ -336,6 +413,9 @@ mod_import_spatial_server <- function(id, global_data) {
                             },
                             "xenium" = Seurat::LoadXenium(dir_path(), fov = "fov"),
                             "cosmx"  = Seurat::LoadNanostring(dir_path(), fov = "fov", assay = "Nanostring"),
+                            "slideseq" = load_spatial_slideseq(dir_path(), sample_name = sample_name,
+                                                               min_counts = input$min_counts_ss %||% 100,
+                                                               min_features = input$min_features_ss %||% 200),
                             stop("Technologie inconnue.")
           )
           if (isTRUE(attr(raw_obj, "ts_manual_hd_loader"))) {
@@ -349,6 +429,25 @@ mod_import_spatial_server <- function(id, global_data) {
                           nrow(raw_obj), ncol(raw_obj),
                           if (input$technology == "visium") "spots" else "cellules",
                           if (is_hd) sprintf(" (bin %sum)", input$hd_bin_size) else ""))
+
+          # ── v7 (backlog #4) : matrice brute (raw) OPTIONNELLE, Visium
+          # classique (non-HD) uniquement — chargee EN PLUS, jamais a la
+          # place, de la matrice filtree ci-dessus. Best-effort : un echec
+          # ici ne bloque jamais l'import filtre.
+          raw_bg_obj <- NULL
+          if (identical(input$technology, "visium") && !is_hd && isTRUE(input$load_raw_also)) {
+            incProgress(0.05, detail = "Lecture de la matrice brute (raw)...")
+            raw_bg_obj <- tryCatch(load_spatial_visium_raw(dir_path()), error = function(e) {
+              add_log(paste("  \u26a0 Lecture matrice brute (raw) echouee :", conditionMessage(e)))
+              NULL
+            })
+            if (!is.null(raw_bg_obj)) {
+              add_log(sprintf("  \u2713 Matrice brute (raw) lue : %d barcodes (avant filtrage tissu).",
+                              ncol(raw_bg_obj)))
+            } else {
+              add_log("  \u26a0 Aucune matrice brute (raw_feature_bc_matrix.h5) trouvee ou lecture impossible.")
+            }
+          }
           
           incProgress(0.3, detail = "Conversion BPCells (disque)...")
           norm_label <- if (input$norm_method == "sct") "SCTransform" else "LogNormalize"
@@ -382,9 +481,14 @@ mod_import_spatial_server <- function(id, global_data) {
             raw_dir = dir_path(),
             swap_xy = isTRUE(input$orient_swap_xy),
             flip_x  = isTRUE(input$orient_flip_x),
-            flip_y  = isTRUE(input$orient_flip_y)
+            flip_y  = isTRUE(input$orient_flip_y),
+            raw_bg_obj = raw_bg_obj
           )
           add_log(sprintf("  ✓ BPCells: %s", spatial_pkg$bpcells_dir))
+          if (!is.null(spatial_pkg$raw_bpcells_dir)) {
+            add_log(sprintf("  \u2713 BPCells (brut/raw) : %s (%d barcodes)",
+                            spatial_pkg$raw_bpcells_dir, spatial_pkg$n_raw_total %||% NA))
+          }
           add_log(sprintf("  ✓ Sketch RAM: %d/%d elements (normalisation: %s)",
                           ncol(spatial_pkg$sketch), spatial_pkg$n_total, norm_label))
           if (!is.null(spatial_pkg$histology)) {
