@@ -34,7 +34,7 @@ mod_spatial_viz_ui <- function(id) {
         condition = sprintf("input['%s'] == 'qc'", ns("color_by")),
         selectInput(
           ns("qc_metric"), NULL,
-          choices = c("nCount", "nFeature", "pct_mt", "pct_ribo")
+          choices = c("nCount", "nFeature", "pct_mt", "pct_ribo", "log_nCount")
         )
       ),
       

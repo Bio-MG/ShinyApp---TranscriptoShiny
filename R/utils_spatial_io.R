@@ -714,7 +714,7 @@ check_histology_coord_alignment <- function(coords, hist_img) {
 #' @param seurat_obj Seurat object as returned by load_spatial_visium()
 #'   / Seurat::LoadXenium() / Seurat::LoadNanostring().
 #' @param dataset_id Character, unique slug for this dataset.
-#' @param technology One of "visium", "xenium", "cosmx".
+#' @param technology One of "visium", "xenium", "cosmx", "slideseq".
 #' @param assay Character, assay holding raw counts.
 #' @param simplify_tol Numeric tolerance passed to Seurat::Simplify().
 #' @param max_sketch Integer, max cells/spots kept in the in-RAM sketch.
@@ -724,15 +724,24 @@ check_histology_coord_alignment <- function(coords, hist_img) {
 #'   reliably find spatial/ (see that function's header, v5 fix #1).
 #' @param swap_xy,flip_x,flip_y Logical, manual coordinate-orientation
 #'   correction -- see apply_coord_orientation() (v5 fix #2).
+#' @param raw_bg_obj Optional Seurat object, the UNFILTERED/background
+#'   matrix (e.g. Visium's raw_feature_bc_matrix.h5, ALL barcodes incl.
+#'   empty/background spots — see helpers_io.R::load_spatial_visium_raw()).
+#'   Purely additive: when provided, written to its OWN BPCells directory
+#'   (returned as $raw_bpcells_dir) alongside the primary filtered matrix.
+#'   NULL (default) = filtered-only import, unchanged behavior. Reserved
+#'   for a future ambient-RNA correction step; no existing consumer reads
+#'   this field.
 #' @return List — see file header CONTRACT.
 convert_to_bpcells_and_fov <- function(seurat_obj, dataset_id,
-                                       technology = c("visium", "xenium", "cosmx"),
+                                       technology = c("visium", "xenium", "cosmx", "slideseq"),
                                        assay = NULL,
                                        simplify_tol = 20,
                                        max_sketch = 50000,
                                        norm_method = c("lognorm", "sct"),
                                        raw_dir = NULL,
-                                       swap_xy = FALSE, flip_x = FALSE, flip_y = FALSE) {
+                                       swap_xy = FALSE, flip_x = FALSE, flip_y = FALSE,
+                                       raw_bg_obj = NULL) {
   technology  <- match.arg(technology)
   norm_method <- match.arg(norm_method)
   if (!requireNamespace("BPCells", quietly = TRUE)) {
@@ -752,6 +761,32 @@ convert_to_bpcells_and_fov <- function(seurat_obj, dataset_id,
   BPCells::write_matrix_dir(counts, bpcells_dir, overwrite = TRUE)
   bpcells_mat <- BPCells::open_matrix_dir(bpcells_dir)
   SeuratObject::LayerData(seurat_obj, assay = assay, layer = "counts") <- bpcells_mat
+  
+  # --- 1b. OPTIONAL raw/background (unfiltered) matrix -> its OWN disk
+  # BPCells dir. Purely additive: existing consumers of spatial_obj
+  # (QC/cluster/deconv/viz) never read raw_bpcells_dir -- reserved for a
+  # future ambient-RNA correction step (DecontX or similar), which needs
+  # the background/empty-droplet profile the filtered matrix alone cannot
+  # provide (see handoff_spatial_bio-mg.md long-term backlog). Stays NULL
+  # unless the caller explicitly passes raw_bg_obj (see mod_import_spatial.R
+  # "Importer aussi la matrice brute" checkbox); never fatal on failure.
+  raw_bpcells_dir <- NULL
+  n_raw_total <- NULL
+  if (!is.null(raw_bg_obj) && inherits(raw_bg_obj, "Seurat")) {
+    raw_bpcells_dir <- file.path(bpcells_cache_root(), dataset_id, "counts_bpcells_raw")
+    dir.create(dirname(raw_bpcells_dir), showWarnings = FALSE, recursive = TRUE)
+    if (dir.exists(raw_bpcells_dir)) unlink(raw_bpcells_dir, recursive = TRUE)
+    tryCatch({
+      raw_assay  <- Seurat::DefaultAssay(raw_bg_obj)
+      raw_counts <- SeuratObject::LayerData(raw_bg_obj, assay = raw_assay, layer = "counts")
+      BPCells::write_matrix_dir(raw_counts, raw_bpcells_dir, overwrite = TRUE)
+      n_raw_total <- ncol(raw_bg_obj)
+    }, error = function(e) {
+      warning("Ecriture BPCells de la matrice brute (raw) echouee : ", conditionMessage(e),
+              " — l'import se poursuit avec la matrice filtree seule.", call. = FALSE)
+      raw_bpcells_dir <<- NULL
+    })
+  }
   
   # --- 2. Imaging-only: simplify segmentation polygons.
   if (technology %in% c("xenium", "cosmx")) {
@@ -803,6 +838,8 @@ convert_to_bpcells_and_fov <- function(seurat_obj, dataset_id,
   list(
     sketch      = sketch,
     bpcells_dir = bpcells_dir,
+    raw_bpcells_dir = raw_bpcells_dir,   # NEW (additive): NULL unless raw_bg_obj was provided
+    n_raw_total     = n_raw_total,       # NEW (additive): barcode count of the raw/background matrix
     coords      = coords,
     histology   = hist_img,
     technology  = technology,
@@ -960,7 +997,7 @@ build_sketch <- function(obj, max_cells = 50000, assay = NULL,
 #' @param bpcells_dir Character path (global_data$spatial_obj$bpcells_dir).
 #' @param mt_pattern Regex for mitochondrial genes.
 #' @param ribo_pattern Regex for ribosomal genes.
-#' @return data.frame(id, nCount, nFeature, pct_mt, pct_ribo).
+#' @return data.frame(id, nCount, nFeature, pct_mt, pct_ribo, log_nCount).
 compute_qc_metrics_fast <- function(bpcells_dir, mt_pattern = "^MT-", ribo_pattern = "^RP[SL]") {
   if (!requireNamespace("BPCells", quietly = TRUE)) stop("Package 'BPCells' requis.")
   mat <- BPCells::open_matrix_dir(bpcells_dir)
@@ -981,6 +1018,13 @@ compute_qc_metrics_fast <- function(bpcells_dir, mt_pattern = "^MT-", ribo_patte
     nFeature  = as.numeric(n_feature),
     pct_mt    = as.numeric(pct_mt),
     pct_ribo  = as.numeric(pct_ribo),
+    # log_nCount: equivalent of the vignette's log_nCount_Spatial (base-10,
+    # +1 pseudocount) — generic across ALL technologies, not Slide-seq
+    # specific, since large-dynamic-range puck/bead data (Slide-seq) reads
+    # far more legibly on a log scale than raw counts, and it costs nothing
+    # for Visium/Xenium/CosMx either. Surfaced as a QC-metric choice in
+    # mod_spatial_qc.R's histogram grid and mod_spatial_viz.R's map viewer.
+    log_nCount = log10(as.numeric(n_count) + 1),
     row.names = NULL, stringsAsFactors = FALSE
   )
 }
