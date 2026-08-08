@@ -271,7 +271,21 @@ server <- function(input, output, session) {
 
     spatial_datasets = list(),
 
-    active_spatial_dataset = NULL
+    active_spatial_dataset = NULL,
+
+    # v10 (backlog court-terme #2) : cache des resultats par-echantillon
+    # (QC/clusters/deconv/niches), ecrit/lu par mod_spatial.R -- vit ici
+    # (plutot que dans un reactiveVal interne au module) precisement pour
+    # etre capturable par save_session_btn / restaurable par
+    # load_session_file ci-dessous.
+    spatial_results_cache = list(),
+
+    # backlog court-terme #1 : reference scRNA-seq PARTAGEE (preparee une
+    # fois depuis l'onglet Import > Spatial), reutilisee par RCTD ET Label
+    # Transfer sans reparser -- voir mod_import_spatial.R et
+    # mod_spatial_deconv.R. list(path=, n_cells=, n_genes=, backend=,
+    # celltype_col=, source_label=, n_dropped_rare=, created_at=) ou NULL.
+    spatial_reference = NULL
 
   )
 
@@ -388,13 +402,21 @@ server <- function(input, output, session) {
 
         label  = "Spatial",
 
-        detail = sprintf("%s elements (%s en RAM, sketch)%s%s",
+        detail = sprintf("%s elements (%s en RAM, sketch)%s%s%s",
 
                          format(n_total, big.mark = ","), format(n_sketch, big.mark = ","),
 
                          if (!disk_ok) " — disque introuvable" else "",
 
-                         if (n_ds > 1) sprintf(" — %d echantillons charges", n_ds) else "")
+                         if (n_ds > 1) sprintf(" — %d echantillons charges", n_ds) else "",
+
+                         if (!is.null(global_data$spatial_reference)) {
+
+                           sprintf(" — reference partagee : %s cellules",
+
+                                   format(global_data$spatial_reference$n_cells %||% 0, big.mark = ","))
+
+                         } else "")
 
       )
 
@@ -441,6 +463,10 @@ server <- function(input, output, session) {
         spatial_datasets = global_data$spatial_datasets,
 
         active_spatial_dataset = global_data$active_spatial_dataset,
+
+        spatial_results_cache = global_data$spatial_results_cache,
+
+        spatial_reference = global_data$spatial_reference,
 
         saved_at    = Sys.time(),
 
@@ -498,6 +524,13 @@ server <- function(input, output, session) {
       global_data$active_spatial_dataset <- snapshot$active_spatial_dataset %||%
         (if (length(global_data$spatial_datasets) > 0) names(global_data$spatial_datasets)[1] else NULL)
 
+      # v10 (backlog court-terme #2/#1) : absents des sessions sauvegardees
+      # AVANT cette version -- %||% list()/NULL degrade proprement (cache
+      # vide / pas de reference partagee) plutot que d'echouer sur un
+      # snapshot ancien.
+      global_data$spatial_results_cache <- snapshot$spatial_results_cache %||% list()
+      global_data$spatial_reference     <- snapshot$spatial_reference %||% NULL
+
 
 
       saved_label <- if (!is.null(snapshot$saved_at)) {
@@ -539,6 +572,37 @@ server <- function(input, output, session) {
             type = "warning", duration = 12
 
           )
+
+        }
+
+      }
+
+      # v10 (backlog court-terme #1) : la reference scRNA-seq PARTAGEE est un
+      # artefact sur DISQUE (tempdir(), voir prepare_reference_artifact())
+      # -- jamais garanti survivre a un redemarrage/changement de machine,
+      # contrairement au sketch (qui, lui, est bien serialise dans le .rds).
+      # Meme logique d'avertissement que pour bpcells_dir ci-dessus.
+      if (!is.null(global_data$spatial_reference)) {
+
+        ref_disk_ok <- !is.null(global_data$spatial_reference$path) &&
+
+          file.exists(global_data$spatial_reference$path)
+
+        if (!ref_disk_ok) {
+
+          showNotification(
+
+            paste0("⚠️ Reference scRNA-seq partagee : artefact introuvable sur ce disque — ",
+
+                   "re-uploadez-la depuis l'onglet Import > Spatial avant de relancer RCTD/",
+
+                   "Label Transfer."),
+
+            type = "warning", duration = 12
+
+          )
+
+          global_data$spatial_reference <- NULL
 
         }
 
@@ -763,6 +827,10 @@ server <- function(input, output, session) {
     global_data$spatial_datasets <- list()
 
     global_data$active_spatial_dataset <- NULL
+
+    global_data$spatial_results_cache <- list()
+
+    global_data$spatial_reference <- NULL
 
     clean_mem()
 

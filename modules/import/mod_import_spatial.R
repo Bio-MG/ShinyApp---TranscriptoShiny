@@ -1,6 +1,16 @@
 # =============================================================================
 # modules/import/mod_import_spatial.R — Spatial Import (Visium / Xenium / CosMx)
 # =============================================================================
+# v9 (backlog court-terme #1 — voir handoff_spatial_bio-mg.md) : nouveau
+#    panneau "Reference scRNA-seq partagee" (carte dediee, sous le resume de
+#    l'objet spatial) : upload + preparation UNE FOIS, reutilisable par RCTD
+#    ET Label Transfer (mod_spatial_deconv.R) sans re-upload/re-parse, tant
+#    que ce module reste ouvert dans l'onglet Import (l'artefact prepare vit
+#    dans global_data$spatial_reference, capture par save_session_btn). Le
+#    module de deconvolution garde son propre uploader LOCAL inchange comme
+#    repli/override (radio "Source de la reference", visible uniquement
+#    quand une reference partagee existe).
+#
 # v6 (Chantier 1 refonte — HD import robustness): the previous version
 # derived "is this an HD folder / which bin sizes exist" from
 # is_visium_hd_dir() + list_visium_hd_bin_sizes(), and separately whether
@@ -271,6 +281,30 @@ mod_import_spatial_ui <- function(id) {
         ),
         card_body(h5("Console de Log", class = "text-muted"),
                   verbatimTextOutput(ns("console_log"), placeholder = TRUE))
+      ),
+
+      # v7 (backlog court-terme #1 — voir handoff_spatial_bio-mg.md) :
+      # reference scRNA-seq PARTAGEE, preparee une fois ici et reutilisable
+      # directement par RCTD ET Label Transfer (onglet Spatial > "3.
+      # Deconvolution") sans re-upload/re-parse a chaque session ou a
+      # chaque nouvel echantillon spatial importe. mod_spatial_deconv.R
+      # garde son propre uploader LOCAL (session-only) inchange -- ceci est
+      # une option SUPPLEMENTAIRE, proposee automatiquement des qu'une
+      # reference partagee existe (voir son radio "Source de la reference").
+      card(
+        card_header("Reference scRNA-seq partagee (RCTD / Label Transfer)"),
+        div(class = "alert alert-light", style = "font-size:0.78rem;",
+            bsicons::bs_icon("info-circle"),
+            " Chargez et preparez UNE FOIS une reference scRNA-seq annotee ici pour la ",
+            "reutiliser directement dans l'onglet \"Spatial > 3. Deconvolution\" (RCTD ET ",
+            "Label Transfer), sans avoir a la re-uploader/re-preparer a chaque echantillon ",
+            "ou a chaque session (tant que l'artefact reste sur ce disque — voir sauvegarde ",
+            "de session dans le panneau lateral)."),
+        fileInput(ns("shared_ref_file"), "Fichier reference (.rds Seurat, .h5ad, .h5, .loom)",
+                  accept = c(".rds", ".h5ad", ".h5", ".loom")),
+        uiOutput(ns("shared_ref_status_badge_ui")),
+        uiOutput(ns("shared_ref_celltype_col_ui")),
+        uiOutput(ns("shared_ref_artifact_status_ui"))
       )
     )
   )
@@ -553,5 +587,164 @@ mod_import_spatial_server <- function(id, global_data) {
       }
     })
     output$console_log <- renderText({ logs() })
+
+    # ── Reference scRNA-seq PARTAGEE (backlog court-terme #1) ──────────────
+    # Reuses the SAME underlying functions as mod_spatial_deconv.R's local
+    # uploader (R/utils_spatial_reference.R -- read_reference_scrna(),
+    # prepare_reference_seurat(), prepare_reference_artifact()), but writes
+    # the prepared artifact into global_data$spatial_reference instead of a
+    # module-local reactiveVal, so it survives across dataset imports (and,
+    # via app.R's save/load session, across sessions) and can be offered as
+    # a ready-to-use option by mod_spatial_deconv.R (its "Source de la
+    # reference" radio) without any re-parsing.
+    shared_ref_state         <- reactiveValues(obj = NULL, status = "empty", message = NULL)
+    shared_ref_meta_cols     <- reactiveVal(character(0))
+
+    observeEvent(input$shared_ref_file, {
+      req(input$shared_ref_file)
+      orig_ext <- tolower(tools::file_ext(input$shared_ref_file$name))
+      shared_ref_state$obj     <- NULL
+      shared_ref_state$status  <- "loading"
+      shared_ref_state$message <- NULL
+      shared_ref_meta_cols(character(0))
+
+      withProgress(message = "Lecture de la reference partagee...", value = 0, {
+        incProgress(0.15, detail = sprintf("Lecture (.%s)...", if (nzchar(orig_ext)) orig_ext else "?"))
+        staged_path <- tryCatch({
+          if (nzchar(orig_ext)) {
+            p <- tempfile(fileext = paste0(".", orig_ext))
+            file.copy(input$shared_ref_file$datapath, p, overwrite = TRUE)
+            p
+          } else input$shared_ref_file$datapath
+        }, error = function(e) NULL)
+        if (is.null(staged_path)) {
+          shared_ref_state$status  <- "error"
+          shared_ref_state$message <- "Copie du fichier uploade impossible."
+          return(invisible(FALSE))
+        }
+
+        raw_ref <- tryCatch(read_reference_scrna(staged_path), error = function(e) {
+          shared_ref_state$status  <- "error"
+          shared_ref_state$message <- paste("Lecture :", conditionMessage(e))
+          showNotification(paste("Reference partagee — erreur de lecture :", conditionMessage(e)),
+                           type = "error", duration = 12)
+          NULL
+        })
+        if (is.null(raw_ref)) return(invisible(FALSE))
+
+        incProgress(0.5, detail = "Conversion en objet Seurat...")
+        ref_obj <- tryCatch(prepare_reference_seurat(raw_ref, project_name = "SharedReference"),
+                            error = function(e) {
+          shared_ref_state$status  <- "error"
+          shared_ref_state$message <- paste("Conversion :", conditionMessage(e))
+          showNotification(paste("Reference partagee — erreur de conversion :", conditionMessage(e)),
+                           type = "error", duration = 12)
+          NULL
+        })
+        if (is.null(ref_obj) || !inherits(ref_obj, "Seurat")) return(invisible(FALSE))
+
+        shared_ref_state$obj     <- ref_obj
+        shared_ref_state$status  <- "loaded"
+        shared_ref_state$message <- NULL
+        shared_ref_meta_cols(colnames(ref_obj@meta.data))
+        incProgress(0.35, detail = "Termine.")
+        showNotification(sprintf("Reference partagee lue : %d cellules x %d genes.",
+                                 ncol(ref_obj), nrow(ref_obj)), type = "message", duration = 5)
+      })
+    })
+
+    output$shared_ref_status_badge_ui <- renderUI({
+      st <- shared_ref_state$status
+      switch(st,
+        "empty" = div(class = "alert alert-light", style = "font-size:0.75rem;",
+                     bsicons::bs_icon("circle"), " Aucune reference partagee chargee."),
+        "loading" = div(class = "alert alert-info", style = "font-size:0.75rem;",
+                        bsicons::bs_icon("hourglass-split"), " Chargement en cours..."),
+        "error" = div(class = "alert alert-danger", style = "font-size:0.75rem;",
+                      bsicons::bs_icon("x-circle"),
+                      sprintf(" Erreur : %s", shared_ref_state$message %||% "cause inconnue")),
+        "loaded" = div(class = "alert alert-success", style = "font-size:0.75rem;",
+                       bsicons::bs_icon("check-circle"),
+                       sprintf(" Reference lue : %d cellules x %d genes — choisissez la colonne 'type cellulaire' puis preparez-la ci-dessous.",
+                              ncol(shared_ref_state$obj), nrow(shared_ref_state$obj))),
+        NULL
+      )
+    })
+
+    output$shared_ref_celltype_col_ui <- renderUI({
+      req(shared_ref_state$obj, length(shared_ref_meta_cols()) > 0)
+      ref_obj <- shared_ref_state$obj
+      cols <- shared_ref_meta_cols()
+      n_levels <- vapply(cols, function(cn) length(unique(ref_obj@meta.data[[cn]])), integer(1))
+      useful <- cols[n_levels >= 2 & n_levels <= 200]
+      useful <- useful[order(-n_levels[useful])]
+      choices <- if (length(useful) > 0) useful else cols
+      tagList(
+        selectInput(ns("shared_ref_celltype_col"), "Colonne 'type cellulaire'", choices = choices),
+        checkboxInput(ns("shared_merge_rare_types"),
+                      "Fusionner/exclure les types rares (< 25 cellules)", value = TRUE),
+        checkboxInput(ns("shared_cap_ref_cells"),
+                      "Limiter le nombre de cellules par type (RAM/vitesse)", value = TRUE),
+        conditionalPanel(
+          condition = sprintf("input['%s']", ns("shared_cap_ref_cells")),
+          numericInput(ns("shared_max_cells_per_type"), "Max cellules par type", 500, min = 25, max = 5000, step = 25)
+        ),
+        actionButton(ns("btn_prepare_shared_ref"), "Preparer + partager cette reference",
+                     icon = icon("share-fill"), class = "btn-sm btn-outline-success w-100 mt-2")
+      )
+    })
+
+    observeEvent(input$btn_prepare_shared_ref, {
+      req(shared_ref_state$obj, input$shared_ref_celltype_col)
+      withProgress(message = "Preparation de l'artefact partage...", value = 0.1, {
+        incProgress(0.2, detail = "Filtrage / fusion des types rares...")
+        result <- tryCatch({
+          prepare_reference_artifact(
+            ref_obj            = shared_ref_state$obj,
+            celltype_col       = input$shared_ref_celltype_col,
+            merge_rare_types   = isTRUE(input$shared_merge_rare_types),
+            min_cells_per_type = 25L,
+            max_cells_per_type = if (isTRUE(input$shared_cap_ref_cells)) input$shared_max_cells_per_type else NA_integer_
+          )
+        }, error = function(e) {
+          showNotification(paste("Erreur preparation reference partagee :", conditionMessage(e)),
+                           type = "error", duration = 10)
+          NULL
+        })
+        if (!is.null(result)) {
+          incProgress(0.7, detail = "Termine.")
+          global_data$spatial_reference <- list(
+            path = result$path, n_cells = result$n_cells, n_genes = result$n_genes,
+            backend = result$backend, celltype_col = input$shared_ref_celltype_col,
+            source_label = input$shared_ref_file$name %||% "reference",
+            n_dropped_rare = result$n_dropped_rare, created_at = Sys.time()
+          )
+          showNotification(sprintf(
+            "Reference partagee prete : %d cellules x %d genes — disponible dans Spatial > 3. Deconvolution (RCTD/Label Transfer).",
+            result$n_cells, result$n_genes
+          ), type = "message", duration = 8)
+        }
+      })
+    })
+
+    output$shared_ref_artifact_status_ui <- renderUI({
+      info <- global_data$spatial_reference
+      if (is.null(info)) {
+        return(div(class = "text-muted", style = "font-size:0.7rem;",
+                   "Pas encore de reference partagee active."))
+      }
+      div(class = "alert alert-success", style = "font-size:0.72rem;",
+          bsicons::bs_icon("share-fill"),
+          sprintf(" Reference partagee ACTIVE : %s cellules x %s genes (colonne '%s') — ",
+                  format(info$n_cells, big.mark = ","), format(info$n_genes, big.mark = ","),
+                  info$celltype_col),
+          "utilisable directement dans Spatial > 3. Deconvolution.",
+          actionLink(ns("btn_clear_shared_ref"), " Retirer", style = "font-size:0.7rem; margin-left:6px;"))
+    })
+
+    observeEvent(input$btn_clear_shared_ref, {
+      global_data$spatial_reference <- NULL
+      showNotification("Reference partagee retiree.", type = "message", duration = 4)
+    })
   })
 }
