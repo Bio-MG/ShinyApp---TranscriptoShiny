@@ -1,6 +1,17 @@
 # =============================================================================
 # modules/spatial/mod_spatial.R — Parent Module (router)
 # =============================================================================
+# v10 (backlog court-terme #2, session "puck_01 bugfix + backlog" — voir
+#    handoff_spatial_bio-mg.md) : le cache par-echantillon (v9 ci-dessous)
+#    est deplace de reactiveVal(list()) local vers
+#    global_data$spatial_results_cache -- app.R n'a aucun acces direct au
+#    reactiveVal INTERNE d'un module Shiny, alors que global_data est deja
+#    le bus partage que app.R serialise dans save_session_btn/restaure dans
+#    load_session_file. Zero changement de logique de cache, uniquement de
+#    "conteneur" -- rend une session Spatial multi-echantillon veritablement
+#    resumable apres sauvegarde/rechargement (voir app.R pour la partie
+#    serialisation).
+#
 # v9 (Chantier 3 round-2 — per-dataset result cache). Switching the active
 # dataset used to unconditionally NULL every derived result (QC/clusters/
 # deconv/niche) -- correct the first time a dataset is visited, but wasteful
@@ -35,27 +46,6 @@
 #
 # v7 (Phase 5 — niches spatiales): 6th top-level tab, "Niches spatiales".
 # =============================================================================
-# =============================================================================
-# modules/spatial/mod_spatial.R — Parent Module (router)
-# =============================================================================
-# v10 (multi-sample robustness fix): dataset-switch cache/reset is now
-# driven by an observer on global_data$active_spatial_dataset ITSELF (keyed
-# by "name@created_at" identity), not just the local nav selectInput. Root
-# cause fixed: mod_import_spatial_server() auto-activates a freshly (re-)
-# imported dataset by writing global_data$active_spatial_dataset/spatial_obj
-# DIRECTLY, bypassing the old selectInput-only observer entirely -- stale
-# shared_rv$qc_pass_idx from the PREVIOUS dataset then reached a NEW
-# (smaller, or same-name-but-resized) BPCells matrix inside a mirai daemon,
-# crashing with an opaque "vctrs::vec_slice" out-of-bounds error. Keying the
-# cache by "name@created_at" (not just name) also fixes a related edge case:
-# re-importing under an EXISTING name now always yields a clean slate
-# instead of possibly restoring stale cached results with wrong dimensions.
-# Paired with a defensive safe_pass_idx() guard (R/utils_spatial_async.R)
-# in mod_spatial_qc.R/mod_spatial_cluster.R/mod_spatial_deconv.R.
-#
-# v9 (per-dataset result cache), v8 (daemon badge honesty), v6 (multi-slice),
-# v6.1 (ns fix), v5 (ROI/crop), v4 (UX), v2 (daemon reset), v7 (niches).
-# =============================================================================
 
 mod_spatial_ui <- function(id) {
   ns <- NS(id)
@@ -82,6 +72,10 @@ mod_spatial_ui <- function(id) {
                 mod_spatial_niche_ui(ns("niche"))),
       
       nav_spacer(),
+      # v9 (fix UX) : un <select> imbrique dans un item de menu deroulant
+      # Bootstrap est peu fiable au clic (le menu intercepte/ferme avant que
+      # le <select> n'ouvre son propre popup). Sorti en nav_item() autonome,
+      # directement cliquable, juste a cote du menu "Session".
       nav_item(uiOutput(ns("active_dataset_ui"))),
       bslib::nav_menu(
         title = tagList(icon("gear"), "Session"), align = "right",
@@ -99,6 +93,7 @@ mod_spatial_server <- function(id, global_data) {
     
     if (!spatial_daemons_ready()) init_spatial_daemons(n_daemons = 6)
     
+    # ── Shared reactive bus for all child modules ─────────────────────────
     shared_rv <- reactiveValues(
       active_tab       = "1. QC & Autocorrelation",
       qc_metrics       = NULL,
@@ -115,10 +110,18 @@ mod_spatial_server <- function(id, global_data) {
       niche_composition = NULL
     )
     
-    # ── Per-dataset-VERSION result cache (session-scoped, in-memory only) ──
-    # Keyed by "name@created_at" (see dataset_identity() below), not just
-    # name -- a re-import under an existing name gets a brand-new key.
-    results_cache <- reactiveVal(list())
+    # ── v10 (backlog court-terme #2): per-dataset result cache, now backed
+    # by global_data$spatial_results_cache instead of a local reactiveVal.
+    # A Shiny module's internal reactiveVal is invisible to app.R's server
+    # function (different scope) -- global_data is the shared reactiveValues
+    # bus every module already reads/writes, and app.R's save_session_btn/
+    # load_session_file already serializes arbitrary global_data fields, so
+    # this one-line change of "where the cache lives" makes multi-sample
+    # Spatial sessions genuinely resumable after a save/reload, with zero
+    # change to the caching LOGIC itself (still session-scoped in-memory
+    # data structure, just addressed through global_data now).
+    .get_cache <- function() global_data$spatial_results_cache %||% list()
+    .set_cache <- function(cache) { global_data$spatial_results_cache <- cache }
     
     .cacheable_fields <- c("qc_metrics", "qc_pass_idx", "moran_results",
                            "cluster_labels", "deconv_props", "cluster_markers",
@@ -183,62 +186,42 @@ mod_spatial_server <- function(id, global_data) {
       )
     })
     
-    # ── Manual switch (nav selectInput): only updates global_data. The
-    # actual cache/reset logic lives in the identity observer below, so a
-    # manual switch and a fresh (re-)import share the EXACT same path.
     observeEvent(input$active_dataset_select, {
       req(input$active_dataset_select %in% names(global_data$spatial_datasets))
       if (identical(input$active_dataset_select, global_data$active_spatial_dataset)) return()
-      global_data$active_spatial_dataset <- input$active_dataset_select
-      global_data$spatial_obj <- global_data$spatial_datasets[[input$active_dataset_select]]
-    })
-    
-    # ── SINGLE source of truth for "the active dataset VERSION changed" ────
-    dataset_identity <- reactive({
-      nm <- global_data$active_spatial_dataset
-      if (is.null(nm)) return(NULL)
-      ts <- tryCatch(format(global_data$spatial_obj$created_at, "%Y%m%d%H%M%OS6"),
-                     error = function(e) NA_character_)
-      paste0(nm, "@", ts %||% "NA")
-    })
-    
-    prev_identity <- reactiveVal(NULL)
-    
-    observeEvent(dataset_identity(), {
-      new_id <- dataset_identity()
-      old_id <- isolate(prev_identity())
-      if (identical(new_id, old_id)) return()
       
-      if (!is.null(old_id)) {
-        cache <- results_cache()
-        cache[[old_id]] <- .snapshot_shared_rv()
-        results_cache(cache)
+      # v9: snapshot the OUTGOING dataset's results before switching away,
+      # so flipping back later restores them instead of forcing a full
+      # recompute (QC/clustering/deconvolution/niches).
+      old_name <- global_data$active_spatial_dataset
+      if (!is.null(old_name)) {
+        cache <- .get_cache()
+        cache[[old_name]] <- .snapshot_shared_rv()
+        .set_cache(cache)
       }
       
-      # ROI stays tied to mod_spatial_viz.R's own local reactive state --
-      # always reset on any dataset-VERSION switch.
+      global_data$active_spatial_dataset <- input$active_dataset_select
+      global_data$spatial_obj <- global_data$spatial_datasets[[input$active_dataset_select]]
+      
+      # ROI state stays tied to mod_spatial_viz.R's own local reactive state
+      # (umap_df, linked lasso selection) -- not safely restorable from
+      # here, always reset on a dataset switch (unchanged from before).
       shared_rv$roi_ids     <- NULL
       shared_rv$roi_bbox    <- NULL
       shared_rv$roi_markers <- NULL
       
-      cached <- results_cache()[[new_id]]
+      cached <- .get_cache()[[input$active_dataset_select]]
       if (!is.null(cached)) {
         .restore_shared_rv(cached)
-        if (!is.null(old_id)) {
-          showNotification(sprintf("Echantillon actif : %s (resultats precedents restaures).",
-                                   global_data$active_spatial_dataset),
-                           type = "message", duration = 4)
-        }
+        showNotification(sprintf("Echantillon actif : %s (resultats precedents restaures).",
+                                 input$active_dataset_select),
+                         type = "message", duration = 4)
       } else {
         .clear_shared_rv()
-        if (!is.null(old_id)) {
-          showNotification(sprintf("Echantillon actif : %s", global_data$active_spatial_dataset),
-                           type = "message", duration = 4)
-        }
+        showNotification(sprintf("Echantillon actif : %s", input$active_dataset_select),
+                         type = "message", duration = 4)
       }
-      
-      prev_identity(new_id)
-    }, ignoreNULL = TRUE)
+    })
     
     mod_spatial_qc_server("qc", global_data, shared_rv)
     mod_spatial_cluster_server("cluster", global_data, shared_rv)

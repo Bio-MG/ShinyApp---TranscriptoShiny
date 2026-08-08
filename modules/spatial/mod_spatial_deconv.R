@@ -1,6 +1,19 @@
 # =============================================================================
 # modules/spatial/mod_spatial_deconv.R — Cell-type Deconvolution / Label Transfer
 # =============================================================================
+# v9 (backlog court-terme #1 et #3, session "puck_01 bugfix + backlog" —
+#    voir handoff_spatial_bio-mg.md) :
+#   1. Reference partagee (Import > Spatial, global_data$spatial_reference) :
+#      quand une reference a ete preparee UNE FOIS dans l'onglet Import >
+#      Spatial (nouveau panneau, mod_import_spatial.R), ce module propose de
+#      la reutiliser directement (radio "Source de la reference") au lieu de
+#      re-uploader/re-preparer a chaque session — additif, invisible tant
+#      qu'aucune reference partagee n'existe (comportement local inchange).
+#   2. STdeconvolve : ses labels de topics auto-generes ("T1_gene1.gene2...")
+#      suivent maintenant la MEME regle de sanitisation que RCTD/Label
+#      Transfer ("/" et "_" -> "-", voir R/utils_spatial_reference.R::
+#      sanitize_celltype_labels()) — coherence de nommage inter-methodes.
+#
 # v8 (round-2 fixes from real-data testing on Allen cortex + human lymph
 # node references):
 #
@@ -82,11 +95,19 @@ mod_spatial_deconv_ui <- function(id) {
 
       conditionalPanel(
         condition = sprintf("input['%s'] == 'rctd' || input['%s'] == 'labeltransfer'", ns("mode"), ns("mode")),
-        fileInput(ns("ref_file"), "Reference scRNA-seq (.rds Seurat, .h5ad, .h5, .loom)",
-                  accept = c(".rds", ".h5ad", ".h5", ".loom")),
-        uiOutput(ns("ref_status_badge_ui")),
-        uiOutput(ns("ref_celltype_col_ui")),
-        uiOutput(ns("ref_celltype_summary_ui"))
+        uiOutput(ns("ref_source_picker_ui")),
+        conditionalPanel(
+          condition = sprintf("!(input['%s'] && input['%s'] == 'shared')", ns("ref_source"), ns("ref_source")),
+          fileInput(ns("ref_file"), "Reference scRNA-seq (.rds Seurat, .h5ad, .h5, .loom)",
+                    accept = c(".rds", ".h5ad", ".h5", ".loom")),
+          uiOutput(ns("ref_status_badge_ui")),
+          uiOutput(ns("ref_celltype_col_ui")),
+          uiOutput(ns("ref_celltype_summary_ui"))
+        ),
+        conditionalPanel(
+          condition = sprintf("input['%s'] == 'shared'", ns("ref_source")),
+          uiOutput(ns("shared_ref_status_ui"))
+        )
       ),
 
       conditionalPanel(
@@ -275,7 +296,46 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
     })
 
     reference_is_ready <- reactive({
+      if (using_shared_ref()) return(!is.null(global_data$spatial_reference$path))
       identical(ref_state$status, "loaded") && !is.null(ref_path())
+    })
+
+    # ── Backlog #1 (shared/persistent reference, Import > Spatial) ────────
+    # global_data$spatial_reference is set by mod_import_spatial.R's own
+    # "Reference scRNA-seq partagee" panel (upload ONCE, reuse across every
+    # dataset import / RCTD / Label Transfer run in the session, without
+    # re-parsing). Purely additive: when NULL (nobody has set one up yet),
+    # ref_source_picker_ui renders NULL and every reactive below falls back
+    # to the exact pre-existing local-upload behavior.
+    using_shared_ref <- reactive({
+      !is.null(global_data$spatial_reference) &&
+        (is.null(input$ref_source) || identical(input$ref_source, "shared"))
+    })
+
+    effective_ref_path <- reactive({
+      if (using_shared_ref()) global_data$spatial_reference$path else ref_path()
+    })
+
+    output$ref_source_picker_ui <- renderUI({
+      req(global_data$spatial_reference)
+      radioButtons(ns("ref_source"), "Source de la reference",
+                   choices = c("Reference partagee (Import > Spatial)" = "shared",
+                               "Uploader une nouvelle reference (cette session)" = "upload"),
+                   selected = "shared")
+    })
+
+    output$shared_ref_status_ui <- renderUI({
+      req(global_data$spatial_reference)
+      info <- global_data$spatial_reference
+      div(class = "alert alert-success", style = "font-size:0.75rem;",
+          bsicons::bs_icon("check-circle"),
+          sprintf(" %s cellules x %s genes (colonne '%s', backend: %s)%s — preparee le %s.",
+                  format(info$n_cells, big.mark = ","), format(info$n_genes, big.mark = ","),
+                  info$celltype_col %||% "?", info$backend %||% "?",
+                  if (!is.null(info$source_label) && nzchar(info$source_label)) {
+                    sprintf(" [%s]", info$source_label)
+                  } else "",
+                  tryCatch(format(info$created_at, "%d/%m %H:%M"), error = function(e) "?")))
     })
 
     output$ref_status_badge_ui <- renderUI({
@@ -614,6 +674,18 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
               paste(colnames(beta)[ord[seq_len(min(3, length(ord)))]], collapse = ".")
             })
             colnames(theta) <- paste0("T", seq_len(ncol(theta)), "_", top_marker_genes)
+            # Backlog #3 (unification): apply the SAME character-substitution
+            # rule as R/utils_spatial_reference.R::sanitize_celltype_labels()
+            # (used by RCTD/Label Transfer) to STdeconvolve's own generated
+            # topic labels -- "/" and "_" -> "-" -- so that IF a topic label
+            # (built from gene symbols) is ever compared/joined against a
+            # RCTD or Label Transfer column from a reference, both sides
+            # follow the same naming convention. Inlined rather than
+            # sourced: utils_spatial_reference.R is intentionally NOT
+            # preloaded into this daemon (main-process-only, see
+            # R/utils_spatial_async.R header) -- keeping this a one-line
+            # inline regex avoids adding that dependency for a single rule.
+            colnames(theta) <- gsub("[/_\\\\]", "-", colnames(theta))
 
             write_mirai_log(log_file, "Termine.", 5, 5)
             data.frame(id = rownames(theta), theta, row.names = NULL, check.names = FALSE)
@@ -639,17 +711,21 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
 
       if (input$mode %in% c("rctd", "labeltransfer")) {
         if (!reference_is_ready()) {
-          reason <- switch(ref_state$status,
-            "empty"   = "aucune reference chargee (section 'Reference scRNA-seq')",
-            "loading" = "chargement de la reference encore en cours -- patientez puis reessayez",
-            "error"   = sprintf("la reference a echoue au chargement (%s)", ref_state$message %||% "cause inconnue"),
-            "loaded"  = if (is.null(input$ref_celltype_col) || !nzchar(input$ref_celltype_col)) {
-              "aucune colonne 'type cellulaire' selectionnee"
-            } else {
-              "reference pas encore preparee -- cliquez '1) Preparer la reference (disque)' puis reessayez"
-            },
-            "cause inconnue"
-          )
+          reason <- if (using_shared_ref()) {
+            "reference partagee introuvable ou invalide -- reimportez-la depuis l'onglet Import > Spatial"
+          } else {
+            switch(ref_state$status,
+              "empty"   = "aucune reference chargee (section 'Reference scRNA-seq')",
+              "loading" = "chargement de la reference encore en cours -- patientez puis reessayez",
+              "error"   = sprintf("la reference a echoue au chargement (%s)", ref_state$message %||% "cause inconnue"),
+              "loaded"  = if (is.null(input$ref_celltype_col) || !nzchar(input$ref_celltype_col)) {
+                "aucune colonne 'type cellulaire' selectionnee"
+              } else {
+                "reference pas encore preparee -- cliquez '1) Preparer la reference (disque)' puis reessayez"
+              },
+              "cause inconnue"
+            )
+          }
           showNotification(paste0("Chargez d'abord une reference scRNA-seq complete : ", reason),
                             type = "warning", duration = 14)
           return()
@@ -657,7 +733,7 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
       }
 
       if (identical(input$mode, "rctd")) {
-        ref_check <- tryCatch(readRDS(ref_path()), error = function(e) NULL)
+        ref_check <- tryCatch(readRDS(effective_ref_path()), error = function(e) NULL)
         if (is.null(ref_check)) {
           showNotification("Reference introuvable ou illisible — reimportez le fichier de reference.",
                             type = "error", duration = 8)
@@ -672,27 +748,26 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
             paste(sprintf("%s (%d)", too_small, as.integer(tab[too_small])), collapse = ", ")
           ), type = "error", duration = 14)
           showNotification(
-            "Cochez 'Fusionner/exclure les types rares' (sidebar) puis cliquez a nouveau ",
-            "'1) Preparer la reference' avant de relancer.", type = "warning", duration = 14)
+            if (using_shared_ref()) {
+              paste0("Repreparez la reference partagee depuis l'onglet Import > Spatial ",
+                    "(case 'Fusionner/exclure les types rares') avant de relancer.")
+            } else {
+              paste0("Cochez 'Fusionner/exclure les types rares' (sidebar) puis cliquez a nouveau ",
+                    "'1) Preparer la reference' avant de relancer.")
+            },
+            type = "warning", duration = 14)
           return()
         }
       }
 
-      pass_idx <- safe_pass_idx(shared_rv$qc_pass_idx, global_data$active_spatial_dataset,
-                                global_data$spatial_obj$n_total)
-      if (is.null(pass_idx) && !is.null(shared_rv$qc_pass_idx)) {
-        showNotification("Seuils QC obsoletes pour cet echantillon -- deconvolution lancee sans filtre QC.",
-                         type = "warning", duration = 8)
-      }
       last_deconv_mode(input$mode)
       reset_log(log_file)
       deconv_task$invoke(
         bpcells_dir      = global_data$spatial_obj$bpcells_dir,
-        pass_idx         = pass_idx,
+        pass_idx         = shared_rv$qc_pass_idx,
         coords           = global_data$spatial_obj$coords,
-        
         mode             = input$mode,
-        ref_path         = ref_path(),
+        ref_path         = effective_ref_path(),
         n_topics         = input$n_topics,
         n_top_od         = input$n_top_od %||% 1000,
         lt_npcs          = input$lt_npcs %||% 30,

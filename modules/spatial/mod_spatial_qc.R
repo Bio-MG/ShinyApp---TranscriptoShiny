@@ -101,11 +101,11 @@ mod_spatial_qc_ui <- function(id) {
                     "Grille des genes les plus spatialement structures (rang Moran's I) — ",
                     "necessite l'autocorrelation ci-contre (calculee au moins une fois)."),
                 fluidRow(
-                  column(6, numericInput(ns("n_top_svg"), "Nombre de genes (grille)", 9, min = 4, max = 20, step = 1)),
+                  column(6, numericInput(ns("n_top_svg"), "Nombre de genes (grille)", 9, min = 4, max = 30, step = 1)),
                   column(6, actionButton(ns("btn_svg_grid"), "Afficher la grille des top SVGs",
                                           class = "btn-sm btn-outline-primary mt-4", icon = icon("table-cells")))
                 ),
-                card(full_screen = TRUE, plotOutput(ns("svg_grid_plot"), height = "600px")),
+                card(full_screen = TRUE, uiOutput(ns("svg_grid_plot_ui"))),
                 hr(),
                 DT::DTOutput(ns("moran_table")))
     )
@@ -366,19 +366,35 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
 
     output$svg_grid_plot <- renderPlot({
       long <- svg_grid_long()
+      n_facet_col <- 3
       p <- ggplot2::ggplot(long, ggplot2::aes(x = x, y = -y, color = expr))
       if (requireNamespace("scattermore", quietly = TRUE)) {
-        p <- p + scattermore::geom_scattermore(pointsize = 2.5)
+        p <- p + scattermore::geom_scattermore(pointsize = 3)
       } else {
-        p <- p + ggplot2::geom_point(size = 0.4)
+        p <- p + ggplot2::geom_point(size = 0.5)
       }
-      p + ggplot2::facet_wrap(~gene, ncol = 3) +
+      p + ggplot2::facet_wrap(~gene, ncol = n_facet_col) +
         ggplot2::scale_color_viridis_c(option = "plasma") +
         ggplot2::coord_fixed() + ggplot2::theme_void() +
-        ggplot2::theme(strip.text = ggplot2::element_text(face = "bold", size = 10)) +
+        ggplot2::theme(strip.text = ggplot2::element_text(face = "bold", size = 12),
+                       legend.text = ggplot2::element_text(size = 10),
+                       legend.title = ggplot2::element_text(size = 11),
+                       plot.title = ggplot2::element_text(size = 14, face = "bold")) +
         ggplot2::labs(color = "Expression",
                       title = sprintf("Top %d genes spatialement variables (indice de Moran)",
                                        length(unique(long$gene))))
+    })
+
+    # NEW: dynamic plot height (biologist feedback -- fixed 600px was too
+    # small once more than ~6 genes were requested, panels became tiny and
+    # unreadable). Scales with the actual number of facet ROWS instead of a
+    # constant, so e.g. 20 genes (7 rows @ ncol=3) gets a tall enough canvas
+    # instead of being squeezed into the same 600px as 4 genes.
+    output$svg_grid_plot_ui <- renderUI({
+      n_genes <- input$n_top_svg %||% 9
+      n_rows  <- ceiling(n_genes / 3)
+      height_px <- max(500, n_rows * 260)
+      plotOutput(ns("svg_grid_plot"), height = paste0(height_px, "px"))
     })
   })
 }

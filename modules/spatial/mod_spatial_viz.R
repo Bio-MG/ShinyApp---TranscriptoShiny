@@ -46,7 +46,14 @@ mod_spatial_viz_ui <- function(id) {
             maxOptions = 3000,
             placeholder = "Rechercher un gene..."
           )
-        )
+        ),
+        # NEW: quick-pick from the Moran's I results (onglet "1. QC &
+        # Autocorrelation" > "Genes spatialement variables") -- the small
+        # facet grid there is useful to scan many genes at once, but picking
+        # ONE gene to inspect full-size/interactively belongs here. Purely
+        # a convenience selectInput that feeds the same `gene` field above;
+        # NULL/hidden until Moran's I has been run at least once.
+        uiOutput(ns("moran_quickpick_ui"))
       ),
       
       conditionalPanel(
@@ -870,6 +877,38 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         choices = rownames(global_data$spatial_obj$sketch),
         server = TRUE
       )
+    }, ignoreInit = TRUE)
+
+    # --------------------------------------------------------------------------
+    # Raccourci "genes spatialement variables (Moran's I)" -- alimente le
+    # champ de recherche de gene ci-dessus a partir des resultats calcules
+    # dans l'onglet "1. QC & Autocorrelation". Cache tant que Moran's I n'a
+    # jamais ete lance pour l'echantillon actif (shared_rv$moran_results
+    # est deja reinitialise au changement d'echantillon par mod_spatial.R).
+    # --------------------------------------------------------------------------
+    output$moran_quickpick_ui <- renderUI({
+      req(shared_rv$moran_results, nrow(shared_rv$moran_results) > 0)
+      top <- shared_rv$moran_results[order(-shared_rv$moran_results$moran_i), ]
+      top <- top[!is.na(top$gene), , drop = FALSE]
+      choices <- stats::setNames(
+        top$gene,
+        sprintf("%s (I = %.2f)", top$gene, top$moran_i)
+      )
+      tagList(
+        selectInput(
+          ns("moran_gene_pick"),
+          "Raccourci : gene spatialement variable (indice de Moran)",
+          choices = c("\u2014 choisir parmi le top Moran's I \u2014" = "",
+                     utils::head(choices, 100))
+        ),
+        div(class = "text-muted", style = "font-size:0.68rem; margin-top:-8px;",
+            "Classes par indice de Moran decroissant (calcule onglet 1).")
+      )
+    })
+
+    observeEvent(input$moran_gene_pick, {
+      req(nzchar(input$moran_gene_pick))
+      updateSelectizeInput(session, "gene", selected = input$moran_gene_pick)
     }, ignoreInit = TRUE)
     
     # --------------------------------------------------------------------------

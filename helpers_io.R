@@ -591,7 +591,16 @@ load_spatial_visium_hd <- function(visium_dir, bin_size = 8L, sample_name = "Spa
 #'      frequently HEADERLESS, handled by .read_delimited_table()'s
 #'      header-sniffing below).
 #'   3. "coords.csv|tsv[.gz]" / "positions.csv|tsv[.gz]" (generic).
-#'   4. Any filename containing "location"/"bead" as a last resort.
+#'   4. "*_spatial.csv|tsv[.gz]" (seen on some real exports, e.g. MBASS-style
+#'      "<sample>_spatial.csv" — lower priority than the more specific
+#'      "coords"/"positions" names since "spatial" is a more generic word).
+#'   5. Any filename containing "location"/"bead" as a last resort.
+#'
+#' BUG FIX (real dataset feedback, PUCK_01 export): patterns are NOT anchored
+#' to the start of the filename (no leading `^`) — real-world exports
+#' routinely prefix every file with a sample/puck identifier (e.g.
+#' "Puck_Num_01_alignedXYCoords.tsv"), which a `^`-anchored pattern would
+#' reject even though the file is perfectly usable.
 #'
 #' @param files Character vector of full file paths (as from list.files(...,
 #'   full.names = TRUE)).
@@ -599,11 +608,12 @@ load_spatial_visium_hd <- function(visium_dir, bin_size = 8L, sample_name = "Spa
 .find_slideseq_location_file <- function(files) {
   bn <- basename(files)
   patterns <- c(
-    "^BeadLocationsForR\\.csv(\\.gz)?$",
-    "^BeadLocation\\.csv(\\.gz)?$",
+    "BeadLocationsForR\\.csv(\\.gz)?$",
+    "BeadLocation\\.csv(\\.gz)?$",
     "_alignedXYCoords\\.(csv|tsv)(\\.gz)?$",
-    "^coords?\\.(csv|tsv)(\\.gz)?$",
-    "^positions?\\.(csv|tsv)(\\.gz)?$",
+    "coords?\\.(csv|tsv)(\\.gz)?$",
+    "positions?\\.(csv|tsv)(\\.gz)?$",
+    "_spatial\\.(csv|tsv)(\\.gz)?$",
     "bead.*location|location.*bead"
   )
   for (pat in patterns) {
@@ -622,20 +632,56 @@ load_spatial_visium_hd <- function(visium_dir, bin_size = 8L, sample_name = "Spa
 #' .csv|.tsv[.gz] file — the classic Slide-seq pipeline output, genes x
 #' beads, can be large but is handled the same way as Bulk's dense tables).
 #'
+#' BUG FIX (real dataset feedback, PUCK_01 export "Puck_Num_01_expression_matrix.mtx"
+#' / "Puck_Num_01_barcodes.tsv" / "Puck_Num_01_genes.tsv"): the previous
+#' version anchored each pattern to the START of the filename (`^matrix\\.mtx$`
+#' etc.), which rejected every real-world export that prefixes triplet files
+#' with a sample/puck name -- the loader fell through to the DGE branch and
+#' errored with "Aucune matrice de comptage trouvee" even though a perfectly
+#' good triplet was sitting right there. Patterns now only anchor the
+#' SUFFIX (`matrix\\.mtx$`, `barcodes\\.tsv$`, ...), matching any prefix.
+#'
+#' Also now DIRECTORY-AWARE: when a folder contains more than one candidate
+#' matrix.mtx (e.g. an uncompressed copy at the top level PLUS a compressed
+#' duplicate under a nested "compress/" subfolder — a real layout seen in
+#' testing), pairing barcodes/features BLINDLY (just "first match") risked
+#' silently combining files from two different directories. This groups
+#' candidates by directory, keeps only directories that have all three
+#' components together, and prefers the SHALLOWEST one (fewest path
+#' separators) — i.e. the top-level copy over an archived/nested duplicate.
+#'
 #' @param files Character vector of full file paths.
 #' @return list(kind = "mtx", mtx=, barcodes=, features=) or
 #'   list(kind = "dge", path=). Errors (call.=FALSE) if nothing usable found.
 .find_slideseq_counts <- function(files) {
   bn <- basename(files)
-  mtx <- files[grepl("^matrix\\.mtx(\\.gz)?$", bn, ignore.case = TRUE)]
-  if (length(mtx) > 0) {
-    bc <- files[grepl("^barcodes\\.tsv(\\.gz)?$", bn, ignore.case = TRUE)]
-    ft <- files[grepl("^(features|genes)\\.tsv(\\.gz)?$", bn, ignore.case = TRUE)]
-    if (length(bc) == 0 || length(ft) == 0) {
-      stop("matrix.mtx trouve mais barcodes.tsv/features.tsv (ou genes.tsv) manquant(s) a cote.",
-           call. = FALSE)
+  dn <- dirname(files)
+
+  mtx_idx <- grepl("matrix\\.mtx(\\.gz)?$", bn, ignore.case = TRUE)
+  bc_idx  <- grepl("barcodes\\.tsv(\\.gz)?$", bn, ignore.case = TRUE)
+  ft_idx  <- grepl("(features|genes)\\.tsv(\\.gz)?$", bn, ignore.case = TRUE)
+
+  if (any(mtx_idx)) {
+    mtx_dirs <- unique(dn[mtx_idx])
+    valid_dirs <- mtx_dirs[vapply(mtx_dirs, function(d) {
+      any(mtx_idx & dn == d) && any(bc_idx & dn == d) && any(ft_idx & dn == d)
+    }, logical(1))]
+
+    if (length(valid_dirs) > 0) {
+      depth <- lengths(gregexpr("[/\\\\]", valid_dirs))
+      chosen_dir <- valid_dirs[order(depth)][1]
+      pick_in_dir <- function(idx) files[idx & dn == chosen_dir][1]
+      return(list(kind = "mtx", mtx = pick_in_dir(mtx_idx),
+                  barcodes = pick_in_dir(bc_idx), features = pick_in_dir(ft_idx)))
     }
-    return(list(kind = "mtx", mtx = mtx[1], barcodes = bc[1], features = ft[1]))
+
+    # A "*matrix.mtx"-like file exists but no directory has BOTH its
+    # barcodes AND features/genes siblings alongside it -- surface a
+    # precise error rather than silently falling through to the (almost
+    # certainly wrong) DGE branch below.
+    stop("Fichier '*matrix.mtx' trouve mais ses fichiers 'barcodes.tsv' et 'features.tsv'/",
+         "'genes.tsv' correspondants sont introuvables ENSEMBLE dans le meme dossier.",
+         call. = FALSE)
   }
 
   dge_patterns <- c("^MappedDGEForR\\.(csv|tsv)(\\.gz)?$", "^dge_?matrix\\.(csv|tsv)(\\.gz)?$",
@@ -729,6 +775,56 @@ is_slideseq_dir <- function(dir_path) {
 #' @param sample_name Character sample name.
 #' @param min_counts,min_features QC thresholds (same convention as Visium).
 #' @return Seurat object, attr(obj, "ts_spatial_mode") == "slideseq".
+#' 
+#' #' Detect the valid feature column in a Slide-seq genes/features TSV file
+#'
+#' Slide-seq exports may contain only one gene-symbol column, whereas
+#' standard 10x feature files usually contain at least two columns.
+#'
+#' @param features_path Path to genes.tsv/features.tsv, optionally gzipped.
+#' @return Integer column index accepted by Seurat::ReadMtx().
+.detect_slideseq_feature_column <- function(features_path) {
+  if (!file.exists(features_path)) {
+    stop(
+      "Fichier de genes/features introuvable : ",
+      features_path,
+      call. = FALSE
+    )
+  }
+  
+  con <- if (grepl("\\.gz$", features_path, ignore.case = TRUE)) {
+    gzfile(features_path, open = "rt")
+  } else {
+    file(features_path, open = "rt")
+  }
+  on.exit(close(con), add = TRUE)
+  
+  first_line <- readLines(con, n = 1L, warn = FALSE)
+  
+  if (length(first_line) != 1L || !nzchar(trimws(first_line))) {
+    stop(
+      "Fichier de genes/features vide ou illisible : ",
+      features_path,
+      call. = FALSE
+    )
+  }
+  
+  n_columns <- length(strsplit(first_line, "\t", fixed = TRUE)[[1L]])
+  
+  if (n_columns < 1L) {
+    stop(
+      "Impossible de determiner le nombre de colonnes dans : ",
+      features_path,
+      call. = FALSE
+    )
+  }
+  
+  if (n_columns >= 2L) 2L else 1L
+}
+#' 
+#' 
+#' 
+#' 
 load_spatial_slideseq <- function(dir_path, sample_name = "SlideSeq_Sample",
                                   min_counts = 100, min_features = 200) {
   dir_path <- normalizePath(enc2utf8(dir_path), winslash = "/", mustWork = FALSE)
@@ -767,8 +863,14 @@ load_spatial_slideseq <- function(dir_path, sample_name = "SlideSeq_Sample",
   # --- 2. Counts: 10x-style triplet preferred, dense DGE table fallback ---
   counts_src <- .find_slideseq_counts(files)
   if (identical(counts_src$kind, "mtx")) {
-    counts <- Seurat::ReadMtx(mtx = counts_src$mtx, cells = counts_src$barcodes,
-                              features = counts_src$features)
+    feature_column <- .detect_slideseq_feature_column(counts_src$features)
+    
+    counts <- Seurat::ReadMtx(
+      mtx = counts_src$mtx,
+      cells = counts_src$barcodes,
+      features = counts_src$features,
+      feature.column = feature_column
+    )
   } else {
     sep <- if (grepl("\\.tsv(\\.gz)?$", counts_src$path, ignore.case = TRUE)) "\t" else ","
     dge <- utils::read.table(counts_src$path, header = TRUE, sep = sep, row.names = 1,
