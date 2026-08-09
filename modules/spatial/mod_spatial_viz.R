@@ -1412,25 +1412,6 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     )
     
     # --------------------------------------------------------------------------
-    # Téléchargement PNG
-    # --------------------------------------------------------------------------
-    output$dl_png <- downloadHandler(
-      filename = function() paste0("carte_spatiale_", input$color_by, "_", Sys.Date(), ".png"),
-      content = function(file) {
-        df <- plot_df()
-        validate(need(nrow(df) > 0, "Aucune donnee a exporter."))
-        ggplot2::ggsave(
-          file,
-          plot = build_raster_plot(df),
-          width = 8,
-          height = 8,
-          dpi = 200,
-          bg = "white"
-        )
-      }
-    )
-    
-    # --------------------------------------------------------------------------
     # Téléchargement CSV
     # --------------------------------------------------------------------------
     output$dl_csv <- downloadHandler(

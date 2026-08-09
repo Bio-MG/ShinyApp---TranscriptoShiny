@@ -307,8 +307,6 @@ server <- function(input, output, session) {
   # === MODULES D'ANALYSE ===
 
   mod_sc_server("sc", global_data)
-  
-  mod_sc_mapping_server("mapping", global_data)
 
   mod_bulk_server("bulk", global_data)
 
