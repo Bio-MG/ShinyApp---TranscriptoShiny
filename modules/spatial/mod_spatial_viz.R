@@ -113,8 +113,41 @@ mod_spatial_viz_ui <- function(id) {
       
       div(
         class = "border-top pt-2 mt-2",
+        checkboxInput(
+          ns("show_static_export_preview"),
+          "Afficher l'apercu PNG (a cote de la carte interactive)",
+          value = TRUE
+        ),
+        div(
+          class = "text-muted mb-2",
+          style = "font-size: 0.7rem;",
+          "Meme moteur que le bouton Export PNG ci-dessous. Decochez pour donner ",
+          "toute la largeur a la carte interactive Plotly."
+        ),
         downloadButton(ns("dl_png"), "Export PNG", class = "btn-sm btn-outline-secondary w-100 mb-1"),
         downloadButton(ns("dl_csv"), "Export CSV (donnees affichees)", class = "btn-sm btn-outline-secondary w-100")
+      ),
+
+      # Feedback biologiste ("ajouter la fonction d'ajout au rapport") :
+      # sauvegarde la vue ACTUELLE (mode de coloration + parametres) pour
+      # qu'elle apparaisse dans l'onglet "7. Export & Rapport" > "Rapport
+      # HTML/PDF" > section "Visualisations sauvegardees", MEME apres avoir
+      # change d'onglet ou d'echantillon (shared_rv$saved_viz_list est
+      # cacheable comme le reste, voir mod_spatial.R). Seule la CONFIG est
+      # sauvegardee (pas une image) -- reconstruite a la volee au moment du
+      # rendu du rapport via build_saved_viz_df() (R/utils_spatial_report.R),
+      # donc toujours a jour avec les derniers calculs si vous relancez une
+      # etape ensuite.
+      div(
+        class = "border-top pt-2 mt-2",
+        h6("Ajouter au rapport", style = "font-weight:bold; font-size:0.85rem;"),
+        div(class = "text-muted", style = "font-size:0.7rem;",
+            "Sauvegarde la vue ACTUELLE (coloration + parametres ci-dessus) pour l'onglet ",
+            "\"7. Export & Rapport\", meme apres avoir change d'onglet ou d'echantillon."),
+        textInput(ns("viz_save_label"), NULL, placeholder = "Nom de cette vue (ex: Cluster 3 vs stroma)"),
+        actionButton(ns("btn_add_to_report"), "\u2795 Ajouter cette vue au rapport",
+                     class = "btn-sm btn-outline-primary w-100"),
+        uiOutput(ns("saved_viz_list_ui"))
       ),
       
       hr(),
@@ -157,53 +190,7 @@ mod_spatial_viz_ui <- function(id) {
     navset_card_underline(
       nav_panel(
         "Carte spatiale",
-        layout_columns(
-          col_widths = c(7, 5),
-          
-          card(
-            full_screen = TRUE,
-            style = "min-height: 72vh;",
-            card_header("Carte interactive (Plotly)"),
-            card_body(
-              class = "p-0",
-              plotly::plotlyOutput(
-                ns("spatial_preview_plot"),
-                height = "72vh"
-              )
-            )
-          ),
-          
-          card(
-            full_screen = TRUE,
-            style = "min-height: 72vh;",
-            card_header("Aperçu dynamique — export PNG"),
-            card_body(
-              checkboxInput(
-                ns("show_static_export_preview"),
-                "Afficher l'aperçu PNG",
-                value = TRUE
-              ),
-              
-              div(
-                class = "text-muted mb-2",
-                style = "font-size: 0.72rem;",
-                "Même moteur que le bouton Export PNG. ",
-                "Le fond est temporairement masqué, sans crash, pendant un changement de résolution invalide."
-              ),
-              
-              conditionalPanel(
-                condition = sprintf(
-                  "input['%s'] == true",
-                  ns("show_static_export_preview")
-                ),
-                plotOutput(
-                  ns("static_export_preview"),
-                  height = "calc(72vh - 105px)"
-                )
-              )
-            )
-          )
-        )
+        uiOutput(ns("carte_spatiale_layout_ui"))
       ),
       
       nav_panel(
@@ -453,6 +440,45 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       )
     })
     
+    # --------------------------------------------------------------------------
+    # Layout reactif "Carte spatiale" (feedback UI) : la carte Plotly recupere
+    # toute la largeur quand l'apercu PNG (case a cocher, deplacee dans la
+    # sidebar) est decoche, au lieu de garder une colonne vide a 5/12. La case
+    # elle-meme ne fait plus partie de cette carte -- voir la sidebar.
+    # --------------------------------------------------------------------------
+    output$carte_spatiale_layout_ui <- renderUI({
+      show_png <- isTRUE(input$show_static_export_preview)
+      plotly_card <- card(
+        full_screen = TRUE,
+        style = "min-height: 72vh;",
+        card_header("Carte interactive (Plotly)"),
+        card_body(
+          class = "p-0",
+          plotly::plotlyOutput(ns("spatial_preview_plot"), height = if (show_png) "72vh" else "80vh")
+        )
+      )
+      if (!show_png) return(plotly_card)
+
+      layout_columns(
+        col_widths = c(7, 5),
+        plotly_card,
+        card(
+          full_screen = TRUE,
+          style = "min-height: 72vh;",
+          card_header("Aperçu dynamique — export PNG"),
+          card_body(
+            div(
+              class = "text-muted mb-2",
+              style = "font-size: 0.72rem;",
+              "Même moteur que le bouton Export PNG. ",
+              "Le fond est temporairement masqué, sans crash, pendant un changement de résolution invalide."
+            ),
+            plotOutput(ns("static_export_preview"), height = "calc(72vh - 65px)")
+          )
+        )
+      )
+    })
+
     # --------------------------------------------------------------------------
     # Statut de la normalisation du sketch
     # --------------------------------------------------------------------------
@@ -907,9 +933,67 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     })
 
     observeEvent(input$moran_gene_pick, {
-      req(nzchar(input$moran_gene_pick))
-      updateSelectizeInput(session, "gene", selected = input$moran_gene_pick)
+      req(nzchar(input$moran_gene_pick), global_data$spatial_obj$sketch)
+      g <- input$moran_gene_pick
+      all_genes <- rownames(global_data$spatial_obj$sketch)
+      if (!g %in% all_genes) {
+        showNotification(sprintf("Gene '%s' introuvable dans le sketch actuel.", g),
+                         type = "warning", duration = 6)
+        return()
+      }
+      # ROBUSTESSE (feedback biologiste : "certains genes ne sont pas
+      # synchronises") : pour un selectizeInput server-side, appeler
+      # updateSelectizeInput() avec seulement `selected=` ne garantit pas que
+      # le client affiche correctement une valeur qu'il n'a encore JAMAIS vue
+      # via une recherche ajax (limitation connue de selectize en mode
+      # server=TRUE). Re-fournir le jeu de choix COMPLET avec `server=TRUE`
+      # a chaque appel enregistre `g` de facon fiable tout en preservant la
+      # recherche libre ensuite (meme liste qu'a l'initialisation).
+      updateSelectizeInput(session, "gene", choices = all_genes, selected = g, server = TRUE)
+      # Le champ "gene" n'etait utile que si color_by == "gene" -- sans ce
+      # changement, choisir un gene ici ne se "voyait" nulle part tant que
+      # l'utilisateur ne changeait pas MANUELLEMENT "Colorer par" -> "Gene".
+      updateSelectInput(session, "color_by", selected = "gene")
     }, ignoreInit = TRUE)
+
+    # --------------------------------------------------------------------------
+    # "Ajouter au rapport" -- sauvegarde la CONFIG de la vue actuelle (pas une
+    # image) dans shared_rv$saved_viz_list, cacheable/restaurable par
+    # mod_spatial.R comme tout le reste. Rendue par le rapport (onglet 7) via
+    # build_saved_viz_df() (R/utils_spatial_report.R).
+    # --------------------------------------------------------------------------
+    observeEvent(input$btn_add_to_report, {
+      label <- trimws(input$viz_save_label %||% "")
+      if (!nzchar(label)) label <- sprintf("Vue %s", format(Sys.time(), "%H:%M:%S"))
+      cfg <- list(
+        color_by = input$color_by, qc_metric = input$qc_metric %||% "nCount",
+        gene = input$gene, deconv_celltype = input$deconv_celltype,
+        show_cluster_labels = isTRUE(input$show_cluster_labels), created_at = Sys.time()
+      )
+      current <- shared_rv$saved_viz_list %||% list()
+      current[[label]] <- cfg
+      shared_rv$saved_viz_list <- current
+      showNotification(sprintf("Vue '%s' ajoutee au rapport.", label), type = "message", duration = 4)
+      updateTextInput(session, "viz_save_label", value = "")
+    })
+
+    output$saved_viz_list_ui <- renderUI({
+      lst <- shared_rv$saved_viz_list %||% list()
+      if (length(lst) == 0) {
+        return(div(class = "text-muted", style = "font-size:0.7rem; margin-top:4px;",
+                   "Aucune vue sauvegardee pour cet echantillon."))
+      }
+      tagList(
+        tags$ul(style = "font-size:0.72rem; padding-left:1.1rem; margin-top:4px;",
+                lapply(names(lst), function(nm) tags$li(nm))),
+        actionLink(ns("btn_clear_saved_viz"), "Vider les vues sauvegardees", style = "font-size:0.7rem;")
+      )
+    })
+
+    observeEvent(input$btn_clear_saved_viz, {
+      shared_rv$saved_viz_list <- list()
+    })
+    
     
     # --------------------------------------------------------------------------
     # UI du type cellulaire pour la déconvolution
@@ -1412,6 +1496,25 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     )
     
     # --------------------------------------------------------------------------
+    # Téléchargement PNG
+    # --------------------------------------------------------------------------
+    output$dl_png <- downloadHandler(
+      filename = function() paste0("carte_spatiale_", input$color_by, "_", Sys.Date(), ".png"),
+      content = function(file) {
+        df <- plot_df()
+        validate(need(nrow(df) > 0, "Aucune donnee a exporter."))
+        ggplot2::ggsave(
+          file,
+          plot = build_raster_plot(df),
+          width = 8,
+          height = 8,
+          dpi = 200,
+          bg = "white"
+        )
+      }
+    )
+    
+    # --------------------------------------------------------------------------
     # Téléchargement CSV
     # --------------------------------------------------------------------------
     output$dl_csv <- downloadHandler(
@@ -1473,11 +1576,9 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       umap_task$invoke(sketch_path = tmp, log_file = log_file)
     })
     
-    umap_df <- reactiveVal(NULL)
-    
     observeEvent(umap_task$status(), {
       if (umap_task$status() == "success") {
-        umap_df(umap_task$result())
+        shared_rv$umap_df <- umap_task$result()
         showNotification("UMAP calcule.", type = "message", duration = 3)
       } else if (umap_task$status() == "error") {
         showNotification("Erreur pendant le calcul UMAP.", type = "error", duration = 10)
@@ -1494,8 +1595,8 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     # Graphique UMAP
     # --------------------------------------------------------------------------
     output$umap_plot <- plotly::renderPlotly({
-      req(umap_df())
-      emb <- umap_df()
+      req(shared_rv$umap_df)
+      emb <- shared_rv$umap_df
       emb$cluster <- if (!is.null(shared_rv$cluster_labels)) {
         as.character(shared_rv$cluster_labels[emb$id])
       } else {
@@ -1635,8 +1736,8 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     })
     
     combined_umap_df <- reactive({
-      req(umap_df())
-      emb <- umap_df()
+      req(shared_rv$umap_df)
+      emb <- shared_rv$umap_df
       emb$cluster <- if (!is.null(shared_rv$cluster_labels)) {
         as.character(shared_rv$cluster_labels[emb$id])
       } else {
@@ -1650,7 +1751,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       if (length(hl) == 0) return(NULL)
       
       n_spatial <- sum(combined_spatial_df()$id %in% hl)
-      n_umap <- if (!is.null(umap_df())) sum(combined_umap_df()$id %in% hl) else NA
+      n_umap <- if (!is.null(shared_rv$umap_df)) sum(combined_umap_df()$id %in% hl) else NA
       
       div(
         class = "text-info style-sm mt-1",
@@ -1854,15 +1955,14 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     
     # FIX (audit step 3.12 -- multi-echantillons dans l'onglet 4): switching
     # the active dataset (mod_spatial.R's selector) already resets shared_rv
-    # (QC/clusters/deconv/ROI), but this module's OWN local state -- umap_df
-    # (computed for the PREVIOUS dataset's sketch) and roi_ids (indices into
-    # the PREVIOUS dataset's coordinates) -- was never reset, so switching
-    # datasets could silently show a stale UMAP or an ROI overlay that no
-    # longer corresponds to the newly active dataset's spots. Reset both
-    # here so tab "4. Visualisation" is always coherent with whichever
-    # dataset is currently active, exactly like every other tab.
+    # (QC/clusters/deconv/ROI) and now ALSO restores/clears shared_rv$umap_df
+    # centrally (see mod_spatial.R's .cacheable_fields -- feedback biologiste:
+    # le sketch-UMAP se perdait a chaque changement d'echantillon). This
+    # module's OWN local state -- roi_ids (indices into the PREVIOUS
+    # dataset's coordinates) -- is NOT part of that cache (ROI stays tightly
+    # coupled to this module's own local reactive state, not safely
+    # restorable, see roi_ids below) and is still reset here explicitly.
     observeEvent(global_data$active_spatial_dataset, {
-      umap_df(NULL)
       roi_ids(NULL)
       shared_rv$roi_ids <- NULL
     }, ignoreInit = TRUE)
