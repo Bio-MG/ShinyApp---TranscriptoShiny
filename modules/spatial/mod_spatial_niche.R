@@ -6,6 +6,12 @@
 # rationale and the compute_spatial_niches() implementation this module
 # wires up.
 #
+# v2 (moyen terme — export/auto-pipeline, voir handoff_spatial_bio-mg.md) :
+#    shared_rv$niche_params ecrit au moment du clic sur "Calculer les
+#    niches" (miroir des parametres UI utilises) -- purement additif, lu
+#    uniquement par mod_spatial_export.R (script R reproductible) ; zero
+#    changement de comportement pour cet onglet.
+#
 # Input: a categorical group label the user already computed elsewhere in
 # the app — either shared_rv$cluster_labels (tab 2, BANKSY-lite) or a
 # dominant-cell-type call derived from shared_rv$deconv_props (tab 3,
@@ -120,6 +126,10 @@ mod_spatial_niche_server <- function(id, global_data, shared_rv) {
       }
 
       reset_log(log_file)
+      # v2 (export/script reproductible) : miroir des parametres UTILISES,
+      # lu uniquement par mod_spatial_export.R -- purement additif.
+      shared_rv$niche_params <- list(group_by = input$group_by, k_neighbors = input$k_neighbors,
+                                     n_niches = input$n_niches)
       niche_task$invoke(
         coords       = global_data$spatial_obj$coords,
         group_labels = group_labels,
