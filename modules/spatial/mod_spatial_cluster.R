@@ -12,6 +12,12 @@
 # perfect alignment between expression data and cluster identity, same
 # pattern as moran_task/deconv_task below/elsewhere in this module family.
 #
+# v3 (moyen terme — export/auto-pipeline, voir handoff_spatial_bio-mg.md) :
+#    shared_rv$cluster_params ecrit au moment du clic sur "Lancer Clustering
+#    Spatial" (miroir des parametres UI utilises) -- purement additif, lu
+#    uniquement par mod_spatial_export.R (script R reproductible) ; zero
+#    changement de comportement pour cet onglet.
+#
 # REWRITE (post-test-3): SeuratWrappers::RunBanksy() / Banksy::computeHarmonics()
 # tries to spawn nested parallel worker processes from inside the mirai
 # daemon (parallel::makeCluster-style) -- fragile in general, and observed to
@@ -194,6 +200,10 @@ mod_spatial_cluster_server <- function(id, global_data, shared_rv) {
                          type = "warning", duration = 8)
       }
       reset_log(log_file)
+      # v3 (export/script reproductible) : miroir des parametres UTILISES,
+      # lu uniquement par mod_spatial_export.R -- purement additif.
+      shared_rv$cluster_params <- list(lambda = input$lambda, k_geom = input$k_geom,
+                                       npcs = input$npcs, resolution = input$resolution)
       cluster_task$invoke(
         bpcells_dir = global_data$spatial_obj$bpcells_dir,
         pass_idx    = pass_idx,
