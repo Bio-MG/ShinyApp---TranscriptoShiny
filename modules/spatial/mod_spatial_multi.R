@@ -33,6 +33,15 @@
 # mod_spatial.R v6.1 for a second, related bug (missing `ns <- session$ns`
 # in the PARENT module) found in the same audit pass — both only manifest
 # once multi-sample import is actually exercised.
+#
+# v2 (feedback biologiste — support rapport multi-echantillons,
+# mod_spatial_report.R) : integration_result() (heretofore un reactiveVal
+# LOCAL a ce module, invisible en dehors) est maintenant AUSSI ecrit dans
+# global_data$spatial_multi_integration (plain list, pas reactif) des qu'un
+# calcul reussit -- purement additif, permet a mod_spatial_report.R (et a
+# tout futur module) de lire le dernier resultat d'integration conjointe
+# sans dependre de l'etat interne de ce module (meme pattern que
+# global_data$spatial_results_cache pour le cache par-echantillon).
 # =============================================================================
 
 `%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
@@ -177,7 +186,19 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
     integration_result <- reactiveVal(NULL)
     observeEvent(integrate_task$status(), {
       if (integrate_task$status() == "success") {
-        integration_result(integrate_task$result())
+        res <- integrate_task$result()
+        integration_result(res)
+        # v2 (feedback biologiste, rapport multi-echantillons) : miroir
+        # ADDITIF dans global_data -- voir header de ce fichier. Le
+        # reactiveVal integration_result() ci-dessus reste la source de
+        # verite pour l'UI de CE module (inchangee) ; global_data$
+        # spatial_multi_integration est une copie en LECTURE pour les
+        # AUTRES modules (mod_spatial_report.R notamment).
+        global_data$spatial_multi_integration <- list(
+          embeddings = res$embeddings, n_per_dataset = res$n_per_dataset,
+          reduction_used = res$reduction_used, datasets = selected_ds(),
+          computed_at = Sys.time()
+        )
         updateRadioButtons(session, "section_color_by", selected = "cluster")
         showNotification("Integration terminee.", type = "message", duration = 5)
       } else if (integrate_task$status() == "error") {
