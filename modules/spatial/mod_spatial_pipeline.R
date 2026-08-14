@@ -1,0 +1,603 @@
+# =============================================================================
+# modules/spatial/mod_spatial_pipeline.R — Pipeline automatique (1 clic)
+# =============================================================================
+# v2 (feedback biologiste — "plus de personnalisation de l'auto-pipeline") :
+#   1. Deconvolution : choix de methode complet (RCTD / Label Transfer /
+#      STdeconvolve(LDA) / Aucune) au lieu de RCTD uniquement -- memes
+#      sous-parametres que l'onglet 3 (mod_spatial_deconv.R). RCTD et Label
+#      Transfer restent conditionnes a une reference partagee disponible
+#      (Import > Spatial) ; STdeconvolve ne necessite aucune reference.
+#   2. 2 etapes optionnelles ajoutees en fin de chaine : PCA+UMAP (sketch,
+#      memes resultats que le bouton "Calculer PCA + UMAP" de l'onglet 4,
+#      ecrit shared_rv$umap_df) et indice de Moran (memes resultats que le
+#      bouton de l'onglet 1, methode "moransi" fixe ici pour rester simple
+#      -- markvariogram reste reserve a l'onglet 1 pour l'utilisateur avance).
+#
+# NEW (moyen terme c, voir handoff_spatial_bio-mg.md) : enchaine QC -> 
+# Clustering spatial (BANKSY-lite) -> Deconvolution (methode au choix) ->
+# Niches spatiales -> [UMAP] -> [Moran's I], avec des parametres par defaut
+# identiques a ceux des onglets individuels.
+#
+# Architecture : contrairement au pipeline Single-Cell (mod_sc_pipeline.R,
+# synchrone avec shiny::Progress), ce module reste 100% ExtendedTask/mirai,
+# comme CHAQUE calcul lourd du module Spatial (regle du projet : jamais
+# d'objet Seurat/BPCells vivant hors d'un daemon -- voir R/utils_spatial_io.R
+# header). Chaque etape possede sa PROPRE paire ExtendedTask/mirai (donc
+# aucune collision avec les boutons des onglets 1/2/3/4/6 -- ce sont des
+# instances INDEPENDANTES), chainee via observeEvent($status()).
+#
+# Duplication assumee (pas de refactor des onglets existants) : chaque corps
+# de tache est copie depuis le module correspondant (mod_spatial_cluster.R,
+# mod_spatial_deconv.R, mod_spatial_viz.R, mod_spatial_qc.R) plutot que
+# factorise dans une fonction partagee -- meme philosophie que le pipeline/
+# rapport Bulk (modules/bulk/mod_bulk_report.R duplique DESeq2 plutot que
+# d'appeler mod_bulk_de_engine.R) : isolation maximale, zero risque de casser
+# un onglet existant. Les niches reutilisent en revanche DIRECTEMENT
+# compute_spatial_niches() (R/utils_spatial_niche.R), deja une fonction pure
+# prevue pour cet usage et deja preloadee dans tous les daemons.
+#
+# Etat ecrit : chaque etape ecrit dans les MEMES champs shared_rv que les
+# onglets 1/2/3/4/6 -- un run du pipeline auto est donc indiscernable, pour
+# tout le reste de l'app (onglet 4 Visualisation, Export, Rapport, cache
+# par-echantillon), d'un enchainement manuel des boutons individuels.
+# =============================================================================
+
+`%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
+
+mod_spatial_pipeline_ui <- function(id) {
+  ns <- NS(id)
+  layout_sidebar(
+    sidebar = sidebar(
+      title = "Pipeline automatique (1 clic)", width = 400,
+
+      div(class = "alert alert-light", style = "font-size:0.8rem;",
+          bsicons::bs_icon("magic"),
+          " Enchaine automatiquement, avec des parametres par defaut identiques ",
+          "a ceux des onglets individuels. Chaque etape ecrit ses resultats au ",
+          "MEME endroit que si vous l'aviez lancee manuellement depuis son propre ",
+          "onglet numerote -- vous pouvez ensuite affiner n'importe quelle etape ",
+          "individuellement sans tout relancer."),
+
+      h6("1. QC", style = "font-weight:bold;"),
+      numericInput(ns("qc_min_count"), "nCount minimum", 100, min = 0, step = 10),
+      numericInput(ns("qc_min_features"), "nFeature minimum", 200, min = 0, step = 10),
+      sliderInput(ns("qc_max_pct_mt"), "% Mitochondrial max", 0, 100, 20, step = 1),
+
+      hr(),
+      h6("2. Clustering (BANKSY-lite)", style = "font-weight:bold;"),
+      sliderInput(ns("lambda"), "Lambda (poids spatial)", 0, 1, 0.8, step = 0.05),
+      numericInput(ns("resolution"), "Resolution (Leiden)", 0.8, min = 0.1, max = 3, step = 0.1),
+
+      hr(),
+      h6("3. Deconvolution", style = "font-weight:bold;"),
+      uiOutput(ns("deconv_status_ui")),
+      radioButtons(ns("deconv_mode"), "Methode",
+                   choices = c("RCTD (reference partagee)" = "rctd",
+                               "Transfert d'ancres (Label Transfer, reference partagee)" = "labeltransfer",
+                               "Sans reference (LDA, type STdeconvolve)" = "stdeconvolve",
+                               "Aucune (ignorer cette etape)" = "none"),
+                   selected = "rctd"),
+      conditionalPanel(
+        condition = sprintf("input['%s'] == 'labeltransfer'", ns("deconv_mode")),
+        radioButtons(ns("lt_norm_method"), "Normalisation",
+                     choices = c("LogNormalize (rapide)" = "lognorm", "SCTransform (lent)" = "sct"),
+                     selected = "lognorm"),
+        conditionalPanel(
+          condition = sprintf("input['%s'] == 'sct'", ns("lt_norm_method")),
+          numericInput(ns("lt_ncells"), "Cellules SCTransform (ncells)", 3000, min = 500, max = 10000, step = 500)
+        ),
+        numericInput(ns("lt_npcs"), "Composantes PCA", 30, min = 5, max = 50, step = 5)
+      ),
+      conditionalPanel(
+        condition = sprintf("input['%s'] == 'stdeconvolve'", ns("deconv_mode")),
+        numericInput(ns("n_topics"), "Nombre de types cellulaires (K)", 6, min = 2, max = 30, step = 1),
+        numericInput(ns("n_top_od"), "Genes surdisperses maximum", 1000, min = 200, max = 3000, step = 100)
+      ),
+
+      hr(),
+      h6("4. Niches spatiales", style = "font-weight:bold;"),
+      numericInput(ns("n_niches"), "Nombre de niches", 5, min = 2, max = 20, step = 1),
+
+      hr(),
+      h6("Analyses complementaires (optionnel)", style = "font-weight:bold;"),
+      checkboxInput(ns("compute_umap"), "PCA + UMAP (sketch, onglet 4)", value = TRUE),
+      checkboxInput(ns("compute_moran"), "Indice de Moran / genes spatialement variables (onglet 1)", value = FALSE),
+      conditionalPanel(
+        condition = sprintf("input['%s']", ns("compute_moran")),
+        numericInput(ns("n_hvg_moran"), "Nombre de genes (HVG)", 1000, min = 100, max = 5000, step = 100)
+      ),
+
+      hr(),
+      actionButton(ns("btn_run_all"), "\U0001F680 Lancer le pipeline complet",
+                   class = "btn-danger w-100", icon = icon("bolt")),
+      div(class = "mt-2", uiOutput(ns("pipeline_status_ui"))),
+      div(class = "bg-light border rounded p-2 mt-2",
+          style = "max-height:220px; overflow-y:auto; white-space:pre-wrap; font-family:monospace; font-size:0.72rem;",
+          verbatimTextOutput(ns("pipeline_log_text"), placeholder = TRUE))
+    ),
+
+    card(
+      full_screen = TRUE,
+      card_header("Resultats du pipeline"),
+      uiOutput(ns("pipeline_summary_ui")),
+      div(class = "alert alert-light small mt-2",
+          bsicons::bs_icon("compass"),
+          " Consultez les onglets numerotes (1 a 6) pour explorer/affiner chaque ",
+          "resultat en detail, ou les onglets \"7. Export\" / \"8. Rapport\" pour tout ",
+          "regrouper dans un paquet .zip / script R reproductible / rapport HTML-PDF.")
+    )
+  )
+}
+
+mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
+  moduleServer(id, function(input, output, session) {
+
+    log_file <- spatial_log_path(session, "auto_pipeline")
+    tracker  <- create_reactive_tracker(session, log_file)
+    pipeline_state <- reactiveVal("idle")   # idle | running | done | error
+    deconv_mode_decided <- reactiveVal("none")
+
+    output$deconv_status_ui <- renderUI({
+      if (!is.null(global_data$spatial_reference)) {
+        div(class = "alert alert-success", style = "font-size:0.75rem;",
+            bsicons::bs_icon("check-circle"),
+            sprintf(" Reference partagee disponible (%s cellules) \u2014 utilisable par RCTD/Label Transfer.",
+                    format(global_data$spatial_reference$n_cells %||% 0, big.mark = ",")))
+      } else {
+        div(class = "alert alert-warning", style = "font-size:0.75rem;",
+            bsicons::bs_icon("exclamation-triangle"),
+            " Aucune reference partagee (onglet Import > Spatial) \u2014 RCTD/Label Transfer seront ",
+            "ignores meme si selectionnes ; choisissez \"Sans reference (LDA)\" ou \"Aucune\".")
+      }
+    })
+
+    output$pipeline_status_ui <- renderUI({
+      switch(pipeline_state(),
+        "idle"    = tags$span(class = "text-muted", "En attente."),
+        "running" = tags$span(class = "text-info", "\u23f3 Pipeline en cours... (voir le journal ci-dessous)"),
+        "done"    = tags$span(class = "text-success", "\u2705 Pipeline termine."),
+        "error"   = tags$span(class = "text-danger", "\u274c Erreur \u2014 voir le journal ci-dessous."),
+        tags$span("En attente.")
+      )
+    })
+
+    output$pipeline_log_text <- renderText({
+      lines <- tracker()
+      if (length(lines) == 0) return("En attente...")
+      paste(lines, collapse = "\n")
+    })
+
+    # ── Etape 2 : Clustering (BANKSY-lite) -- duplication assumee, voir header ──
+    cluster_task <- ExtendedTask$new(function(bpcells_dir, pass_idx, coords,
+                                               lambda, k_geom, npcs, resolution, log_file) {
+      mirai::mirai(
+        {
+          if (!requireNamespace("RANN", quietly = TRUE)) stop("Package 'RANN' requis.")
+          write_mirai_log(log_file, "[2/6] Ouverture BPCells...", 1, 4)
+          mat <- BPCells::open_matrix_dir(bpcells_dir)
+          if (!is.null(pass_idx)) mat <- mat[, pass_idx, drop = FALSE]
+          obj <- Seurat::CreateSeuratObject(counts = mat)
+          obj <- Seurat::NormalizeData(obj, verbose = FALSE)
+          obj <- Seurat::FindVariableFeatures(obj, verbose = FALSE)
+          var_feat <- Seurat::VariableFeatures(obj)
+          coords_df <- coords[match(colnames(obj), coords$id), c("x", "y")]
+          rownames(coords_df) <- colnames(obj)
+          keep <- stats::complete.cases(coords_df)
+          obj <- obj[, keep]
+          coords_mat <- as.matrix(coords_df[keep, , drop = FALSE])
+          write_mirai_log(log_file, "[2/6] Voisinage spatial (RANN)...", 2, 4)
+          nn <- RANN::nn2(coords_mat, k = min(k_geom + 1, nrow(coords_mat)))
+          neighbor_idx <- nn$nn.idx[, -1, drop = FALSE]
+          own_mat <- t(as.matrix(SeuratObject::LayerData(obj, layer = "data")[var_feat, , drop = FALSE]))
+          n <- nrow(own_mat); kk <- ncol(neighbor_idx)
+          W <- Matrix::sparseMatrix(i = rep(seq_len(n), each = kk), j = as.vector(t(neighbor_idx)),
+                                     x = 1 / kk, dims = c(n, n))
+          nbr_mat <- as.matrix(W %*% own_mat); dimnames(nbr_mat) <- dimnames(own_mat)
+          own_scaled <- scale(own_mat); own_scaled[!is.finite(own_scaled)] <- 0
+          nbr_scaled <- scale(nbr_mat); nbr_scaled[!is.finite(nbr_scaled)] <- 0
+          augmented <- cbind(sqrt(1 - lambda) * own_scaled, sqrt(lambda) * nbr_scaled)
+          write_mirai_log(log_file, "[2/6] PCA...", 3, 4)
+          n_pc <- max(2, min(npcs, ncol(augmented) - 1, nrow(augmented) - 1))
+          pca <- if (requireNamespace("irlba", quietly = TRUE)) {
+            irlba::prcomp_irlba(augmented, n = n_pc, center = FALSE, scale. = FALSE)
+          } else stats::prcomp(augmented, rank. = n_pc, center = FALSE, scale. = FALSE)
+          emb <- pca$x; rownames(emb) <- colnames(obj); colnames(emb) <- paste0("BANKSYPCA_", seq_len(ncol(emb)))
+          obj[["BANKSY_PCA"]] <- Seurat::CreateDimReducObject(embeddings = emb, key = "BANKSYPCA_",
+                                                               assay = Seurat::DefaultAssay(obj))
+          obj <- Seurat::FindNeighbors(obj, reduction = "BANKSY_PCA", dims = seq_len(n_pc), verbose = FALSE)
+          write_mirai_log(log_file, "[2/6] Clustering Leiden...", 4, 4)
+          obj <- tryCatch(Seurat::FindClusters(obj, resolution = resolution, algorithm = 4, verbose = FALSE),
+                          error = function(e) Seurat::FindClusters(obj, resolution = resolution, algorithm = 1, verbose = FALSE))
+          setNames(as.character(obj$seurat_clusters), colnames(obj))
+        },
+        bpcells_dir = bpcells_dir, pass_idx = pass_idx, coords = coords,
+        lambda = lambda, k_geom = k_geom, npcs = npcs, resolution = resolution,
+        log_file = log_file, .timeout = MIRAI_TASK_TIMEOUT_MS
+      )
+    })
+
+    # ── Etape 3 : Deconvolution (RCTD / Label Transfer / STdeconvolve) --
+    # duplication complete du corps de mod_spatial_deconv.R::deconv_task
+    # (memes 3 branches, memes timeouts dedies). ────────────────────────────
+    deconv_task <- ExtendedTask$new(function(bpcells_dir, pass_idx, coords, mode, ref_path,
+                                              n_topics, n_top_od, lt_npcs, lt_norm_method,
+                                              lt_ncells, min_shared_genes, log_file) {
+      mirai::mirai(
+        {
+          .load_reference_artifact <- function(manifest_path) {
+            manifest <- readRDS(manifest_path)
+            counts <- if (identical(manifest$backend, "bpcells")) {
+              BPCells::open_matrix_dir(manifest$counts_path)
+            } else readRDS(manifest$counts_path)
+            list(counts = counts, cell_types = manifest$cell_types)
+          }
+
+          write_mirai_log(log_file, "[3/6] Ouverture BPCells...", 1, 5)
+          mat <- BPCells::open_matrix_dir(bpcells_dir)
+          if (!is.null(pass_idx)) mat <- mat[, pass_idx, drop = FALSE]
+          coords_df <- coords[match(colnames(mat), coords$id), c("x", "y")]
+          rownames(coords_df) <- colnames(mat)
+          keep <- stats::complete.cases(coords_df)
+          mat <- mat[, keep, drop = FALSE]; coords_df <- coords_df[keep, , drop = FALSE]
+
+          if (identical(mode, "rctd")) {
+            if (!requireNamespace("spacexr", quietly = TRUE)) stop("Package 'spacexr' requis (RCTD).")
+            write_mirai_log(log_file, "[3/6] RCTD (mode full, mono-coeur)...", 3, 5)
+            reloaded <- .load_reference_artifact(ref_path)
+            ref_counts <- methods::as(reloaded$counts, "dgCMatrix")
+            reference <- spacexr::Reference(counts = ref_counts, cell_types = reloaded$cell_types)
+            puck <- spacexr::SpatialRNA(coords = coords_df, counts = methods::as(mat, "dgCMatrix"))
+            rctd <- spacexr::create.RCTD(puck, reference, max_cores = 1)
+            rctd <- spacexr::run.RCTD(rctd, doublet_mode = "full")
+            w <- as.matrix(rctd@results$weights); w <- sweep(w, 1, rowSums(w), "/")
+            write_mirai_log(log_file, "[3/6] Termine.", 5, 5)
+            data.frame(id = rownames(w), w, row.names = NULL, check.names = FALSE)
+
+          } else if (identical(mode, "labeltransfer")) {
+            use_sct <- identical(lt_norm_method, "sct")
+            write_mirai_log(log_file, sprintf("[3/6] Preparation reference (%s)...",
+                                               if (use_sct) "SCTransform" else "LogNormalize"), 2, 5)
+            reloaded <- .load_reference_artifact(ref_path)
+            ref_obj  <- Seurat::CreateSeuratObject(counts = reloaded$counts)
+            ref_obj$cell_type <- as.character(reloaded$cell_types)[match(colnames(ref_obj), names(reloaded$cell_types))]
+            ref_obj  <- subset(ref_obj, cells = colnames(ref_obj)[!is.na(ref_obj$cell_type)])
+            if (ncol(ref_obj) < 10) stop("Reference trop petite apres filtrage (< 10 cellules annotees).")
+            sctransform_sequential <- function(o, ncells) {
+              old_plan <- future::plan(); on.exit(future::plan(old_plan), add = TRUE)
+              future::plan("sequential"); Seurat::SCTransform(o, ncells = ncells, verbose = FALSE)
+            }
+            if (use_sct) {
+              ref_obj <- sctransform_sequential(ref_obj, lt_ncells)
+            } else {
+              ref_obj <- Seurat::NormalizeData(ref_obj, verbose = FALSE)
+              ref_obj <- Seurat::FindVariableFeatures(ref_obj, verbose = FALSE)
+              ref_obj <- Seurat::ScaleData(ref_obj, verbose = FALSE)
+            }
+            ref_obj <- Seurat::RunPCA(ref_obj, npcs = 50, verbose = FALSE)
+
+            write_mirai_log(log_file, "[3/6] Preparation requete spatiale...", 3, 5)
+            query <- Seurat::CreateSeuratObject(counts = mat)
+            if (use_sct) {
+              query <- sctransform_sequential(query, lt_ncells)
+            } else {
+              query <- Seurat::NormalizeData(query, verbose = FALSE)
+              query <- Seurat::FindVariableFeatures(query, verbose = FALSE)
+              query <- Seurat::ScaleData(query, verbose = FALSE)
+            }
+            n_pc <- max(2, min(lt_npcs, ncol(query) - 1, nrow(query) - 1, 50))
+            query <- Seurat::RunPCA(query, npcs = n_pc, verbose = FALSE)
+
+            shared_genes <- intersect(rownames(ref_obj), rownames(query))
+            if (length(shared_genes) < min_shared_genes) {
+              stop(sprintf("Seulement %d gene(s) commun(s) (minimum : %d).", length(shared_genes), min_shared_genes))
+            }
+            write_mirai_log(log_file, "[3/6] FindTransferAnchors...", 4, 5)
+            anchors <- Seurat::FindTransferAnchors(
+              reference = ref_obj, query = query,
+              normalization.method = if (use_sct) "SCT" else "LogNormalize", npcs = min(30, n_pc)
+            )
+            predictions <- Seurat::TransferData(anchorset = anchors, refdata = ref_obj$cell_type,
+                                                prediction.assay = TRUE, weight.reduction = query[["pca"]],
+                                                dims = seq_len(n_pc))
+            write_mirai_log(log_file, "[3/6] Termine.", 5, 5)
+            pred_mat <- t(as.matrix(SeuratObject::LayerData(predictions, layer = "data")))
+            pred_mat <- pred_mat[, setdiff(colnames(pred_mat), "max"), drop = FALSE]
+            data.frame(id = rownames(pred_mat), pred_mat, row.names = NULL, check.names = FALSE)
+
+          } else {
+            if (!requireNamespace("STdeconvolve", quietly = TRUE) ||
+                !requireNamespace("topicmodels", quietly = TRUE) ||
+                !requireNamespace("slam", quietly = TRUE)) {
+              stop("Packages 'STdeconvolve', 'topicmodels' et 'slam' requis.")
+            }
+            write_mirai_log(log_file, "[3/6] Pretraitement (genes surdisperses)...", 2, 5)
+            counts_dense <- as.matrix(methods::as(mat, "dgCMatrix"))
+            storage.mode(counts_dense) <- "integer"
+            corpus <- STdeconvolve::restrictCorpus(counts_dense, alpha = 0.05,
+                                                   nTopOD = min(n_top_od, nrow(counts_dense)), verbose = FALSE, plot = FALSE)
+            write_mirai_log(log_file, sprintf("[3/6] Ajustement LDA (K=%d)...", n_topics), 3, 5)
+            corpus_stm <- slam::as.simple_triplet_matrix(t(as.matrix(corpus)))
+            lda_model <- topicmodels::LDA(corpus_stm, k = n_topics,
+              control = list(seed = 0, verbose = 0, keep = 0, estimate.alpha = FALSE,
+                            em = list(iter.max = 100), var = list(iter.max = 50)))
+            write_mirai_log(log_file, "[3/6] Extraction des proportions...", 4, 5)
+            post <- topicmodels::posterior(lda_model)
+            theta <- post$topics; beta <- post$terms
+            theta[theta < 0.05] <- 0; theta <- theta / rowSums(theta); theta[is.na(theta)] <- 0
+            top_marker_genes <- apply(beta, 1, function(row) {
+              ord <- order(row, decreasing = TRUE)
+              paste(colnames(beta)[ord[seq_len(min(3, length(ord)))]], collapse = ".")
+            })
+            colnames(theta) <- paste0("T", seq_len(ncol(theta)), "_", top_marker_genes)
+            colnames(theta) <- gsub("[/_\\\\]", "-", colnames(theta))
+            write_mirai_log(log_file, "[3/6] Termine.", 5, 5)
+            data.frame(id = rownames(theta), theta, row.names = NULL, check.names = FALSE)
+          }
+        },
+        bpcells_dir = bpcells_dir, pass_idx = pass_idx, coords = coords, mode = mode,
+        ref_path = ref_path, n_topics = n_topics, n_top_od = n_top_od, lt_npcs = lt_npcs,
+        lt_norm_method = lt_norm_method, lt_ncells = lt_ncells, min_shared_genes = min_shared_genes,
+        log_file = log_file,
+        .timeout = switch(mode, "labeltransfer" = LABEL_TRANSFER_TIMEOUT_MS,
+                          "rctd" = RCTD_TIMEOUT_MS, MIRAI_TASK_TIMEOUT_MS)
+      )
+    })
+
+    # ── Etape 4 : Niches -- reutilise DIRECTEMENT la fonction pure existante ──
+    niche_task <- ExtendedTask$new(function(coords, group_labels, n_niches, log_file) {
+      mirai::mirai(
+        {
+          write_mirai_log(log_file, "[4/6] Calcul des niches...", 1, 1)
+          compute_spatial_niches(coords = coords, group_labels = group_labels,
+                                  k_neighbors = 30, n_niches = n_niches, log_file = NULL)
+        },
+        coords = coords, group_labels = group_labels, n_niches = n_niches, log_file = log_file,
+        .timeout = MIRAI_TASK_TIMEOUT_MS
+      )
+    })
+
+    # ── Etape 5 (optionnelle) : PCA + UMAP (sketch) -- duplication du corps
+    # de mod_spatial_viz.R::umap_task. ───────────────────────────────────────
+    umap_task <- ExtendedTask$new(function(sketch_path, log_file) {
+      mirai::mirai(
+        {
+          write_mirai_log(log_file, "[5/6] Chargement du sketch...", 1, 4)
+          sk <- readRDS(sketch_path)
+          already_sct <- identical(Seurat::DefaultAssay(sk), "SCT")
+          if (!already_sct) {
+            if (!"data" %in% SeuratObject::Layers(sk)) sk <- Seurat::NormalizeData(sk, verbose = FALSE)
+            sk <- Seurat::FindVariableFeatures(sk, verbose = FALSE)
+            sk <- Seurat::ScaleData(sk, verbose = FALSE)
+          }
+          write_mirai_log(log_file, "[5/6] PCA...", 2, 4)
+          sk <- Seurat::RunPCA(sk, npcs = 30, verbose = FALSE)
+          write_mirai_log(log_file, "[5/6] UMAP...", 3, 4)
+          sk <- Seurat::RunUMAP(sk, dims = 1:30, verbose = FALSE)
+          write_mirai_log(log_file, "[5/6] Termine.", 4, 4)
+          emb <- as.data.frame(Seurat::Embeddings(sk, "umap"))
+          colnames(emb)[1:2] <- c("dim1", "dim2")
+          emb$id <- rownames(emb)
+          emb
+        },
+        sketch_path = sketch_path, log_file = log_file, .timeout = MIRAI_TASK_TIMEOUT_MS
+      )
+    })
+
+    # ── Etape 6 (optionnelle) : Indice de Moran -- duplication du corps de
+    # mod_spatial_qc.R::moran_task (methode "moransi" fixe ici, voir header). ──
+    moran_task <- ExtendedTask$new(function(bpcells_dir, pass_idx, coords, n_hvg, log_file) {
+      mirai::mirai(
+        {
+          write_mirai_log(log_file, "[6/6] Ouverture BPCells...", 1, 4)
+          mat <- BPCells::open_matrix_dir(bpcells_dir)
+          if (!is.null(pass_idx)) mat <- mat[, pass_idx, drop = FALSE]
+          obj <- Seurat::CreateSeuratObject(counts = mat)
+          obj <- Seurat::NormalizeData(obj, verbose = FALSE)
+          obj <- Seurat::FindVariableFeatures(obj, nfeatures = n_hvg, verbose = FALSE)
+          hvgs <- Seurat::VariableFeatures(obj)
+          write_mirai_log(log_file, "[6/6] Alignement coordonnees...", 2, 4)
+          coords_df <- coords[match(colnames(obj), coords$id), c("x", "y")]
+          rownames(coords_df) <- colnames(obj)
+          keep <- stats::complete.cases(coords_df)
+          coords_df <- coords_df[keep, , drop = FALSE]
+          obj <- obj[, rownames(coords_df)]
+          write_mirai_log(log_file, sprintf("[6/6] Indice de Moran sur %d genes...", length(hvgs)), 3, 4)
+          assay_res <- Seurat::FindSpatiallyVariableFeatures(
+            object = obj[["RNA"]], layer = "data", features = hvgs, spatial.location = coords_df,
+            selection.method = "moransi", nfeatures = length(hvgs), verbose = FALSE
+          )
+          info <- SeuratObject::SVFInfo(assay_res, method = "moransi")
+          write_mirai_log(log_file, "[6/6] Termine.", 4, 4)
+          obs_col <- grep("observed$", colnames(info), value = TRUE)[1]
+          pv_col  <- grep("p\\.value$|pvalue$", colnames(info), value = TRUE)[1]
+          data.frame(gene = rownames(info),
+                    moran_i = if (!is.na(obs_col)) info[[obs_col]] else NA_real_,
+                    p_value = if (!is.na(pv_col)) info[[pv_col]] else NA_real_,
+                    row.names = NULL, stringsAsFactors = FALSE)
+        },
+        bpcells_dir = bpcells_dir, pass_idx = pass_idx, coords = coords, n_hvg = n_hvg,
+        log_file = log_file, .timeout = MIRAI_TASK_TIMEOUT_MS
+      )
+    })
+
+    .launch_niche <- function() {
+      write_mirai_log(log_file, "Etape 4/6 : Niches spatiales (basees sur le clustering)...", 4, 6)
+      niche_task$invoke(coords = global_data$spatial_obj$coords, group_labels = shared_rv$cluster_labels,
+                        n_niches = input$n_niches, log_file = log_file)
+    }
+
+    .launch_umap_or_moran_or_finish <- function() {
+      if (isTRUE(input$compute_umap)) {
+        write_mirai_log(log_file, "Etape 5/6 : PCA + UMAP (sketch)...", 5, 6)
+        tmp <- tempfile(fileext = ".rds")
+        saveRDS(global_data$spatial_obj$sketch, tmp)
+        umap_task$invoke(sketch_path = tmp, log_file = log_file)
+      } else {
+        write_mirai_log(log_file, "Etape 5/6 : UMAP ignore (non coche).", 5, 6)
+        .launch_moran_or_finish()
+      }
+    }
+
+    .launch_moran_or_finish <- function() {
+      if (isTRUE(input$compute_moran)) {
+        write_mirai_log(log_file, "Etape 6/6 : Indice de Moran...", 6, 6)
+        moran_task$invoke(
+          bpcells_dir = global_data$spatial_obj$bpcells_dir, pass_idx = shared_rv$qc_pass_idx,
+          coords = global_data$spatial_obj$coords, n_hvg = input$n_hvg_moran %||% 1000, log_file = log_file
+        )
+      } else {
+        write_mirai_log(log_file, "Etape 6/6 : Moran ignore (non coche). Pipeline termine.", 6, 6)
+        pipeline_state("done")
+        showNotification("\u2705 Pipeline automatique termine.", type = "message", duration = 6)
+      }
+    }
+
+    observeEvent(input$btn_run_all, {
+      req(global_data$spatial_obj$bpcells_dir, global_data$spatial_obj$coords)
+      if (identical(pipeline_state(), "running")) return()   # re-entrance guard
+
+      reset_log(log_file)
+      pipeline_state("running")
+
+      write_mirai_log(log_file, "Etape 1/6 : QC (seuils appliques)...", 1, 6)
+      qc_metrics <- tryCatch(compute_qc_metrics_fast(global_data$spatial_obj$bpcells_dir),
+                             error = function(e) NULL)
+      if (is.null(qc_metrics)) {
+        write_mirai_log(log_file, "Erreur QC -- pipeline interrompu.", 1, 6)
+        pipeline_state("error")
+        showNotification("Erreur lors du calcul QC (pipeline auto).", type = "error", duration = 8)
+        return()
+      }
+      shared_rv$qc_metrics <- qc_metrics
+      pass <- with(qc_metrics, nCount >= input$qc_min_count & nFeature >= input$qc_min_features &
+                     (is.na(pct_mt) | pct_mt <= input$qc_max_pct_mt))
+      pass_idx <- which(pass)
+      shared_rv$qc_pass_idx <- pass_idx
+      shared_rv$qc_params <- list(min_count = input$qc_min_count, min_features = input$qc_min_features,
+                                   max_pct_mt = input$qc_max_pct_mt)
+      write_mirai_log(log_file, sprintf("QC : %d/%d elements conserves.", length(pass_idx), nrow(qc_metrics)), 1, 6)
+
+      mode_req <- input$deconv_mode %||% "none"
+      deconv_mode_decided(
+        if (mode_req %in% c("rctd", "labeltransfer") && is.null(global_data$spatial_reference)) "none"
+        else mode_req
+      )
+
+      write_mirai_log(log_file, "Etape 2/6 : Clustering spatial (BANKSY-lite)...", 2, 6)
+      cluster_task$invoke(
+        bpcells_dir = global_data$spatial_obj$bpcells_dir, pass_idx = pass_idx,
+        coords = global_data$spatial_obj$coords, lambda = input$lambda, k_geom = 18,
+        npcs = 30, resolution = input$resolution, log_file = log_file
+      )
+    })
+
+    observeEvent(cluster_task$status(), {
+      req(identical(pipeline_state(), "running"))
+      st <- cluster_task$status()
+      if (identical(st, "success")) {
+        shared_rv$cluster_labels <- cluster_task$result()
+        shared_rv$cluster_params <- list(lambda = input$lambda, k_geom = 18, npcs = 30, resolution = input$resolution)
+        write_mirai_log(log_file, sprintf("Clustering termine : %d clusters.",
+                                          length(unique(shared_rv$cluster_labels))), 2, 6)
+        mode <- deconv_mode_decided()
+        if (!identical(mode, "none")) {
+          write_mirai_log(log_file, sprintf("Etape 3/6 : Deconvolution (%s)...", mode), 3, 6)
+          deconv_task$invoke(
+            bpcells_dir = global_data$spatial_obj$bpcells_dir, pass_idx = shared_rv$qc_pass_idx,
+            coords = global_data$spatial_obj$coords, mode = mode,
+            ref_path = if (mode %in% c("rctd", "labeltransfer")) global_data$spatial_reference$path else NULL,
+            n_topics = input$n_topics %||% 6, n_top_od = input$n_top_od %||% 1000,
+            lt_npcs = input$lt_npcs %||% 30, lt_norm_method = input$lt_norm_method %||% "lognorm",
+            lt_ncells = input$lt_ncells %||% 3000, min_shared_genes = LABEL_TRANSFER_MIN_SHARED_GENES,
+            log_file = log_file
+          )
+        } else {
+          write_mirai_log(log_file, "Etape 3/6 : Deconvolution ignoree (aucune methode / pas de reference).", 3, 6)
+          .launch_niche()
+        }
+      } else if (identical(st, "error")) {
+        write_mirai_log(log_file, "Erreur pendant le clustering -- pipeline interrompu.", 2, 6)
+        pipeline_state("error")
+        showNotification("Erreur pendant le clustering (pipeline auto) -- voir le journal.", type = "error", duration = 10)
+      }
+    })
+
+    observeEvent(deconv_task$status(), {
+      req(identical(pipeline_state(), "running"), !identical(deconv_mode_decided(), "none"))
+      st <- deconv_task$status()
+      if (identical(st, "success")) {
+        shared_rv$deconv_props <- deconv_task$result()
+        shared_rv$deconv_params <- list(
+          mode = deconv_mode_decided(),
+          ref_path = if (deconv_mode_decided() %in% c("rctd", "labeltransfer")) global_data$spatial_reference$path else NULL,
+          ref_source_label = if (deconv_mode_decided() %in% c("rctd", "labeltransfer")) "reference partagee (Import > Spatial)" else NULL,
+          n_topics = input$n_topics, n_top_od = input$n_top_od,
+          lt_npcs = input$lt_npcs, lt_norm_method = input$lt_norm_method, lt_ncells = input$lt_ncells
+        )
+        write_mirai_log(log_file, "Deconvolution terminee.", 3, 6)
+        .launch_niche()
+      } else if (identical(st, "error")) {
+        # Non-bloquant : un echec de deconvolution ne doit pas empecher les
+        # niches (basees sur le CLUSTERING, pas la deconvolution).
+        write_mirai_log(log_file, "Deconvolution echouee -- poursuite sans elle (niches basees sur le clustering).", 3, 6)
+        .launch_niche()
+      }
+    })
+
+    observeEvent(niche_task$status(), {
+      req(identical(pipeline_state(), "running"))
+      st <- niche_task$status()
+      if (identical(st, "success")) {
+        res <- niche_task$result()
+        shared_rv$niche_labels      <- stats::setNames(res$assignments$niche, res$assignments$id)
+        shared_rv$niche_composition <- res$niche_composition
+        shared_rv$niche_params <- list(group_by = "cluster", k_neighbors = 30, n_niches = input$n_niches)
+        write_mirai_log(log_file, "Niches terminees.", 4, 6)
+        .launch_umap_or_moran_or_finish()
+      } else if (identical(st, "error")) {
+        write_mirai_log(log_file, "Erreur pendant le calcul des niches.", 4, 6)
+        pipeline_state("error")
+        showNotification("Erreur pendant le calcul des niches (pipeline auto) -- voir le journal.", type = "error", duration = 10)
+      }
+    })
+
+    observeEvent(umap_task$status(), {
+      req(identical(pipeline_state(), "running"), isTRUE(input$compute_umap))
+      st <- umap_task$status()
+      if (identical(st, "success")) {
+        shared_rv$umap_df <- umap_task$result()
+        write_mirai_log(log_file, "UMAP termine.", 5, 6)
+        .launch_moran_or_finish()
+      } else if (identical(st, "error")) {
+        write_mirai_log(log_file, "UMAP echoue -- poursuite sans lui.", 5, 6)
+        .launch_moran_or_finish()
+      }
+    })
+
+    observeEvent(moran_task$status(), {
+      req(identical(pipeline_state(), "running"), isTRUE(input$compute_moran))
+      st <- moran_task$status()
+      if (identical(st, "success")) {
+        shared_rv$moran_results <- moran_task$result()
+        shared_rv$moran_params <- list(n_hvg = input$n_hvg_moran %||% 1000, x_cuts = 0, y_cuts = 0, method = "moransi")
+        write_mirai_log(log_file, "Termine.", 6, 6)
+      } else if (identical(st, "error")) {
+        write_mirai_log(log_file, "Indice de Moran echoue.", 6, 6)
+      }
+      pipeline_state("done")
+      showNotification("\u2705 Pipeline automatique termine.", type = "message", duration = 6)
+    })
+
+    output$pipeline_summary_ui <- renderUI({
+      row <- function(label, value) tags$tr(tags$td(strong(label)), tags$td(value))
+      tags$table(class = "table table-sm table-striped",
+        row("1. QC", if (!is.null(shared_rv$qc_pass_idx)) sprintf("%d elements retenus", length(shared_rv$qc_pass_idx)) else "-"),
+        row("2. Clustering", if (!is.null(shared_rv$cluster_labels)) sprintf("%d clusters", length(unique(shared_rv$cluster_labels))) else "Non calcule"),
+        row("3. Deconvolution", if (!is.null(shared_rv$deconv_props)) sprintf("%d types cellulaires (%s)", ncol(shared_rv$deconv_props) - 1, shared_rv$deconv_params$mode %||% "?") else "Non calculee / ignoree"),
+        row("4. Niches", if (!is.null(shared_rv$niche_labels)) sprintf("%d niches", length(unique(shared_rv$niche_labels))) else "Non calculees"),
+        row("5. UMAP", if (!is.null(shared_rv$umap_df)) sprintf("%d points (sketch)", nrow(shared_rv$umap_df)) else "Non calcule / ignore"),
+        row("6. Moran's I", if (!is.null(shared_rv$moran_results)) sprintf("%d genes testes", nrow(shared_rv$moran_results)) else "Non calcule / ignore")
+      )
+    })
+  })
+}
