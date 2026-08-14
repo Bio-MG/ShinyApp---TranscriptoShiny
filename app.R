@@ -34,6 +34,17 @@ tryCatch(
   error = function(e) warning("Initialisation des daemons mirai (spatial) impossible : ", conditionMessage(e))
 )
 source("R/utils_spatial_niche.R")
+# Moyen terme (export/auto-pipeline, voir handoff_spatial_bio-mg.md) : paquet
+# complet (.zip) + script R reproductible pour le module Spatial. Pure
+# helpers (aucune reactivite Shiny) appelés UNIQUEMENT depuis
+# modules/spatial/mod_spatial_export.R sur le thread principal (jamais dans
+# un daemon mirai) -- pas besoin de l'ajouter à init_spatial_daemons().
+source("R/utils_spatial_export.R")
+# Feedback biologiste (rapport HTML/PDF multi-echantillons) : idem, pure
+# helper (dataset-snapshot builder + resolution du chemin du template Rmd),
+# appelé UNIQUEMENT depuis modules/spatial/mod_spatial_report.R sur le
+# thread principal (rmarkdown::render() n'est jamais lancé dans un daemon).
+source("R/utils_spatial_report.R")
 
 source("modules/import/mod_import_sc.R")
 source("modules/import/mod_import_bulk.R")
@@ -59,13 +70,20 @@ source("modules/bulk/mod_bulk_pathways.R")
 source("modules/bulk/mod_bulk_report.R")
 source("modules/bulk/mod_bulk.R")
 
-# --- Spatial (parent + 5 sous-modules enfants) ---
+# --- Spatial (parent + sous-modules enfants) ---
 source("modules/spatial/mod_spatial_qc.R")
 source("modules/spatial/mod_spatial_cluster.R")
 source("modules/spatial/mod_spatial_deconv.R")
 source("modules/spatial/mod_spatial_viz.R")
 source("modules/spatial/mod_spatial_multi.R")
 source("modules/spatial/mod_spatial_niche.R")
+# Moyen terme (voir handoff_spatial_bio-mg.md) : pipeline automatique 1-clic
+# + export (paquet .zip / script reproductible) -- sourcés avant
+# mod_spatial.R, qui appelle mod_spatial_pipeline_server()/
+# mod_spatial_export_server() au meme titre que les autres sous-modules.
+source("modules/spatial/mod_spatial_pipeline.R")
+source("modules/spatial/mod_spatial_export.R")
+source("modules/spatial/mod_spatial_report.R")
 source("modules/spatial/mod_spatial.R")
 
 
@@ -285,7 +303,13 @@ server <- function(input, output, session) {
     # Transfer sans reparser -- voir mod_import_spatial.R et
     # mod_spatial_deconv.R. list(path=, n_cells=, n_genes=, backend=,
     # celltype_col=, source_label=, n_dropped_rare=, created_at=) ou NULL.
-    spatial_reference = NULL
+    spatial_reference = NULL,
+
+    # Feedback biologiste (rapport multi-echantillons) : dernier resultat
+    # d'integration conjointe (mod_spatial_multi.R), miroir en LECTURE pour
+    # mod_spatial_report.R -- voir mod_spatial_multi.R v2. list(embeddings=,
+    # n_per_dataset=, reduction_used=, datasets=, computed_at=) ou NULL.
+    spatial_multi_integration = NULL
 
   )
 
@@ -307,6 +331,8 @@ server <- function(input, output, session) {
   # === MODULES D'ANALYSE ===
 
   mod_sc_server("sc", global_data)
+  
+  mod_sc_mapping_server("mapping", global_data)
 
   mod_bulk_server("bulk", global_data)
 
@@ -466,6 +492,8 @@ server <- function(input, output, session) {
 
         spatial_reference = global_data$spatial_reference,
 
+        spatial_multi_integration = global_data$spatial_multi_integration,
+
         saved_at    = Sys.time(),
 
         app_version = "TranscriptoShiny v2"
@@ -526,8 +554,12 @@ server <- function(input, output, session) {
       # AVANT cette version -- %||% list()/NULL degrade proprement (cache
       # vide / pas de reference partagee) plutot que d'echouer sur un
       # snapshot ancien.
+
       global_data$spatial_results_cache <- snapshot$spatial_results_cache %||% list()
+
       global_data$spatial_reference     <- snapshot$spatial_reference %||% NULL
+
+      global_data$spatial_multi_integration <- snapshot$spatial_multi_integration %||% NULL
 
 
 
@@ -580,6 +612,7 @@ server <- function(input, output, session) {
       # -- jamais garanti survivre a un redemarrage/changement de machine,
       # contrairement au sketch (qui, lui, est bien serialise dans le .rds).
       # Meme logique d'avertissement que pour bpcells_dir ci-dessus.
+
       if (!is.null(global_data$spatial_reference)) {
 
         ref_disk_ok <- !is.null(global_data$spatial_reference$path) &&
@@ -724,11 +757,13 @@ server <- function(input, output, session) {
 
           tags$li(tags$strong("Bulk RNA:"), " Analyse différentielle avec DESeq2/edgeR"),
 
-          tags$li(tags$strong("Spatial:"), " QC → Clustering (BANKSY, asynchrone) → Deconvolution ",
+          tags$li(tags$strong("Spatial:"), " Pipeline auto (1 clic) OU QC → Clustering (BANKSY, asynchrone) → ",
 
-                  "(RCTD/Label Transfer/STdeconvolve, asynchrone) → Visualisation WebGL → ",
+                  "Deconvolution (RCTD/Label Transfer/STdeconvolve, asynchrone) → Visualisation WebGL → ",
 
-                  "Multi-echantillons (integration Harmony conjointe, asynchrone)")
+                  "Multi-echantillons (integration Harmony conjointe, asynchrone) → Export (paquet .zip / ",
+
+                  "script R reproductible)")
 
         ),
 
@@ -829,6 +864,8 @@ server <- function(input, output, session) {
     global_data$spatial_results_cache <- list()
 
     global_data$spatial_reference <- NULL
+
+    global_data$spatial_multi_integration <- NULL
 
     clean_mem()
 
