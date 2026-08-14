@@ -11,6 +11,21 @@
 #    repli/override (radio "Source de la reference", visible uniquement
 #    quand une reference partagee existe).
 #
+# v10 (feedback biologiste — fix cache multi-echantillons, voir
+#    handoff_spatial_bio-mg.md) : cet import ne pose plus DIRECTEMENT
+#    global_data$spatial_obj -- seuls spatial_datasets[[nom]] et
+#    active_spatial_dataset sont ecrits ici desormais. C'est
+#    mod_spatial.R qui, en reagissant a active_spatial_dataset (observer
+#    CENTRALISE, quel que soit qui a change cette valeur), se charge de
+#    synchroniser spatial_obj -- ET, plus important, de snapshot les
+#    resultats de l'echantillon SORTANT dans le cache par-echantillon avant
+#    de basculer. Avant ce correctif, cet import ecrasait spatial_obj EN
+#    COURT-CIRCUITANT ce mecanisme : importer un 2e echantillon perdait
+#    irremediablement les resultats deja calcules sur le 1er (jamais
+#    snapshotes) ET les faisait apparaitre, a tort, comme appartenant au
+#    nouvel echantillon (shared_rv n'etait jamais reinitialise). Voir
+#    mod_spatial.R pour le detail du nouvel observer centralise.
+#
 # v6 (Chantier 1 refonte — HD import robustness): the previous version
 # derived "is this an HD folder / which bin sizes exist" from
 # is_visium_hd_dir() + list_visium_hd_bin_sizes(), and separately whether
@@ -102,10 +117,9 @@
 # v3 (Phase 4 — multi-echantillons): each successful import now ADDS to
 # global_data$spatial_datasets (named list, key = sample name) instead of
 # silently overwriting any previous import, and becomes the "active" dataset
-# (global_data$active_spatial_dataset + global_data$spatial_obj, which keeps
-# pointing at exactly one entry of $spatial_datasets — see mod_spatial.R's
-# active-dataset switcher). Re-importing under an EXISTING sample name still
-# replaces that one entry (with a warning), matching the previous
+# (global_data$active_spatial_dataset — see mod_spatial.R's centralized
+# active-dataset observer, v10 above). Re-importing under an EXISTING sample
+# name still replaces that one entry (with a warning), matching the previous
 # re-import-overwrites behavior for a single dataset.
 #
 # v2 (vignette coverage — Phase 3): added the sketch normalization choice
@@ -549,8 +563,14 @@ mod_import_spatial_server <- function(id, global_data) {
                              type = "warning", duration = 6)
           }
           global_data$spatial_datasets[[sample_name]] <- spatial_pkg
+          # v10 (fix cache multi-echantillons) : NE PLUS ecrire
+          # global_data$spatial_obj directement ici -- seul
+          # active_spatial_dataset est mis a jour ; c'est l'observer
+          # CENTRALISE de mod_spatial.R (qui reagit a active_spatial_dataset,
+          # peu importe qui l'a change) qui synchronise spatial_obj ET
+          # snapshot/restaure shared_rv au passage. Voir le header de ce
+          # fichier (v10) pour le bug que ce court-circuit provoquait.
           global_data$active_spatial_dataset <- sample_name
-          global_data$spatial_obj <- spatial_pkg
           
           add_log(sprintf("✅ Import termine : %s (%s%s) — %d echantillon(s) au total",
                           sample_name, input$technology,
