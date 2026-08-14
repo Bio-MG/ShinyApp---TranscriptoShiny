@@ -17,6 +17,12 @@
 # BPCells/disk access, no mirai needed — consistent with this project's
 # convention of reserving async for genuinely heavy compute only).
 #
+# v4 (moyen terme — export/auto-pipeline, voir handoff_spatial_bio-mg.md) :
+#    shared_rv$qc_params / shared_rv$moran_params ecrits au moment du clic
+#    sur leurs boutons respectifs (miroir des parametres UI utilises) --
+#    purement additif, lu uniquement par mod_spatial_export.R (script R
+#    reproductible) ; zero changement de comportement pour cet onglet.
+#
 # Two very different cost profiles, per spec:
 #   1. QC metrics (nCount/nFeature/%MT/%ribo) — cheap, streamed straight off
 #      the on-disk BPCells matrix (R/utils_spatial_io.R::compute_qc_metrics_fast()),
@@ -59,6 +65,25 @@ mod_spatial_qc_ui <- function(id) {
           " Calcul asynchrone (mirai) sur les 1000 genes les plus variables — ",
           "n'interrompt pas votre session."),
       numericInput(ns("n_hvg_moran"), "Nombre de genes (HVG)", 1000, min = 100, max = 5000, step = 100),
+
+      # Long terme (carte blanche, voir handoff_spatial_bio-mg.md) : methode
+      # alternative a l'indice de Moran. Mark variogram est l'autre methode
+      # native de Seurat::FindSpatiallyVariableFeatures() (approche
+      # Trendsceek-like) -- x.cuts/y.cuts (grille) ne s'appliquent qu'a
+      # "moransi" cote Seurat, ignores automatiquement sinon.
+      radioButtons(ns("svg_method"), "Methode de detection",
+                   choices = c("Indice de Moran (rapide, recommande)" = "moransi",
+                               "Mark variogram (alternative, plus lent)" = "markvariogram"),
+                   selected = "moransi"),
+      conditionalPanel(
+        condition = sprintf("input['%s'] == 'markvariogram'", ns("svg_method")),
+        div(class = "alert alert-warning", style = "font-size:0.72rem;",
+            bsicons::bs_icon("exclamation-triangle"),
+            " Methode alternative -- le nom des colonnes internes de Seurat differe de ",
+            "'moransi' et n'est pas garanti stable entre versions ; le score affiche est ",
+            "detecte de facon defensive (generique) plutot que suppose. En cas de doute, ",
+            "preferez l'indice de Moran (par defaut).")
+      ),
 
       tags$details(
         tags$summary(style = "cursor:pointer; font-size:0.75rem; color:#666;",
@@ -221,6 +246,10 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
       pass <- with(df, nCount >= input$min_count & nFeature >= input$min_features &
                      (is.na(pct_mt) | pct_mt <= input$max_pct_mt))
       shared_rv$qc_pass_idx <- which(pass)
+      # v4 (export/script reproductible) : miroir des seuils UTILISES,
+      # lu uniquement par mod_spatial_export.R -- purement additif.
+      shared_rv$qc_params <- list(min_count = input$min_count, min_features = input$min_features,
+                                   max_pct_mt = input$max_pct_mt)
       showNotification(sprintf("Seuils appliques : %d/%d elements conserves.",
                                 sum(pass), length(pass)), type = "message", duration = 4)
     })
@@ -237,7 +266,7 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
     tracker  <- create_reactive_tracker(session, log_file)
 
     moran_task <- ExtendedTask$new(function(bpcells_dir, pass_idx, coords, n_hvg,
-                                            x_cuts, y_cuts, log_file) {
+                                            x_cuts, y_cuts, method, log_file) {
       mirai::mirai(
         {
           write_mirai_log(log_file, "Ouverture de la matrice BPCells...", 1, 5)
@@ -262,36 +291,67 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
           # locations before computing Moran's I instead of point-by-point,
           # trading a little spatial resolution for a large speedup. NULL/0
           # (default) preserves the exact prior point-based behavior for
-          # Visium's few thousand spots.
-          use_cuts <- is.finite(x_cuts) && is.finite(y_cuts) && x_cuts > 0 && y_cuts > 0
+          # Visium's few thousand spots. Only applies to "moransi" -- Seurat's
+          # own markvariogram implementation does not take x.cuts/y.cuts.
+          use_cuts <- identical(method, "moransi") &&
+            is.finite(x_cuts) && is.finite(y_cuts) && x_cuts > 0 && y_cuts > 0
           write_mirai_log(log_file, sprintf(
-            "Calcul de l'indice de Moran sur %d genes%s...", length(hvgs),
-            if (use_cuts) sprintf(" (grille %dx%d)", x_cuts, y_cuts) else ""
+            "Calcul de l'autocorrelation spatiale (%s) sur %d genes%s...",
+            if (identical(method, "markvariogram")) "mark variogram" else "indice de Moran",
+            length(hvgs), if (use_cuts) sprintf(" (grille %dx%d)", x_cuts, y_cuts) else ""
           ), 4, 5)
           # Verified against Seurat source: FindSpatiallyVariableFeatures.Assay()
           # / .StdAssay() takes spatial.location directly (no FOV needed), and
           # SVFInfo() retrieves the per-gene statistics table afterwards.
           svf_args <- list(
             object = obj[["RNA"]], layer = "data", features = hvgs,
-            spatial.location = coords_df, selection.method = "moransi",
+            spatial.location = coords_df, selection.method = method,
             nfeatures = length(hvgs), verbose = FALSE
           )
           if (use_cuts) { svf_args$x.cuts <- x_cuts; svf_args$y.cuts <- y_cuts }
           assay_res <- do.call(Seurat::FindSpatiallyVariableFeatures, svf_args)
-          info <- SeuratObject::SVFInfo(assay_res, method = "moransi")
+
+          # Method-agnostic gene ORDER: Seurat's own public accessor stays
+          # stable across selection.method values even when SVFInfo()'s
+          # COLUMN NAMES differ (confirmed for "moransi" ; NOT independently
+          # verified for "markvariogram" in this codebase -- defensive
+          # fallback below rather than asserting a specific column name).
+          ranked <- tryCatch(Seurat::SpatiallyVariableFeatures(assay_res, selection.method = method),
+                             error = function(e) character(0))
+          info <- SeuratObject::SVFInfo(assay_res, method = method)
+
+          if (identical(method, "moransi")) {
+            obs_col <- grep("observed$", colnames(info), value = TRUE)[1]
+            pv_col  <- grep("p\\.value$|pvalue$", colnames(info), value = TRUE)[1]
+          } else {
+            # markvariogram: column naming is not treated as a stable
+            # contract here -- pick the first numeric column defensively
+            # (labeled generically as "score" downstream, see moran_i below)
+            # instead of guessing a specific name that could silently point
+            # at the wrong statistic.
+            numeric_cols <- colnames(info)[vapply(info, is.numeric, logical(1))]
+            obs_col <- if (length(numeric_cols) > 0) numeric_cols[1] else NA_character_
+            pv_col  <- grep("p\\.value$|pvalue$", colnames(info), value = TRUE)[1]
+          }
 
           write_mirai_log(log_file, "Termine.", 5, 5)
-          obs_col <- grep("observed$", colnames(info), value = TRUE)[1]
-          pv_col  <- grep("p\\.value$|pvalue$", colnames(info), value = TRUE)[1]
-          data.frame(
+          out <- data.frame(
             gene     = rownames(info),
             moran_i  = if (!is.na(obs_col)) info[[obs_col]] else NA_real_,
             p_value  = if (!is.na(pv_col))  info[[pv_col]]  else NA_real_,
             row.names = NULL, stringsAsFactors = FALSE
           )
+          # Reorder by Seurat's own ranking when available (guaranteed
+          # correct regardless of which numeric column was picked above).
+          if (length(ranked) > 0) {
+            ord <- match(ranked, out$gene)
+            ord <- ord[!is.na(ord)]
+            out <- out[c(ord, setdiff(seq_len(nrow(out)), ord)), ]
+          }
+          out
         },
         bpcells_dir = bpcells_dir, pass_idx = pass_idx, coords = coords,
-        n_hvg = n_hvg, x_cuts = x_cuts, y_cuts = y_cuts,
+        n_hvg = n_hvg, x_cuts = x_cuts, y_cuts = y_cuts, method = method,
         log_file = log_file, .timeout = MIRAI_TASK_TIMEOUT_MS
       )
     })
@@ -300,6 +360,12 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
     observeEvent(input$btn_moran, {
       req(global_data$spatial_obj$bpcells_dir, global_data$spatial_obj$coords)
       reset_log(log_file)
+      # v4 (export/script reproductible) : miroir des parametres UTILISES,
+      # lu uniquement par mod_spatial_export.R -- purement additif.
+      shared_rv$moran_params <- list(n_hvg = input$n_hvg_moran,
+                                     x_cuts = input$moran_x_cuts %||% 0,
+                                     y_cuts = input$moran_y_cuts %||% 0,
+                                     method = input$svg_method %||% "moransi")
       moran_task$invoke(
         bpcells_dir = global_data$spatial_obj$bpcells_dir,
         pass_idx    = shared_rv$qc_pass_idx,
@@ -307,6 +373,7 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
         n_hvg       = input$n_hvg_moran,
         x_cuts      = input$moran_x_cuts %||% 0,
         y_cuts      = input$moran_y_cuts %||% 0,
+        method      = input$svg_method %||% "moransi",
         log_file    = log_file
       )
     })
@@ -369,31 +436,35 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
       n_facet_col <- 3
       p <- ggplot2::ggplot(long, ggplot2::aes(x = x, y = -y, color = expr))
       if (requireNamespace("scattermore", quietly = TRUE)) {
-        p <- p + scattermore::geom_scattermore(pointsize = 3)
+        p <- p + scattermore::geom_scattermore(pointsize = 4.5)
       } else {
-        p <- p + ggplot2::geom_point(size = 0.5)
+        p <- p + ggplot2::geom_point(size = 0.8)
       }
+      method_lbl <- if (identical(shared_rv$moran_params$method, "markvariogram")) {
+        "mark variogram"
+      } else "indice de Moran"
       p + ggplot2::facet_wrap(~gene, ncol = n_facet_col) +
         ggplot2::scale_color_viridis_c(option = "plasma") +
-        ggplot2::coord_fixed() + ggplot2::theme_void() +
-        ggplot2::theme(strip.text = ggplot2::element_text(face = "bold", size = 12),
-                       legend.text = ggplot2::element_text(size = 10),
-                       legend.title = ggplot2::element_text(size = 11),
-                       plot.title = ggplot2::element_text(size = 14, face = "bold")) +
+        ggplot2::coord_fixed() + ggplot2::theme_void(base_size = 15) +
+        ggplot2::theme(strip.text = ggplot2::element_text(face = "bold", size = 15),
+                       legend.text = ggplot2::element_text(size = 12),
+                       legend.title = ggplot2::element_text(size = 13),
+                       plot.title = ggplot2::element_text(size = 17, face = "bold"),
+                       panel.spacing = ggplot2::unit(1, "lines")) +
         ggplot2::labs(color = "Expression",
-                      title = sprintf("Top %d genes spatialement variables (indice de Moran)",
-                                       length(unique(long$gene))))
+                      title = sprintf("Top %d genes spatialement variables (%s)",
+                                       length(unique(long$gene)), method_lbl))
     })
 
-    # NEW: dynamic plot height (biologist feedback -- fixed 600px was too
-    # small once more than ~6 genes were requested, panels became tiny and
-    # unreadable). Scales with the actual number of facet ROWS instead of a
-    # constant, so e.g. 20 genes (7 rows @ ncol=3) gets a tall enough canvas
-    # instead of being squeezed into the same 600px as 4 genes.
+    # Dynamic plot height/width: scales with the actual number of facet ROWS
+    # (agrandi sur retour biologiste -- 260px/rangee etait trop petit des que
+    # plus de ~6 genes etaient demandes, panneaux illisibles). ncol reste 3
+    # ci-dessus -- height suit donc ceiling(n/3) rangees a 340px chacune,
+    # avec un plancher de 650px (au lieu de 500) meme pour peu de genes.
     output$svg_grid_plot_ui <- renderUI({
       n_genes <- input$n_top_svg %||% 9
       n_rows  <- ceiling(n_genes / 3)
-      height_px <- max(500, n_rows * 260)
+      height_px <- max(650, n_rows * 340)
       plotOutput(ns("svg_grid_plot"), height = paste0(height_px, "px"))
     })
   })
