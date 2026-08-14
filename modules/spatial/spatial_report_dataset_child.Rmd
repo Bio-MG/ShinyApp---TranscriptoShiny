@@ -1,0 +1,216 @@
+<!--
+spatial_report_dataset_child.Rmd - one dataset's full section set.
+Rendered via knitr::knit_child() from spatial_report_template.Rmd's loop,
+which binds `ds` (this dataset's snapshot, see build_spatial_report_dataset()
+in R/utils_spatial_report.R) and `ds_name` (its name) into the calling
+environment before invoking knit_child(envir = environment()) -- both are
+therefore in scope here, along with everything from the PARENT's setup
+chunk (params, %||%, render_plot(), render_plot_spatial()).
+
+IMPORTANT (caught by rendering this template for real, see integration
+notes) -- two fixes baked in:
+  1. knit_child() runs this file ONCE PER DATASET within the SAME overall
+     render session -- knitr enforces a single, document-WIDE chunk-label
+     namespace, so ANY explicitly-labeled chunk here would collide on the
+     2nd+ dataset ("Duplicate chunk label"). Every chunk below is therefore
+     deliberately ANONYMOUS (no label after the `r`).
+  2. Section headers are produced via cat("### ...") INSIDE an eval-gated
+     results='asis' chunk (same convention as sc_report_template.Rmd's own
+     sections), NOT as static markdown text -- a static "### Deconvolution"
+     heading would always render even when eval=FALSE for every chunk
+     beneath it, leaving a visibly EMPTY section for any dataset where that
+     step was never computed. Gating the heading itself means a section is
+     fully absent, not empty, when its data doesn't exist -- exactly "LE
+     MAXIMUM D'EXPORT, meme si non affiche, juste calcule" without ever
+     showing dead section titles.
+-->
+
+```{r, include=FALSE}
+res <- ds$results %||% list()
+qc_ready      <- "qc" %in% params$sections && !is.null(res$qc_metrics)
+cluster_ready <- "cluster" %in% params$sections && !is.null(res$cluster_labels)
+deconv_ready  <- "deconv" %in% params$sections && !is.null(res$deconv_props)
+moran_ready   <- "moran" %in% params$sections && !is.null(res$moran_results)
+niche_ready   <- "niche" %in% params$sections && !is.null(res$niche_labels)
+umap_ready    <- "umap" %in% params$sections && !is.null(res$umap_df)
+viz_ready     <- "custom_viz" %in% params$sections && length(res$saved_viz_list %||% list()) > 0
+any_ready     <- qc_ready || cluster_ready || deconv_ready || moran_ready || niche_ready || umap_ready || viz_ready
+
+# Base spot/cell table (id, x, y) for this dataset -- used by every spatial
+# map below. NULL-safe: a dataset with no coords simply skips every map.
+.ds_base_df <- if (!is.null(ds$coords) && length(ds$sketch_ids) > 0) {
+  ds$coords[match(ds$sketch_ids, ds$coords$id), c("id", "x", "y")]
+} else NULL
+```
+
+```{r, results='asis'}
+cat(sprintf("\n\n## %s\n\n", ds_name))
+cat(sprintf("*%s -- %s elements (total) -- %s en sketch RAM*\n\n",
+            ds$technology, format(ds$n_total, big.mark = ","), format(length(ds$sketch_ids), big.mark = ",")))
+```
+
+```{r, eval=!any_ready, results='asis'}
+cat("*Aucune section calculee pour cet echantillon au moment de l'export.*\n\n---\n\n")
+```
+
+```{r, eval=qc_ready, results='asis'}
+cat("### QC\n\n")
+cat("Seuils appliques : ", if (!is.null(res$qc_params))
+  sprintf("nCount >= %s, nFeature >= %s, %%MT <= %s", res$qc_params$min_count,
+          res$qc_params$min_features, res$qc_params$max_pct_mt) else "non enregistres", "\n\n")
+if (!is.null(res$qc_pass_idx)) {
+  cat(sprintf("**%d / %d** elements retenus.\n\n", length(res$qc_pass_idx), nrow(res$qc_metrics)))
+}
+```
+```{r, eval=qc_ready, fig.height=4}
+df_qc <- res$qc_metrics
+p1 <- ggplot2::ggplot(df_qc, ggplot2::aes(x = nCount)) +
+  ggplot2::geom_histogram(bins = 40, fill = "#2C3E50") + ggplot2::theme_minimal() + ggplot2::labs(title="nCount")
+p2 <- ggplot2::ggplot(df_qc, ggplot2::aes(x = nFeature)) +
+  ggplot2::geom_histogram(bins = 40, fill = "#18BC9C") + ggplot2::theme_minimal() + ggplot2::labs(title="nFeature")
+p3 <- ggplot2::ggplot(df_qc, ggplot2::aes(x = pct_mt)) +
+  ggplot2::geom_histogram(bins = 40, fill = "#E74C3C") + ggplot2::theme_minimal() + ggplot2::labs(title="% MT")
+patchwork::wrap_plots(p1, p2, p3, ncol = 3)
+```
+```{r, eval=qc_ready && !is.null(.ds_base_df)}
+m <- match(.ds_base_df$id, res$qc_metrics$id)
+df_map <- data.frame(x = .ds_base_df$x, y = .ds_base_df$y, value = res$qc_metrics$nCount[m])
+render_plot_spatial(df_map, title = "nCount (carte)")
+```
+
+```{r, eval=cluster_ready, results='asis'}
+cat("### Clustering (BANKSY-lite)\n\n")
+cat(sprintf("**%d clusters** sur %d elements.%s\n\n", length(unique(res$cluster_labels)),
+            length(res$cluster_labels),
+            if (!is.null(res$cluster_params)) sprintf(" (lambda=%s, resolution=%s)",
+              res$cluster_params$lambda, res$cluster_params$resolution) else ""))
+```
+```{r, eval=cluster_ready && !is.null(.ds_base_df)}
+df_map <- data.frame(x = .ds_base_df$x, y = .ds_base_df$y,
+                     value = as.character(res$cluster_labels[.ds_base_df$id]))
+render_plot_spatial(df_map, title = "Clusters spatiaux")
+```
+```{r, eval=cluster_ready && knitr::is_html_output()}
+tab <- as.data.frame(table(Cluster = res$cluster_labels))
+colnames(tab) <- c("Cluster", "Effectif")
+DT::datatable(tab, options = list(pageLength = 8, dom = "tp"), rownames = FALSE)
+```
+```{r, eval=cluster_ready && !knitr::is_html_output()}
+tab <- as.data.frame(table(Cluster = res$cluster_labels))
+colnames(tab) <- c("Cluster", "Effectif")
+knitr::kable(tab)
+```
+```{r, eval=cluster_ready && !is.null(res$cluster_markers) && nrow(res$cluster_markers) > 0, results='asis'}
+cat("\n\n**Marqueurs differentiels (top 30, |log2FC| decroissant) :**\n\n")
+```
+```{r, eval=cluster_ready && !is.null(res$cluster_markers) && nrow(res$cluster_markers) > 0 && knitr::is_html_output()}
+top_m <- res$cluster_markers[order(-abs(res$cluster_markers$avg_log2FC)), ]
+DT::datatable(utils::head(top_m, 30), options = list(pageLength = 10, scrollX = TRUE), rownames = FALSE)
+```
+```{r, eval=cluster_ready && !is.null(res$cluster_markers) && nrow(res$cluster_markers) > 0 && !knitr::is_html_output()}
+top_m <- res$cluster_markers[order(-abs(res$cluster_markers$avg_log2FC)), ]
+knitr::kable(utils::head(top_m[, c("cluster","gene","avg_log2FC","p_val_adj")], 30))
+```
+
+```{r, eval=deconv_ready, results='asis'}
+cat("### Deconvolution\n\n")
+cat(sprintf("Methode : **%s**.%s\n\n", res$deconv_params$mode %||% "?",
+            if (!is.null(res$deconv_params$ref_source_label)) sprintf(" (%s)", res$deconv_params$ref_source_label) else ""))
+```
+```{r, eval=deconv_ready, fig.height=5}
+long <- reshape2::melt(res$deconv_props, id.vars = "id", variable.name = "cell_type", value.name = "proportion")
+ids_show <- utils::head(unique(long$id), 60)
+ggplot2::ggplot(long[long$id %in% ids_show, ], ggplot2::aes(x = id, y = proportion, fill = cell_type)) +
+  ggplot2::geom_col() + ggplot2::theme_minimal() +
+  ggplot2::theme(axis.text.x = ggplot2::element_blank(), legend.text = ggplot2::element_text(size = 8)) +
+  ggplot2::labs(x = "Spots/cellules (echantillon)", y = "Proportion", fill = "Type")
+```
+```{r, eval=deconv_ready && knitr::is_html_output()}
+DT::datatable(res$deconv_props, options = list(pageLength = 8, scrollX = TRUE), rownames = FALSE) |>
+  DT::formatRound(setdiff(colnames(res$deconv_props), "id"), 3)
+```
+```{r, eval=deconv_ready && !knitr::is_html_output()}
+knitr::kable(utils::head(res$deconv_props, 20), digits = 3)
+```
+
+```{r, eval=moran_ready, results='asis'}
+cat("### Moran's I / Genes spatialement variables\n\n")
+meth <- res$moran_params$method %||% "moransi"
+cat(sprintf("Methode : **%s** -- %d genes testes.\n\n",
+            if (identical(meth, "markvariogram")) "mark variogram" else "indice de Moran", nrow(res$moran_results)))
+```
+```{r, eval=moran_ready && knitr::is_html_output()}
+top_svg <- res$moran_results[order(-res$moran_results$moran_i), ]
+DT::datatable(utils::head(top_svg, 50), options = list(pageLength = 10), rownames = FALSE) |>
+  DT::formatRound(c("moran_i", "p_value"), 4)
+```
+```{r, eval=moran_ready && !knitr::is_html_output()}
+top_svg <- res$moran_results[order(-res$moran_results$moran_i), ]
+knitr::kable(utils::head(top_svg, 25), digits = 4)
+```
+
+```{r, eval=niche_ready, results='asis'}
+cat("### Niches spatiales\n\n")
+cat(sprintf("**%d niches** sur %d elements.\n\n", length(unique(res$niche_labels)), length(res$niche_labels)))
+```
+```{r, eval=niche_ready && !is.null(.ds_base_df)}
+df_map <- data.frame(x = .ds_base_df$x, y = .ds_base_df$y,
+                     value = as.character(res$niche_labels[.ds_base_df$id]))
+render_plot_spatial(df_map, title = "Niches spatiales")
+```
+```{r, eval=niche_ready && !is.null(res$niche_composition), fig.height=4}
+long <- reshape2::melt(res$niche_composition, id.vars = "niche", variable.name = "groupe", value.name = "proportion")
+ggplot2::ggplot(long, ggplot2::aes(x = groupe, y = niche, fill = proportion)) +
+  ggplot2::geom_tile() + ggplot2::scale_fill_viridis_c(option = "magma", limits = c(0, 1)) +
+  ggplot2::theme_minimal(base_size = 11) +
+  ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
+  ggplot2::labs(x = NULL, y = NULL, fill = "Proportion\nmoyenne", title = "Composition par niche")
+```
+
+```{r, eval=umap_ready, results='asis'}
+cat("### UMAP (sketch, non-spatial)\n\n")
+```
+```{r, eval=umap_ready}
+emb <- res$umap_df
+emb$cluster <- if (!is.null(res$cluster_labels)) as.character(res$cluster_labels[emb$id]) else "sketch"
+p <- ggplot2::ggplot(emb, ggplot2::aes(x = dim1, y = dim2, color = cluster)) +
+  ggplot2::geom_point(size = 0.8, alpha = 0.75) + ggplot2::theme_minimal() +
+  ggplot2::labs(x = "UMAP_1", y = "UMAP_2", color = "Cluster")
+render_plot(p)
+```
+
+```{r, eval=viz_ready, results='asis'}
+cat("### Visualisations sauvegardees\n\n")
+cat("*Vues ajoutees depuis l'onglet \"4. Visualisation\" (bouton \"Ajouter cette vue au rapport\") --",
+    "reconstruites a partir des DERNIERS resultats disponibles au moment du rendu de ce rapport.*\n\n")
+# Loop-safe pattern (mirrors sc_report_template.Rmd's own custom_viz_loop):
+# an unknown number of iterations inside ONE results='asis' chunk needs
+# EXPLICIT handling per item -- print(htmltools::tagList(...)) for an
+# interactive widget, or an explicit ggsave() + markdown image link for the
+# static fallback -- rather than relying on implicit end-of-chunk auto-print,
+# which is only proven safe for a SINGLE plot per chunk (see every other
+# section above).
+viz_list <- res$saved_viz_list %||% list()
+for (nm in names(viz_list)) {
+  cfg <- viz_list[[nm]]
+  cat(sprintf("\n\n**%s** (colore par : %s)\n\n", nm, cfg$color_by %||% "?"))
+  df_v <- tryCatch(build_saved_viz_df(ds$sketch, ds$coords, cfg, res), error = function(e) NULL)
+  if (is.null(df_v)) {
+    cat("*(donnees indisponibles pour reconstruire cette vue -- relancez le calcul correspondant puis re-sauvegardez la vue depuis l'onglet 4)*\n\n")
+    next
+  }
+  interactive_ok <- isTRUE(params$interactive) && knitr::is_html_output() && requireNamespace("plotly", quietly = TRUE)
+  if (interactive_ok) {
+    print(render_plot_spatial(df_v, title = nm))
+  } else {
+    tmp_png <- tempfile(fileext = ".png")
+    p_static <- render_spatial_static_map(df_v, title = nm)
+    ggplot2::ggsave(tmp_png, p_static, width = 7, height = 7, dpi = 130, bg = "white")
+    cat(sprintf("\n\n![%s](%s)\n\n", nm, tmp_png))
+  }
+}
+```
+
+```{r, eval=any_ready, results='asis'}
+cat("\n\n---\n\n")
+```
