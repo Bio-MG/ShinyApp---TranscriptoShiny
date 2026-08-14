@@ -1,0 +1,164 @@
+---
+title: "`r params$report_title`"
+subtitle: "`r params$report_subtitle`"
+date: "`r format(Sys.time(), '%d %B %Y, %H:%M')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+    df_print: paged
+  pdf_document:
+    toc: true
+    latex_engine: xelatex
+params:
+  datasets: NULL
+  active_dataset: NULL
+  multi_integration: NULL
+  sections: NULL
+  fig_width: 9
+  fig_height: 7
+  report_title: "Analyse Spatiale"
+  report_subtitle: ""
+  report_notes: ""
+  interactive: TRUE
+---
+
+```{r setup, include=FALSE}
+`%||%` <- function(a, b) if (is.null(a)) b else a
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE,
+                      fig.width = params$fig_width %||% 9, fig.height = params$fig_height %||% 7,
+                      out.width = "100%")
+sections <- params$sections %||% character(0)
+
+# Step-3.7-style helper (sc_report_template.Rmd) reused verbatim: wrapping a
+# raw htmlwidget (plotly) inside a results='asis'-adjacent flow needs
+# htmltools::tagList() for correct JS/CSS dependency injection.
+render_plot <- function(p, allow_interactive = TRUE) {
+  if (allow_interactive && isTRUE(params$interactive) && knitr::is_html_output() &&
+      requireNamespace("plotly", quietly = TRUE)) {
+    return(htmltools::tagList(plotly::ggplotly(p)))
+  }
+  p
+}
+
+# Spatial-map specific helper: builds plotly DIRECTLY (not via ggplotly())
+# when interactive, because scattermore::geom_scattermore() -- used by
+# render_spatial_static_map(), R/utils_spatial_export.R, already sourced
+# into globalenv() by app.R -- produces a raster grob that plotly::ggplotly()
+# cannot faithfully convert (known scattermore/plotly incompatibility).
+# Falls back to render_spatial_static_map() for PDF / non-interactive HTML,
+# where that raster approach is exactly the right (fast, large-N-safe) tool.
+render_plot_spatial <- function(df, title = NULL) {
+  df <- df[stats::complete.cases(df[, c("x", "y")]), , drop = FALSE]
+  if (nrow(df) == 0) return(invisible(NULL))
+
+  interactive_ok <- isTRUE(params$interactive) && knitr::is_html_output() &&
+    requireNamespace("plotly", quietly = TRUE)
+
+  if (interactive_ok) {
+    df_i <- df
+    if (nrow(df_i) > 20000) {
+      set.seed(1)
+      df_i <- df_i[sample.int(nrow(df_i), 20000), , drop = FALSE]
+    }
+    if (is.numeric(df_i$value)) {
+      p <- plotly::plot_ly(df_i, x = ~x, y = ~-y, type = "scattergl", mode = "markers",
+                           marker = list(color = ~value, colorscale = "Viridis", size = 4, showscale = TRUE),
+                           text = ~paste0("Valeur: ", round(value, 3)), hoverinfo = "text")
+    } else {
+      p <- plotly::plot_ly(df_i, x = ~x, y = ~-y, color = ~value, type = "scattergl", mode = "markers",
+                           marker = list(size = 4), text = ~paste0("Valeur: ", value), hoverinfo = "text")
+    }
+    p <- plotly::layout(p, title = title,
+                        xaxis = list(title = "", zeroline = FALSE, showgrid = FALSE),
+                        yaxis = list(title = "", zeroline = FALSE, showgrid = FALSE, scaleanchor = "x"))
+    return(htmltools::tagList(p))
+  }
+  print(render_spatial_static_map(df, title = title))
+}
+```
+
+```{r notes_section, eval=nzchar(params$report_notes %||% ""), results='asis'}
+cat("> ", gsub("\n", "\n> ", params$report_notes), "\n\n", sep = "")
+```
+
+# Apercu
+
+```{r overview_table_build, eval="overview" %in% sections}
+ov <- do.call(rbind, lapply(names(params$datasets), function(nm) {
+  d <- params$datasets[[nm]]
+  data.frame(
+    Echantillon = nm, Technologie = d$technology %||% "?",
+    `Elements (total)` = format(d$n_total %||% NA, big.mark = ","),
+    `Sketch (RAM)` = format(length(d$sketch_ids), big.mark = ","),
+    check.names = FALSE, stringsAsFactors = FALSE
+  )
+}))
+```
+```{r overview_table_html, eval="overview" %in% sections && knitr::is_html_output()}
+DT::datatable(ov, options = list(pageLength = 10, dom = "t"), rownames = FALSE)
+```
+```{r overview_table_pdf, eval="overview" %in% sections && !knitr::is_html_output()}
+knitr::kable(ov)
+```
+
+---
+
+```{r multi_missing_notice, eval="multi" %in% sections && is.null(params$multi_integration), results='asis'}
+cat("# Multi-echantillons\n\n")
+cat("*Aucune integration conjointe calculee pour cette session (onglet \"5. Multi-echantillons\").*\n\n")
+cat("---\n\n")
+```
+
+```{r multi_title, eval="multi" %in% sections && !is.null(params$multi_integration), results='asis'}
+cat("# Multi-echantillons - Integration conjointe\n\n")
+mi <- params$multi_integration
+cat(sprintf(
+  "Reduction utilisee : **%s** - %s elements sur %d echantillon(s) : %s.\n\n",
+  mi$reduction_used %||% "?", format(nrow(mi$embeddings), big.mark = ","),
+  length(unique(mi$embeddings$dataset)), paste(mi$datasets %||% character(0), collapse = ", ")
+))
+```
+```{r multi_umap_by_dataset, eval="multi" %in% sections && !is.null(params$multi_integration)}
+emb <- params$multi_integration$embeddings
+p <- ggplot2::ggplot(emb, ggplot2::aes(x = dim1, y = dim2, color = dataset)) +
+  ggplot2::geom_point(size = 0.7, alpha = 0.7) + ggplot2::theme_minimal() +
+  ggplot2::labs(title = "Colore par echantillon (effet de lot)", x = "UMAP_1", y = "UMAP_2")
+render_plot(p)
+```
+```{r multi_umap_by_cluster, eval="multi" %in% sections && !is.null(params$multi_integration)}
+emb <- params$multi_integration$embeddings
+p <- ggplot2::ggplot(emb, ggplot2::aes(x = dim1, y = dim2, color = cluster)) +
+  ggplot2::geom_point(size = 0.7, alpha = 0.7) + ggplot2::theme_minimal() +
+  ggplot2::labs(title = "Colore par cluster integre", x = "UMAP_1", y = "UMAP_2")
+render_plot(p)
+```
+```{r multi_sizes_table, eval="multi" %in% sections && !is.null(params$multi_integration) && knitr::is_html_output()}
+tab <- as.data.frame(table(Echantillon = params$multi_integration$embeddings$dataset))
+colnames(tab) <- c("Echantillon", "Elements (sketch)")
+DT::datatable(tab, options = list(pageLength = 10, dom = "t"), rownames = FALSE)
+```
+```{r multi_sep, eval="multi" %in% sections, results='asis'}
+cat("\n\n---\n\n")
+```
+
+# Par echantillon
+
+```{r dataset_loop, results='asis'}
+# Canonical R Markdown "child-per-item" loop (knitr::knit_child): each
+# iteration binds ds/ds_name into ITS OWN function-execution environment,
+# then renders spatial_report_dataset_child.Rmd with envir = that
+# environment -- the child inherits ds/ds_name via normal lexical lookup,
+# plus everything from THIS document's setup chunk (params, render_plot(),
+# render_plot_spatial(), %||%) via the parent-environment chain.
+child_path <- "spatial_report_dataset_child.Rmd"
+res <- lapply(names(params$datasets), function(nm) {
+  ds <- params$datasets[[nm]]
+  ds_name <- nm
+  knitr::knit_child(child_path, envir = environment(), quiet = TRUE)
+})
+cat(unlist(res), sep = "\n")
+```
+
+<small>Rapport genere automatiquement par TranscriptoShiny - module Spatial.</small>
