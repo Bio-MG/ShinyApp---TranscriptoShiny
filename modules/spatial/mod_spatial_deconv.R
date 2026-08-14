@@ -1,6 +1,13 @@
 # =============================================================================
 # modules/spatial/mod_spatial_deconv.R — Cell-type Deconvolution / Label Transfer
 # =============================================================================
+# v10 (moyen terme — export/auto-pipeline, voir handoff_spatial_bio-mg.md) :
+#    shared_rv$deconv_params ecrit au moment du clic sur "2) Lancer la
+#    deconvolution" (miroir des parametres UI utilises + chemin de la
+#    reference effectivement utilisee) -- purement additif, lu uniquement
+#    par mod_spatial_export.R (script R reproductible) ; zero changement de
+#    comportement pour cet onglet.
+#
 # v9 (backlog court-terme #1 et #3, session "puck_01 bugfix + backlog" —
 #    voir handoff_spatial_bio-mg.md) :
 #   1. Reference partagee (Import > Spatial, global_data$spatial_reference) :
@@ -108,6 +115,31 @@ mod_spatial_deconv_ui <- function(id) {
           condition = sprintf("input['%s'] == 'shared'", ns("ref_source")),
           uiOutput(ns("shared_ref_status_ui"))
         )
+      ),
+
+      # Feedback biologiste ("afficher une umap ou pca du fichier sc rna
+      # dans la partie deconvolution") : apercu labellise (style
+      # DimPlot(label=TRUE)) de la reference scRNA-seq, coloree/etiquetee
+      # par la colonne 'type cellulaire' deja choisie -- verifie visuellement
+      # que les types sont bien separes AVANT de lancer RCTD/Label Transfer.
+      # Fonctionne pour les deux sources (upload local ET reference
+      # partagee) : la reference partagee est un ARTEFACT sur disque
+      # (counts + cell_types uniquement, voir prepare_reference_artifact())
+      # donc sans reduction pre-existante -- PCA/UMAP y sont toujours
+      # recalcules a la volee (asynchrone, mirai, sous-echantillonne a
+      # 20000 cellules pour un apercu rapide) ; un upload local conserve sa
+      # propre reduction si l'objet .rds en contenait deja une.
+      conditionalPanel(
+        condition = sprintf("input['%s'] == 'rctd' || input['%s'] == 'labeltransfer'", ns("mode"), ns("mode")),
+        hr(),
+        h6("Visualiser la reference (UMAP/PCA)", style = "font-weight:bold; font-size:0.85rem;"),
+        div(class = "text-muted", style = "font-size:0.7rem;",
+            "Verifiez visuellement que les types cellulaires sont bien separes avant de lancer ",
+            "la deconvolution. Recalcule (asynchrone) si aucune reduction n'existe deja."),
+        selectInput(ns("ref_viz_reduction"), NULL, choices = c("UMAP" = "umap", "PCA" = "pca"), selected = "umap"),
+        bslib::input_task_button(ns("btn_ref_viz"), "Calculer / afficher", icon = icon("chart-line")),
+        verbatimTextOutput(ns("ref_viz_progress_text"), placeholder = TRUE),
+        plotOutput(ns("ref_viz_plot"), height = "360px")
       ),
 
       conditionalPanel(
@@ -495,6 +527,125 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
                     options = list(pageLength = 6, dom = "tp"))
     })
 
+    # ── Reference UMAP/PCA preview (feedback biologiste, voir header UI) ──
+    ref_viz_log_file <- spatial_log_path(session, "ref_viz")
+    ref_viz_tracker  <- create_reactive_tracker(session, ref_viz_log_file)
+
+    ref_viz_task <- ExtendedTask$new(function(mode, ref_obj_path, ref_manifest_path, celltype_col,
+                                               reduction, max_cells, log_file) {
+      mirai::mirai(
+        {
+          write_mirai_log(log_file, "Chargement de la reference...", 1, 4)
+          if (identical(mode, "local")) {
+            obj <- readRDS(ref_obj_path)
+            if (!celltype_col %in% colnames(obj@meta.data)) stop("Colonne 'type cellulaire' introuvable.")
+            cell_types <- as.character(obj@meta.data[[celltype_col]])
+            names(cell_types) <- colnames(obj)
+          } else {
+            manifest <- readRDS(ref_manifest_path)
+            counts <- if (identical(manifest$backend, "bpcells")) {
+              BPCells::open_matrix_dir(manifest$counts_path)
+            } else readRDS(manifest$counts_path)
+            obj <- Seurat::CreateSeuratObject(counts = counts)
+            cell_types <- as.character(manifest$cell_types)[match(colnames(obj), names(manifest$cell_types))]
+            names(cell_types) <- colnames(obj)
+          }
+
+          if (ncol(obj) > max_cells) {
+            write_mirai_log(log_file, sprintf("Sous-echantillonnage (%d -> %d cellules, apercu rapide)...",
+                                               ncol(obj), max_cells), 2, 4)
+            set.seed(1)
+            keep <- sample(colnames(obj), max_cells)
+            obj <- obj[, keep]
+            cell_types <- cell_types[keep]
+          }
+
+          has_red <- reduction %in% names(obj@reductions)
+          if (has_red) {
+            write_mirai_log(log_file, sprintf("Reduction '%s' deja presente -- reutilisee.", reduction), 3, 4)
+          } else {
+            write_mirai_log(log_file, "Normalisation + PCA...", 2, 4)
+            obj <- Seurat::NormalizeData(obj, verbose = FALSE)
+            obj <- Seurat::FindVariableFeatures(obj, verbose = FALSE)
+            obj <- Seurat::ScaleData(obj, verbose = FALSE)
+            obj <- Seurat::RunPCA(obj, npcs = 30, verbose = FALSE)
+            if (identical(reduction, "umap")) {
+              write_mirai_log(log_file, "UMAP...", 3, 4)
+              obj <- Seurat::RunUMAP(obj, dims = 1:30, verbose = FALSE)
+            }
+          }
+
+          write_mirai_log(log_file, "Termine.", 4, 4)
+          emb <- as.data.frame(Seurat::Embeddings(obj, reduction)[, 1:2])
+          colnames(emb) <- c("dim1", "dim2")
+          emb$id <- rownames(emb)
+          emb$cell_type <- cell_types[emb$id]
+          emb
+        },
+        mode = mode, ref_obj_path = ref_obj_path, ref_manifest_path = ref_manifest_path,
+        celltype_col = celltype_col, reduction = reduction, max_cells = max_cells, log_file = log_file,
+        .timeout = MIRAI_TASK_TIMEOUT_MS
+      )
+    })
+    bslib::bind_task_button(ref_viz_task, "btn_ref_viz")
+
+    observeEvent(input$btn_ref_viz, {
+      reset_log(ref_viz_log_file)
+      if (using_shared_ref()) {
+        req(global_data$spatial_reference$path)
+        ref_viz_task$invoke(mode = "shared", ref_obj_path = NULL,
+                            ref_manifest_path = global_data$spatial_reference$path,
+                            celltype_col = global_data$spatial_reference$celltype_col %||% "",
+                            reduction = input$ref_viz_reduction, max_cells = 20000,
+                            log_file = ref_viz_log_file)
+      } else {
+        if (is.null(ref_state$obj) || is.null(input$ref_celltype_col)) {
+          showNotification("Chargez d'abord une reference et choisissez la colonne 'type cellulaire'.",
+                           type = "warning", duration = 8)
+          return()
+        }
+        tmp <- tempfile(fileext = ".rds")
+        saveRDS(ref_state$obj, tmp)
+        ref_viz_task$invoke(mode = "local", ref_obj_path = tmp, ref_manifest_path = NULL,
+                            celltype_col = input$ref_celltype_col, reduction = input$ref_viz_reduction,
+                            max_cells = 20000, log_file = ref_viz_log_file)
+      }
+    })
+
+    ref_viz_result <- reactiveVal(NULL)
+    observeEvent(ref_viz_task$status(), {
+      if (ref_viz_task$status() == "success") {
+        ref_viz_result(ref_viz_task$result())
+      } else if (ref_viz_task$status() == "error") {
+        showNotification("Erreur lors du calcul UMAP/PCA de la reference -- voir le journal.",
+                         type = "error", duration = 10)
+      }
+    })
+
+    output$ref_viz_progress_text <- renderText({
+      lines <- ref_viz_tracker()
+      if (length(lines) == 0) return("En attente...")
+      paste(lines, collapse = "\n")
+    })
+
+    output$ref_viz_plot <- renderPlot({
+      req(ref_viz_result())
+      emb <- ref_viz_result()
+      lv  <- sort(unique(stats::na.omit(as.character(emb$cell_type))))
+      pal <- stats::setNames(grDevices::hcl.colors(max(length(lv), 1), palette = "Dark 3"), lv)
+      centroids <- stats::aggregate(cbind(dim1, dim2) ~ cell_type, data = emb, FUN = stats::median)
+      ggplot2::ggplot(emb, ggplot2::aes(x = dim1, y = dim2, color = cell_type)) +
+        ggplot2::geom_point(size = 0.6, alpha = 0.7) +
+        ggplot2::scale_color_manual(values = pal, na.value = "#CCCCCC") +
+        ggplot2::geom_text(data = centroids, ggplot2::aes(label = cell_type), color = "black",
+                           size = 3.2, fontface = "bold") +
+        ggplot2::theme_minimal() +
+        ggplot2::labs(x = paste0(toupper(input$ref_viz_reduction), "_1"),
+                      y = paste0(toupper(input$ref_viz_reduction), "_2"),
+                      title = "Reference scRNA-seq") +
+        ggplot2::theme(legend.position = "none")
+    })
+
     # ── Async deconvolution/integration task (mode chosen at invoke time) ──
     deconv_task <- ExtendedTask$new(function(bpcells_dir, pass_idx, coords, mode,
                                               ref_path, n_topics, n_top_od,
@@ -762,6 +913,18 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
 
       last_deconv_mode(input$mode)
       reset_log(log_file)
+      # v10 (export/script reproductible) : miroir des parametres UTILISES
+      # (y compris le chemin de reference EFFECTIF, partagee ou locale) --
+      # lu uniquement par mod_spatial_export.R -- purement additif.
+      shared_rv$deconv_params <- list(
+        mode = input$mode,
+        ref_path = if (input$mode %in% c("rctd", "labeltransfer")) effective_ref_path() else NULL,
+        ref_source_label = if (input$mode %in% c("rctd", "labeltransfer")) {
+          if (using_shared_ref()) "reference partagee (Import > Spatial)" else "upload local (session)"
+        } else NULL,
+        n_topics = input$n_topics, n_top_od = input$n_top_od,
+        lt_npcs = input$lt_npcs, lt_norm_method = input$lt_norm_method, lt_ncells = input$lt_ncells
+      )
       deconv_task$invoke(
         bpcells_dir      = global_data$spatial_obj$bpcells_dir,
         pass_idx         = shared_rv$qc_pass_idx,
