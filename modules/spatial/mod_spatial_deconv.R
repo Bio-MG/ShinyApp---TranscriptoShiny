@@ -117,41 +117,14 @@ mod_spatial_deconv_ui <- function(id) {
         )
       ),
 
-      # Feedback biologiste ("afficher une umap ou pca du fichier sc rna
-      # dans la partie deconvolution") : apercu labellise (style
-      # DimPlot(label=TRUE)) de la reference scRNA-seq, coloree/etiquetee
-      # par la colonne 'type cellulaire' deja choisie -- verifie visuellement
-      # que les types sont bien separes AVANT de lancer RCTD/Label Transfer.
-      # Fonctionne pour les deux sources (upload local ET reference
-      # partagee) : la reference partagee est un ARTEFACT sur disque
-      # (counts + cell_types uniquement, voir prepare_reference_artifact())
-      # donc sans reduction pre-existante -- PCA/UMAP y sont toujours
-      # recalcules a la volee (asynchrone, mirai, sous-echantillonne a
-      # 20000 cellules pour un apercu rapide) ; un upload local conserve sa
-      # propre reduction si l'objet .rds en contenait deja une.
-      conditionalPanel(
-        condition = sprintf("input['%s'] == 'rctd' || input['%s'] == 'labeltransfer'", ns("mode"), ns("mode")),
-        hr(),
-        h6("Visualiser la reference (UMAP/PCA)", style = "font-weight:bold; font-size:0.85rem;"),
-        div(class = "text-muted", style = "font-size:0.7rem;",
-            "Verifiez visuellement que les types cellulaires sont bien separes avant de lancer ",
-            "la deconvolution. Recalcule (asynchrone) si aucune reduction n'existe deja."),
-        selectInput(ns("ref_viz_reduction"), NULL, choices = c("UMAP" = "umap", "PCA" = "pca"), selected = "umap"),
-        bslib::input_task_button(ns("btn_ref_viz"), "Calculer / afficher", icon = icon("chart-line")),
-        verbatimTextOutput(ns("ref_viz_progress_text"), placeholder = TRUE),
-        plotOutput(ns("ref_viz_plot"), height = "360px")
-      ),
-
       conditionalPanel(
         condition = sprintf("input['%s'] == 'rctd'", ns("mode")),
         div(class = "alert alert-light", style = "font-size:0.75rem;",
             bsicons::bs_icon("info-circle"),
             " RCTD modelise l'expression par une loi de Poisson resolue par ",
             "programmation quadratique — pic RAM attendu sous ~2 Go. Execute ",
-            "en mono-coeur (max_cores=1) pour eviter tout sous-processus imbrique. ",
-            "Necessite au moins 25 cellules par type dans la reference. Les colonnes du ",
-            "tableau resultat portent directement les noms de type cellulaire ",
-            "de votre reference (ex: 'Astrocytes', 'Neurons_L4').")
+            "en mono-coeur (max_cores=1). Necessite au moins 25 cellules par ",
+            "type dans la reference.")
       ),
       conditionalPanel(
         condition = sprintf("input['%s'] == 'labeltransfer'", ns("mode")),
@@ -165,33 +138,15 @@ mod_spatial_deconv_ui <- function(id) {
                        3000, min = 500, max = 10000, step = 500),
           div(class = "alert alert-warning", style = "font-size:0.75rem;",
               bsicons::bs_icon("exclamation-triangle"),
-              " SCTransform() est significativement plus lente sans le package 'glmGamPoi' ",
-              "(non installe par defaut) — installez-le via ",
-              "BiocManager::install('glmGamPoi') pour accelerer nettement cette etape. ",
-              "Sur une reference de plusieurs dizaines de milliers de cellules sans ce ",
-              "package, comptez potentiellement > 30-45 min : reduisez plutot le nombre de ",
-              "cellules par type (case a cocher ci-dessus, section reference) avant de lancer.")
+              " Installez 'glmGamPoi' (BiocManager::install('glmGamPoi')) pour accelerer, ",
+              "sinon reduisez plutot le nombre de cellules par type (section reference).")
         ),
-        numericInput(ns("lt_npcs"), "Composantes PCA (requete spatiale)", 30, min = 5, max = 50, step = 5),
-        div(class = "alert alert-light", style = "font-size:0.75rem;",
-            bsicons::bs_icon("info-circle"),
-            " FindTransferAnchors()/TransferData() — les colonnes du tableau resultat portent, ",
-            "comme pour RCTD, les noms de type cellulaire de votre reference. Pas de minimum ",
-            "de cellules impose (contrairement a RCTD), mais un type tres rare donnera un ",
-            "score plus bruite.")
+        numericInput(ns("lt_npcs"), "Composantes PCA (requete spatiale)", 30, min = 5, max = 50, step = 5)
       ),
       conditionalPanel(
         condition = sprintf("input['%s'] == 'stdeconvolve'", ns("mode")),
         numericInput(ns("n_topics"), "Nombre de types cellulaires (K)", 6, min = 2, max = 30, step = 1),
-        numericInput(ns("n_top_od"), "Genes surdisperses maximum (vitesse)", 1000, min = 200, max = 3000, step = 100),
-        div(class = "alert alert-light", style = "font-size:0.75rem;",
-            bsicons::bs_icon("info-circle"),
-            " Allocation de Dirichlet Latente (LDA) : extrait K 'themes' ",
-            "d'expression purs sans reference externe."),
-        div(class = "alert alert-warning", style = "font-size:0.75rem;",
-            bsicons::bs_icon("exclamation-triangle"),
-            " Sans reference, chaque colonne du tableau resultat est etiquetee avec ses 3 genes ",
-            "les plus caracteristiques (ex: 'T3_Gfap.Aqp4.Mbp') — a interpreter biologiquement.")
+        numericInput(ns("n_top_od"), "Genes surdisperses maximum (vitesse)", 1000, min = 200, max = 3000, step = 100)
       ),
 
       bslib::input_task_button(ns("btn_deconv"), "2) Lancer la deconvolution",
@@ -199,11 +154,35 @@ mod_spatial_deconv_ui <- function(id) {
       verbatimTextOutput(ns("deconv_progress_text"), placeholder = TRUE)
     ),
 
-    card(
-      full_screen = TRUE,
-      card_header("Proportions par spot/cellule"),
-      plotOutput(ns("deconv_bar_plot"), height = "550px"),
-      DT::DTOutput(ns("deconv_table"))
+    navset_card_underline(
+      nav_panel("Proportions par spot/cellule",
+                plotOutput(ns("deconv_bar_plot"), height = "550px"),
+                DT::DTOutput(ns("deconv_table"))),
+
+      nav_panel("Reference (UMAP/PCA)",
+                div(class = "alert alert-light small mb-2",
+                    bsicons::bs_icon("info-circle"),
+                    " Verifiez visuellement que les types cellulaires sont bien separes avant de ",
+                    "lancer RCTD/Label Transfer (sidebar). Recalcule (asynchrone) si aucune reduction ",
+                    "n'existe deja dans la reference."),
+                layout_columns(
+                  col_widths = c(4, 4, 4),
+                  selectInput(ns("ref_viz_reduction"), "Reduction",
+                              choices = c("UMAP" = "umap", "PCA" = "pca"), selected = "umap"),
+                  checkboxInput(ns("ref_viz_interactive"), "Vue interactive (Plotly)", value = TRUE),
+                  bslib::input_task_button(ns("btn_ref_viz"), "Calculer / afficher", icon = icon("chart-line"))
+                ),
+                verbatimTextOutput(ns("ref_viz_progress_text"), placeholder = TRUE),
+                conditionalPanel(condition = sprintf("input['%s']", ns("ref_viz_interactive")),
+                                 plotly::plotlyOutput(ns("ref_viz_plotly"), height = "480px")),
+                conditionalPanel(condition = sprintf("!input['%s']", ns("ref_viz_interactive")),
+                                 plotOutput(ns("ref_viz_plot"), height = "480px"))),
+
+      nav_panel("Colocalisation (types cellulaires)",
+                div(class = "alert alert-light small mb-2",
+                    "Correlation entre proportions de types cellulaires par spot/cellule -- deux types ",
+                    "fortement correles positivement tendent a co-localiser ; negativement, a s'exclure."),
+                plotOutput(ns("deconv_coloc_plot"), height = "520px"))
     )
   )
 }
@@ -211,6 +190,12 @@ mod_spatial_deconv_ui <- function(id) {
 mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    discrete_palette_colors_fallback <- function(lv) {
+      cols <- sc_discrete_colors(lv, palette = "okabeito")
+      if (is.null(cols)) cols <- grDevices::hcl.colors(max(length(lv), 1), palette = "Dark 3")
+      stats::setNames(cols, lv)
+    }
 
     log_file <- spatial_log_path(session, "deconv")
     tracker  <- create_reactive_tracker(session, log_file)
@@ -644,6 +629,43 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
                       y = paste0(toupper(input$ref_viz_reduction), "_2"),
                       title = "Reference scRNA-seq") +
         ggplot2::theme(legend.position = "none")
+    })
+
+    output$ref_viz_plotly <- plotly::renderPlotly({
+      req(ref_viz_result())
+      emb <- ref_viz_result()
+      lv  <- sort(unique(stats::na.omit(as.character(emb$cell_type))))
+      pal <- discrete_palette_colors_fallback(lv)
+      plotly::plot_ly(emb, x = ~dim1, y = ~dim2, color = ~cell_type, colors = pal,
+                      type = "scattergl", mode = "markers",
+                      marker = list(size = 5, opacity = 0.75),
+                      text = ~paste0("Type: ", cell_type), hoverinfo = "text") |>
+        plotly::layout(
+          xaxis = list(title = paste0(toupper(input$ref_viz_reduction), "_1")),
+          yaxis = list(title = paste0(toupper(input$ref_viz_reduction), "_2")),
+          margin = list(l = 20, r = 20, t = 20, b = 20)
+        )
+    })
+
+    # (B2, Vague 4) Colocalisation : correlation Pearson entre colonnes de
+    # deconv_props, midpoint=0 fixe ("point fixe") -- pas de mirai (synchrone,
+    # matrice deja en RAM, cout negligeable).
+    output$deconv_coloc_plot <- renderPlot({
+      req(shared_rv$deconv_props)
+      df <- shared_rv$deconv_props
+      cts <- setdiff(colnames(df), "id")
+      validate(need(length(cts) >= 2, "Au moins 2 types cellulaires necessaires."))
+      cor_mat <- stats::cor(df[, cts, drop = FALSE], use = "pairwise.complete.obs", method = "pearson")
+      long <- reshape2::melt(cor_mat, varnames = c("Type1", "Type2"), value.name = "correlation")
+      ggplot2::ggplot(long, ggplot2::aes(x = Type1, y = Type2, fill = correlation)) +
+        ggplot2::geom_tile() +
+        ggplot2::geom_text(ggplot2::aes(label = sprintf("%.2f", correlation)), size = 3) +
+        ggplot2::scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#B2182B",
+                                      midpoint = 0, limits = c(-1, 1)) +
+        ggplot2::theme_minimal(base_size = 11) +
+        ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
+        ggplot2::labs(x = NULL, y = NULL, fill = "Correlation\n(Pearson)",
+                      title = "Colocalisation des types cellulaires (proportions par spot)")
     })
 
     # ── Async deconvolution/integration task (mode chosen at invoke time) ──

@@ -9,6 +9,7 @@ source("helpers_sc.R")
 source("helpers_sc_bpcells.R")
 source("helpers_bulk.R")
 source("helpers_pathway.R")
+source("R/palettes.R")
 
 # --- NOUVEAU (module Spatial v3, BPCells + mirai) ---
 # Ces deux fichiers ne dépendent que des packages chargés par global.R —
@@ -309,7 +310,9 @@ server <- function(input, output, session) {
     # d'integration conjointe (mod_spatial_multi.R), miroir en LECTURE pour
     # mod_spatial_report.R -- voir mod_spatial_multi.R v2. list(embeddings=,
     # n_per_dataset=, reduction_used=, datasets=, computed_at=) ou NULL.
-    spatial_multi_integration = NULL
+    spatial_multi_integration = NULL,
+
+    spatial_reimport_signal = NULL   # {name=, at=} -- signal re-import sous nom deja actif (voir mod_spatial.R)
 
   )
 

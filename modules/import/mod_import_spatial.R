@@ -557,10 +557,18 @@ mod_import_spatial_server <- function(id, global_data) {
           # echantillon. Re-importer sous un nom DEJA utilise remplace
           # toujours cette entree specifique (comportement inchange pour un
           # seul echantillon), avec un avertissement explicite.
+          was_already_active <- identical(sample_name, global_data$active_spatial_dataset)
           if (sample_name %in% names(global_data$spatial_datasets)) {
             add_log(sprintf("  \u26a0 Un echantillon nomme '%s' existait deja — remplace.", sample_name))
             showNotification(sprintf("\u26a0\ufe0f Echantillon '%s' deja existant — remplace.", sample_name),
                              type = "warning", duration = 6)
+          }
+          # (c) Purge le cache par-echantillon pour CE nom -- un import frais
+          # rend tout resultat precedemment cache obsolete, actif ou non.
+          if (!is.null(global_data$spatial_results_cache[[sample_name]])) {
+            cache <- global_data$spatial_results_cache
+            cache[[sample_name]] <- NULL
+            global_data$spatial_results_cache <- cache
           }
           global_data$spatial_datasets[[sample_name]] <- spatial_pkg
           # v10 (fix cache multi-echantillons) : NE PLUS ecrire
@@ -571,6 +579,12 @@ mod_import_spatial_server <- function(id, global_data) {
           # snapshot/restaure shared_rv au passage. Voir le header de ce
           # fichier (v10) pour le bug que ce court-circuit provoquait.
           global_data$active_spatial_dataset <- sample_name
+          # (c) Reassigner a la MEME valeur ne re-declenche pas l'observer
+          # de mod_spatial.R (Shiny n'invalide pas sur reassignation
+          # identique) -- signal explicite separe pour ce cas precis.
+          if (was_already_active) {
+            global_data$spatial_reimport_signal <- list(name = sample_name, at = Sys.time())
+          }
           
           add_log(sprintf("✅ Import termine : %s (%s%s) — %d echantillon(s) au total",
                           sample_name, input$technology,
