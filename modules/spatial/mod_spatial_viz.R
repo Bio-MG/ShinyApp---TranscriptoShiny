@@ -88,7 +88,32 @@ mod_spatial_viz_ui <- function(id) {
       
       sliderInput(ns("pt_radius"), "Taille des points", 1, 20, 6, step = 1),
       sliderInput(ns("pt_opacity"), "Opacite des points (hors mode Gene)", 0.1, 1, 0.85, step = 0.05),
-      
+
+      hr(),
+      tags$details(
+        tags$summary(style = "cursor:pointer; font-weight:bold; font-size:0.85rem;", "Palette de couleurs"),
+        div(class = "mt-2",
+            selectInput(ns("color_palette"), "Jeu de couleurs",
+                        choices = c("Defaut" = "default", "Okabe-Ito (daltonien)" = "okabeito",
+                                    "Viridis" = "viridis", "Set2" = "set2", "Manuel (degrade)" = "manual"),
+                        selected = "default"),
+            conditionalPanel(
+              condition = sprintf("input['%s'] == 'manual'", ns("color_palette")),
+              manual_color_picker_ui(ns, c("grad_low", "grad_high"), c("Bas", "Haut"), c("#2166AC", "#B2182B"))
+            ),
+            checkboxInput(ns("fixed_scale"), "Echelle de couleur fixe (point fixe min/max)", value = FALSE),
+            conditionalPanel(
+              condition = sprintf("input['%s']", ns("fixed_scale")),
+              div(style = "display:flex; gap:8px;",
+                  numericInput(ns("fixed_scale_min"), "Min", value = 0, width = "100px"),
+                  numericInput(ns("fixed_scale_max"), "Max", value = 100, width = "100px")),
+              div(class = "text-muted", style = "font-size:0.68rem;",
+                  "Fixe la meme echelle (QC/gene/deconvolution) au lieu de la recalculer a chaque rendu ",
+                  "-- utile pour comparer plusieurs vues/echantillons.")
+            )
+        )
+      ),
+
       hr(),
       
       checkboxInput(ns("show_histology"), "Afficher l'image histologique (fond de coupe)", value = TRUE),
@@ -977,6 +1002,8 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       updateTextInput(session, "viz_save_label", value = "")
     })
 
+    .esc_js <- function(x) gsub("'", "\\'", x, fixed = TRUE)
+
     output$saved_viz_list_ui <- renderUI({
       lst <- shared_rv$saved_viz_list %||% list()
       if (length(lst) == 0) {
@@ -984,10 +1011,32 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
                    "Aucune vue sauvegardee pour cet echantillon."))
       }
       tagList(
-        tags$ul(style = "font-size:0.72rem; padding-left:1.1rem; margin-top:4px;",
-                lapply(names(lst), function(nm) tags$li(nm))),
-        actionLink(ns("btn_clear_saved_viz"), "Vider les vues sauvegardees", style = "font-size:0.7rem;")
+        tags$ul(
+          style = "font-size:0.72rem; padding-left:0.2rem; margin-top:4px; list-style:none;",
+          lapply(names(lst), function(nm) {
+            tags$li(style = "display:flex; justify-content:space-between; align-items:center; gap:6px; padding:1px 0;",
+                    tags$span(nm),
+                    tags$a(href = "#", class = "text-danger", title = "Supprimer cette vue",
+                           style = "text-decoration:none; font-weight:bold;",
+                           onclick = sprintf(
+                             "Shiny.setInputValue('%s', {name: '%s', ts: Date.now()}, {priority:'event'}); return false;",
+                             ns("viz_delete_target"), .esc_js(nm)
+                           ),
+                           "\u2715"))
+          })
+        ),
+        actionLink(ns("btn_clear_saved_viz"), "Vider toutes les vues sauvegardees", style = "font-size:0.7rem;")
       )
+    })
+
+    # (b) Un seul input partage (JS passe {name:}) -- pas d'observer
+    # dynamique par vue, donc pas de fuite d'observers au fil des ajouts.
+    observeEvent(input$viz_delete_target, {
+      target <- input$viz_delete_target$name
+      req(nzchar(target %||% ""))
+      current <- shared_rv$saved_viz_list %||% list()
+      current[[target]] <- NULL
+      shared_rv$saved_viz_list <- current
     })
 
     observeEvent(input$btn_clear_saved_viz, {
@@ -1088,19 +1137,26 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       if (all(grepl("^[0-9]+$", x))) x[order(as.integer(x))] else sort(x)
     }
     
-    cluster_palette <- function(cluster_vec) {
-      lv <- sort_cluster_labels(cluster_vec)
+    # Couleur discrete partagee cluster/niche/generique. "default" renvoie
+    # NULL depuis sc_discrete_colors() (R/palettes.R) -> repli Dark 3
+    # inchange si l'utilisateur ne touche pas au selecteur.
+    discrete_palette_colors <- function(lv) {
       if (length(lv) == 0) return(NULL)
-      stats::setNames(grDevices::hcl.colors(length(lv), palette = "Dark 3"), lv)
+      pal <- input$color_palette %||% "default"
+      if (identical(pal, "manual")) pal <- "default"  # pas de picker par niveau -- repli
+      cols <- sc_discrete_colors(lv, palette = pal)
+      if (is.null(cols)) cols <- grDevices::hcl.colors(length(lv), palette = "Dark 3")
+      stats::setNames(cols, lv)
     }
-    
-    # --------------------------------------------------------------------------
-    # Calcul des couleurs selon le mode
-    # --------------------------------------------------------------------------
+
+    cluster_palette <- function(cluster_vec) {
+      discrete_palette_colors(sort_cluster_labels(cluster_vec))
+    }
+
     color_values <- function(df) {
       n <- nrow(df)
       if (n == 0L) return(character(0))
-      
+
       add_alpha <- function(cols, alpha) {
         cols <- as.character(cols)
         alpha <- as.numeric(alpha)
@@ -1108,54 +1164,55 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         cols[is.na(cols) | !nzchar(cols)] <- "#CCCCCC"
         alpha[!is.finite(alpha)] <- 1
         alpha <- pmax(0, pmin(1, alpha))
-        
         rgb <- grDevices::col2rgb(cols, alpha = FALSE)
-        grDevices::rgb(
-          red = rgb[1, ],
-          green = rgb[2, ],
-          blue = rgb[3, ],
-          alpha = round(alpha * 255),
-          maxColorValue = 255
-        )
+        grDevices::rgb(red = rgb[1, ], green = rgb[2, ], blue = rgb[3, ],
+                       alpha = round(alpha * 255), maxColorValue = 255)
       }
-      
+
       if (is.numeric(df$value)) {
         valid <- is.finite(df$value)
         if (!any(valid)) return(rep("#CCCCCC", n))
-        
-        domain <- range(df$value[valid])
-        pal <- leaflet::colorNumeric(
-          palette = "viridis",
-          domain = domain,
-          na.color = "#CCCCCC"
+
+        domain <- if (isTRUE(input$fixed_scale) &&
+                      is.finite(input$fixed_scale_min %||% NA_real_) &&
+                      is.finite(input$fixed_scale_max %||% NA_real_) &&
+                      input$fixed_scale_max > input$fixed_scale_min) {
+          c(input$fixed_scale_min, input$fixed_scale_max)
+        } else range(df$value[valid])
+
+        palette_arg <- switch(input$color_palette %||% "default",
+          "manual"   = grDevices::colorRampPalette(
+                         c(input$grad_low %||% "#2166AC", input$grad_high %||% "#B2182B"))(256),
+          "okabeito" = grDevices::colorRampPalette(c("#FFFFFF", "#D55E00"))(256),
+          "set2"     = if (requireNamespace("RColorBrewer", quietly = TRUE)) {
+                         grDevices::colorRampPalette(RColorBrewer::brewer.pal(8, "Set2"))(256)
+                       } else "viridis",
+          "viridis"
         )
+        pal <- leaflet::colorNumeric(palette = palette_arg, domain = domain, na.color = "#CCCCCC")
         cols <- as.character(pal(df$value))
         cols[!valid | is.na(cols) | !nzchar(cols)] <- "#CCCCCC"
-        
+
         if (identical(input$color_by, "gene") && isTRUE(input$scale_alpha_by_expr)) {
           alpha <- scale_alpha_by_value(df$value, input$alpha_range %||% c(0.15, 1))
           return(add_alpha(cols, alpha))
         }
         return(cols)
       }
-      
+
       vals <- as.character(df$value)
       vals[is.na(vals) | !nzchar(vals)] <- NA_character_
-      
+
       if (identical(input$color_by, "cluster")) {
         pal <- cluster_palette(vals)
         cols <- unname(pal[vals])
         cols[is.na(cols) | !nzchar(cols)] <- "#CCCCCC"
         return(cols)
       }
-      
+
       lv <- sort(unique(stats::na.omit(vals)))
       if (length(lv) == 0L) return(rep("#CCCCCC", n))
-      
-      pal <- stats::setNames(
-        grDevices::hcl.colors(length(lv), palette = "Dark 3"),
-        lv
-      )
+      pal <- discrete_palette_colors(lv)
       cols <- unname(pal[vals])
       cols[is.na(cols) | !nzchar(cols)] <- "#CCCCCC"
       cols
@@ -1394,17 +1451,25 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         ggplot2::theme_void()
       
       if (is.numeric(df$value)) {
-        p + ggplot2::scale_color_viridis_c(
-          na.value = "#CCCCCC"
-        )
+        limits <- if (isTRUE(input$fixed_scale) &&
+                      is.finite(input$fixed_scale_min %||% NA_real_) &&
+                      is.finite(input$fixed_scale_max %||% NA_real_) &&
+                      input$fixed_scale_max > input$fixed_scale_min) {
+          c(input$fixed_scale_min, input$fixed_scale_max)
+        } else NULL
+
+        if (identical(input$color_palette %||% "default", "manual")) {
+          p + ggplot2::scale_color_gradient(
+            low = input$grad_low %||% "#2166AC", high = input$grad_high %||% "#B2182B",
+            limits = limits, na.value = "#CCCCCC"
+          )
+        } else {
+          p + ggplot2::scale_color_viridis_c(na.value = "#CCCCCC", limits = limits)
+        }
       } else {
         labels <- sort_cluster_labels(df$value)
-        palette <- cluster_palette(labels)
-        
-        p + ggplot2::scale_color_manual(
-          values = palette,
-          na.value = "#CCCCCC"
-        )
+        palette <- discrete_palette_colors(labels)
+        p + ggplot2::scale_color_manual(values = palette, na.value = "#CCCCCC")
       }
     }
     

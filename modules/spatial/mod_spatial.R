@@ -331,6 +331,19 @@ mod_spatial_server <- function(id, global_data) {
       prev_active_dataset(new_name)
     }, ignoreNULL = FALSE, ignoreInit = TRUE)
     
+    # (c) Re-import sous un nom DEJA actif : reset shared_rv + purge cache,
+    # via le signal explicite emis par mod_import_spatial.R.
+    observeEvent(global_data$spatial_reimport_signal, {
+      sig <- global_data$spatial_reimport_signal
+      req(sig, identical(sig$name, global_data$active_spatial_dataset))
+      .clear_shared_rv()
+      cache <- .get_cache()
+      cache[[sig$name]] <- NULL
+      .set_cache(cache)
+      showNotification(sprintf("Echantillon '%s' re-importe (deja actif) : resultats precedents reinitialises.",
+                               sig$name), type = "message", duration = 5)
+    }, ignoreInit = TRUE)
+
     mod_spatial_qc_server("qc", global_data, shared_rv)
     mod_spatial_cluster_server("cluster", global_data, shared_rv)
     mod_spatial_deconv_server("deconv", global_data, shared_rv)
