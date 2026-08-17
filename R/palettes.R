@@ -189,3 +189,77 @@ bulk_role_colors <- function(palette = "default", manual_colors = NULL) {
   }
   base
 }
+
+# ---------------------------------------------------------
+# Spatial-wide palette resolvers (vague 6) — consulte
+# shared_rv$color_palette / shared_rv$manual_gradient /
+# shared_rv$manual_discrete au lieu que chaque module recalcule
+# sa propre palette locale. shared_rv$manual_discrete est une
+# list() de vecteurs nommés, un par "kind" (cluster/niche/
+# celltype/dataset) pour eviter toute collision entre groupages
+# qui partageraient un meme libelle (ex: cluster "1" vs niche "1").
+# ---------------------------------------------------------
+
+#' Resolve discrete colors for a set of levels from the shared palette state
+#' @param levels Character vector of distinct levels.
+#' @param shared_rv Spatial module's shared reactiveValues bus.
+#' @param kind Character, palette bucket: "cluster", "niche", "celltype", "dataset".
+#' @return Named character vector (level -> hex color).
+spatial_discrete_colors <- function(levels, shared_rv, kind = "cluster") {
+  levels <- sort(unique(stats::na.omit(as.character(levels))))
+  if (length(levels) == 0) return(NULL)
+  pal <- shared_rv$color_palette %||% "default"
+  manual <- (shared_rv$manual_discrete %||% list())[[kind]]
+  cols <- sc_discrete_colors(levels, palette = pal, manual_colors = manual)
+  if (is.null(cols)) cols <- grDevices::hcl.colors(length(levels), palette = "Dark 3")
+  stats::setNames(cols, levels)
+}
+
+#' Resolve a continuous ggplot scale from the shared palette state
+spatial_continuous_scale <- function(shared_rv, aesthetic = "color") {
+  sc_continuous_scale(palette = shared_rv$color_palette %||% "default", aesthetic = aesthetic,
+                      gradient = shared_rv$manual_gradient)
+}
+
+#' Resolve a diverging ggplot scale (z-scores, residuals, correlations)
+spatial_diverging_scale <- function(shared_rv, aesthetic = "fill") {
+  sc <- sc_diverging_scale(palette = shared_rv$color_palette %||% "default", aesthetic = aesthetic,
+                           gradient = shared_rv$manual_gradient)
+  if (!is.null(sc)) return(sc)
+  fn <- if (aesthetic == "color") ggplot2::scale_color_gradient2 else ggplot2::scale_fill_gradient2
+  fn(low = "#2166AC", mid = "white", high = "#B2182B", midpoint = 0)
+}
+
+#' Dynamic per-level manual color picker (native <input type=color>)
+#'
+#' Unlike manual_color_picker_ui() (fixed id/label/default triples), renders
+#' ONE swatch per level of a set that VARIES per dataset/grouping (cluster
+#' ids, niche ids, cell types...) — must be called from a renderUI, not a
+#' static UI function. Fires a single shared input event per `kind`
+#' ({level:, color:}), same JS pattern already used by mod_spatial_viz.R's
+#' saved-view delete link.
+#' @param ns Module namespace function.
+#' @param kind Character, matches spatial_discrete_colors()'s `kind`.
+#' @param levels Character vector of distinct levels.
+#' @param current_colors Named character vector (level -> hex), already-set overrides.
+#' @param defaults Named character vector, starting color per level (pass
+#'   spatial_discrete_colors(levels, shared_rv, kind) BEFORE any override).
+dynamic_manual_color_picker_ui <- function(ns, kind, levels, current_colors = NULL, defaults = NULL) {
+  if (length(levels) == 0) return(NULL)
+  if (is.null(defaults)) defaults <- stats::setNames(grDevices::hcl.colors(length(levels), palette = "Dark 3"), levels)
+  input_id <- paste0("manual_discrete_", kind)
+  div(style = "display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:6px 0;max-height:220px;overflow-y:auto;",
+      lapply(levels, function(lv) {
+        full_id <- ns(paste0(input_id, "__", gsub("[^A-Za-z0-9]+", "_", lv)))
+        val <- current_colors[[lv]] %||% defaults[[lv]] %||% "#999999"
+        div(style = "display:flex;align-items:center;gap:5px;",
+            tags$input(type = "color", id = full_id, value = val,
+                       style = "width:30px;height:24px;border:1px solid #ccc;border-radius:4px;padding:0;cursor:pointer;",
+                       onchange = sprintf(
+                         "Shiny.setInputValue('%s', {level: '%s', color: this.value, ts: Date.now()}, {priority:'event'})",
+                         ns(paste0(input_id, "_change")), gsub("'", "\\\\'", lv)
+                       )),
+            tags$span(lv, style = "font-size:0.78em;"))
+      })
+  )
+}

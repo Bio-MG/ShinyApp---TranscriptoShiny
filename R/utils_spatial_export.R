@@ -1,6 +1,24 @@
 # =============================================================================
 # R/utils_spatial_export.R — Spatial "paquet complet" (zip) + script R reproductible
 # =============================================================================
+# v2 (vague 5 — Phase 6 stats + "exporter tout ce qui est en memoire") :
+#    build_spatial_export_bundle() gagne 3 nouvelles sections, memes
+#    conventions que les sections existantes (CSV + ligne README, controlee
+#    par `sections`) :
+#      - "enrichment" : results$enrichment_result$enrichment (data.frame
+#        from/to/observed/z_score, B1, mod_spatial_niche.R).
+#      - "hotspots"   : results$hotspot_result (data.frame id/value/gi_star/
+#        p_value/hotspot, B4, mod_spatial_qc.R).
+#      - "ripley"     : results$ripley_result$curve (data.frame r/k_observed/
+#        k_perm_mean/k_perm_lo/k_perm_hi/signif, B6, mod_spatial_niche.R).
+#    Toutes trois NULL-safe (section simplement omise si le calcul
+#    correspondant n'a jamais ete lance) -- meme philosophie "LE MAXIMUM
+#    D'EXPORT, meme si non affiche, juste calcule" que le reste de ce
+#    fichier. mod_spatial_export.R expose maintenant aussi un lien "Tout
+#    selectionner" sur la liste de sections, pour repondre directement au
+#    besoin "un moyen d'exporter tous les fichiers/plots deja calcules en
+#    memoire" sans devoir cocher chaque section une par une.
+#
 # Companion to modules/spatial/mod_spatial_export.R (moyen terme, voir
 # handoff_spatial_bio-mg.md, points a/b). Pure functions only (no Shiny
 # reactivity) so they stay testable/callable outside the app -- same
@@ -73,139 +91,170 @@ render_spatial_static_map <- function(df, title = NULL) {
 #' @param results A plain list SNAPSHOT of the relevant shared_rv fields --
 #'   qc_metrics, qc_pass_idx, qc_params, cluster_labels, cluster_params,
 #'   cluster_markers, deconv_props, deconv_params, moran_results,
-#'   moran_params, niche_labels, niche_composition, niche_params. Passed as
-#'   a plain list (NOT the reactiveValues object itself) so this function
-#'   has zero Shiny dependency and stays unit-testable.
+#'   moran_params, niche_labels, niche_composition, niche_params,
+#'   enrichment_result, enrichment_params, hotspot_result, hotspot_params,
+#'   ripley_result, ripley_params. Passed as a plain list (NOT the
+#'   reactiveValues object itself) so this function has zero Shiny
+#'   dependency and stays unit-testable.
 #' @param sections Character vector, subset of c("qc","cluster","deconv",
-#'   "niche","moran","maps") to include.
+#'   "niche","moran","maps","custom_viz","enrichment","hotspots","ripley")
+#'   to include.
 #' @param out_dir Character path to an existing, EMPTY directory to write
 #'   files into.
 #' @return Character vector of file paths written (for the caller to zip).
-build_spatial_export_bundle <- function(spatial_obj, results, sections, out_dir) {
+build_spatial_export_bundle <- function(spatial_obj, results, sections, out_dir, multi_integration = NULL) {
   written <- character(0)
   add <- function(path) written <<- c(written, path)
-
+  plots_dir <- file.path(out_dir, "graphiques_png")
+  .ensure_plots_dir <- function() { if (!dir.exists(plots_dir)) dir.create(plots_dir, showWarnings = FALSE); plots_dir }
+  .save_plot <- function(p, name) {
+    if (is.null(p)) return(invisible(NULL))
+    dir <- .ensure_plots_dir()
+    path <- file.path(dir, sprintf("%s.png", name))
+    ok <- tryCatch({ ggplot2::ggsave(path, p, width = 8, height = 6, dpi = 150, bg = "white"); TRUE }, error = function(e) FALSE)
+    if (isTRUE(ok) && file.exists(path)) add(path)
+  }
+  
   coords <- spatial_obj$coords
   sk_ids <- if (!is.null(spatial_obj$sketch)) colnames(spatial_obj$sketch) else NULL
-
+  
   readme_lines <- c(
-    "TranscriptoShiny -- Export Spatial",
+    "TranscriptoShiny -- Export Spatial (paquet complet)",
     sprintf("Echantillon     : %s", spatial_obj$project %||% "?"),
     sprintf("Technologie     : %s", spatial_obj$technology %||% "?"),
     sprintf("Genere le       : %s", format(Sys.time(), "%Y-%m-%d %H:%M:%S")),
     sprintf("Elements (total): %s", format(spatial_obj$n_total %||% NA, big.mark = ",")),
     "", "Contenu :"
   )
-
-  # ── QC ────────────────────────────────────────────────────────────────
+  
   if ("qc" %in% sections && !is.null(results$qc_metrics)) {
-    p <- file.path(out_dir, "qc_metrics.csv")
-    utils::write.csv(results$qc_metrics, p, row.names = FALSE)
-    add(p)
+    p <- file.path(out_dir, "qc_metrics.csv"); utils::write.csv(results$qc_metrics, p, row.names = FALSE); add(p)
     readme_lines <- c(readme_lines, sprintf(
       "  - qc_metrics.csv : nCount/nFeature/%%MT/%%ribo par element (%d lignes).%s",
       nrow(results$qc_metrics),
-      if (!is.null(results$qc_pass_idx)) sprintf(" %d/%d passent les seuils appliques (%s).",
-        length(results$qc_pass_idx), nrow(results$qc_metrics),
-        .spatial_params_to_text(results$qc_params)) else ""
-    ))
+      if (!is.null(results$qc_pass_idx)) sprintf(" %d/%d passent les seuils (%s).", length(results$qc_pass_idx),
+                                                 nrow(results$qc_metrics), .spatial_params_to_text(results$qc_params)) else ""))
+    df <- results$qc_metrics
+    p1 <- ggplot2::ggplot(df, ggplot2::aes(x = nCount)) + ggplot2::geom_histogram(bins = 50, fill = "#2C3E50") + ggplot2::theme_minimal() + ggplot2::labs(title = "nCount")
+    p2 <- ggplot2::ggplot(df, ggplot2::aes(x = nFeature)) + ggplot2::geom_histogram(bins = 50, fill = "#18BC9C") + ggplot2::theme_minimal() + ggplot2::labs(title = "nFeature")
+    p3 <- ggplot2::ggplot(df, ggplot2::aes(x = pct_mt)) + ggplot2::geom_histogram(bins = 50, fill = "#E74C3C") + ggplot2::theme_minimal() + ggplot2::labs(title = "%MT")
+    .save_plot(tryCatch(patchwork::wrap_plots(p1, p2, p3, ncol = 3), error = function(e) NULL), "qc_histogrammes")
+    .save_plot(tryCatch(ggplot2::ggplot(df, ggplot2::aes(x = nCount, y = nFeature, color = pct_mt)) +
+                          ggplot2::geom_point(alpha = 0.5, size = 1) + ggplot2::scale_color_viridis_c(option = "inferno", direction = -1) +
+                          ggplot2::theme_minimal() + ggplot2::labs(title = "nCount vs nFeature"), error = function(e) NULL), "qc_scatter")
   }
-
-  # ── Clustering ────────────────────────────────────────────────────────
+  
   if ("cluster" %in% sections && !is.null(results$cluster_labels)) {
     p <- file.path(out_dir, "cluster_labels.csv")
-    utils::write.csv(data.frame(id = names(results$cluster_labels),
-                                 cluster = unname(results$cluster_labels)),
-                     p, row.names = FALSE)
-    add(p)
-    readme_lines <- c(readme_lines, sprintf(
-      "  - cluster_labels.csv : %d elements, %d clusters (BANKSY-lite, %s).",
-      length(results$cluster_labels), length(unique(results$cluster_labels)),
-      .spatial_params_to_text(results$cluster_params)))
+    utils::write.csv(data.frame(id = names(results$cluster_labels), cluster = unname(results$cluster_labels)), p, row.names = FALSE); add(p)
+    readme_lines <- c(readme_lines, sprintf("  - cluster_labels.csv : %d elements, %d clusters (%s).",
+                                            length(results$cluster_labels), length(unique(results$cluster_labels)), .spatial_params_to_text(results$cluster_params)))
     if (!is.null(results$cluster_markers) && nrow(results$cluster_markers) > 0) {
-      p2 <- file.path(out_dir, "cluster_markers.csv")
-      utils::write.csv(results$cluster_markers, p2, row.names = FALSE)
-      add(p2)
-      readme_lines <- c(readme_lines, sprintf(
-        "  - cluster_markers.csv : marqueurs differentiels par cluster (%d lignes).",
-        nrow(results$cluster_markers)))
+      p2 <- file.path(out_dir, "cluster_markers.csv"); utils::write.csv(results$cluster_markers, p2, row.names = FALSE); add(p2)
+      readme_lines <- c(readme_lines, sprintf("  - cluster_markers.csv : %d lignes.", nrow(results$cluster_markers)))
     }
   }
-
-  # ── Deconvolution ─────────────────────────────────────────────────────
+  
   if ("deconv" %in% sections && !is.null(results$deconv_props)) {
-    p <- file.path(out_dir, "deconv_proportions.csv")
-    utils::write.csv(results$deconv_props, p, row.names = FALSE)
-    add(p)
-    readme_lines <- c(readme_lines, sprintf(
-      "  - deconv_proportions.csv : proportions par type cellulaire (%d elements x %d types, %s).",
-      nrow(results$deconv_props), ncol(results$deconv_props) - 1,
-      .spatial_params_to_text(results$deconv_params)))
+    p <- file.path(out_dir, "deconv_proportions.csv"); utils::write.csv(results$deconv_props, p, row.names = FALSE); add(p)
+    readme_lines <- c(readme_lines, sprintf("  - deconv_proportions.csv : %d elements x %d types (%s).",
+                                            nrow(results$deconv_props), ncol(results$deconv_props) - 1, .spatial_params_to_text(results$deconv_params)))
+    long <- reshape2::melt(results$deconv_props, id.vars = "id", variable.name = "cell_type", value.name = "proportion")
+    ids_show <- utils::head(unique(long$id), 60)
+    .save_plot(tryCatch(ggplot2::ggplot(long[long$id %in% ids_show, ], ggplot2::aes(x = id, y = proportion, fill = cell_type)) +
+                          ggplot2::geom_col() + ggplot2::theme_minimal() + ggplot2::theme(axis.text.x = ggplot2::element_blank()) +
+                          ggplot2::labs(title = "Proportions par type (60 premiers)"), error = function(e) NULL), "deconv_proportions")
+    cts <- setdiff(colnames(results$deconv_props), "id")
+    if (length(cts) >= 2) {
+      cor_mat <- stats::cor(results$deconv_props[, cts, drop = FALSE], use = "pairwise.complete.obs")
+      long_c <- reshape2::melt(cor_mat, varnames = c("Type1", "Type2"), value.name = "correlation")
+      .save_plot(tryCatch(ggplot2::ggplot(long_c, ggplot2::aes(x = Type1, y = Type2, fill = correlation)) + ggplot2::geom_tile() +
+                            ggplot2::scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#B2182B", midpoint = 0, limits = c(-1, 1)) +
+                            ggplot2::theme_minimal() + ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
+                            ggplot2::labs(title = "Colocalisation"), error = function(e) NULL), "deconv_colocalisation")
+    }
   }
-
-  # ── Moran's I ─────────────────────────────────────────────────────────
+  
   if ("moran" %in% sections && !is.null(results$moran_results)) {
-    p <- file.path(out_dir, "moran_svg.csv")
-    utils::write.csv(results$moran_results, p, row.names = FALSE)
-    add(p)
-    readme_lines <- c(readme_lines, sprintf(
-      "  - moran_svg.csv : indice de Moran par gene (%d genes, %s).",
-      nrow(results$moran_results), .spatial_params_to_text(results$moran_params)))
+    p <- file.path(out_dir, "moran_svg.csv"); utils::write.csv(results$moran_results, p, row.names = FALSE); add(p)
+    readme_lines <- c(readme_lines, sprintf("  - moran_svg.csv : %d genes (%s).",
+                                            nrow(results$moran_results), .spatial_params_to_text(results$moran_params)))
   }
-
-  # ── Niches ────────────────────────────────────────────────────────────
+  
   if ("niche" %in% sections && !is.null(results$niche_labels)) {
     p <- file.path(out_dir, "niche_labels.csv")
-    utils::write.csv(data.frame(id = names(results$niche_labels),
-                                 niche = unname(results$niche_labels)),
-                     p, row.names = FALSE)
-    add(p)
+    utils::write.csv(data.frame(id = names(results$niche_labels), niche = unname(results$niche_labels)), p, row.names = FALSE); add(p)
     if (!is.null(results$niche_composition)) {
-      p2 <- file.path(out_dir, "niche_composition.csv")
-      utils::write.csv(results$niche_composition, p2, row.names = FALSE)
-      add(p2)
+      p2 <- file.path(out_dir, "niche_composition.csv"); utils::write.csv(results$niche_composition, p2, row.names = FALSE); add(p2)
+      long <- reshape2::melt(results$niche_composition, id.vars = "niche", variable.name = "groupe", value.name = "proportion")
+      .save_plot(tryCatch(ggplot2::ggplot(long, ggplot2::aes(x = groupe, y = niche, fill = proportion)) + ggplot2::geom_tile() +
+                            ggplot2::scale_fill_viridis_c(option = "magma", limits = c(0, 1)) + ggplot2::theme_minimal() +
+                            ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) + ggplot2::labs(title = "Composition par niche"),
+                          error = function(e) NULL), "niche_composition")
     }
-    readme_lines <- c(readme_lines, sprintf(
-      "  - niche_labels.csv / niche_composition.csv : %d niches (%s).",
-      length(unique(results$niche_labels)), .spatial_params_to_text(results$niche_params)))
+    readme_lines <- c(readme_lines, sprintf("  - niche_labels.csv / niche_composition.csv : %d niches (%s).",
+                                            length(unique(results$niche_labels)), .spatial_params_to_text(results$niche_params)))
   }
-
-  # ── Maps (PNG, point-only, no histology -- see file header) ────────────
+  
+  if ("enrichment" %in% sections && !is.null(results$enrichment_result)) {
+    p <- file.path(out_dir, "enrichment_zscore.csv"); utils::write.csv(results$enrichment_result$enrichment, p, row.names = FALSE); add(p)
+    df <- results$enrichment_result$enrichment
+    .save_plot(tryCatch(ggplot2::ggplot(df, ggplot2::aes(x = to, y = from, fill = z_score)) + ggplot2::geom_tile() +
+                          ggplot2::geom_text(ggplot2::aes(label = sprintf("%.1f", z_score)), size = 3) +
+                          ggplot2::scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#B2182B", midpoint = 0) +
+                          ggplot2::theme_minimal() + ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
+                          ggplot2::labs(title = "Enrichissement de voisinage"), error = function(e) NULL), "enrichment_heatmap")
+    readme_lines <- c(readme_lines, sprintf("  - enrichment_zscore.csv : %d niveaux (%s).",
+                                            length(results$enrichment_result$levels), .spatial_params_to_text(results$enrichment_params)))
+  }
+  
+  if ("hotspots" %in% sections && !is.null(results$hotspot_result)) {
+    p <- file.path(out_dir, "hotspots_gi.csv"); utils::write.csv(results$hotspot_result, p, row.names = FALSE); add(p)
+    n_hot <- sum(results$hotspot_result$hotspot == "Hotspot (chaud)")
+    n_cold <- sum(results$hotspot_result$hotspot == "Coldspot (froid)")
+    .save_plot(tryCatch(ggplot2::ggplot(results$hotspot_result, ggplot2::aes(x = gi_star, fill = hotspot)) +
+                          ggplot2::geom_histogram(bins = 50) +
+                          ggplot2::scale_fill_manual(values = c("Hotspot (chaud)" = "#D55E00", "Coldspot (froid)" = "#0072B2", "NS" = "#CCCCCC")) +
+                          ggplot2::theme_minimal() + ggplot2::labs(title = "Distribution du Gi*"), error = function(e) NULL), "hotspots_distribution")
+    readme_lines <- c(readme_lines, sprintf("  - hotspots_gi.csv : %d hotspots, %d coldspots sur %d (%s).",
+                                            n_hot, n_cold, nrow(results$hotspot_result), .spatial_params_to_text(results$hotspot_params)))
+  }
+  
+  if ("ripley" %in% sections && !is.null(results$ripley_result)) {
+    p <- file.path(out_dir, "ripley_k_curve.csv"); utils::write.csv(results$ripley_result$curve, p, row.names = FALSE); add(p)
+    df <- results$ripley_result$curve
+    .save_plot(tryCatch(ggplot2::ggplot(df, ggplot2::aes(x = r)) +
+                          ggplot2::geom_ribbon(ggplot2::aes(ymin = k_perm_lo, ymax = k_perm_hi), fill = "grey80", alpha = 0.6) +
+                          ggplot2::geom_line(ggplot2::aes(y = k_observed), color = "#D55E00", linewidth = 1) + ggplot2::theme_minimal() +
+                          ggplot2::labs(title = sprintf("Ripley's K -- '%s'", results$ripley_result$target_level)), error = function(e) NULL), "ripley_k")
+    readme_lines <- c(readme_lines, sprintf("  - ripley_k_curve.csv : cible '%s' (%s, %s).",
+                                            results$ripley_result$target_level, if (isTRUE(results$ripley_result$subsampled)) "sous-echantillonne" else "complet",
+                                            .spatial_params_to_text(results$ripley_params)))
+  }
+  
   if ("maps" %in% sections && !is.null(coords) && !is.null(sk_ids)) {
-    maps_dir <- file.path(out_dir, "cartes_png")
-    dir.create(maps_dir, showWarnings = FALSE)
+    maps_dir <- file.path(out_dir, "cartes_png"); dir.create(maps_dir, showWarnings = FALSE)
     base_df <- coords[match(sk_ids, coords$id), c("id", "x", "y")]
-
     map_specs <- list()
-    if (!is.null(results$qc_metrics)) {
-      m <- match(base_df$id, results$qc_metrics$id)
-      map_specs[["nCount"]] <- results$qc_metrics$nCount[m]
-    }
+    if (!is.null(results$qc_metrics)) { m <- match(base_df$id, results$qc_metrics$id); map_specs[["nCount"]] <- results$qc_metrics$nCount[m] }
     if (!is.null(results$cluster_labels)) map_specs[["cluster"]] <- as.character(results$cluster_labels[base_df$id])
     if (!is.null(results$niche_labels))   map_specs[["niche"]]   <- as.character(results$niche_labels[base_df$id])
-
+    if (!is.null(results$hotspot_result)) { m <- match(base_df$id, results$hotspot_result$id); map_specs[["hotspot"]] <- results$hotspot_result$hotspot[m] }
     for (nm in names(map_specs)) {
       df_map <- data.frame(x = base_df$x, y = base_df$y, value = map_specs[[nm]])
       if (all(is.na(df_map$value))) next
       png_path <- file.path(maps_dir, sprintf("carte_%s.png", nm))
       p_gg <- tryCatch(render_spatial_static_map(df_map, title = nm), error = function(e) NULL)
       if (!is.null(p_gg)) {
-        tryCatch(ggplot2::ggsave(png_path, p_gg, width = 7, height = 7, dpi = 150, bg = "white"),
-                error = function(e) NULL)
+        tryCatch(ggplot2::ggsave(png_path, p_gg, width = 7, height = 7, dpi = 150, bg = "white"), error = function(e) NULL)
         if (file.exists(png_path)) add(png_path)
       }
     }
-    if (length(map_specs) > 0) {
-      readme_lines <- c(readme_lines, sprintf(
-        "  - cartes_png/ : apercu PNG (SANS fond histologique -- utilisez l'onglet \"4. Visualisation\" pour l'export avec fond) pour : %s.",
-        paste(names(map_specs), collapse = ", ")))
-    }
+    if (length(map_specs) > 0) readme_lines <- c(readme_lines, sprintf("  - cartes_png/ : %s.", paste(names(map_specs), collapse = ", ")))
   }
-
-  # ── Saved custom views (mod_spatial_viz.R's "Ajouter au rapport") ──────
+  
   if ("custom_viz" %in% sections && !is.null(coords) && length(results$saved_viz_list %||% list()) > 0) {
-    maps_dir <- file.path(out_dir, "cartes_png")
-    dir.create(maps_dir, showWarnings = FALSE)
+    maps_dir <- file.path(out_dir, "cartes_png"); dir.create(maps_dir, showWarnings = FALSE)
     n_saved <- 0L
     for (nm in names(results$saved_viz_list)) {
       cfg <- results$saved_viz_list[[nm]]
@@ -214,28 +263,42 @@ build_spatial_export_bundle <- function(spatial_obj, results, sections, out_dir)
       png_path <- file.path(maps_dir, sprintf("vue_%s.png", gsub("[^A-Za-z0-9_-]+", "_", nm)))
       p_gg <- tryCatch(render_spatial_static_map(df_v, title = nm), error = function(e) NULL)
       if (!is.null(p_gg)) {
-        tryCatch(ggplot2::ggsave(png_path, p_gg, width = 7, height = 7, dpi = 150, bg = "white"),
-                error = function(e) NULL)
+        tryCatch(ggplot2::ggsave(png_path, p_gg, width = 7, height = 7, dpi = 150, bg = "white"), error = function(e) NULL)
         if (file.exists(png_path)) { add(png_path); n_saved <- n_saved + 1L }
       }
     }
-    if (n_saved > 0) {
-      readme_lines <- c(readme_lines, sprintf(
-        "  - cartes_png/vue_*.png : %d vue(s) personnalisee(s) sauvegardees depuis l'onglet 4 (\"Ajouter au rapport\").",
-        n_saved))
+    if (n_saved > 0) readme_lines <- c(readme_lines, sprintf("  - cartes_png/vue_*.png : %d vue(s) sauvegardee(s).", n_saved))
+  }
+  
+  if ("multi" %in% sections && !is.null(multi_integration)) {
+    p <- file.path(out_dir, "multi_embeddings.csv"); utils::write.csv(multi_integration$embeddings, p, row.names = FALSE); add(p)
+    .save_plot(tryCatch(ggplot2::ggplot(multi_integration$embeddings, ggplot2::aes(x = dim1, y = dim2, color = dataset)) +
+                          ggplot2::geom_point(size = 0.7, alpha = 0.7) + ggplot2::theme_minimal() + ggplot2::labs(title = "UMAP conjoint -- par echantillon"),
+                        error = function(e) NULL), "multi_umap_by_dataset")
+    .save_plot(tryCatch(ggplot2::ggplot(multi_integration$embeddings, ggplot2::aes(x = dim1, y = dim2, color = cluster)) +
+                          ggplot2::geom_point(size = 0.7, alpha = 0.7) + ggplot2::theme_minimal() + ggplot2::labs(title = "UMAP conjoint -- par cluster"),
+                        error = function(e) NULL), "multi_umap_by_cluster")
+    readme_lines <- c(readme_lines, sprintf("  - multi_embeddings.csv : %s, %d elements, echantillons : %s.",
+                                            multi_integration$reduction_used %||% "?", nrow(multi_integration$embeddings),
+                                            paste(multi_integration$datasets %||% character(0), collapse = ", ")))
+    
+    diffcomp <- tryCatch(compute_composition_differential(multi_integration$embeddings), error = function(e) NULL)
+    if (!is.null(diffcomp)) {
+      p3 <- file.path(out_dir, "multi_composition_differentielle.csv"); utils::write.csv(diffcomp$residuals, p3, row.names = FALSE); add(p3)
+      .save_plot(tryCatch(ggplot2::ggplot(diffcomp$residuals, ggplot2::aes(x = cluster, y = dataset, fill = std_resid)) + ggplot2::geom_tile() +
+                            ggplot2::geom_text(ggplot2::aes(label = sprintf("%.1f", std_resid)), size = 3) +
+                            ggplot2::scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#B2182B", midpoint = 0) + ggplot2::theme_minimal() +
+                            ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) + ggplot2::labs(title = "Composition differentielle"),
+                          error = function(e) NULL), "multi_composition_differentielle")
+      readme_lines <- c(readme_lines, sprintf("  - multi_composition_differentielle.csv : Chi2 = %.1f, p = %.4g (%s).",
+                                              diffcomp$chisq$statistic, diffcomp$chisq$p_value, diffcomp$chisq$method))
     }
   }
-
-  readme_lines <- c(readme_lines, "",
-    "Note : cet export reflete l'etat des onglets au moment du clic -- relancez",
-    "une etape dans son propre onglet puis re-exportez si vous changez un parametre.")
-  readme_path <- file.path(out_dir, "README.txt")
-  writeLines(readme_lines, readme_path)
-  add(readme_path)
-
+  
+  readme_lines <- c(readme_lines, "", "Note : cet export reflete l'etat des onglets au moment du clic.")
+  readme_path <- file.path(out_dir, "README.txt"); writeLines(readme_lines, readme_path); add(readme_path)
   written
 }
-
 #' Rebuild one saved custom view's (x, y, value) data.frame
 #'
 #' Companion to mod_spatial_viz.R's "Ajouter au rapport" button: that button
@@ -302,7 +365,6 @@ build_saved_viz_df <- function(sketch, coords, cfg, results = list()) {
   df
 }
 
-#'
 #' Mirrors modules/bulk/mod_bulk_report.R's `.bulk_r_script_text()` pattern:
 #' plain R code assembled via paste0()/sprintf(), meant to run OUTSIDE Shiny
 #' via `Rscript` or `source()`. Only steps ALREADY run in the app (i.e. with
@@ -444,6 +506,10 @@ niche_res <- NULL
 #
 # Sourcez R/utils_spatial_io.R et R/utils_spatial_niche.R du projet AVANT ce
 # script pour disposer de compute_qc_metrics_fast() / compute_spatial_niches().
+# Sourcez aussi R/utils_spatial_stats.R si vous voulez reproduire manuellement
+# l\'enrichissement de voisinage / les hotspots / Ripley\'s K (non inclus dans
+# ce script auto-genere -- voir enrichment_zscore.csv / hotspots_gi.csv /
+# ripley_k_curve.csv dans le paquet .zip pour les resultats DEJA calcules).
 
 suppressPackageStartupMessages({
   library(Seurat); library(BPCells); library(Matrix); library(RANN)

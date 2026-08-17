@@ -149,6 +149,16 @@ mod_spatial_deconv_ui <- function(id) {
         numericInput(ns("n_top_od"), "Genes surdisperses maximum (vitesse)", 1000, min = 200, max = 3000, step = 100)
       ),
 
+      
+      hr(),
+      h6("Aperçu de la reference (UMAP/PCA)", style = "font-weight:bold;"),
+      div(class = "alert alert-light", style = "font-size:0.75rem;",
+          "Verifiez visuellement que les types cellulaires sont bien separes avant de lancer ",
+          "RCTD/Label Transfer ci-dessous."),
+      selectInput(ns("ref_viz_reduction"), "Reduction", choices = c("UMAP" = "umap", "PCA" = "pca"), selected = "umap"),
+      checkboxInput(ns("ref_viz_interactive"), "Vue interactive (Plotly)", value = TRUE),
+      bslib::input_task_button(ns("btn_ref_viz"), "Calculer / afficher", icon = icon("chart-line")),
+      verbatimTextOutput(ns("ref_viz_progress_text"), placeholder = TRUE),
       bslib::input_task_button(ns("btn_deconv"), "2) Lancer la deconvolution",
                                 icon = icon("puzzle-piece")),
       verbatimTextOutput(ns("deconv_progress_text"), placeholder = TRUE)
@@ -162,21 +172,11 @@ mod_spatial_deconv_ui <- function(id) {
       nav_panel("Reference (UMAP/PCA)",
                 div(class = "alert alert-light small mb-2",
                     bsicons::bs_icon("info-circle"),
-                    " Verifiez visuellement que les types cellulaires sont bien separes avant de ",
-                    "lancer RCTD/Label Transfer (sidebar). Recalcule (asynchrone) si aucune reduction ",
-                    "n'existe deja dans la reference."),
-                layout_columns(
-                  col_widths = c(4, 4, 4),
-                  selectInput(ns("ref_viz_reduction"), "Reduction",
-                              choices = c("UMAP" = "umap", "PCA" = "pca"), selected = "umap"),
-                  checkboxInput(ns("ref_viz_interactive"), "Vue interactive (Plotly)", value = TRUE),
-                  bslib::input_task_button(ns("btn_ref_viz"), "Calculer / afficher", icon = icon("chart-line"))
-                ),
-                verbatimTextOutput(ns("ref_viz_progress_text"), placeholder = TRUE),
+                    " Controles deplaces dans le panneau lateral ('Apercu de la reference')."),
                 conditionalPanel(condition = sprintf("input['%s']", ns("ref_viz_interactive")),
-                                 plotly::plotlyOutput(ns("ref_viz_plotly"), height = "480px")),
+                                 plotly::plotlyOutput(ns("ref_viz_plotly"), height = "600px")),
                 conditionalPanel(condition = sprintf("!input['%s']", ns("ref_viz_interactive")),
-                                 plotOutput(ns("ref_viz_plot"), height = "480px"))),
+                                 plotOutput(ns("ref_viz_plot"), height = "600px"))),
 
       nav_panel("Colocalisation (types cellulaires)",
                 div(class = "alert alert-light small mb-2",
