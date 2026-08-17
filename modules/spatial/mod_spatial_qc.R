@@ -1,7 +1,20 @@
 # =============================================================================
 # modules/spatial/mod_spatial_qc.R — QC & Spatial Autocorrelation (Moran's I)
 # =============================================================================
-# v3 (UX feedback): new "Apercu du jeu de donnees" tab, first in the strip —
+# v5 (vague 5 — Phase 6 stats) : nouveau sous-onglet "Hotspots locaux
+#    (Getis-Ord Gi*)" (B4), SYNCHRONE (pas de mirai) -- appelle directement
+#    R/utils_spatial_stats.R::compute_getis_ord_hotspots(), qui est
+#    volontairement bon marche (pas de permutation, O(n*k)), meme convention
+#    que compute_qc_metrics_fast() ci-dessous. Deux sources de metrique :
+#    une colonne QC deja en RAM (shared_rv$qc_metrics) ou une proportion de
+#    deconvolution deja en RAM (shared_rv$deconv_props) -- toutes deux sans
+#    reouverture de la matrice BPCells. L'expression d'un gene n'est PAS
+#    proposee ici (necessiterait de rouvrir BPCells/normaliser -- casserait
+#    la conception synchrone documentee dans utils_spatial_stats.R) ; a
+#    faire plus tard si besoin reel (onglet 4 reste la reference pour
+#    l'expression genique).
+#
+# v4 (UX feedback): new "Apercu du jeu de donnees" tab, first in the strip —
 # absorbs the dataset banner that used to sit above ALL tabs in mod_spatial.R
 # (project/technology/counts/sketch size), now shown where it's contextually
 # relevant instead of permanently pinned, plus a metadata table (sketch
@@ -10,28 +23,29 @@
 # an nCount-vs-nFeature scatter colored by %MT (the classic QC diagnostic,
 # complements the 4 histograms with the actual joint relationship).
 #
-# v2 (vignette coverage — Phase 2): added the "Top SVGs" small-multiples grid
+# v3 (vignette coverage — Phase 2): added the "Top SVGs" small-multiples grid
 # (facet_wrap of the top-N Moran's-I genes over the spatial sketch) — purely
 # a visualization of results already computed by moran_task below, so it
 # runs synchronously off global_data$spatial_obj$sketch (<=50k cells, no
 # BPCells/disk access, no mirai needed — consistent with this project's
 # convention of reserving async for genuinely heavy compute only).
 #
-# v4 (moyen terme — export/auto-pipeline, voir handoff_spatial_bio-mg.md) :
+# v2 (moyen terme — export/auto-pipeline, voir handoff_spatial_bio-mg.md) :
 #    shared_rv$qc_params / shared_rv$moran_params ecrits au moment du clic
 #    sur leurs boutons respectifs (miroir des parametres UI utilises) --
 #    purement additif, lu uniquement par mod_spatial_export.R (script R
 #    reproductible) ; zero changement de comportement pour cet onglet.
 #
-# Two very different cost profiles, per spec:
+# Cost profiles, per spec:
 #   1. QC metrics (nCount/nFeature/%MT/%ribo) — cheap, streamed straight off
 #      the on-disk BPCells matrix (R/utils_spatial_io.R::compute_qc_metrics_fast()),
-#      runs synchronously on the main thread (spec explicitly reserves async
-#      only for Moran's I).
+#      runs synchronously on the main thread.
 #   2. Moran's I spatial autocorrelation on the top ~1000 HVGs — genuinely
 #      heavy, so it goes through ExtendedTask + mirai, isolated in a daemon
 #      that reopens the BPCells matrix from disk (never receives the Seurat
 #      object itself).
+#   3. Hotspots (Getis-Ord Gi*, B4) — cheap, closed-form, synchronous (see
+#      v5 above).
 #
 # Reuses Seurat's own FindSpatiallyVariableFeatures(selection.method="moransi")
 # / SVFInfo() (verified against SeuratObject/Seurat source — see comments
@@ -101,7 +115,32 @@ mod_spatial_qc_ui <- function(id) {
 
       bslib::input_task_button(ns("btn_moran"), "Lancer l'autocorrelation spatiale",
                                 icon = icon("wave-square")),
-      verbatimTextOutput(ns("moran_progress_text"), placeholder = TRUE)
+      verbatimTextOutput(ns("moran_progress_text"), placeholder = TRUE),
+
+      hr(),
+      h6("Hotspots locaux (Getis-Ord Gi*)", style = "font-weight:bold;"),
+      div(class = "alert alert-light", style = "font-size:0.78rem;",
+          bsicons::bs_icon("fire"),
+          " Detecte les regions ou une metrique est significativement plus ELEVEE ",
+          "(hotspot, rouge) ou plus BASSE (coldspot, bleu) que la moyenne globale, en ",
+          "tenant compte du voisinage spatial. Calcul rapide (pas de permutation), ",
+          "synchrone -- pas de barre de progression necessaire."),
+      radioButtons(ns("hotspot_source"), "Metrique",
+                   choices = c("Metrique QC" = "qc", "Proportion (deconvolution, onglet 3)" = "deconv"),
+                   selected = "qc"),
+      conditionalPanel(
+        condition = sprintf("input['%s'] == 'qc'", ns("hotspot_source")),
+        selectInput(ns("hotspot_qc_metric"), NULL,
+                    choices = c("nCount", "nFeature", "pct_mt", "pct_ribo", "log_nCount"))
+      ),
+      conditionalPanel(
+        condition = sprintf("input['%s'] == 'deconv'", ns("hotspot_source")),
+        uiOutput(ns("hotspot_deconv_celltype_ui"))
+      ),
+      numericInput(ns("hotspot_k"), "Voisins spatiaux (k, self inclus)", 30, min = 5, max = 200, step = 5),
+      actionButton(ns("btn_hotspots"), "Detecter les hotspots",
+                   class = "btn-outline-primary w-100", icon = icon("fire")),
+      uiOutput(ns("hotspot_status_ui"))
     ),
 
     navset_card_underline(
@@ -132,7 +171,20 @@ mod_spatial_qc_ui <- function(id) {
                 ),
                 card(full_screen = TRUE, uiOutput(ns("svg_grid_plot_ui"))),
                 hr(),
-                DT::DTOutput(ns("moran_table")))
+                DT::DTOutput(ns("moran_table"))),
+
+      nav_panel("Hotspots locaux (Getis-Ord Gi*)",
+                div(class = "alert alert-light small mb-2",
+                    "Rouge = hotspot (voisinage significativement eleve, p < 0.05) ; ",
+                    "bleu = coldspot ; gris = non significatif."),
+                layout_columns(
+                  col_widths = c(7, 5),
+                  card(full_screen = TRUE, card_header("Carte des hotspots"),
+                       plotOutput(ns("hotspot_map"), height = "520px")),
+                  card(full_screen = TRUE, card_header("Distribution du Gi*"),
+                       plotOutput(ns("hotspot_hist"), height = "520px"))
+                ),
+                DT::DTOutput(ns("hotspot_table")))
     )
   )
 }
@@ -209,25 +261,15 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
         ggplot2::geom_histogram(bins = 50, fill = "#E74C3C") +
         ggplot2::geom_vline(xintercept = input$max_pct_mt, color = "red", linetype = "dashed") +
         ggplot2::labs(title = "% Mitochondrial") + ggplot2::theme_minimal()
-      # NEW: was already computed by compute_qc_metrics_fast() but never
-      # plotted anywhere -- completes the 4-metric QC picture.
       p4 <- ggplot2::ggplot(df, ggplot2::aes(x = pct_ribo)) +
         ggplot2::geom_histogram(bins = 50, fill = "#8E44AD") +
         ggplot2::labs(title = "% Ribosomal") + ggplot2::theme_minimal()
-      # NEW (biologist feedback, Slide-seq real-dataset test): log10(nCount+1)
-      # -- generic across ALL technologies (not Slide-seq-specific), but
-      # especially useful for puck/bead data whose count range is wide
-      # enough that the raw nCount histogram (p1) is hard to read.
       p5 <- ggplot2::ggplot(df, ggplot2::aes(x = log_nCount)) +
         ggplot2::geom_histogram(bins = 50, fill = "#F39C12") +
         ggplot2::labs(title = "log10(nCount + 1)") + ggplot2::theme_minimal()
       patchwork::wrap_plots(p1, p2, p3, p4, p5, ncol = 5)
     })
 
-    # NEW: classic joint QC diagnostic (nCount vs nFeature, colored by %MT) —
-    # the 4 histograms show marginal distributions only; this shows whether
-    # low-nFeature spots are ALSO high-%MT (a real dying-cell/empty-spot
-    # signature) or not (could just be genuinely low-complexity tissue).
     output$qc_scatter_plot <- renderPlot({
       req(shared_rv$qc_metrics)
       df <- shared_rv$qc_metrics
@@ -246,8 +288,6 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
       pass <- with(df, nCount >= input$min_count & nFeature >= input$min_features &
                      (is.na(pct_mt) | pct_mt <= input$max_pct_mt))
       shared_rv$qc_pass_idx <- which(pass)
-      # v4 (export/script reproductible) : miroir des seuils UTILISES,
-      # lu uniquement par mod_spatial_export.R -- purement additif.
       shared_rv$qc_params <- list(min_count = input$min_count, min_features = input$min_features,
                                    max_pct_mt = input$max_pct_mt)
       showNotification(sprintf("Seuils appliques : %d/%d elements conserves.",
@@ -286,13 +326,6 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
           coords_df <- coords_df[keep, , drop = FALSE]
           obj <- obj[, rownames(coords_df)]
 
-          # OPTIONAL grid-binning (x.cuts/y.cuts) -- vignette parity for large
-          # point clouds (Slide-seq pucks, tens of thousands of beads): bins
-          # locations before computing Moran's I instead of point-by-point,
-          # trading a little spatial resolution for a large speedup. NULL/0
-          # (default) preserves the exact prior point-based behavior for
-          # Visium's few thousand spots. Only applies to "moransi" -- Seurat's
-          # own markvariogram implementation does not take x.cuts/y.cuts.
           use_cuts <- identical(method, "moransi") &&
             is.finite(x_cuts) && is.finite(y_cuts) && x_cuts > 0 && y_cuts > 0
           write_mirai_log(log_file, sprintf(
@@ -300,9 +333,6 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
             if (identical(method, "markvariogram")) "mark variogram" else "indice de Moran",
             length(hvgs), if (use_cuts) sprintf(" (grille %dx%d)", x_cuts, y_cuts) else ""
           ), 4, 5)
-          # Verified against Seurat source: FindSpatiallyVariableFeatures.Assay()
-          # / .StdAssay() takes spatial.location directly (no FOV needed), and
-          # SVFInfo() retrieves the per-gene statistics table afterwards.
           svf_args <- list(
             object = obj[["RNA"]], layer = "data", features = hvgs,
             spatial.location = coords_df, selection.method = method,
@@ -311,11 +341,6 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
           if (use_cuts) { svf_args$x.cuts <- x_cuts; svf_args$y.cuts <- y_cuts }
           assay_res <- do.call(Seurat::FindSpatiallyVariableFeatures, svf_args)
 
-          # Method-agnostic gene ORDER: Seurat's own public accessor stays
-          # stable across selection.method values even when SVFInfo()'s
-          # COLUMN NAMES differ (confirmed for "moransi" ; NOT independently
-          # verified for "markvariogram" in this codebase -- defensive
-          # fallback below rather than asserting a specific column name).
           ranked <- tryCatch(Seurat::SpatiallyVariableFeatures(assay_res, selection.method = method),
                              error = function(e) character(0))
           info <- SeuratObject::SVFInfo(assay_res, method = method)
@@ -324,11 +349,6 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
             obs_col <- grep("observed$", colnames(info), value = TRUE)[1]
             pv_col  <- grep("p\\.value$|pvalue$", colnames(info), value = TRUE)[1]
           } else {
-            # markvariogram: column naming is not treated as a stable
-            # contract here -- pick the first numeric column defensively
-            # (labeled generically as "score" downstream, see moran_i below)
-            # instead of guessing a specific name that could silently point
-            # at the wrong statistic.
             numeric_cols <- colnames(info)[vapply(info, is.numeric, logical(1))]
             obs_col <- if (length(numeric_cols) > 0) numeric_cols[1] else NA_character_
             pv_col  <- grep("p\\.value$|pvalue$", colnames(info), value = TRUE)[1]
@@ -341,8 +361,6 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
             p_value  = if (!is.na(pv_col))  info[[pv_col]]  else NA_real_,
             row.names = NULL, stringsAsFactors = FALSE
           )
-          # Reorder by Seurat's own ranking when available (guaranteed
-          # correct regardless of which numeric column was picked above).
           if (length(ranked) > 0) {
             ord <- match(ranked, out$gene)
             ord <- ord[!is.na(ord)]
@@ -360,8 +378,6 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
     observeEvent(input$btn_moran, {
       req(global_data$spatial_obj$bpcells_dir, global_data$spatial_obj$coords)
       reset_log(log_file)
-      # v4 (export/script reproductible) : miroir des parametres UTILISES,
-      # lu uniquement par mod_spatial_export.R -- purement additif.
       shared_rv$moran_params <- list(n_hvg = input$n_hvg_moran,
                                      x_cuts = input$moran_x_cuts %||% 0,
                                      y_cuts = input$moran_y_cuts %||% 0,
@@ -401,11 +417,7 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
         DT::formatRound(c("moran_i", "p_value"), 4)
     })
 
-    # ── Top SVGs grid (vignette parity: small-multiples of the top-N most
-    # spatially structured genes). Sync — sketch is capped (<=50k) and N is
-    # small (<=20 genes), so no mirai needed here (same convention as
-    # everywhere else in this module: async is reserved for genuinely heavy
-    # compute, not for visualizing results already computed).
+    # ── Top SVGs grid ─────────────────────────────────────────────────────
     svg_grid_long <- eventReactive(input$btn_svg_grid, {
       req(shared_rv$moran_results, global_data$spatial_obj$sketch, global_data$spatial_obj$coords)
 
@@ -427,7 +439,7 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
         data.frame(base_df, gene = g, expr = as.numeric(expr_mat[g, base_df$id]))
       }))
       long <- long[stats::complete.cases(long[, c("x", "y")]), ]
-      long$gene <- factor(long$gene, levels = top_genes)  # preserve Moran's I rank order across facets
+      long$gene <- factor(long$gene, levels = top_genes)
       long
     })
 
@@ -456,16 +468,99 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
                                        length(unique(long$gene)), method_lbl))
     })
 
-    # Dynamic plot height/width: scales with the actual number of facet ROWS
-    # (agrandi sur retour biologiste -- 260px/rangee etait trop petit des que
-    # plus de ~6 genes etaient demandes, panneaux illisibles). ncol reste 3
-    # ci-dessus -- height suit donc ceiling(n/3) rangees a 340px chacune,
-    # avec un plancher de 650px (au lieu de 500) meme pour peu de genes.
     output$svg_grid_plot_ui <- renderUI({
       n_genes <- input$n_top_svg %||% 9
       n_rows  <- ceiling(n_genes / 3)
       height_px <- max(650, n_rows * 340)
       plotOutput(ns("svg_grid_plot"), height = paste0(height_px, "px"))
+    })
+
+    # =========================================================================
+    # B4 (vague 5) — Hotspots locaux (Getis-Ord Gi*), SYNCHRONE
+    # compute_getis_ord_hotspots(coords, values, k_neighbors) ->
+    # data.frame(id, value, gi_star, p_value, hotspot). No log_file/mirai --
+    # see file header for why (cheap, closed-form, no permutation).
+    # =========================================================================
+    output$hotspot_deconv_celltype_ui <- renderUI({
+      req(shared_rv$deconv_props)
+      cts <- setdiff(colnames(shared_rv$deconv_props), "id")
+      selectInput(ns("hotspot_deconv_celltype"), NULL, choices = cts)
+    })
+
+    observeEvent(input$btn_hotspots, {
+      req(global_data$spatial_obj$coords)
+      values <- if (identical(input$hotspot_source, "deconv")) {
+        req(shared_rv$deconv_props, input$hotspot_deconv_celltype)
+        stats::setNames(shared_rv$deconv_props[[input$hotspot_deconv_celltype]], shared_rv$deconv_props$id)
+      } else {
+        req(shared_rv$qc_metrics, input$hotspot_qc_metric)
+        stats::setNames(shared_rv$qc_metrics[[input$hotspot_qc_metric]], shared_rv$qc_metrics$id)
+      }
+      shared_rv$hotspot_params <- list(
+        source = input$hotspot_source,
+        metric = if (identical(input$hotspot_source, "deconv")) input$hotspot_deconv_celltype else input$hotspot_qc_metric,
+        k_neighbors = input$hotspot_k
+      )
+      res <- tryCatch(
+        compute_getis_ord_hotspots(coords = global_data$spatial_obj$coords, values = values, k_neighbors = input$hotspot_k),
+        error = function(e) { showNotification(paste("Erreur hotspots :", conditionMessage(e)), type = "error", duration = 8); NULL }
+      )
+      if (!is.null(res)) shared_rv$hotspot_result <- res
+    })
+    
+    output$hotspot_status_ui <- renderUI({
+      req(shared_rv$hotspot_result)
+      n_hot <- sum(shared_rv$hotspot_result$hotspot == "Hotspot (chaud)")
+      n_cold <- sum(shared_rv$hotspot_result$hotspot == "Coldspot (froid)")
+      div(class = "alert alert-success", style = "font-size:0.75rem;",
+          sprintf("%d hotspot(s), %d coldspot(s) sur %d elements (p < 0.05).",
+                  n_hot, n_cold, nrow(shared_rv$hotspot_result)))
+    })
+    
+    .hotspot_palette <- c("Hotspot (chaud)" = "#D55E00", "Coldspot (froid)" = "#0072B2", "NS" = "#CCCCCC")
+    
+    output$hotspot_map <- renderPlot({
+      req(shared_rv$hotspot_result)
+      df <- shared_rv$hotspot_result
+      coords <- global_data$spatial_obj$coords
+      m <- match(df$id, coords$id)
+      df$x <- coords$x[m]; df$y <- coords$y[m]
+      df <- df[stats::complete.cases(df[, c("x", "y")]), ]
+      p <- ggplot2::ggplot(df, ggplot2::aes(x = x, y = -y, color = hotspot))
+      if (requireNamespace("scattermore", quietly = TRUE)) {
+        p <- p + scattermore::geom_scattermore(pointsize = 3, alpha = 0.85)
+      } else {
+        p <- p + ggplot2::geom_point(size = 0.7, alpha = 0.85)
+      }
+      p + ggplot2::scale_color_manual(values = .hotspot_palette) +
+        ggplot2::coord_fixed() + ggplot2::theme_void(base_size = 12) +
+        ggplot2::labs(color = NULL, title = "Hotspots locaux (Getis-Ord Gi*)")
+    })
+    
+    output$hotspot_hist <- renderPlot({
+      req(shared_rv$hotspot_result)
+      df <- shared_rv$hotspot_result
+      ggplot2::ggplot(df, ggplot2::aes(x = gi_star, fill = hotspot)) +
+        ggplot2::geom_histogram(bins = 50) +
+        ggplot2::geom_vline(xintercept = c(-1.96, 1.96), color = "grey30", linetype = "dashed") +
+        ggplot2::scale_fill_manual(values = .hotspot_palette) +
+        ggplot2::theme_minimal(base_size = 12) +
+        ggplot2::labs(x = "Gi* (z-score)", y = "Effectif", fill = NULL,
+                      title = "Distribution du Gi*", subtitle = "Pointilles = seuil p < 0.05 (|z| > 1.96)")
+    })
+    
+    output$hotspot_table <- DT::renderDT({
+      req(shared_rv$hotspot_result)
+      DT::datatable(shared_rv$hotspot_result, rownames = FALSE, filter = "top",
+                    options = list(pageLength = 15, scrollX = TRUE)) |>
+        DT::formatRound(c("value", "gi_star", "p_value"), 3)
+    })
+
+    output$hotspot_table <- DT::renderDT({
+      df <- hotspot_result()
+      DT::datatable(df, rownames = FALSE, filter = "top",
+                    options = list(pageLength = 15, scrollX = TRUE)) |>
+        DT::formatRound(c("value", "gi_star", "p_value"), 3)
     })
   })
 }

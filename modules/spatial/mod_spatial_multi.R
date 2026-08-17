@@ -2,6 +2,37 @@
 # modules/spatial/mod_spatial_multi.R — Phase 4: Multi-echantillons
 # ("Working with multiple slices in Seurat", vignette parity)
 # =============================================================================
+# v3 (vague 5 — Phase 6 stats, B3) : nouvel onglet "Composition differentielle"
+#    -- test du Chi2 d'independance (dataset x cluster) sur l'integration
+#    conjointe (ci-dessus), via
+#    R/utils_spatial_stats.R::compute_composition_differential() (deja pure,
+#    synchrone, meme convention que mod_spatial_deconv.R's "Colocalisation").
+#    FIX layout (retour terrain -- "les graphiques Residus standardises et
+#    Proportions par echantillon restent dans un petit cadre malgre le bouton
+#    plein ecran") : les deux plots sont maintenant dans des card(height=)
+#    EXPLICITES (520px) + card_body(class="p-0") + plotOutput(height="100%"),
+#    copie a l'identique du pattern DEJA UTILISE (et DEJA CONFIRME correct
+#    par l'utilisateur) par l'onglet "UMAP conjoint" un peu plus bas dans ce
+#    meme fichier -- un plotOutput/plotlyOutput sans hauteur explicite a
+#    l'interieur d'un card() sans hauteur explicite retombe sur la hauteur
+#    par defaut du navigateur (souvent ~400px), ce que full_screen=TRUE
+#    n'affecte QUE lorsqu'on clique effectivement sur l'icone d'agrandissement
+#    -- d'ou "le bouton plein ecran marche mais la vue normale reste petite".
+#
+# v2 (feedback biologiste — support rapport multi-echantillons,
+# mod_spatial_report.R) : integration_result() (heretofore un reactiveVal
+# LOCAL a ce module, invisible en dehors) est maintenant AUSSI ecrit dans
+# global_data$spatial_multi_integration (plain list, pas reactif) des qu'un
+# calcul reussit -- purement additif, permet a mod_spatial_report.R (et a
+# tout futur module) de lire le dernier resultat d'integration conjointe
+# sans dependre de l'etat interne de ce module (meme pattern que
+# global_data$spatial_results_cache pour le cache par-echantillon).
+#
+# v1.1 (audit step 3.9b — multi-sample bugfix): output$dataset_picker_ui's
+# sprintf() call had its format string accidentally split into TWO separate
+# character arguments (missing string concatenation) instead of one
+# continuous "%d ...(onglet Import > Spatial)..." string. Fixed.
+#
 # Operates on global_data$spatial_datasets (NEW top-level container, see
 # app.R / mod_import_spatial.R): a named list of the SAME spatial_obj-shaped
 # list every other spatial module already reads ($sketch, $bpcells_dir,
@@ -19,29 +50,6 @@
 # live Shiny state into the daemon. The per-section spatial maps below the
 # integration button are cheap (sketch + coords, already in RAM) and render
 # synchronously, exactly like every other "instant preview" in this app.
-#
-# v1.1 (audit step 3.9b — multi-sample bugfix): output$dataset_picker_ui's
-# sprintf() call had its format string accidentally split into TWO separate
-# character arguments (missing string concatenation) instead of one
-# continuous "%d ...(onglet Import > Spatial)..." string. sprintf() then
-# tried to fill the lone "%d" placeholder with the first EXTRA argument —
-# "Spatial) pour utiliser cette page." — a character string, which is
-# exactly what produced the reported error: "format incorrect '%d' ;
-# utilisez le format %s pour les objets caracteres". Only reproducible with
-# 0 or 1 dataset(s) imported (the `length(ds_names) < 2` branch), which is
-# why it slipped through earlier single-sample testing. See also
-# mod_spatial.R v6.1 for a second, related bug (missing `ns <- session$ns`
-# in the PARENT module) found in the same audit pass — both only manifest
-# once multi-sample import is actually exercised.
-#
-# v2 (feedback biologiste — support rapport multi-echantillons,
-# mod_spatial_report.R) : integration_result() (heretofore un reactiveVal
-# LOCAL a ce module, invisible en dehors) est maintenant AUSSI ecrit dans
-# global_data$spatial_multi_integration (plain list, pas reactif) des qu'un
-# calcul reussit -- purement additif, permet a mod_spatial_report.R (et a
-# tout futur module) de lire le dernier resultat d'integration conjointe
-# sans dependre de l'etat interne de ce module (meme pattern que
-# global_data$spatial_results_cache pour le cache par-echantillon).
 # =============================================================================
 
 `%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
@@ -77,7 +85,14 @@ mod_spatial_multi_ui <- function(id) {
       radioButtons(ns("section_color_by"), "Colorer les cartes par section",
                    choices = c("nCount (avant integration)" = "ncount",
                                "Cluster integre (apres integration)" = "cluster"),
-                   selected = "ncount")
+                   selected = "ncount"),
+
+      hr(),
+      div(class = "alert alert-light", style = "font-size:0.72rem;",
+          bsicons::bs_icon("bar-chart-steps"),
+          " Le test de composition differentielle (onglet \"Composition differentielle\") se ",
+          "recalcule automatiquement des qu'une integration conjointe est disponible ci-dessus ",
+          "— aucun bouton separe.")
     ),
 
     navset_card_underline(
@@ -106,6 +121,27 @@ mod_spatial_multi_ui <- function(id) {
         )
       ),
       nav_panel(
+        "Composition differentielle",
+        div(class = "alert alert-light small mt-2 mb-2",
+            "Test du Chi2 d'independance (table de contingence dataset x cluster) sur ",
+            "l'integration conjointe -- repli automatique sur un p simule (2000 replicats) si ",
+            "des effectifs attendus sont trop faibles (< 5). Les residus standardises indiquent ",
+            "QUELS clusters/echantillons s'ecartent le plus de l'independance (|residu| > ~2 = ",
+            "ecart notable)."),
+        uiOutput(ns("diffcomp_summary_ui")),
+        layout_columns(
+          col_widths = c(6, 6),
+          row_heights = "520px",
+          card(full_screen = TRUE, height = "520px",
+               card_header("Residus standardises (dataset x cluster)"),
+               card_body(class = "p-0", plotOutput(ns("diffcomp_resid_plot"), height = "100%"))),
+          card(full_screen = TRUE, height = "520px",
+               card_header("Proportions par echantillon"),
+               card_body(class = "p-0", plotOutput(ns("diffcomp_prop_plot"), height = "100%")))
+        ),
+        DT::DTOutput(ns("diffcomp_contingency_table"))
+      ),
+      nav_panel(
         "Resume",
         uiOutput(ns("summary_ui")),
         DT::DTOutput(ns("n_per_dataset_table"))
@@ -122,8 +158,6 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
     output$dataset_picker_ui <- renderUI({
       ds_names <- names(global_data$spatial_datasets)
       if (length(ds_names) < 2) {
-        # FIX (audit step 3.9b): format string was previously split into two
-        # separate string arguments instead of one -- see file header.
         return(div(class = "alert alert-warning", style = "font-size:0.8rem;",
                     sprintf(paste0("%d echantillon(s) importe(s) — importez-en au moins 2 ",
                                    "(onglet Import > Spatial) pour utiliser cette page."),
@@ -165,10 +199,6 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
         return()
       }
       reset_log(log_file)
-      # Same pattern as the single-dataset sketch UMAP task
-      # (mod_spatial_viz.R): serialize each small sketch to its own
-      # tempfile and pass PATHS into the daemon -- never the live Shiny
-      # reactiveValues/session state.
       sketch_paths <- stats::setNames(
         lapply(ds, function(nm) {
           tmp <- tempfile(fileext = ".rds")
@@ -188,12 +218,6 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
       if (integrate_task$status() == "success") {
         res <- integrate_task$result()
         integration_result(res)
-        # v2 (feedback biologiste, rapport multi-echantillons) : miroir
-        # ADDITIF dans global_data -- voir header de ce fichier. Le
-        # reactiveVal integration_result() ci-dessus reste la source de
-        # verite pour l'UI de CE module (inchangee) ; global_data$
-        # spatial_multi_integration est une copie en LECTURE pour les
-        # AUTRES modules (mod_spatial_report.R notamment).
         global_data$spatial_multi_integration <- list(
           embeddings = res$embeddings, n_per_dataset = res$n_per_dataset,
           reduction_used = res$reduction_used, datasets = selected_ds(),
@@ -306,6 +330,68 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
                       type = "scattergl", mode = "markers",
                       marker = list(size = 5, opacity = 0.7)) |>
         plotly::layout(margin = list(l = 20, r = 20, t = 20, b = 20))
+    })
+
+    # =========================================================================
+    # B3 (vague 5) — Composition differentielle inter-echantillons
+    # compute_composition_differential(embeddings) -> list(contingency=table,
+    # chisq=list(statistic,p_value,method), residuals=data.frame(dataset,
+    # cluster,std_resid), proportions=data.frame(dataset,cluster,proportion,n))
+    # Purely reactive off integration_result() -- no extra button, same
+    # convention as mod_spatial_deconv.R's colocalisation heatmap (B2).
+    # =========================================================================
+    composition_diff_result <- reactive({
+      req(integration_result())
+      tryCatch(
+        compute_composition_differential(integration_result()$embeddings),
+        error = function(e) {
+          showNotification(paste("Erreur test de composition differentielle :", conditionMessage(e)),
+                           type = "error", duration = 8)
+          NULL
+        }
+      )
+    })
+
+    output$diffcomp_summary_ui <- renderUI({
+      res <- composition_diff_result()
+      if (is.null(res)) {
+        return(div(class = "alert alert-light",
+                    "Calculez d'abord une integration conjointe (bouton \"Lancer l'integration\" ",
+                    "dans le panneau lateral)."))
+      }
+      sig <- if (res$chisq$p_value < 0.05) "SIGNIFICATIVE" else "non significative"
+      div(class = if (res$chisq$p_value < 0.05) "alert alert-success" else "alert alert-light",
+          sprintf("Chi2 = %.1f, p = %.4g (%s) — composition %s entre echantillons (seuil 0.05).",
+                  res$chisq$statistic, res$chisq$p_value, res$chisq$method, sig))
+    })
+
+    output$diffcomp_resid_plot <- renderPlot({
+      res <- req(composition_diff_result())
+      ggplot2::ggplot(res$residuals, ggplot2::aes(x = cluster, y = dataset, fill = std_resid)) +
+        ggplot2::geom_tile() +
+        ggplot2::geom_text(ggplot2::aes(label = sprintf("%.1f", std_resid)), size = 3.2) +
+        ggplot2::scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#B2182B", midpoint = 0) +
+        ggplot2::theme_minimal(base_size = 12) +
+        ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
+        ggplot2::labs(x = "Cluster", y = "Echantillon", fill = "Residu\nstandardise",
+                      title = "Ecarts a l'independance (dataset x cluster)")
+    })
+
+    output$diffcomp_prop_plot <- renderPlot({
+      res <- req(composition_diff_result())
+      ggplot2::ggplot(res$proportions, ggplot2::aes(x = dataset, y = proportion, fill = cluster)) +
+        ggplot2::geom_col() +
+        ggplot2::theme_minimal(base_size = 12) +
+        ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 30, hjust = 1)) +
+        ggplot2::labs(x = NULL, y = "Proportion", fill = "Cluster",
+                      title = "Composition en clusters par echantillon")
+    })
+
+    output$diffcomp_contingency_table <- DT::renderDT({
+      res <- req(composition_diff_result())
+      tab <- as.data.frame.matrix(res$contingency)
+      tab <- cbind(Echantillon = rownames(tab), tab)
+      DT::datatable(tab, rownames = FALSE, options = list(pageLength = 10, scrollX = TRUE))
     })
 
     # ── Summary ───────────────────────────────────────────────────────────

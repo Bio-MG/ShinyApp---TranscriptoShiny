@@ -95,25 +95,24 @@ mod_spatial_viz_ui <- function(id) {
         div(class = "mt-2",
             selectInput(ns("color_palette"), "Jeu de couleurs",
                         choices = c("Defaut" = "default", "Okabe-Ito (daltonien)" = "okabeito",
-                                    "Viridis" = "viridis", "Set2" = "set2", "Manuel (degrade)" = "manual"),
+                                    "Viridis" = "viridis", "Set2" = "set2", "Manuel" = "manual"),
                         selected = "default"),
             conditionalPanel(
               condition = sprintf("input['%s'] == 'manual'", ns("color_palette")),
-              manual_color_picker_ui(ns, c("grad_low", "grad_high"), c("Bas", "Haut"), c("#2166AC", "#B2182B"))
+              div(class = "text-muted", style = "font-size:0.7rem;", "Degrade (metriques continues : QC, gene, Z-score...)"),
+              manual_color_picker_ui(ns, c("grad_low", "grad_high"), c("Bas", "Haut"), c("#2166AC", "#B2182B")),
+              div(class = "text-muted mt-2", style = "font-size:0.7rem;", "Couleurs discretes (categorie affichee actuellement) :"),
+              uiOutput(ns("manual_discrete_picker_ui"))
             ),
             checkboxInput(ns("fixed_scale"), "Echelle de couleur fixe (point fixe min/max)", value = FALSE),
             conditionalPanel(
               condition = sprintf("input['%s']", ns("fixed_scale")),
               div(style = "display:flex; gap:8px;",
                   numericInput(ns("fixed_scale_min"), "Min", value = 0, width = "100px"),
-                  numericInput(ns("fixed_scale_max"), "Max", value = 100, width = "100px")),
-              div(class = "text-muted", style = "font-size:0.68rem;",
-                  "Fixe la meme echelle (QC/gene/deconvolution) au lieu de la recalculer a chaque rendu ",
-                  "-- utile pour comparer plusieurs vues/echantillons.")
+                  numericInput(ns("fixed_scale_max"), "Max", value = 100, width = "100px"))
             )
         )
       ),
-
       hr(),
       
       checkboxInput(ns("show_histology"), "Afficher l'image histologique (fond de coupe)", value = TRUE),
@@ -1043,6 +1042,89 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       shared_rv$saved_viz_list <- list()
     })
     
+    # ── Palette PARTAGEE app-wide (vague 6) : ce module reste le panneau de
+    # controle central ; toute autre vue Spatial lit shared_rv$color_palette /
+    # manual_gradient / manual_discrete au lieu de recalculer sa propre palette.
+    observeEvent(list(input$color_palette, input$grad_low, input$grad_high), {
+      shared_rv$color_palette <- input$color_palette %||% "default"
+      shared_rv$manual_gradient <- list(low = input$grad_low %||% "#2166AC", mid = "white",
+                                        high = input$grad_high %||% "#B2182B")
+    }, ignoreInit = FALSE)
+    
+    .current_discrete_kind <- reactive({
+      switch(input$color_by %||% "qc", "cluster" = "cluster", "niche" = "niche", "deconv" = "celltype", NULL)
+    })
+    
+    output$manual_discrete_picker_ui <- renderUI({
+      kind <- .current_discrete_kind()
+      req(kind)
+      levels <- switch(kind,
+                       "cluster" = if (!is.null(shared_rv$cluster_labels)) shared_rv$cluster_labels else NULL,
+                       "niche"   = if (!is.null(shared_rv$niche_labels)) shared_rv$niche_labels else NULL,
+                       "celltype" = if (!is.null(shared_rv$deconv_props)) setdiff(colnames(shared_rv$deconv_props), "id") else NULL
+      )
+      req(levels)
+      levels <- sort(unique(as.character(levels)))
+      defaults <- spatial_discrete_colors(levels, shared_rv, kind = kind)
+      dynamic_manual_color_picker_ui(ns, kind, levels,
+                                     current_colors = (shared_rv$manual_discrete %||% list())[[kind]],
+                                     defaults = defaults)
+    })
+    
+    lapply(c("cluster", "niche", "celltype", "dataset"), function(kind) {
+      observeEvent(input[[paste0("manual_discrete_", kind, "_change")]], {
+        ev <- input[[paste0("manual_discrete_", kind, "_change")]]
+        req(ev$level, ev$color)
+        md <- shared_rv$manual_discrete %||% list()
+        cur <- md[[kind]] %||% stats::setNames(character(0), character(0))
+        cur[ev$level] <- ev$color
+        md[[kind]] <- cur
+        shared_rv$manual_discrete <- md
+      }, ignoreInit = TRUE)
+    })
+    
+    #########
+    # ── Palette PARTAGEE app-wide (vague 6) : ce module reste le panneau de
+    # controle central ; toute autre vue Spatial lit shared_rv$color_palette /
+    # manual_gradient / manual_discrete au lieu de recalculer sa propre palette.
+    observeEvent(list(input$color_palette, input$grad_low, input$grad_high), {
+      shared_rv$color_palette <- input$color_palette %||% "default"
+      shared_rv$manual_gradient <- list(low = input$grad_low %||% "#2166AC", mid = "white",
+                                        high = input$grad_high %||% "#B2182B")
+    }, ignoreInit = FALSE)
+    
+    .current_discrete_kind <- reactive({
+      switch(input$color_by %||% "qc", "cluster" = "cluster", "niche" = "niche", "deconv" = "celltype", NULL)
+    })
+    
+    output$manual_discrete_picker_ui <- renderUI({
+      kind <- .current_discrete_kind()
+      req(kind)
+      levels <- switch(kind,
+                       "cluster" = if (!is.null(shared_rv$cluster_labels)) shared_rv$cluster_labels else NULL,
+                       "niche"   = if (!is.null(shared_rv$niche_labels)) shared_rv$niche_labels else NULL,
+                       "celltype" = if (!is.null(shared_rv$deconv_props)) setdiff(colnames(shared_rv$deconv_props), "id") else NULL
+      )
+      req(levels)
+      levels <- sort(unique(as.character(levels)))
+      defaults <- spatial_discrete_colors(levels, shared_rv, kind = kind)
+      dynamic_manual_color_picker_ui(ns, kind, levels,
+                                     current_colors = (shared_rv$manual_discrete %||% list())[[kind]],
+                                     defaults = defaults)
+    })
+    
+    lapply(c("cluster", "niche", "celltype", "dataset"), function(kind) {
+      observeEvent(input[[paste0("manual_discrete_", kind, "_change")]], {
+        ev <- input[[paste0("manual_discrete_", kind, "_change")]]
+        req(ev$level, ev$color)
+        md <- shared_rv$manual_discrete %||% list()
+        cur <- md[[kind]] %||% stats::setNames(character(0), character(0))
+        cur[ev$level] <- ev$color
+        md[[kind]] <- cur
+        shared_rv$manual_discrete <- md
+      }, ignoreInit = TRUE)
+    })
+    #########
     
     # --------------------------------------------------------------------------
     # UI du type cellulaire pour la déconvolution
@@ -1149,10 +1231,8 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       stats::setNames(cols, lv)
     }
 
-    cluster_palette <- function(cluster_vec) {
-      discrete_palette_colors(sort_cluster_labels(cluster_vec))
-    }
-
+    cluster_palette <- function(cluster_vec) spatial_discrete_colors(cluster_vec, shared_rv, kind = "cluster")
+    discrete_palette_colors <- function(lv) spatial_discrete_colors(lv, shared_rv, kind = if (identical(input$color_by, "niche")) "niche" else if (identical(input$color_by, "deconv")) "celltype" else "cluster")
     color_values <- function(df) {
       n <- nrow(df)
       if (n == 0L) return(character(0))

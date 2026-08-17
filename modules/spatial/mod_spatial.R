@@ -1,6 +1,44 @@
 # =============================================================================
 # modules/spatial/mod_spatial.R — Parent Module (router)
 # =============================================================================
+# v13 (vague 5 — Phase 6 stats) : shared_rv gagne 6 nouveaux champs pour les
+#    sous-onglets B1 (enrichissement de voisinage) et B6 (Ripley's K) de
+#    mod_spatial_niche.R : enrichment_result/enrichment_params,
+#    hotspot_result/hotspot_params (B4, mod_spatial_qc.R),
+#    ripley_result/ripley_params (B6, mod_spatial_niche.R) -- ajoutes a
+#    .cacheable_fields pour beneficier GRATUITEMENT du meme cache par-
+#    echantillon que qc_metrics/cluster_labels/etc. (voir v9/v10 ci-dessous).
+#    B3 (composition differentielle, mod_spatial_multi.R) N'EST PAS ajoute
+#    ici deliberement : comme l'integration multi-echantillons elle-meme
+#    (global_data$spatial_multi_integration), c'est un resultat CROSS-
+#    dataset, pas un resultat de l'echantillon actif -- il vit dans son
+#    propre reactive local a mod_spatial_multi.R et n'a pas besoin d'etre
+#    snapshot/restaure au changement d'echantillon actif.
+#
+# v11 (moyen terme — export/auto-pipeline, voir handoff_spatial_bio-mg.md) :
+#    2 nouveaux onglets additifs, zero changement de logique existante :
+#      - "Pipeline auto" (mod_spatial_pipeline.R) : QC -> Clustering ->
+#        Deconvolution (si reference partagee) -> Niches, en 1 clic, memes
+#        resultats/memes champs shared_rv que si chaque etape avait ete
+#        lancee manuellement depuis son propre onglet.
+#      - "7. Export" (mod_spatial_export.R) : paquet .zip (CSV/PNG deja
+#        calcules) + script R reproductible.
+#    shared_rv gagne 5 champs *_params (miroir des parametres utilises pour
+#    chaque resultat, ecrits par chaque onglet au moment du clic sur son
+#    propre bouton) -- lus par mod_spatial_export.R pour le script
+#    reproductible ; caches/restaures comme le reste au changement
+#    d'echantillon (voir .cacheable_fields ci-dessous).
+#
+# v12 (feedback biologiste, session suivante) :
+#    - "8. Rapport" (mod_spatial_report.R) : rapport HTML/PDF multi-
+#      echantillons (voir handoff pour details).
+#    - shared_rv$umap_df AJOUTE et rendu cacheable : le sketch-UMAP (onglet
+#      4) etait un reactiveVal LOCAL a mod_spatial_viz.R, perdu a chaque
+#      changement d'echantillon en multi-echantillons -- deplace ici pour
+#      beneficier du meme cache par-echantillon que le reste.
+#    - Selecteur "Actif" : fix CSS (debordement sur le menu "Session" avec
+#      un nom d'echantillon long).
+#
 # v10 (backlog court-terme #2, session "puck_01 bugfix + backlog" — voir
 #    handoff_spatial_bio-mg.md) : le cache par-echantillon (v9 ci-dessous)
 #    est deplace de reactiveVal(list()) local vers
@@ -45,30 +83,6 @@
 # v2 (post-test-3): "Reinitialiser les daemons" button.
 #
 # v7 (Phase 5 — niches spatiales): 6th top-level tab, "Niches spatiales".
-#
-# v11 (moyen terme — export/auto-pipeline, voir handoff_spatial_bio-mg.md) :
-#    2 nouveaux onglets additifs, zero changement de logique existante :
-#      - "Pipeline auto" (mod_spatial_pipeline.R) : QC -> Clustering ->
-#        Deconvolution (si reference partagee) -> Niches, en 1 clic, memes
-#        resultats/memes champs shared_rv que si chaque etape avait ete
-#        lancee manuellement depuis son propre onglet.
-#      - "7. Export" (mod_spatial_export.R) : paquet .zip (CSV/PNG deja
-#        calcules) + script R reproductible.
-#    shared_rv gagne 5 champs *_params (miroir des parametres utilises pour
-#    chaque resultat, ecrits par chaque onglet au moment du clic sur son
-#    propre bouton) -- lus par mod_spatial_export.R pour le script
-#    reproductible ; caches/restaures comme le reste au changement
-#    d'echantillon (voir .cacheable_fields ci-dessous).
-#
-# v12 (feedback biologiste, session suivante) :
-#    - "8. Rapport" (mod_spatial_report.R) : rapport HTML/PDF multi-
-#      echantillons (voir handoff pour details).
-#    - shared_rv$umap_df AJOUTE et rendu cacheable : le sketch-UMAP (onglet
-#      4) etait un reactiveVal LOCAL a mod_spatial_viz.R, perdu a chaque
-#      changement d'echantillon en multi-echantillons -- deplace ici pour
-#      beneficier du meme cache par-echantillon que le reste.
-#    - Selecteur "Actif" : fix CSS (debordement sur le menu "Session" avec
-#      un nom d'echantillon long).
 # =============================================================================
 
 mod_spatial_ui <- function(id) {
@@ -105,10 +119,6 @@ mod_spatial_ui <- function(id) {
                 )),
       
       nav_spacer(),
-      # v9 (fix UX) : un <select> imbrique dans un item de menu deroulant
-      # Bootstrap est peu fiable au clic (le menu intercepte/ferme avant que
-      # le <select> n'ouvre son propre popup). Sorti en nav_item() autonome,
-      # directement cliquable, juste a cote du menu "Session".
       nav_item(uiOutput(ns("active_dataset_ui"))),
       bslib::nav_menu(
         title = tagList(icon("gear"), "Session"), align = "right",
@@ -146,38 +156,42 @@ mod_spatial_server <- function(id, global_data) {
       niche_labels      = NULL,
       niche_composition = NULL,
       niche_params      = NULL,
-      # Feedback biologiste : le sketch-UMAP (onglet 4) se perdait a chaque
-      # changement d'echantillon en multi-echantillons (etait un reactiveVal
-      # LOCAL a mod_spatial_viz.R, jamais mis en cache). Deplace ici pour
-      # beneficier GRATUITEMENT du meme mecanisme de cache par-echantillon
-      # que qc_metrics/cluster_labels/etc. ci-dessus (voir .cacheable_fields).
       umap_df           = NULL,
-      # Feedback biologiste ("ajouter la fonction d'ajout au rapport") :
-      # vues personnalisees sauvegardees depuis l'onglet 4 (bouton "Ajouter
-      # cette vue au rapport") -- named list, cle = label choisi par
-      # l'utilisateur, valeur = cfg (color_by/qc_metric/gene/deconv_celltype/
-      # show_cluster_labels). Rendu dans le rapport (onglet 7, section
-      # "Rapport HTML/PDF") via build_saved_viz_df() (R/utils_spatial_report.R).
-      saved_viz_list    = list()
+      saved_viz_list    = list(),
+      # v13 (vague 5 — Phase 6 stats) : voir changelog en tete de fichier.
+      #   - enrichment_result = list(enrichment=, matrix=, levels=,
+      #     k_neighbors=, n_perm=) — mod_spatial_niche.R (B1).
+      #   - hotspot_result = data.frame(id,value,gi_star,p_value,hotspot)
+      #     — mod_spatial_qc.R (B4).
+      #   - ripley_result = list(curve=, target_level=, n_target=, n_total=,
+      #     n_perm=, subsampled=) — mod_spatial_niche.R (B6).
+      enrichment_result = NULL,
+      enrichment_params = NULL,
+      hotspot_result     = NULL,
+      hotspot_params     = NULL,
+      ripley_result      = NULL,
+      ripley_params      = NULL,
+      # Palette PARTAGEE (vague 6) — reglages UTILISATEUR, pas des resultats
+      # de calcul : volontairement HORS .cacheable_fields (persiste entre
+      # changements d'echantillon actif, contrairement a qc_metrics/etc.).
+      color_palette   = "default",
+      manual_gradient = list(low = "#2166AC", mid = "white", high = "#B2182B"),
+      manual_discrete = list()   # list(cluster=c(...), niche=c(...), celltype=c(...), dataset=c(...))
     )
     
-    # ── v10 (backlog court-terme #2): per-dataset result cache, now backed
-    # by global_data$spatial_results_cache instead of a local reactiveVal.
-    # A Shiny module's internal reactiveVal is invisible to app.R's server
-    # function (different scope) -- global_data is the shared reactiveValues
-    # bus every module already reads/writes, and app.R's save_session_btn/
-    # load_session_file already serializes arbitrary global_data fields, so
-    # this one-line change of "where the cache lives" makes multi-sample
-    # Spatial sessions genuinely resumable after a save/reload, with zero
-    # change to the caching LOGIC itself (still session-scoped in-memory
-    # data structure, just addressed through global_data now).
+    # ── v10 (backlog court-terme #2): per-dataset result cache, backed by
+    # global_data$spatial_results_cache (see v10 changelog above).
     .get_cache <- function() global_data$spatial_results_cache %||% list()
     .set_cache <- function(cache) { global_data$spatial_results_cache <- cache }
     
     .cacheable_fields <- c("qc_metrics", "qc_pass_idx", "qc_params", "moran_results", "moran_params",
                            "cluster_labels", "cluster_params", "deconv_props", "deconv_params",
                            "cluster_markers", "niche_labels", "niche_composition", "niche_params",
-                           "umap_df", "saved_viz_list")
+                           "umap_df", "saved_viz_list",
+                           # v13 (vague 5 — Phase 6 stats)
+                           "enrichment_result", "enrichment_params",
+                           "hotspot_result", "hotspot_params",
+                           "ripley_result", "ripley_params")
     
     .snapshot_shared_rv <- function() {
       stats::setNames(lapply(.cacheable_fields, function(f) shared_rv[[f]]), .cacheable_fields)
@@ -229,13 +243,6 @@ mod_spatial_server <- function(id, global_data) {
     output$active_dataset_ui <- renderUI({
       ds_names <- names(global_data$spatial_datasets)
       if (length(ds_names) < 2) return(NULL)
-      # FIX (UI feedback) : un nom d'echantillon long faisait deborder ce
-      # <select> par-dessus le menu "Session" voisin (badge daemons + reset).
-      # Cause : flex-item par defaut a min-width:auto, qui empeche tout
-      # retrecissement/troncature reel meme avec un width fixe sur le
-      # selectInput lui-meme. On borne le conteneur ET on force
-      # min-width:0 sur le wrapper flex pour autoriser la troncature CSS
-      # (text-overflow:ellipsis) au lieu du debordement.
       tags$span(
         style = "display:flex; align-items:center; gap:6px; max-width:240px; min-width:0;",
         tags$style(HTML(sprintf(
@@ -251,34 +258,12 @@ mod_spatial_server <- function(id, global_data) {
       )
     })
     
-    # v10 (feedback biologiste — fix cache multi-echantillons) : le
-    # dropdown ne fait plus QUE proposer un nouveau nom -- toute la logique
-    # de snapshot/restauration vit dans l'observer CENTRALISE ci-dessous,
-    # qui reagit a global_data$active_spatial_dataset lui-meme plutot qu'a
-    # input$active_dataset_select. Avant ce correctif, SEUL ce dropdown
-    # declenchait le snapshot -- mod_import_spatial.R changeait
-    # active_spatial_dataset DIRECTEMENT lors d'un 2e (ou N-ieme) import,
-    # court-circuitant entierement cette logique : les resultats de
-    # l'echantillon SORTANT n'etaient jamais snapshotes (perdus), et
-    # shared_rv n'etait ni vide ni restaure pour le NOUVEL echantillon --
-    # il heritait silencieusement des resultats de l'ancien. D'ou le bug
-    # rapporte : "au passage au second echantillon, des donnees du premier
-    # ne sont pas sauvegardees... impossible de revenir".
     observeEvent(input$active_dataset_select, {
       req(input$active_dataset_select %in% names(global_data$spatial_datasets))
       if (identical(input$active_dataset_select, global_data$active_spatial_dataset)) return()
       global_data$active_spatial_dataset <- input$active_dataset_select
     })
     
-    # v10 (feedback biologiste — fix cache multi-echantillons) : synchronise
-    # global_data$spatial_obj sur SA PROPRE observation, separee du
-    # snapshot/restauration ci-dessous. Necessaire car re-importer SOUS UN
-    # NOM DEJA ACTIF (ex: reimport apres correction d'orientation) ne fait
-    # PAS changer la VALEUR de active_spatial_dataset (les reactiveValues de
-    # Shiny n'invalident pas sur une reassignation identique) -- un seul
-    # observer cale sur active_spatial_dataset manquerait donc ce cas et
-    # laisserait spatial_obj pointer vers l'ancienne version (perimee) de
-    # l'echantillon. Watcher AUSSI spatial_datasets lui-meme couvre ce cas.
     observeEvent(list(global_data$active_spatial_dataset, global_data$spatial_datasets), {
       nm <- global_data$active_spatial_dataset
       if (!is.null(nm) && nm %in% names(global_data$spatial_datasets)) {
@@ -292,12 +277,6 @@ mod_spatial_server <- function(id, global_data) {
       new_name <- global_data$active_spatial_dataset
       old_name <- prev_active_dataset()
       
-      # Snapshot the OUTGOING dataset's results before switching away --
-      # regardless of WHICH code changed active_spatial_dataset (dropdown
-      # here, or a fresh import in mod_import_spatial.R). Guarded against
-      # old_name no longer being a valid key (e.g. right after a full
-      # session load wholesale-replaces spatial_datasets) -- snapshotting
-      # under a stale/foreign key would be meaningless.
       if (!is.null(old_name) && !identical(old_name, new_name) &&
           old_name %in% names(global_data$spatial_datasets)) {
         cache <- .get_cache()
@@ -305,9 +284,6 @@ mod_spatial_server <- function(id, global_data) {
         .set_cache(cache)
       }
       
-      # ROI state stays tied to mod_spatial_viz.R's own local reactive state
-      # (umap_df, linked lasso selection) -- not safely restorable from
-      # here, always reset on a dataset switch (unchanged from before).
       shared_rv$roi_ids     <- NULL
       shared_rv$roi_bbox    <- NULL
       shared_rv$roi_markers <- NULL
@@ -331,8 +307,6 @@ mod_spatial_server <- function(id, global_data) {
       prev_active_dataset(new_name)
     }, ignoreNULL = FALSE, ignoreInit = TRUE)
     
-    # (c) Re-import sous un nom DEJA actif : reset shared_rv + purge cache,
-    # via le signal explicite emis par mod_import_spatial.R.
     observeEvent(global_data$spatial_reimport_signal, {
       sig <- global_data$spatial_reimport_signal
       req(sig, identical(sig$name, global_data$active_spatial_dataset))

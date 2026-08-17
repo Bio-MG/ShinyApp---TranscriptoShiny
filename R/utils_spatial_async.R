@@ -1,6 +1,20 @@
 # =============================================================================
 # R/utils_spatial_async.R — mirai daemon pool + reactivePoll progress tracking
 # =============================================================================
+# v5 (vague 5 — Phase 6 stats preload): R/utils_spatial_stats.R (B1 neighborhood
+# enrichment, B3 composition diff, B4 Getis-Ord hotspots, B6 Ripley's K) is now
+# part of the default `source_files` preloaded into every daemon, and
+# .verify_spatial_daemons() checks the 4 new functions are actually visible
+# after preload (has_enrichment / has_diffcomp / has_hotspots / has_ripley) —
+# same "verify what actually happened, not just that daemons(n) returned"
+# philosophy as v4 below. A daemon pool started BEFORE this change (i.e. a
+# running R process that already called init_spatial_daemons() with the old
+# source_files) will keep reporting "degrade" with these 4 names listed as
+# missing until "Reinitialiser les daemons" (mod_spatial.R) is clicked, or the
+# app is restarted — init_spatial_daemons() itself is a no-op once
+# .spatial_async_env$daemons_ready is TRUE (see below), it does not
+# auto-reload a pool that is already up.
+#
 # v4 (Chantier 3 refonte — daemon preload hardening). Two problems found on
 # top of the reference-pipeline architecture fix (see
 # R/utils_spatial_reference.R and mod_spatial_deconv.R):
@@ -65,8 +79,9 @@
 .spatial_async_env$last_diagnostics <- NULL
 
 # Hard ceiling for any single spatial async task (clustering, deconvolution,
-# Moran's I, sketch UMAP) — after this, the ExtendedTask errors out instead
-# of hanging forever, so the UI always eventually gets actionable feedback.
+# Moran's I, sketch UMAP, neighborhood enrichment, hotspots, Ripley's K) —
+# after this, the ExtendedTask errors out instead of hanging forever, so the
+# UI always eventually gets actionable feedback.
 MIRAI_TASK_TIMEOUT_MS <- 20 * 60 * 1000  # 20 minutes
 # RCTD (mode="rctd", doublet_mode="full") peut aussi tourner longtemps,
 # independamment de la taille de la reference (observe en reel : une
@@ -98,7 +113,8 @@ init_spatial_daemons <- function(n_daemons = 6,
                                  source_files = c("R/utils_spatial_async.R",
                                                   "R/utils_spatial_io.R",
                                                   "R/utils_spatial_multi.R",
-                                                  "R/utils_spatial_niche.R")) {
+                                                  "R/utils_spatial_niche.R",
+                                                  "R/utils_spatial_stats.R")) {
   if (!requireNamespace("mirai", quietly = TRUE)) {
     warning("Package 'mirai' manquant : les calculs spatiaux asynchrones (clustering, ",
             "deconvolution, indice de Moran) seront indisponibles. Installez-le via ",
@@ -225,14 +241,26 @@ spatial_daemon_diagnostics_text <- function() {
           has_rann      = requireNamespace("RANN", quietly = TRUE),
           has_write_log = exists("write_mirai_log", mode = "function"),
           has_integrate = exists("integrate_spatial_sketches", mode = "function"),
-          has_niches    = exists("compute_spatial_niches", mode = "function")
+          has_niches    = exists("compute_spatial_niches", mode = "function"),
+          # v5 (vague 5 — Phase 6 stats): confirms R/utils_spatial_stats.R
+          # actually preloaded without error -- see that file's header.
+          # NAMES MUST MATCH EXACTLY what R/utils_spatial_stats.R defines —
+          # a previous draft of that file used different names
+          # (spatial_composition_diff/spatial_hotspots_gi/spatial_ripley_k),
+          # which is what produced a "has_enrichment; has_ripley missing"
+          # degraded badge even though the file itself sourced fine.
+          has_enrichment = exists("spatial_neighborhood_enrichment", mode = "function"),
+          has_diffcomp   = exists("compute_composition_differential", mode = "function"),
+          has_hotspots   = exists("compute_getis_ord_hotspots", mode = "function"),
+          has_ripley     = exists("ripley_k_random_labeling", mode = "function")
         )
       })[],
       error = function(e) list(error = conditionMessage(e))
     )
   }
 
-  checks <- c("has_bpcells", "has_seurat", "has_rann", "has_write_log", "has_integrate", "has_niches")
+  checks <- c("has_bpcells", "has_seurat", "has_rann", "has_write_log", "has_integrate", "has_niches",
+              "has_enrichment", "has_diffcomp", "has_hotspots", "has_ripley")
   ok_vec <- vapply(results, function(r) {
     !is.null(r) && is.null(r$error) && all(vapply(checks, function(chk) isTRUE(r[[chk]]), logical(1)))
   }, logical(1))
@@ -276,7 +304,10 @@ stop_spatial_daemons <- function() {
 #' process — no zombie survives a full teardown) and respawns fresh
 #' processes, re-running the same post-init verification as a normal
 #' startup. Call this from the UI ("Reinitialiser les daemons") whenever a
-#' task fails unexpectedly, times out, or the badge shows "degrade".
+#' task fails unexpectedly, times out, or the badge shows "degrade" — this
+#' is ALSO the fix for a pool started before R/utils_spatial_stats.R
+#' existed in source_files (see v5 changelog): init_spatial_daemons() alone
+#' will not reload an already-`daemons_ready` pool, but reset always does.
 #'
 #' @param n_daemons Integer, pool size (default: whatever was last used).
 #' @return invisible(TRUE)/(FALSE), see init_spatial_daemons().
