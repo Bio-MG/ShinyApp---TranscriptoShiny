@@ -16,15 +16,21 @@
 # then the 4 helpers_*.R (order among them does not matter — R resolves
 # function-to-function calls at call time, not at source time), then the
 # R/utils_spatial_*.R pair (spatial daemons init), then modules.
+#
+# AUDIT FIX (quick win): R/utils_spatial_io.R used to be source()'d HERE,
+# BEFORE any package is loaded, AND AGAIN in app.R (after packages are
+# loaded, alongside the rest of the spatial infrastructure). Two independent
+# audits flagged this double-sourcing as a latent divergence risk (harmless
+# today since source() just redefines the same functions identically, but a
+# future edit to one call site and not the other would silently diverge).
+# Single source of truth now lives in app.R, where it belongs alongside
+# R/utils_spatial_async.R / _multi.R / _niche.R / _reference.R and AFTER
+# every package is guaranteed loaded.
 # =============================================================================
 
 # global.R v3.txt
 
 # Charge les librairies et définit les options globales
-
-if (file.exists("R/utils_spatial_io.R")) {
-  source("R/utils_spatial_io.R")
-}
 
 # --- 1. MEMOIRE & OPTIONS ---
 

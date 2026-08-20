@@ -487,7 +487,7 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
       selectInput(ns("hotspot_deconv_celltype"), NULL, choices = cts)
     })
 
-    observeEvent(input$btn_hotspots, {
+    hotspot_result <- eventReactive(input$btn_hotspots, {
       req(global_data$spatial_obj$coords)
       values <- if (identical(input$hotspot_source, "deconv")) {
         req(shared_rv$deconv_props, input$hotspot_deconv_celltype)
@@ -502,12 +502,18 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
         k_neighbors = input$hotspot_k
       )
       res <- tryCatch(
-        compute_getis_ord_hotspots(coords = global_data$spatial_obj$coords, values = values, k_neighbors = input$hotspot_k),
-        error = function(e) { showNotification(paste("Erreur hotspots :", conditionMessage(e)), type = "error", duration = 8); NULL }
+        compute_getis_ord_hotspots(coords = global_data$spatial_obj$coords, values = values,
+                                    k_neighbors = input$hotspot_k),
+        error = function(e) {
+          showNotification(paste("Erreur hotspots :", conditionMessage(e)), type = "error", duration = 8)
+          NULL
+        }
       )
-      if (!is.null(res)) shared_rv$hotspot_result <- res
+      shared_rv$hotspot_result <- res
+      req(res)
+      res
     })
-    
+
     output$hotspot_status_ui <- renderUI({
       req(shared_rv$hotspot_result)
       n_hot <- sum(shared_rv$hotspot_result$hotspot == "Hotspot (chaud)")
@@ -516,12 +522,11 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
           sprintf("%d hotspot(s), %d coldspot(s) sur %d elements (p < 0.05).",
                   n_hot, n_cold, nrow(shared_rv$hotspot_result)))
     })
-    
+
     .hotspot_palette <- c("Hotspot (chaud)" = "#D55E00", "Coldspot (froid)" = "#0072B2", "NS" = "#CCCCCC")
-    
+
     output$hotspot_map <- renderPlot({
-      req(shared_rv$hotspot_result)
-      df <- shared_rv$hotspot_result
+      df <- hotspot_result()
       coords <- global_data$spatial_obj$coords
       m <- match(df$id, coords$id)
       df$x <- coords$x[m]; df$y <- coords$y[m]
@@ -536,30 +541,42 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
         ggplot2::coord_fixed() + ggplot2::theme_void(base_size = 12) +
         ggplot2::labs(color = NULL, title = "Hotspots locaux (Getis-Ord Gi*)")
     })
-    
+
     output$hotspot_hist <- renderPlot({
       req(shared_rv$hotspot_result)
+      
       df <- shared_rv$hotspot_result
-      ggplot2::ggplot(df, ggplot2::aes(x = gi_star, fill = hotspot)) +
+      
+      ggplot2::ggplot(
+        df,
+        ggplot2::aes(x = gi_star, fill = hotspot)
+      ) +
         ggplot2::geom_histogram(bins = 50) +
-        ggplot2::geom_vline(xintercept = c(-1.96, 1.96), color = "grey30", linetype = "dashed") +
+        ggplot2::geom_vline(
+          xintercept = c(-1.96, 1.96),
+          color = "grey30",
+          linetype = "dashed"
+        ) +
         ggplot2::scale_fill_manual(values = .hotspot_palette) +
         ggplot2::theme_minimal(base_size = 12) +
-        ggplot2::labs(x = "Gi* (z-score)", y = "Effectif", fill = NULL,
-                      title = "Distribution du Gi*", subtitle = "Pointilles = seuil p < 0.05 (|z| > 1.96)")
+        ggplot2::labs(
+          x = "Gi* (z-score)",
+          y = "Effectif",
+          fill = NULL,
+          title = "Distribution du Gi*",
+          subtitle = "Pointilles = seuil p < 0.05 (|z| > 1.96)"
+        )
     })
     
     output$hotspot_table <- DT::renderDT({
       req(shared_rv$hotspot_result)
-      DT::datatable(shared_rv$hotspot_result, rownames = FALSE, filter = "top",
-                    options = list(pageLength = 15, scrollX = TRUE)) |>
-        DT::formatRound(c("value", "gi_star", "p_value"), 3)
-    })
-
-    output$hotspot_table <- DT::renderDT({
-      df <- hotspot_result()
-      DT::datatable(df, rownames = FALSE, filter = "top",
-                    options = list(pageLength = 15, scrollX = TRUE)) |>
+      
+      DT::datatable(
+        shared_rv$hotspot_result,
+        rownames = FALSE,
+        filter = "top",
+        options = list(pageLength = 15, scrollX = TRUE)
+      ) |>
         DT::formatRound(c("value", "gi_star", "p_value"), 3)
     })
   })

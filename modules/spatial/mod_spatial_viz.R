@@ -164,7 +164,7 @@ mod_spatial_viz_ui <- function(id) {
       # etape ensuite.
       div(
         class = "border-top pt-2 mt-2",
-        h6("Ajouter au rapport", style = "font-weight:bold; font-size:0.85rem;"),
+        h6("Ajouter au rapport", style = "font-weight: bold; font-size:0.85rem;"),
         div(class = "text-muted", style = "font-size:0.7rem;",
             "Sauvegarde la vue ACTUELLE (coloration + parametres ci-dessus) pour l'onglet ",
             "\"7. Export & Rapport\", meme apres avoir change d'onglet ou d'echantillon."),
@@ -1083,49 +1083,6 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       }, ignoreInit = TRUE)
     })
     
-    #########
-    # ── Palette PARTAGEE app-wide (vague 6) : ce module reste le panneau de
-    # controle central ; toute autre vue Spatial lit shared_rv$color_palette /
-    # manual_gradient / manual_discrete au lieu de recalculer sa propre palette.
-    observeEvent(list(input$color_palette, input$grad_low, input$grad_high), {
-      shared_rv$color_palette <- input$color_palette %||% "default"
-      shared_rv$manual_gradient <- list(low = input$grad_low %||% "#2166AC", mid = "white",
-                                        high = input$grad_high %||% "#B2182B")
-    }, ignoreInit = FALSE)
-    
-    .current_discrete_kind <- reactive({
-      switch(input$color_by %||% "qc", "cluster" = "cluster", "niche" = "niche", "deconv" = "celltype", NULL)
-    })
-    
-    output$manual_discrete_picker_ui <- renderUI({
-      kind <- .current_discrete_kind()
-      req(kind)
-      levels <- switch(kind,
-                       "cluster" = if (!is.null(shared_rv$cluster_labels)) shared_rv$cluster_labels else NULL,
-                       "niche"   = if (!is.null(shared_rv$niche_labels)) shared_rv$niche_labels else NULL,
-                       "celltype" = if (!is.null(shared_rv$deconv_props)) setdiff(colnames(shared_rv$deconv_props), "id") else NULL
-      )
-      req(levels)
-      levels <- sort(unique(as.character(levels)))
-      defaults <- spatial_discrete_colors(levels, shared_rv, kind = kind)
-      dynamic_manual_color_picker_ui(ns, kind, levels,
-                                     current_colors = (shared_rv$manual_discrete %||% list())[[kind]],
-                                     defaults = defaults)
-    })
-    
-    lapply(c("cluster", "niche", "celltype", "dataset"), function(kind) {
-      observeEvent(input[[paste0("manual_discrete_", kind, "_change")]], {
-        ev <- input[[paste0("manual_discrete_", kind, "_change")]]
-        req(ev$level, ev$color)
-        md <- shared_rv$manual_discrete %||% list()
-        cur <- md[[kind]] %||% stats::setNames(character(0), character(0))
-        cur[ev$level] <- ev$color
-        md[[kind]] <- cur
-        shared_rv$manual_discrete <- md
-      }, ignoreInit = TRUE)
-    })
-    #########
-    
     # --------------------------------------------------------------------------
     # UI du type cellulaire pour la déconvolution
     # --------------------------------------------------------------------------
@@ -1632,25 +1589,6 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         ggplot2::ggsave(
           filename = file,
           plot = p,
-          width = 8,
-          height = 8,
-          dpi = 200,
-          bg = "white"
-        )
-      }
-    )
-    
-    # --------------------------------------------------------------------------
-    # Téléchargement PNG
-    # --------------------------------------------------------------------------
-    output$dl_png <- downloadHandler(
-      filename = function() paste0("carte_spatiale_", input$color_by, "_", Sys.Date(), ".png"),
-      content = function(file) {
-        df <- plot_df()
-        validate(need(nrow(df) > 0, "Aucune donnee a exporter."))
-        ggplot2::ggsave(
-          file,
-          plot = build_raster_plot(df),
           width = 8,
           height = 8,
           dpi = 200,

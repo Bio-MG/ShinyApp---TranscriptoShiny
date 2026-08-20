@@ -80,7 +80,8 @@
       p$set(0.5, "DESeq2 + edgeR + limma-voom...")
       de_list <- getAllDE(shared_rv$filtered_counts, meta, input$condition_col,
                           input$group_target, input$group_ref,
-                          dds_full = dds_full, shrink = input$shrink_lfc)
+                          dds_full = dds_full, shrink = input$shrink_lfc,
+                          covariates = input$covariates %||% character(0))
 
       if (length(de_list) < 2) {
         stop("Au moins 2 méthodes doivent réussir pour comparer (", length(de_list),

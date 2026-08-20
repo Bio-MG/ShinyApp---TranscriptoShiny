@@ -669,7 +669,8 @@ mod_sc_server <- function(id, global_data) {
                   run_pathway_enrichment(top_g,
                                          organism = pathway_org,
                                          database = input$sc_ap_pathway_db %||% "GOBP",
-                                         pval_cutoff = 0.05),
+                                         pval_cutoff = 0.05,
+                                         universe = rownames(obj)),
                   error=function(e) { log_sc(paste("\u26a0\ufe0f Pathway:", e$message,
                                                     "\u2014 exemples testés :",
                                                     paste(head(top_g, 5), collapse=", "))); NULL }

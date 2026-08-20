@@ -16,6 +16,11 @@ source("R/palettes.R")
 # doivent être sourcés avant tout module qui les utilise (import spatial,
 # modules/spatial/*). init_spatial_daemons() est idempotent : sans risque si
 # rappelé plus tard (voir mod_spatial.R, appel défensif dans le module).
+#
+# AUDIT FIX (quick win) : R/utils_spatial_io.R n'est plus sourcé qu'ICI —
+# il l'était aussi en tête de global.R (avant même le chargement des
+# packages), un double-sourcing confirmé par deux audits indépendants comme
+# risque de divergence latente. Seule source de vérité désormais.
 source("R/utils_spatial_async.R")
 source("R/utils_spatial_io.R")
 # Phase 4 (multi-echantillons) — pure helper, depends only on
@@ -334,8 +339,15 @@ server <- function(input, output, session) {
   # === MODULES D'ANALYSE ===
 
   mod_sc_server("sc", global_data)
-  
-  mod_sc_mapping_server("mapping", global_data)
+
+  # AUDIT FIX (quick win) : l'appel racine mod_sc_mapping_server("mapping", global_data)
+  # a ete retire d'ici. Il enregistrait un moduleServer sous le namespace
+  # top-level "mapping", qui n'a JAMAIS eu de UI correspondante (le vrai
+  # panneau "0. Mapping IDs" du Single-Cell vit sous le namespace "sc-mapping",
+  # cree par l'appel imbrique mod_sc_mapping_server("mapping", global_data)
+  # DEJA present a l'interieur de mod_sc_server(), voir modules/sc/mod_sc.R).
+  # C'etait donc un module fantome : aucun input ne pointait jamais vers son
+  # namespace "mapping" nu, seulement de la reactivite morte. Retire.
 
   mod_bulk_server("bulk", global_data)
 
@@ -554,8 +566,11 @@ server <- function(input, output, session) {
         (if (length(global_data$spatial_datasets) > 0) names(global_data$spatial_datasets)[1] else NULL)
 
       # v10 (backlog court-terme #2/#1) : absents des sessions sauvegardees
+
       # AVANT cette version -- %||% list()/NULL degrade proprement (cache
+
       # vide / pas de reference partagee) plutot que d'echouer sur un
+
       # snapshot ancien.
 
       global_data$spatial_results_cache <- snapshot$spatial_results_cache %||% list()
@@ -611,9 +626,13 @@ server <- function(input, output, session) {
       }
 
       # v10 (backlog court-terme #1) : la reference scRNA-seq PARTAGEE est un
+
       # artefact sur DISQUE (tempdir(), voir prepare_reference_artifact())
+
       # -- jamais garanti survivre a un redemarrage/changement de machine,
+
       # contrairement au sketch (qui, lui, est bien serialise dans le .rds).
+
       # Meme logique d'avertissement que pour bpcells_dir ci-dessus.
 
       if (!is.null(global_data$spatial_reference)) {

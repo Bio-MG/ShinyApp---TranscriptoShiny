@@ -33,7 +33,7 @@ run_pathway_enrichment <- function(genes, organism = "human",
 
                                    database = "GOBP",
 
-                                   pval_cutoff = 0.05) {
+                                   pval_cutoff = 0.05, universe = NULL) {
 
   
 
@@ -143,7 +143,19 @@ run_pathway_enrichment <- function(genes, organism = "human",
 
   ids <- gene_entrez$ENTREZID
 
-  
+  universe_entrez <- NULL
+  if (!is.null(universe)) {
+    universe_clean <- unique(trimws(universe[!is.na(universe) & nchar(trimws(universe)) > 0]))
+    if (length(universe_clean) > 0) {
+      universe_map <- tryCatch(bitr(universe_clean, fromType = "SYMBOL", toType = "ENTREZID", OrgDb = orgdb),
+                               error = function(e) NULL)
+      if (!is.null(universe_map) && nrow(universe_map) > 0) {
+        universe_entrez <- union(unique(universe_map$ENTREZID), ids)
+      } else {
+        warning("Univers fourni mais aucun ID converti — repli sur le fond par défaut.")
+      }
+    }
+  } 
 
   # 3. Run Enrichment based on Database
 
@@ -167,7 +179,9 @@ run_pathway_enrichment <- function(genes, organism = "human",
 
       qvalueCutoff  = 0.2,
 
-      readable      = FALSE # Keep as Entrez for consistency, or TRUE for Symbols
+      readable      = FALSE, # Keep as Entrez for consistency, or TRUE for Symbols
+
+      universe      = universe_entrez
 
     )
 
@@ -199,7 +213,9 @@ run_pathway_enrichment <- function(genes, organism = "human",
 
       pAdjustMethod = "BH",
 
-      pvalueCutoff  = pval_cutoff
+      pvalueCutoff  = pval_cutoff,
+
+      universe      = universe_entrez
 
     )
 
@@ -229,7 +245,9 @@ run_pathway_enrichment <- function(genes, organism = "human",
 
       pAdjustMethod = "BH",
 
-      pvalueCutoff  = pval_cutoff
+      pvalueCutoff  = pval_cutoff,
+
+      universe      = universe_entrez
 
     )
 
