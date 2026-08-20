@@ -363,7 +363,8 @@ extract_deseq2_contrast <- function(dds, condition_col, group_target, group_ref,
 
 #' edgeR fallback differential expression (2-group comparison)
 
-run_edger_de <- function(counts_matrix, metadata, condition_col, group_target, group_ref) {
+run_edger_de <- function(counts_matrix, metadata, condition_col, group_target, group_ref,
+                         covariates = character(0)) {
 
   if (!requireNamespace("edgeR", quietly = TRUE)) stop("Package 'edgeR' requis.")
 
@@ -377,17 +378,33 @@ run_edger_de <- function(counts_matrix, metadata, condition_col, group_target, g
 
   grp  <- factor(metadata[[condition_col]], levels = c(group_ref, group_target))
 
+  covariates <- intersect(covariates, colnames(metadata))
+
   keep <- !is.na(grp)
+
+  for (cov in covariates) keep <- keep & !is.na(metadata[[cov]])
 
   if (sum(keep) < 4) stop("Trop peu d'échantillons valides pour edgeR (minimum 4 recommandé).")
 
 
 
-  y      <- edgeR::DGEList(counts = round(counts_matrix[, keep, drop = FALSE]), group = grp[keep])
+  meta_keep <- droplevels(metadata[keep, , drop = FALSE])
+
+  grp_keep  <- droplevels(grp[keep])
+
+  design <- if (length(covariates) > 0) {
+
+    stats::model.matrix(stats::as.formula(paste("~ grp_keep +", paste(covariates, collapse = " + "))),
+
+                        data = data.frame(grp_keep = grp_keep, meta_keep[, covariates, drop = FALSE]))
+
+  } else stats::model.matrix(~grp_keep)
+
+
+
+  y      <- edgeR::DGEList(counts = round(counts_matrix[, keep, drop = FALSE]), group = grp_keep)
 
   y      <- edgeR::calcNormFactors(y)
-
-  design <- stats::model.matrix(~grp[keep])
 
   y      <- edgeR::estimateDisp(y, design)
 
@@ -415,7 +432,8 @@ run_edger_de <- function(counts_matrix, metadata, condition_col, group_target, g
 
 #' limma-voom fallback differential expression (2-group comparison)
 
-run_limma_voom_de <- function(counts_matrix, metadata, condition_col, group_target, group_ref) {
+run_limma_voom_de <- function(counts_matrix, metadata, condition_col, group_target, group_ref,
+                              covariates = character(0)) {
 
   missing_pkgs <- c(
 
@@ -443,17 +461,33 @@ run_limma_voom_de <- function(counts_matrix, metadata, condition_col, group_targ
 
   grp  <- factor(metadata[[condition_col]], levels = c(group_ref, group_target))
 
+  covariates <- intersect(covariates, colnames(metadata))
+
   keep <- !is.na(grp)
 
+  for (cov in covariates) keep <- keep & !is.na(metadata[[cov]])
+
   if (sum(keep) < 4) stop("Trop peu d'échantillons valides pour limma-voom (minimum 4 recommandé).")
+
+
+
+  meta_keep <- droplevels(metadata[keep, , drop = FALSE])
+
+  grp_keep  <- droplevels(grp[keep])
+
+  design <- if (length(covariates) > 0) {
+
+    stats::model.matrix(stats::as.formula(paste("~ grp_keep +", paste(covariates, collapse = " + "))),
+
+                        data = data.frame(grp_keep = grp_keep, meta_keep[, covariates, drop = FALSE]))
+
+  } else stats::model.matrix(~grp_keep)
 
 
 
   y      <- edgeR::DGEList(counts = round(counts_matrix[, keep, drop = FALSE]))
 
   y      <- edgeR::calcNormFactors(y)
-
-  design <- stats::model.matrix(~grp[keep])
 
   v      <- limma::voom(y, design)
 
@@ -481,7 +515,9 @@ run_limma_voom_de <- function(counts_matrix, metadata, condition_col, group_targ
 
 run_bulk_de_dispatch <- function(engine, counts_matrix, metadata, condition_col,
 
-                                  group_target, group_ref, dds = NULL, shrink = TRUE) {
+                                  group_target, group_ref, dds = NULL, shrink = TRUE,
+
+                                  covariates = character(0)) {
 
   switch(engine,
 
@@ -493,9 +529,9 @@ run_bulk_de_dispatch <- function(engine, counts_matrix, metadata, condition_col,
 
     },
 
-    edger = run_edger_de(counts_matrix, metadata, condition_col, group_target, group_ref),
+    edger = run_edger_de(counts_matrix, metadata, condition_col, group_target, group_ref, covariates = covariates),
 
-    limma = run_limma_voom_de(counts_matrix, metadata, condition_col, group_target, group_ref),
+    limma = run_limma_voom_de(counts_matrix, metadata, condition_col, group_target, group_ref, covariates = covariates),
 
     stop("Moteur DE non supporté : ", engine)
 
@@ -558,7 +594,7 @@ run_bulk_de_dispatch <- function(engine, counts_matrix, metadata, condition_col,
 #'   `limma` that succeeded (length >= 1; methods that errored are omitted,
 #'   with a `warning()` raised for each — caller decides whether to surface it).
 getAllDE <- function(counts_matrix, metadata, condition_col, group_target, group_ref,
-                     dds_full, shrink = TRUE) {
+                     dds_full, shrink = TRUE, covariates = character(0)) {
   out <- list()
 
   out$deseq2 <- tryCatch({
@@ -569,14 +605,14 @@ getAllDE <- function(counts_matrix, metadata, condition_col, group_target, group
 
   out$edger <- tryCatch({
     res <- run_bulk_de_dispatch("edger", counts_matrix, metadata, condition_col,
-                                group_target, group_ref)
+                                group_target, group_ref, covariates = covariates)
     .normalize_de_cols(res, counts_for_basemean = counts_matrix)
   }, error = function(e) { warning("edgeR a échoué : ", conditionMessage(e)); NULL })
 
   if (isTRUE(has_limma)) {
     out$limma <- tryCatch({
       res <- run_bulk_de_dispatch("limma", counts_matrix, metadata, condition_col,
-                                  group_target, group_ref)
+                                  group_target, group_ref, covariates = covariates)
       .normalize_de_cols(res, counts_for_basemean = counts_matrix)
     }, error = function(e) { warning("limma-voom a échoué : ", conditionMessage(e)); NULL })
   }

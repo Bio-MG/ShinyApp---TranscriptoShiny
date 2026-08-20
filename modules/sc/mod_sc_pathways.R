@@ -147,7 +147,8 @@ mod_sc_pathways_server <- function(id, global_data, shared_rv) {
 
       tryCatch({
         res <- run_pathway_enrichment(genes=genes_to_test, organism=input$pathway_org,
-                                      database=input$pathway_db, pval_cutoff=input$pathway_pval)
+                                      database=input$pathway_db, pval_cutoff=input$pathway_pval,
+                                      universe = rownames(global_data$sc_obj))
         if (nrow(res)==0) {
           showNotification("ℹ️ Aucun pathway enrichi.", type="warning")
           pathway_rv(NULL); return()

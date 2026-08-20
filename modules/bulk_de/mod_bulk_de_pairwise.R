@@ -65,7 +65,8 @@
                                  target, ref, dds = dds_full, shrink = input$shrink_lfc)
           } else {
             run_bulk_de_dispatch(input$de_engine, shared_rv$filtered_counts, meta,
-                                 input$condition_col, target, ref)
+                                 input$condition_col, target, ref,
+                                 covariates = input$covariates %||% character(0))
           }
           .normalize_de_cols(r, counts_for_basemean = shared_rv$filtered_counts)
         }, error = function(e) { failed <<- c(failed, name); NULL })

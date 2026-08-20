@@ -97,7 +97,8 @@
       } else {
         p$set(0.5, paste("Ajustement", input$de_engine, "..."))
         res <- run_bulk_de_dispatch(input$de_engine, shared_rv$filtered_counts, meta,
-                                    input$condition_col, input$group_target, input$group_ref)
+                                    input$condition_col, input$group_target, input$group_ref,
+                                    covariates = input$covariates %||% character(0))
       }
 
       res <- .normalize_de_cols(res, counts_for_basemean = shared_rv$filtered_counts)

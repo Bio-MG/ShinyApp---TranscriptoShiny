@@ -327,7 +327,8 @@ mod_bulk_server <- function(id, global_data) {
           if (length(sig_g) >= 10) {
             pw <- tryCatch(
               run_pathway_enrichment(sig_g, organism=input$ap_pathway_org,
-                                     database=input$ap_pathway_db, pval_cutoff=0.05),
+                                     database=input$ap_pathway_db, pval_cutoff=0.05,
+                                     universe = rownames(filtered)),
               error=function(e) { log(paste("\u26a0\ufe0f Pathway:", e$message)); NULL }
             )
             if (!is.null(pw) && nrow(pw) > 0) {
