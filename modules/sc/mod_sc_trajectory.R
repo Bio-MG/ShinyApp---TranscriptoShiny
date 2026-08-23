@@ -239,6 +239,7 @@ mod_sc_trajectory_output_ui <- function(id) {
 
 mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
   moduleServer(id, function(input, output, session) {
+    ns <- session$ns
     traj_status_rv <- reactiveVal("En attente du calcul...")
     # Raw result of the LAST trajectory run — either method:
     #   - exploratory : calculate_pseudotime() list (graph, root_cell,

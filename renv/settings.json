@@ -2,7 +2,10 @@
   "bioconductor.enabled": true,
   "bioconductor.version": null,
   "external.libraries": [],
-  "ignored.packages": [],
+  "ignored.packages": [
+    "loomR",
+    "sceasy"
+  ],
   "lockfile.sanitize": true,
   "package.dependency.fields": [
     "Imports",

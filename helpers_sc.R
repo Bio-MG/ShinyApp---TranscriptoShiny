@@ -886,7 +886,7 @@ calculate_slingshot_pseudotime <- function(
   cluster_labels <- factor(cluster_labels)
 
   slingshot_args <- list(
-    X = embeddings,
+    data = embeddings,
     clusterLabels = cluster_labels
   )
 
