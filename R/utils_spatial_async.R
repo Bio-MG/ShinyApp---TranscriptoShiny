@@ -114,6 +114,7 @@ init_spatial_daemons <- function(n_daemons = 6,
                                                   "R/utils_spatial_io.R",
                                                   "R/utils_spatial_multi.R",
                                                   "R/utils_spatial_niche.R",
+                                                  "R/utils_spatial_deconv_tasks.R",
                                                   "R/utils_spatial_stats.R")) {
   if (!requireNamespace("mirai", quietly = TRUE)) {
     warning("Package 'mirai' manquant : les calculs spatiaux asynchrones (clustering, ",

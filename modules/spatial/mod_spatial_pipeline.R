@@ -272,119 +272,17 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
     # duplication complete du corps de mod_spatial_deconv.R::deconv_task
     # (memes 3 branches, memes timeouts dedies). ────────────────────────────
     deconv_task <- ExtendedTask$new(function(bpcells_dir, pass_idx, coords, mode, ref_path,
-                                              n_topics, n_top_od, lt_npcs, lt_norm_method,
-                                              lt_ncells, min_shared_genes, log_file) {
+                                             n_topics, n_top_od, lt_npcs, lt_norm_method,
+                                             lt_ncells, min_shared_genes, log_file) {
       mirai::mirai(
         {
-          .load_reference_artifact <- function(manifest_path) {
-            manifest <- readRDS(manifest_path)
-            counts <- if (identical(manifest$backend, "bpcells")) {
-              BPCells::open_matrix_dir(manifest$counts_path)
-            } else readRDS(manifest$counts_path)
-            list(counts = counts, cell_types = manifest$cell_types)
-          }
-
-          write_mirai_log(log_file, "[3/9] Ouverture BPCells...", 1, 5)
-          mat <- BPCells::open_matrix_dir(bpcells_dir)
-          if (!is.null(pass_idx)) mat <- mat[, pass_idx, drop = FALSE]
-          coords_df <- coords[match(colnames(mat), coords$id), c("x", "y")]
-          rownames(coords_df) <- colnames(mat)
-          keep <- stats::complete.cases(coords_df)
-          mat <- mat[, keep, drop = FALSE]; coords_df <- coords_df[keep, , drop = FALSE]
-
-          if (identical(mode, "rctd")) {
-            if (!requireNamespace("spacexr", quietly = TRUE)) stop("Package 'spacexr' requis (RCTD).")
-            write_mirai_log(log_file, "[3/9] RCTD (mode full, mono-coeur)...", 3, 5)
-            reloaded <- .load_reference_artifact(ref_path)
-            ref_counts <- methods::as(reloaded$counts, "dgCMatrix")
-            reference <- spacexr::Reference(counts = ref_counts, cell_types = reloaded$cell_types)
-            puck <- spacexr::SpatialRNA(coords = coords_df, counts = methods::as(mat, "dgCMatrix"))
-            rctd <- spacexr::create.RCTD(puck, reference, max_cores = 1)
-            rctd <- spacexr::run.RCTD(rctd, doublet_mode = "full")
-            w <- as.matrix(rctd@results$weights); w <- sweep(w, 1, rowSums(w), "/")
-            write_mirai_log(log_file, "[3/9] Termine.", 5, 5)
-            data.frame(id = rownames(w), w, row.names = NULL, check.names = FALSE)
-
-          } else if (identical(mode, "labeltransfer")) {
-            use_sct <- identical(lt_norm_method, "sct")
-            write_mirai_log(log_file, sprintf("[3/9] Preparation reference (%s)...",
-                                               if (use_sct) "SCTransform" else "LogNormalize"), 2, 5)
-            reloaded <- .load_reference_artifact(ref_path)
-            ref_obj  <- Seurat::CreateSeuratObject(counts = reloaded$counts)
-            ref_obj$cell_type <- as.character(reloaded$cell_types)[match(colnames(ref_obj), names(reloaded$cell_types))]
-            ref_obj  <- subset(ref_obj, cells = colnames(ref_obj)[!is.na(ref_obj$cell_type)])
-            if (ncol(ref_obj) < 10) stop("Reference trop petite apres filtrage (< 10 cellules annotees).")
-            sctransform_sequential <- function(o, ncells) {
-              old_plan <- future::plan(); on.exit(future::plan(old_plan), add = TRUE)
-              future::plan("sequential"); Seurat::SCTransform(o, ncells = ncells, verbose = FALSE)
-            }
-            if (use_sct) {
-              ref_obj <- sctransform_sequential(ref_obj, lt_ncells)
-            } else {
-              ref_obj <- Seurat::NormalizeData(ref_obj, verbose = FALSE)
-              ref_obj <- Seurat::FindVariableFeatures(ref_obj, verbose = FALSE)
-              ref_obj <- Seurat::ScaleData(ref_obj, verbose = FALSE)
-            }
-            ref_obj <- Seurat::RunPCA(ref_obj, npcs = 50, verbose = FALSE)
-
-            write_mirai_log(log_file, "[3/9] Preparation requete spatiale...", 3, 5)
-            query <- Seurat::CreateSeuratObject(counts = mat)
-            if (use_sct) {
-              query <- sctransform_sequential(query, lt_ncells)
-            } else {
-              query <- Seurat::NormalizeData(query, verbose = FALSE)
-              query <- Seurat::FindVariableFeatures(query, verbose = FALSE)
-              query <- Seurat::ScaleData(query, verbose = FALSE)
-            }
-            n_pc <- max(2, min(lt_npcs, ncol(query) - 1, nrow(query) - 1, 50))
-            query <- Seurat::RunPCA(query, npcs = n_pc, verbose = FALSE)
-
-            shared_genes <- intersect(rownames(ref_obj), rownames(query))
-            if (length(shared_genes) < min_shared_genes) {
-              stop(sprintf("Seulement %d gene(s) commun(s) (minimum : %d).", length(shared_genes), min_shared_genes))
-            }
-            write_mirai_log(log_file, "[3/9] FindTransferAnchors...", 4, 5)
-            anchors <- Seurat::FindTransferAnchors(
-              reference = ref_obj, query = query,
-              normalization.method = if (use_sct) "SCT" else "LogNormalize", npcs = min(30, n_pc)
-            )
-            predictions <- Seurat::TransferData(anchorset = anchors, refdata = ref_obj$cell_type,
-                                                prediction.assay = TRUE, weight.reduction = query[["pca"]],
-                                                dims = seq_len(n_pc))
-            write_mirai_log(log_file, "[3/9] Termine.", 5, 5)
-            pred_mat <- t(as.matrix(SeuratObject::LayerData(predictions, layer = "data")))
-            pred_mat <- pred_mat[, setdiff(colnames(pred_mat), "max"), drop = FALSE]
-            data.frame(id = rownames(pred_mat), pred_mat, row.names = NULL, check.names = FALSE)
-
-          } else {
-            if (!requireNamespace("STdeconvolve", quietly = TRUE) ||
-                !requireNamespace("topicmodels", quietly = TRUE) ||
-                !requireNamespace("slam", quietly = TRUE)) {
-              stop("Packages 'STdeconvolve', 'topicmodels' et 'slam' requis.")
-            }
-            write_mirai_log(log_file, "[3/9] Pretraitement (genes surdisperses)...", 2, 5)
-            counts_dense <- as.matrix(methods::as(mat, "dgCMatrix"))
-            storage.mode(counts_dense) <- "integer"
-            corpus <- STdeconvolve::restrictCorpus(counts_dense, alpha = 0.05,
-                                                   nTopOD = min(n_top_od, nrow(counts_dense)), verbose = FALSE, plot = FALSE)
-            write_mirai_log(log_file, sprintf("[3/9] Ajustement LDA (K=%d)...", n_topics), 3, 5)
-            corpus_stm <- slam::as.simple_triplet_matrix(t(as.matrix(corpus)))
-            lda_model <- topicmodels::LDA(corpus_stm, k = n_topics,
-              control = list(seed = 0, verbose = 0, keep = 0, estimate.alpha = FALSE,
-                            em = list(iter.max = 100), var = list(iter.max = 50)))
-            write_mirai_log(log_file, "[3/9] Extraction des proportions...", 4, 5)
-            post <- topicmodels::posterior(lda_model)
-            theta <- post$topics; beta <- post$terms
-            theta[theta < 0.05] <- 0; theta <- theta / rowSums(theta); theta[is.na(theta)] <- 0
-            top_marker_genes <- apply(beta, 1, function(row) {
-              ord <- order(row, decreasing = TRUE)
-              paste(colnames(beta)[ord[seq_len(min(3, length(ord)))]], collapse = ".")
-            })
-            colnames(theta) <- paste0("T", seq_len(ncol(theta)), "_", top_marker_genes)
-            colnames(theta) <- gsub("[/_\\\\]", "-", colnames(theta))
-            write_mirai_log(log_file, "[3/9] Termine.", 5, 5)
-            data.frame(id = rownames(theta), theta, row.names = NULL, check.names = FALSE)
-          }
+          run_spatial_deconv_body(
+            bpcells_dir = bpcells_dir, pass_idx = pass_idx, coords = coords,
+            mode = mode, ref_path = ref_path, n_topics = n_topics,
+            n_top_od = n_top_od, lt_npcs = lt_npcs, lt_norm_method = lt_norm_method,
+            lt_ncells = lt_ncells, min_shared_genes = min_shared_genes,
+            log_file = log_file
+          )
         },
         bpcells_dir = bpcells_dir, pass_idx = pass_idx, coords = coords, mode = mode,
         ref_path = ref_path, n_topics = n_topics, n_top_od = n_top_od, lt_npcs = lt_npcs,
@@ -394,7 +292,6 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
                           "rctd" = RCTD_TIMEOUT_MS, MIRAI_TASK_TIMEOUT_MS)
       )
     })
-
     # ── Etape 4 : Niches -- reutilise DIRECTEMENT la fonction pure existante ──
     niche_task <- ExtendedTask$new(function(coords, group_labels, n_niches, log_file) {
       mirai::mirai(

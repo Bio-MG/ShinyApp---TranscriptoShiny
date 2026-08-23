@@ -79,10 +79,18 @@ source("modules/bulk/mod_bulk.R")
 # --- Spatial (parent + sous-modules enfants) ---
 source("modules/spatial/mod_spatial_qc.R")
 source("modules/spatial/mod_spatial_cluster.R")
-source("modules/spatial/mod_spatial_deconv.R")
+
 source("modules/spatial/mod_spatial_viz.R")
 source("modules/spatial/mod_spatial_multi.R")
 source("modules/spatial/mod_spatial_niche.R")
+
+# --- Spatial sub-deconv (Phase 2 split) ---
+source("R/utils_spatial_deconv_tasks.R") # BEFORE daemon init if not already
+source("modules/spatial/deconv/mod_spatial_deconv_ui.R")
+source("modules/spatial/deconv/mod_spatial_deconv_reference.R")
+source("modules/spatial/deconv/mod_spatial_deconv_refviz.R")
+source("modules/spatial/deconv/mod_spatial_deconv_outputs.R")
+source("modules/spatial/deconv/mod_spatial_deconv.R")
 # Moyen terme (voir handoff_spatial_bio-mg.md) : pipeline automatique 1-clic
 # + export (paquet .zip / script reproductible) -- sourcés avant
 # mod_spatial.R, qui appelle mod_spatial_pipeline_server()/

@@ -213,9 +213,9 @@ mod_spatial_lr_server <- function(id, global_data, shared_rv) {
           ggplot2::geom_histogram(bins = 30, fill = shared_rv$color_palette %||% "default", color = "white") +
           spatial_continuous_scale(shared_rv, fill) +
           ggplot2::theme_minimal(base_size = 12) +
-          ggplot2::labs(title = "Repartition des scores LR moyens par spot", x = "Moyenne score LR", y = "Count"),
-          subtitle = sprintf("k=%d, %d permutations: shared_rv$lr_result$spot_scores",
-                              input$k_neighbors, input$n_perm))
+          ggplot2::labs(title = "Repartition des scores LR moyens par spot", x = "Moyenne score LR", y = "Count") +
+          ggplot2::labs(subtitle = sprintf("k=%d, %d permutations: shared_rv$lr_result$spot_scores",
+                                          input$k_neighbors, input$n_perm))
       } else {
         ggplot2::ggplot() +
           ggplot2::labs(title = "Aucune donnée de scores LR disponible", subtitle = "Calculez d'abord les scores (onglet gauche)") +

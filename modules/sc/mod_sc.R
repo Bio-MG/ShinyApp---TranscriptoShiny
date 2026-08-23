@@ -122,6 +122,7 @@ mod_sc_server <- function(id, global_data) {
       active_tab       = NULL,
       report_viz_list  = list(),    # basket for "📌 Ajouter au Rapport"
       traj_reduction   = NULL,      # mirrors last trajectory reduction used
+      traj_method      = NULL,      # mirrors last trajectory method used ("exploratory_knn" | "slingshot")
       traj_genes       = character(0),  # Step-3.7: mirrors "Genes vs Pseudotemps" picker
       max_cells_heavy  = Inf        # Step-3.7: RAM-safety cap (set by mod_sc_pipeline.R)
     )
@@ -723,6 +724,9 @@ mod_sc_server <- function(id, global_data) {
         }
 
         # ── Step 9: Trajectory (optional) ────────────────────────────────────
+        # Auto-pipeline stays EXPLICITLY exploratory (weighted kNN graph):
+        # Slingshot is opt-in only from the Trajectory module UI. No method
+        # switch ever happens silently here.
         if (isTRUE(input$sc_ap_trajectory)) {
           p$set(0.95,"Trajectoire..."); log_sc("Trajectory / Pseudotime...")
           if (ncol(obj) > .MAX_TRAJECTORY_CELLS) {
@@ -731,14 +735,30 @@ mod_sc_server <- function(id, global_data) {
           } else {
             # Step-3.8B: fall back to PCA if UMAP was skipped ("PCA seul" mode)
             traj_red_use <- if ("umap" %in% names(obj@reductions)) "umap" else "pca"
+            # Step-3.9: embeddings-based signature — extract the matrix, tag it
+            # with the reduction name for provenance, then write the result list
+            # fields back into meta.data (no Seurat object returned anymore).
+            traj_embedding <- Seurat::Embeddings(obj, reduction = traj_red_use)
+            attr(traj_embedding, "reduction") <- traj_red_use
             traj_res <- tryCatch(
-              calculate_pseudotime(obj, reduction=traj_red_use, root_cells=NULL),
+              calculate_pseudotime(embeddings = traj_embedding, k = 15,
+                                   root_cells = NULL, root_method = "diameter"),
               error=function(e) { log_sc(paste("\u26a0\ufe0f Trajectoire:", e$message)); NULL }
             )
             if (!is.null(traj_res)) {
-              obj                      <- traj_res
-              shared_rv$traj_reduction <- traj_red_use
-              log_sc(sprintf("\u2713 Pseudotemps calculé (racine auto, réduction: %s)", toupper(traj_red_use)))
+              obj@meta.data$pseudotime        <- traj_res$pseudotime
+              obj@meta.data$traj_in_component <- traj_res$in_root_component
+              # Provenance persistence (mirrors mod_sc_trajectory.R) so the
+              # report/exports know exactly how this pseudotime was made.
+              obj@meta.data$traj_method                <- rep("exploratory_knn", ncol(obj))
+              obj@meta.data$traj_computation_reduction <- rep(traj_red_use, ncol(obj))
+              obj@meta.data$traj_root_method           <- rep(traj_res$root_method, ncol(obj))
+              obj@meta.data$traj_root_cell             <- rep(traj_res$root_cell, ncol(obj))
+              obj@meta.data$traj_root_cluster          <- rep(NA_character_, ncol(obj))
+              obj@meta.data$traj_root_component_size   <- rep(traj_res$root_component_size, ncol(obj))
+              shared_rv$traj_reduction        <- traj_red_use
+              shared_rv$traj_method           <- "exploratory_knn"
+              log_sc(sprintf("\u2713 Pseudotemps calculé (exploratoire kNN, racine auto/diamètre, réduction: %s)", toupper(traj_red_use)))
             }
           }
         }
@@ -798,6 +818,7 @@ mod_sc_server <- function(id, global_data) {
           sections         = input$report_sections %||% character(0),
           reduction        = "umap",
           traj_reduction   = shared_rv$traj_reduction %||% "umap",
+          traj_method      = shared_rv$traj_method,   # transient fallback; obj@meta.data provenance wins in the report
           traj_genes       = shared_rv$traj_genes %||% character(0),  # Step-3.7
           saved_viz_list   = if (length(shared_rv$report_viz_list)) shared_rv$report_viz_list else NULL,
           group_by         = "seurat_clusters",
@@ -975,7 +996,11 @@ ggplot(data.frame(pseudotime=obj$pseudotime, cluster=obj$seurat_clusters),
   geom_density(alpha=0.6) + scale_fill_viridis_d(option="turbo") +
   labs(title="Distribution Pseudotemps", x="Pseudotemps", y="Densité") + theme_minimal()'
 ) else
-'# obj <- calculate_pseudotime(obj, reduction="umap")
+'# Step-3.9 : nouvelle signature (matrice embeddings -> liste de resultats) :
+# emb <- Seurat::Embeddings(obj, reduction = "umap")
+# attr(emb, "reduction") <- "umap"
+# res <- calculate_pseudotime(embeddings = emb, k = 15, root_cells = NULL)
+# obj$pseudotime <- res$pseudotime
 # ggplot(data.frame(pseudotime=obj$pseudotime, cluster=obj$seurat_clusters),
 #        aes(x=pseudotime, fill=cluster)) +
 #   geom_density(alpha=0.6) + scale_fill_viridis_d(option="turbo") + theme_minimal()',

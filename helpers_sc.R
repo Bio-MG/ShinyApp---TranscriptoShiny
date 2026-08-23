@@ -8,9 +8,12 @@
 # Contents:
 #   - Plots      : plot_enhanced_scatter(), plot_violin_enhanced(),
 #                  plot_multi_sample(), plot_correlation_matrix(),
-#                  plot_trajectory(), plot_gene_correlation_network(),
+#                  plot_trajectory(), plot_slingshot_trajectory(),
+#                  plot_gene_correlation_network(),
 #                  plot_pseudotime_distribution(), plot_genes_vs_pseudotime()
-#   - Analysis   : find_correlated_genes(), calculate_pseudotime(),
+#   - Analysis   : find_correlated_genes(), calculate_pseudotime()
+#                  (exploratory kNN graph), calculate_slingshot_pseudotime()
+#                  (Slingshot lineage inference — distinct method),
 #                  subsample_seurat_for_analysis()
 #   - DT tables  : build_markers_dt(), build_corr_dt()
 #   - Internal   : .get_norm_matrix() (Seurat v4/v5-safe assay extraction)
@@ -673,134 +676,461 @@ plot_correlation_matrix <- function(seurat_obj, features, method = "pearson",
 
 
 
-#' Trajectory Analysis (k-NN shortest path)
+#' Calculate exploratory graph-based pseudotime
+#'
+#' Builds a k-nearest-neighbour graph using RANN::nn2(), weights edges by
+#' Euclidean distance in the selected computation space, and computes
+#' shortest-path pseudotime from a validated root cell.
+#'
+#' This is an exploratory graph-based ordering. It is NOT Slingshot,
+#' Monocle, diffusion pseudotime, or a branching lineage-inference method.
+#'
+#' @param embeddings Numeric matrix. Rows are cells, columns are dimensions.
+#'   Should carry attr(embeddings, "reduction") set to the reduction name
+#'   (e.g. "pca") for provenance tracking downstream.
+#' @param k Integer. Number of nearest neighbours (default 15).
+#' @param root_cells Optional integer vector of root cell indices (1-based).
+#'   If NULL, root is selected automatically via double-sweep BFS
+#'   (diameter-endpoint approximation).
+#' @param root_method Character. "diameter" or "manual". Informational only;
+#'   actual behavior is driven by root_cells being NULL or not.
+#'
+#' @return A list with: pseudotime (named numeric vector, min-max normalized
+#'   to [0,1], NA outside root component), graph (igraph object), root_cell,
+#'   root_cells, component_membership, in_root_component (logical vector),
+#'   root_component_size, n_cells, n_edges, k, root_method,
+#'   computation_reduction, weighted, normalization, method.
+#' @export
+calculate_pseudotime <- function(
+    embeddings,
+    k = 15,
+    root_cells = NULL,
+    root_method = c("diameter", "manual")
+) {
+  root_method <- match.arg(root_method)
 
-#' @param seurat_obj Objet Seurat
-
-#' @param reduction Réduction à utiliser ("umap", "pca")
-
-#' @param root_cells Indices des cellules racines (optionnel)
-
-#' @return Objet Seurat avec $pseudotime
-
-calculate_pseudotime <- function(seurat_obj, reduction = "umap", root_cells = NULL) {
-  if (!reduction %in% names(seurat_obj@reductions))
-    stop(paste("Réduction", reduction, "non trouvée"))
-  
-  embeddings <- Embeddings(seurat_obj, reduction = reduction)
-  if (!requireNamespace("igraph", quietly = TRUE)) stop("Package igraph requis")
-  
-  dist_mat <- as.matrix(dist(embeddings))
-  k <- min(10, ncol(seurat_obj) - 1)
-  edge_list <- c()
-  for (i in 1:nrow(dist_mat)) {
-    neighbors <- order(dist_mat[i, ])[2:(k+1)]
-    for (j in neighbors) edge_list <- c(edge_list, i, j)
+  if (!requireNamespace("RANN", quietly = TRUE)) {
+    stop("Package 'RANN' is required for graph-based pseudotime.")
   }
-  
-  g <- igraph::graph(edges = edge_list, n = ncol(seurat_obj), directed = FALSE)
-  g <- igraph::simplify(g, remove.multiple = TRUE, remove.loops = TRUE)
-  
-  # FIX: a k-NN graph on well-separated clusters (small test datasets) can be
-  # disconnected. igraph::distances() then returns Inf across components,
-  # which used to corrupt the min/max normalization below -- every reachable
-  # cell collapsed near 0 and the rest became NaN (empty distribution plot,
-  # trajectory colored by a single value). Now: root cell is picked within
-  # its own component, cells outside it get NA (excluded downstream by
-  # ggplot's na.rm) instead of a corrupted value.
-  comp <- igraph::components(g)
-  if (comp$no > 1) {
-    warning(sprintf(
-      "Graphe de trajectoire deconnecte (%d composantes) -- pseudotemps calcule uniquement sur la composante de la cellule racine ; les autres cellules recoivent NA.",
-      comp$no
-    ))
+  if (!requireNamespace("igraph", quietly = TRUE)) {
+    stop("Package 'igraph' is required for graph-based pseudotime.")
   }
-  
-  if (is.null(root_cells)) {
-    main_comp  <- which.max(comp$csize)
-    comp_cells <- which(comp$membership == main_comp)
-    centrality <- igraph::closeness(g, vids = comp_cells)
-    root_cell  <- comp_cells[which.max(centrality)]
+
+  embeddings <- as.matrix(embeddings)
+
+  if (!is.numeric(embeddings) || nrow(embeddings) < 3L || ncol(embeddings) < 1L) {
+    stop("embeddings must be a numeric matrix with at least 3 cells.")
+  }
+  if (any(!is.finite(embeddings))) {
+    stop("embeddings contain NA, NaN, or infinite values.")
+  }
+
+  n_cells <- nrow(embeddings)
+  k <- as.integer(k)
+  if (length(k) != 1L || is.na(k) || k < 1L) {
+    stop("'k' must be a positive integer.")
+  }
+  k <- min(k, n_cells - 1L)
+
+  if (!is.null(root_cells)) {
+    root_cells <- unique(as.integer(root_cells))
+    if (anyNA(root_cells) || any(root_cells < 1L) || any(root_cells > n_cells)) {
+      stop("Invalid root cell index. Valid indices are between 1 and ", n_cells, ".")
+    }
+  }
+
+  # RANN returns the query cell itself as the first neighbour -> drop column 1.
+  nn <- RANN::nn2(data = embeddings, query = embeddings, k = k + 1L)
+  neighbour_idx  <- nn$nn.idx[, -1L, drop = FALSE]
+  neighbour_dist <- nn$nn.dists[, -1L, drop = FALSE]
+
+  from   <- rep(seq_len(n_cells), each = k)
+  to     <- as.vector(t(neighbour_idx))
+  weight <- as.vector(t(neighbour_dist))
+
+  edge_df <- data.frame(from = from, to = to, weight = weight, stringsAsFactors = FALSE)
+  edge_df <- edge_df[edge_df$from != edge_df$to, , drop = FALSE]
+
+  edge_key <- paste(pmin(edge_df$from, edge_df$to), pmax(edge_df$from, edge_df$to), sep = "_")
+  edge_df  <- edge_df[!duplicated(edge_key), , drop = FALSE]
+
+  if (nrow(edge_df) < 1L) {
+    stop("Unable to construct a valid kNN graph.")
+  }
+
+  graph <- igraph::graph_from_data_frame(
+    d = edge_df,
+    directed = FALSE,
+    vertices = data.frame(name = as.character(seq_len(n_cells)))
+  )
+  igraph::E(graph)$weight <- pmax(as.numeric(edge_df$weight), .Machine$double.eps)
+
+  components <- igraph::components(graph)
+  automatic_root <- is.null(root_cells)
+
+  if (automatic_root) {
+    largest_component <- which.max(components$csize)
+    component_cells <- which(components$membership == largest_component)
+
+    # Double-sweep BFS: diameter-endpoint approximation.
+    start_cell <- component_cells[[1L]]
+    d_start <- igraph::distances(graph, v = start_cell, to = component_cells,
+                                  weights = igraph::E(graph)$weight)
+    far_cell_1 <- component_cells[[which.max(d_start)]]
+    d_far <- igraph::distances(graph, v = far_cell_1, to = component_cells,
+                                weights = igraph::E(graph)$weight)
+    root_cell <- component_cells[[which.max(d_far)]]
+    root_cells <- root_cell
   } else {
-    root_cell <- root_cells[1]
+    root_cell <- root_cells[[1L]]
+    root_component  <- components$membership[[root_cell]]
+    component_cells <- which(components$membership == root_component)
   }
-  
-  root_comp <- comp$membership[root_cell]
-  same_comp <- which(comp$membership == root_comp)
-  
-  pseudotime <- rep(NA_real_, ncol(seurat_obj))
-  d   <- igraph::distances(g, v = root_cell, to = same_comp)[1, ]
-  rng <- range(d, finite = TRUE)
-  pseudotime[same_comp] <- if (diff(rng) > 0) (d - rng[1]) / diff(rng) else 0
-  
-  seurat_obj$pseudotime <- pseudotime
-  seurat_obj
+
+  root_component <- components$membership[[root_cell]]
+  same_component <- components$membership == root_component
+
+  distances <- igraph::distances(graph, v = root_cell, to = seq_len(n_cells),
+                                  weights = igraph::E(graph)$weight)
+  pseudotime <- as.numeric(distances)
+  pseudotime[!same_component] <- NA_real_  # undefined outside root component
+
+  finite_pt <- pseudotime[is.finite(pseudotime)]
+  if (length(finite_pt) == 0L) {
+    stop("No finite pseudotime values were obtained.")
+  }
+
+  pt_min <- min(finite_pt)
+  pt_max <- max(finite_pt)
+  if (pt_max > pt_min) {
+    pseudotime <- (pseudotime - pt_min) / (pt_max - pt_min)
+  } else {
+    pseudotime[] <- 0
+  }
+
+  names(pseudotime) <- rownames(embeddings) %||% as.character(seq_len(n_cells))
+
+  list(
+    pseudotime             = pseudotime,
+    graph                  = graph,
+    root_cell              = root_cell,
+    root_cells             = root_cells,
+    component_membership   = components$membership,
+    in_root_component      = same_component,
+    root_component_size    = sum(same_component),
+    n_cells                = n_cells,
+    n_edges                = igraph::ecount(graph),
+    k                      = k,
+    root_method            = if (automatic_root) "diameter" else "manual",
+    computation_reduction  = attr(embeddings, "reduction") %||% NA_character_,
+    weighted               = TRUE,
+    normalization          = "min-max",
+    method                 = "Exploratory weighted kNN graph pseudotime"
+  )
 }
 
 
 
-#' Plot Trajectory
+#' Calculate Slingshot lineage pseudotime
+#'
+#' Runs Slingshot on a reduced embedding matrix and cluster labels.
+#' This is distinct from exploratory weighted kNN pseudotime:
+#' calculate_pseudotime() is an exploratory graph ordering that infers NO
+#' lineage, whereas this helper delegates to the actual Slingshot
+#' lineage-inference algorithm (slingshot::slingshot()).
+#'
+#' @param embeddings Numeric matrix with cells in rows.
+#' @param cluster_labels Cluster labels, one per cell.
+#' @param start_cluster Optional starting cluster.
+#' @param end_clusters Optional terminal clusters.
+#' @param reduction Character reduction name for provenance.
+#'
+#' @return A list containing pseudotime, pseudotime_matrix, curve_weights,
+#' lineages, curves, computation_reduction, method, root_method,
+#' root_cluster, n_cells.
+#' @export
 
-#' @param seurat_obj Objet Seurat avec pseudotime
-
-#' @param reduction Réduction à visualiser
-
-#' @param color_by Variable de coloration ("pseudotime" ou metadata)
-
-#' @return ggplot object
-
-plot_trajectory <- function(seurat_obj, reduction = "umap", color_by = "pseudotime") {
-
-  if (!reduction %in% names(seurat_obj@reductions))
-
-    stop(paste("Réduction", reduction, "non trouvée"))
-
-  
-
-  embeddings <- Embeddings(seurat_obj, reduction = reduction)
-
-  color_val <- if (color_by %in% colnames(seurat_obj@meta.data)) {
-
-    seurat_obj@meta.data[[color_by]]
-
-  } else {
-
-    warning(paste("Colonne", color_by, "introuvable"))
-
-    rep("unknown", ncol(seurat_obj))
-
+calculate_slingshot_pseudotime <- function(
+    embeddings,
+    cluster_labels,
+    start_cluster = NULL,
+    end_clusters = NULL,
+    reduction = NA_character_
+) {
+  if (!requireNamespace("slingshot", quietly = TRUE)) {
+    stop("Package 'Slingshot' is required for Slingshot trajectory inference.")
   }
 
-  
+  embeddings <- as.matrix(embeddings)
 
-  plot_data <- data.frame(x = embeddings[, 1], y = embeddings[, 2], value = color_val)
+  if (!is.numeric(embeddings) ||
+      nrow(embeddings) < 3L ||
+      ncol(embeddings) < 2L) {
+    stop("embeddings must be a numeric matrix with at least 3 cells and 2 dimensions.")
+  }
 
-  
+  if (any(!is.finite(embeddings))) {
+    stop("embeddings contain NA, NaN, or infinite values.")
+  }
 
-  p <- ggplot(plot_data, aes(x = x, y = y, color = value)) +
+  cluster_labels <- as.character(cluster_labels)
 
-    geom_point(size = 1.5, alpha = 0.7) +
+  if (length(cluster_labels) != nrow(embeddings)) {
+    stop("cluster_labels must have one value per cell.")
+  }
 
-    labs(title = paste("Trajectory —", toupper(reduction)),
+  if (anyNA(cluster_labels) || any(!nzchar(cluster_labels))) {
+    stop("cluster_labels contain missing or empty values.")
+  }
 
-         x = paste0(toupper(reduction), "_1"),
+  cluster_labels <- factor(cluster_labels)
 
-         y = paste0(toupper(reduction), "_2"),
+  slingshot_args <- list(
+    X = embeddings,
+    clusterLabels = cluster_labels
+  )
 
-         color = color_by) +
+  if (!is.null(start_cluster)) {
+    slingshot_args$start.clus <- as.character(start_cluster)
+  }
 
-    theme_minimal() +
+  if (!is.null(end_clusters)) {
+    slingshot_args$end.clus <- as.character(end_clusters)
+  }
 
-    theme(plot.title = element_text(face = "bold", size = 14), legend.position = "right")
+  sce <- do.call(
+    slingshot::slingshot,
+    slingshot_args
+  )
 
-  
+  # slingPseudotime() returns a cells x lineages matrix; some versions may
+  # return a bare vector when exactly one lineage is present -> coerce safely.
+  pt_matrix <- tryCatch(
+    slingshot::slingPseudotime(sce),
+    error = function(e) stop("Slingshot pseudotime extraction failed: ", e$message, call. = FALSE)
+  )
+  if (!is.matrix(pt_matrix)) {
+    pt_matrix <- matrix(pt_matrix, ncol = 1L)
+  } else {
+    pt_matrix <- as.matrix(pt_matrix)
+  }
+  curve_weights <- as.matrix(slingshot::slingCurveWeights(sce))
+  lineages <- slingshot::slingLineages(sce)
+  curves <- slingshot::slingCurves(sce)
 
-  if (color_by == "pseudotime" && is.numeric(plot_data$value))
+  if (nrow(pt_matrix) != nrow(embeddings)) {
+    stop("Slingshot returned an unexpected pseudotime dimension.")
+  }
 
-    p <- p + scale_color_viridis_c(option = "plasma")
+  lineage_names <- colnames(pt_matrix)
+
+  if (is.null(lineage_names) || !length(lineage_names)) {
+    lineage_names <- paste0("Lineage_", seq_len(ncol(pt_matrix)))
+    colnames(pt_matrix) <- lineage_names
+  }
+
+  # Use the first Slingshot lineage as the default exported pseudotime.
+  # This is a COMPATIBILITY DEFAULT ONLY -- it is not a biologically
+  # validated lineage selection. The full multi-lineage matrix is preserved
+  # below in `pseudotime_matrix` so every lineage remains available for
+  # downstream use and exports.
+  pseudotime <- if (ncol(pt_matrix) > 0L) {
+    pt_matrix[, 1L]
+  } else {
+    rep(NA_real_, nrow(embeddings))
+  }
+
+  names(pseudotime) <- rownames(embeddings) %||%
+    as.character(seq_len(nrow(embeddings)))
+
+  list(
+    pseudotime = pseudotime,
+    pseudotime_matrix = pt_matrix,
+    curve_weights = curve_weights,
+    lineages = lineages,
+    curves = curves,
+    computation_reduction = reduction %||% NA_character_,
+    method = "Slingshot lineage pseudotime",
+    root_method = if (is.null(start_cluster)) "slingshot_default" else "start_cluster",
+    root_cluster = start_cluster %||% NA_character_,
+    n_cells = nrow(embeddings)
+  )
+}
+
+
+
+#' Plot cells coloured by exploratory pseudotime
+#'
+#' @param embeddings Numeric matrix/data.frame of DISPLAY coordinates
+#'   (first two columns used). May differ from the computation reduction.
+#' @param pseudotime Numeric vector, same length/order as embeddings rows.
+#' @param graph Optional igraph object built on the same cell ordering
+#'   (for edge overlay only; NULL skips edges).
+#' @param root_cell Integer index of the root cell to highlight.
+#' @param show_edges Logical. Draw a subsample of graph edges (default FALSE).
+#' @param edge_subsample Integer. Max number of edges drawn if show_edges=TRUE.
+#'
+#' @return A ggplot object.
+#' @export
+plot_trajectory <- function(
+    embeddings,
+    pseudotime,
+    graph = NULL,
+    root_cell = NULL,
+    show_edges = FALSE,
+    edge_subsample = 5000L
+) {
+  embeddings <- as.data.frame(embeddings)
+  if (ncol(embeddings) < 2L) {
+    stop("At least two display dimensions are required.")
+  }
+  colnames(embeddings)[1:2] <- c("dim1", "dim2")
+
+  plot_data <- data.frame(
+    dim1 = embeddings$dim1,
+    dim2 = embeddings$dim2,
+    pseudotime = as.numeric(pseudotime),
+    cell_index = seq_len(nrow(embeddings))
+  )
+
+  p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = dim1, y = dim2, colour = pseudotime)) +
+    ggplot2::geom_point(size = 0.7, alpha = 0.75, na.rm = FALSE) +
+    ggplot2::scale_colour_viridis_c(option = "plasma", na.value = "grey80",
+                                     name = "Pseudotemps\n(sans unite)") +
+    ggplot2::theme_classic() +
+    ggplot2::labs(x = colnames(embeddings)[1], y = colnames(embeddings)[2],
+                  subtitle = "Pseudotemps exploratoire (graphe kNN pondere)")
+
+  if (isTRUE(show_edges) && !is.null(graph) && igraph::ecount(graph) > 0L) {
+    edge_tbl <- igraph::as_data_frame(graph, what = "edges")
+    if (nrow(edge_tbl) > edge_subsample) {
+      set.seed(1L)
+      edge_tbl <- edge_tbl[sample.int(nrow(edge_tbl), edge_subsample), , drop = FALSE]
+    }
+    edge_tbl$from <- as.integer(edge_tbl$from)
+    edge_tbl$to   <- as.integer(edge_tbl$to)
+
+    edge_data <- data.frame(
+      x = embeddings$dim1[edge_tbl$from], y = embeddings$dim2[edge_tbl$from],
+      xend = embeddings$dim1[edge_tbl$to], yend = embeddings$dim2[edge_tbl$to]
+    )
+
+    p <- p + ggplot2::geom_segment(
+      data = edge_data,
+      ggplot2::aes(x = x, y = y, xend = xend, yend = yend),
+      inherit.aes = FALSE, linewidth = 0.15, alpha = 0.15, colour = "grey35"
+    )
+  }
+
+  if (!is.null(root_cell) && length(root_cell) == 1L &&
+      root_cell >= 1L && root_cell <= nrow(plot_data)) {
+    p <- p + ggplot2::geom_point(
+      data = plot_data[root_cell, , drop = FALSE],
+      ggplot2::aes(x = dim1, y = dim2), inherit.aes = FALSE,
+      shape = 8, size = 4, stroke = 1.2, colour = "black"
+    )
+  }
 
   p
+}
 
+
+
+#' Plot Slingshot pseudotime
+#'
+#' Cells coloured by the DEFAULT Slingshot lineage pseudotime (first
+#' lineage — a compatibility default, not a biologically validated
+#' selection). Deliberately separate from plot_trajectory(): no kNN graph
+#' edges and no root-cell marker are drawn here.
+#'
+#' @param embeddings Display coordinates.
+#' @param pseudotime Numeric pseudotime vector.
+#' @param curves Optional Slingshot curves. Accepted for API completeness;
+#'   curve overlays are only drawn when every curve exposes a numeric
+#'   coordinate matrix compatible with the display space, otherwise they
+#'   are silently skipped (no fabricated curves).
+#'
+#' @return A ggplot object.
+#' @export
+
+plot_slingshot_trajectory <- function(
+    embeddings,
+    pseudotime,
+    curves = NULL
+) {
+  embeddings <- as.data.frame(embeddings)
+
+  if (ncol(embeddings) < 2L) {
+    stop("At least two display dimensions are required.")
+  }
+
+  if (length(pseudotime) != nrow(embeddings)) {
+    stop("pseudotime must have the same length as embeddings rows.")
+  }
+
+  colnames(embeddings)[1:2] <- c("dim1", "dim2")
+
+  plot_data <- data.frame(
+    dim1 = embeddings$dim1,
+    dim2 = embeddings$dim2,
+    pseudotime = as.numeric(pseudotime),
+    cell_index = seq_len(nrow(embeddings))
+  )
+
+  p <- ggplot2::ggplot(
+    plot_data,
+    ggplot2::aes(x = dim1, y = dim2, colour = pseudotime)
+  ) +
+    ggplot2::geom_point(
+      size = 0.7,
+      alpha = 0.75,
+      na.rm = FALSE
+    ) +
+    ggplot2::scale_colour_viridis_c(
+      option = "plasma",
+      na.value = "grey80",
+      name = "Pseudotemps Slingshot"
+    ) +
+    ggplot2::theme_classic() +
+    ggplot2::labs(
+      x = colnames(embeddings)[1],
+      y = colnames(embeddings)[2],
+      subtitle = "Slingshot — pseudotemps de la première lignée"
+    )
+
+  # Guarded curve overlay: draw lineages ONLY if every curve carries a
+  # numeric 's' coordinate matrix with at least two columns matching the
+  # number of display rows. Any structural surprise -> skip silently
+  # rather than fabricate geometry. Curves live in the COMPUTATION space,
+  # so an overlay is only meaningful when that equals the DISPLAY space.
+  if (!is.null(curves) && is.list(curves) && length(curves) > 0L) {
+    ok_overlay <- TRUE
+    curve_lines <- list()
+    for (i in seq_along(curves)) {
+      s_mat <- tryCatch(curves[[i]]$s, error = function(e) NULL)
+      if (is.null(s_mat) || !is.numeric(as.matrix(s_mat)) ||
+          nrow(as.matrix(s_mat)) < 2L || ncol(as.matrix(s_mat)) < 2L) {
+        ok_overlay <- FALSE; break
+      }
+      s_mat <- as.matrix(s_mat)
+      curve_lines[[i]] <- data.frame(
+        lineage  = paste0("Lineage_", i),
+        dim1 = s_mat[, 1L],
+        dim2 = s_mat[, 2L]
+      )
+    }
+    if (ok_overlay && length(curve_lines) > 0L) {
+      line_df <- do.call(rbind, curve_lines)
+      p <- p + ggplot2::geom_path(
+        data = line_df,
+        ggplot2::aes(x = dim1, y = dim2, group = lineage),
+        inherit.aes = FALSE,
+        linewidth = 0.8, colour = "black", alpha = 0.6
+      )
+    }
+  }
+
+  p
 }
 
 

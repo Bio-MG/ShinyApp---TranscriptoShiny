@@ -63,7 +63,12 @@ optional_packages <- c(
 )
 
 bioc_packages <- c(
-  "DESeq2", "edgeR", "limma", "ComplexHeatmap"
+  "DESeq2", "edgeR", "limma", "ComplexHeatmap",
+  # Slingshot : inference de lineees pour le module Trajectoire (option
+  # "Slingshot — inférence de lignées"). Bioconductor :
+  #   BiocManager::install("slingshot")
+  # Absent => seul le pseudotemps exploratoire kNN reste disponible.
+  "slingshot"
 )
 
 
@@ -122,6 +127,10 @@ has_stdeconvolve <- requireNamespace("STdeconvolve", quietly = TRUE) &&
 has_leafgl       <- requireNamespace("leafgl", quietly = TRUE)
 has_mirai        <- requireNamespace("mirai", quietly = TRUE)
 has_rann         <- requireNamespace("RANN", quietly = TRUE)
+# Trajectoire : Slingshot optionnel a l'echelle de l'app — le module
+# Trajectoire refuse proprement l'option "slingshot" avec un message en
+# francais si ce flag est FALSE (voir helpers_sc.R::calculate_slingshot_pseudotime()).
+has_slingshot    <- requireNamespace("slingshot", quietly = TRUE)
 # Phase 5 : lecteur .h5ad robuste (reference de deconvolution RCTD/Label
 # Transfer + import Single-Cell) — voir helpers_io.R::load_single_cell_data().
 # Optionnel : a defaut, l'app retombe sur SeuratDisk (moins fiable pour

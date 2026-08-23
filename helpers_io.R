@@ -1144,6 +1144,10 @@ remap_gene_ids_to_symbol <- function(counts_matrix, from_type, organism = "human
 
   ids_clean <- rownames(counts_matrix)
 
+  if (from_type == "ensembl") {
+    ids_clean <- sub("[_.].*", "", ids_clean)   # retire "_TSPAN6", ".1", etc.
+  }
+  
   # ── Pre-flight sanity check ────────────────────────────────────────────────
   # AnnotationDbi::select() throws a low-level, untranslated error ("None of
   # the keys entered are valid keys for 'ENSEMBL'") when NONE of the supplied

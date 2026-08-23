@@ -21,6 +21,7 @@ params:
   sections: NULL
   reduction: "umap"
   traj_reduction: "umap"
+  traj_method: NULL
   traj_genes: NULL
   qc_snapshot: NULL
   fig_width: 9
@@ -72,8 +73,52 @@ render_plot <- function(p, allow_interactive=TRUE) {
   if (preferred %in% reds) preferred else if (length(reds) > 0) reds[1] else NULL
 }
 
-# Trajectory reduction: use stored value (PCA/UMAP/Harmony), fallback to UMAP
-.traj_red <- params$traj_reduction %||% "umap"
+# ── Trajectory provenance resolution (metadata-first) ──────────────────────
+# Priority:
+#   1. provenance persisted in obj@meta.data at calculation time,
+#   2. transient params$traj_method / params$traj_reduction,
+#   3. safe default only if no provenance exists ("exploratory_knn" — the
+#      historical default of this application; never labelled as Slingshot).
+.traj_meta_cols <- if (!is.null(obj)) colnames(obj@meta.data) else character(0)
+.first_unique_chr <- function(x) {
+  x <- unique(as.character(x[!is.na(x)]))
+  if (length(x)) x[1] else NA_character_
+}
+.traj_method_md <- if ("traj_method" %in% .traj_meta_cols)
+  .first_unique_chr(obj@meta.data$traj_method) else NULL
+.traj_comp_red_md <- if ("traj_computation_reduction" %in% .traj_meta_cols)
+  .first_unique_chr(obj@meta.data$traj_computation_reduction) else NULL
+.traj_root_meth_md <- if ("traj_root_method" %in% .traj_meta_cols)
+  .first_unique_chr(obj@meta.data$traj_root_method) else NA_character_
+.traj_root_cell_md <- if ("traj_root_cell" %in% .traj_meta_cols) {
+  v <- unique(obj@meta.data$traj_root_cell); v <- v[!is.na(v)]
+  if (length(v) == 1L) as.character(v[1]) else NA_character_
+} else NA_character_
+.traj_root_clus_md <- if ("traj_root_cluster" %in% .traj_meta_cols)
+  .first_unique_chr(obj@meta.data$traj_root_cluster) else NA_character_
+
+.traj_method_key   <- .traj_method_md %||% params$traj_method %||% "exploratory_knn"
+.is_slingshot_traj <- identical(.traj_method_key, "slingshot")
+.is_explor_traj    <- identical(.traj_method_key, "exploratory_knn")
+
+# Computation reduction: persisted metadata first, then transient param.
+.traj_comp_red <- .traj_comp_red_md %||% params$traj_reduction %||% "umap"
+
+# French labels for provenance display.
+.traj_method_label <- if (.is_slingshot_traj) {
+  "Slingshot — inférence de lignées"
+} else if (.is_explor_traj) {
+  "Pseudotemps exploratoire — graphe kNN pondéré"
+} else {
+  paste0("Inconnue (provenance absente ; traité comme exploratoire : ", .traj_method_key, ")")
+}
+.traj_root_meth_label <- switch(.traj_root_meth_md,
+  "diameter"          = "automatique (extrémité du diamètre du graphe)",
+  "manual"            = "manuelle (index de cellule fourni)",
+  "start_cluster"     = "cluster de départ imposé",
+  "slingshot_default" = "défaut Slingshot (aucun cluster de départ imposé)",
+  "non renseignée"
+)
 ```
 
 ```{r notes_section, eval=nzchar(params$report_notes), results='asis'}
@@ -205,15 +250,74 @@ knitr::kable(head(params$pathway_results[, cols, drop=FALSE], 20))
 ---
 
 ```{r traj_section, eval="trajectory" %in% sections && .has_traj, results='asis'}
-cat("# Trajectory Analysis — Pseudotemps\n\n")
-cat(sprintf("*(Réduction utilisée : %s)*\n\n", toupper(.traj_red)))
+cat("# Trajectory Analysis — ", .traj_method_label, "\n\n", sep="")
+if (.is_slingshot_traj) {
+  cat(sprintf("*(Slingshot — inférence de lignées : courbes ajustées dans l'espace **%s** à partir des clusters. ",
+              toupper(.traj_comp_red)))
+  cat("Le pseudotemps affiché et exporté correspond à la **première lignée** (défaut de compatibilité, ",
+      "non validé biologiquement). Les lignées complètes restent disponibles dans le résultat sauvegardé ",
+      "mais ne sont pas nécessairement rendues dans ce rapport. Unités sans dimension : à interpréter avec la biologie connue.)*\n\n")
+} else {
+  cat(sprintf("*(Pseudotemps exploratoire — graphe kNN pondéré, calculé sur la réduction **%s** — ",
+              toupper(.traj_comp_red)))
+  cat("ce n'est ni Slingshot ni Monocle ni un pseudotemps de diffusion ; aucune inférence de lignées validée ; ",
+      "unités sans dimension, à interpréter prudemment.)*\n\n")
+}
+```
+```{r traj_provenance, eval="trajectory" %in% sections && .has_traj, results='asis'}
+pt_finite <- sum(is.finite(obj@meta.data$pseudotime))
+root_desc <- if (.is_slingshot_traj) {
+  if (!is.na(.traj_root_clus_md) && nzchar(.traj_root_clus_md)) {
+    sprintf("%s (%s)", .traj_root_clus_md, .traj_root_meth_label)
+  } else .traj_root_meth_label
+} else if (!is.na(.traj_root_cell_md)) {
+  sprintf("cellule #%s (%s)", .traj_root_cell_md, .traj_root_meth_label)
+} else {
+  "non renseignée (objet antérieur à la persistance de la provenance)"
+}
+flag_desc <- if (.is_slingshot_traj) {
+  "vrai = pseudotemps fini sur la lignée par défaut (ce n'est PAS un indicateur de composante connexe)"
+} else {
+  "vrai = appartenance à la composante connexe de la racine du graphe kNN"
+}
+cat("\n\n## Provenance du calcul\n\n")
+cat(sprintf("- **Méthode :** %s\n", .traj_method_label))
+cat(sprintf("- **Réduction de calcul :** %s\n", toupper(.traj_comp_red)))
+cat(sprintf("- **Racine / point de départ :** %s\n", root_desc))
+cat(sprintf("- **Cellules avec pseudotemps fini :** %d / %d\n", pt_finite, ncol(obj)))
+cat(sprintf("- **Champ `in_root_component` :** %s\n", flag_desc))
+```
+
+```{r traj_reduction_check, eval="trajectory" %in% sections && .has_traj, results='asis'}
+# Provenance guard: pseudotime was computed on the persisted computation
+# reduction (= shared_rv$traj_reduction at calculation time, now also in
+# obj@meta.data$traj_computation_reduction). If that reduction is missing
+# from the object and .pick_red() fell back to another one, warn in French
+# instead of silently rendering on a foreign space.
+red_t <- .pick_red(.traj_comp_red)
+if (is.null(red_t)) {
+  cat(sprintf("\n\n> **Attention :** réduction de calcul '%s' non trouvée dans l'objet et aucune autre réduction disponible — trajectoire non rendue.\n\n",
+              .traj_comp_red))
+} else if (!identical(red_t, .traj_comp_red)) {
+  cat(sprintf("\n\n> **Attention :** le pseudotemps a été calculé dans l'espace %s, mais est affiché dans l'espace %s. Les coordonnées d'affichage ne correspondent pas à l'espace de calcul.\n\n",
+              toupper(.traj_comp_red), toupper(red_t)))
+}
 ```
 ```{r traj_plot, eval="trajectory" %in% sections && .has_traj}
-red_t <- .pick_red(.traj_red)
-if (!is.null(red_t)) {
-  render_plot(plot_trajectory(seurat_obj=obj, reduction=red_t, color_by="pseudotime"))
+if (exists("red_t", inherits = FALSE) && !is.null(red_t)) {
+  emb_t <- Seurat::Embeddings(obj, reduction = red_t)
+  render_plot(
+    if (.is_slingshot_traj) {
+      plot_slingshot_trajectory(embeddings = emb_t,
+                                pseudotime = obj@meta.data$pseudotime)
+    } else {
+      plot_trajectory(embeddings = emb_t,
+                      pseudotime = obj@meta.data$pseudotime)
+    }
+  )
 } else {
-  cat(sprintf("Réduction '%s' non trouvée dans l'objet.", .traj_red))
+  # Nothing to plot: the section above already carries the French
+  # "réduction introuvable" warning — never render on an unrelated space.
 }
 ```
 ```{r traj_dist, eval="trajectory" %in% sections && .has_traj}
