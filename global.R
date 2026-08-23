@@ -154,20 +154,16 @@ for (dep in c("bpcells", "spacexr", "stdeconvolve", "leafgl", "mirai", "rann", "
 
 
 
+# PARALLÉLISATION (fix 2026-08 : ce bloc était dupliqué — deux plan(multisession,
+# workers = detectCores()-2) lançaient 2 x 14 workers PSOCK au démarrage, en
+# plus des 6 daemons mirai => tempête de ~20+ processus R simultanés. Sous
+# Windows, chaque enfant paie l'activation renv (~54 s observee), les
+# connexions PSOCK expiraient ("Cluster setup failed ... 13 of 14 workers")
+# et l'app mourait au lancement. Un seul plan, plafonne a 4 workers ; les
+# gros calculs async passent deja par le pool mirai (R/utils_spatial_async.R).
 if (require("future", quietly = TRUE)) {
-  
-  plan(multisession, workers = max(1, parallel::detectCores() - 2))
-  
-}
-
-# OPTIMISATION PARALLÉLISATION 
-
-if(require("future", quietly = TRUE)) {
-  
-  plan("multisession", workers = max(1, parallel::detectCores() - 2))
-  
+  plan(multisession, workers = min(4L, max(1L, parallel::detectCores() - 2)))
   options(future.globals.maxSize = 10000 * 1024^2)  # 10GB
-  
 }
 
 

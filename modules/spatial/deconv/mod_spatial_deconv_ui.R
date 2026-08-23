@@ -42,7 +42,13 @@ mod_spatial_deconv_ui <- function(id) {
             " RCTD modelise l'expression par une loi de Poisson resolue par ",
             "programmation quadratique — pic RAM attendu sous ~2 Go. Execute ",
             "en mono-coeur (max_cores=1). Necessite au moins 25 cellules par ",
-            "type dans la reference.")
+            "type dans la reference."),
+        numericInput(ns("rctd_n_hvg"), "Max genes (HVG) avant RCTD (RAM/vitesse)",
+                     DECONV_DEFAULT_N_HVG, min = 200, max = 8000, step = 100),
+        div(class = "text-muted", style = "font-size:0.68rem;",
+            "Reduit le panel aux genes les plus variables avant de construire ",
+            "la reference/le puck spatial — borne la RAM sur un gros Visium HD/",
+            "Slide-seq sans perdre les types cellulaires (Backlog #6).")
       ),
       conditionalPanel(
         condition = sprintf("input['%s'] == 'labeltransfer'", ns("mode")),

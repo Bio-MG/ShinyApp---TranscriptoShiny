@@ -44,7 +44,7 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
     deconv_task <- ExtendedTask$new(function(bpcells_dir, pass_idx, coords, mode,
                                               ref_path, n_topics, n_top_od,
                                               lt_npcs, lt_norm_method, lt_ncells,
-                                              min_shared_genes, log_file) {
+                                              min_shared_genes, rctd_n_hvg, log_file) {
       mirai::mirai(
         {
           run_spatial_deconv_body(
@@ -52,13 +52,13 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
             mode = mode, ref_path = ref_path, n_topics = n_topics,
             n_top_od = n_top_od, lt_npcs = lt_npcs, lt_norm_method = lt_norm_method,
             lt_ncells = lt_ncells, min_shared_genes = min_shared_genes,
-            log_file = log_file
+            rctd_n_hvg = rctd_n_hvg, log_file = log_file
           )
         },
         bpcells_dir = bpcells_dir, pass_idx = pass_idx, coords = coords, mode = mode,
         ref_path = ref_path, n_topics = n_topics, n_top_od = n_top_od,
         lt_npcs = lt_npcs, lt_norm_method = lt_norm_method, lt_ncells = lt_ncells,
-        min_shared_genes = min_shared_genes, log_file = log_file,
+        min_shared_genes = min_shared_genes, rctd_n_hvg = rctd_n_hvg, log_file = log_file,
         .timeout = switch(mode,
                           "labeltransfer" = LABEL_TRANSFER_TIMEOUT_MS,
                           "rctd"          = RCTD_TIMEOUT_MS,
@@ -131,7 +131,8 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
           if (ref$using_shared_ref()) "reference partagee (Import > Spatial)" else "upload local (session)"
         } else NULL,
         n_topics = input$n_topics, n_top_od = input$n_top_od,
-        lt_npcs = input$lt_npcs, lt_norm_method = input$lt_norm_method, lt_ncells = input$lt_ncells
+        lt_npcs = input$lt_npcs, lt_norm_method = input$lt_norm_method, lt_ncells = input$lt_ncells,
+        rctd_n_hvg = input$rctd_n_hvg %||% DECONV_DEFAULT_N_HVG
       )
       deconv_task$invoke(
         bpcells_dir      = global_data$spatial_obj$bpcells_dir,
@@ -145,6 +146,7 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
         lt_norm_method   = input$lt_norm_method %||% "lognorm",
         lt_ncells        = input$lt_ncells %||% 3000,
         min_shared_genes = LABEL_TRANSFER_MIN_SHARED_GENES,
+        rctd_n_hvg       = input$rctd_n_hvg %||% DECONV_DEFAULT_N_HVG,
         log_file         = log_file
       )
     })

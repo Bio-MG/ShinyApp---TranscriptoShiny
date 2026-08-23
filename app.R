@@ -35,11 +35,23 @@ source("R/utils_spatial_multi.R")
 # + BPCells only, never this file. See its header for the full rationale
 # (fixes "could not find function load_single_cell_data").
 source("R/utils_spatial_reference.R")
-tryCatch(
-  init_spatial_daemons(n_daemons = 6),
-  error = function(e) warning("Initialisation des daemons mirai (spatial) impossible : ", conditionMessage(e))
-)
+# FIX 2026-08 : init des daemons mirai DIFFEREE — elle n'est plus faite au
+# lancement mais a la premiere ouverture de l'onglet Spatial
+# (modules/spatial/mod_spatial.R : "if (!spatial_daemons_ready())
+# init_spatial_daemons(6)"). Raison : au demarrage, 6 processus R de plus en
+# concurrence avec les workers future faisait exploser les connectTimeout
+# ("Cluster setup failed", ".dispatcher_wait fige"). Le badge d'etat du pool
+# dans l'UI affichera simplement "inactive" jusqu'a cet appel paresseux.
+# Pour restaurer l'init eager, decommenter :
+# tryCatch(
+#   init_spatial_daemons(n_daemons = 6),
+#   error = function(e) warning("Initialisation des daemons mirai (spatial) impossible : ", conditionMessage(e))
+# )
 source("R/utils_spatial_niche.R")
+# Backlog #6 (RAM STdeconvolve/RCTD) : capping HVG avant densification —
+# pure helper, doit AUSSI etre dans source_files de init_spatial_daemons()
+# (R/utils_spatial_async.R) car appelee depuis un daemon mirai.
+source("R/utils_spatial_deconv_prep.R")
 # Moyen terme (export/auto-pipeline, voir handoff_spatial_bio-mg.md) : paquet
 # complet (.zip) + script R reproductible pour le module Spatial. Pure
 # helpers (aucune reactivite Shiny) appelés UNIQUEMENT depuis

@@ -66,12 +66,15 @@
 #' @param lt_norm_method "lognorm" or "sct".
 #' @param lt_ncells Integer, SCTransform ncells.
 #' @param min_shared_genes Integer, minimum shared genes check.
+#' @param rctd_n_hvg Integer, HVG cap applied before building the RCTD
+#'   Reference()/SpatialRNA() (Backlog #6 RAM fix); ignored by other modes.
 #' @param log_file Character path for write_mirai_log() progress.
 #' @return data.frame(id, <proportion columns>).
 run_spatial_deconv_body <- function(bpcells_dir, pass_idx, coords, mode,
                                      ref_path, n_topics, n_top_od,
                                      lt_npcs, lt_norm_method, lt_ncells,
-                                     min_shared_genes, log_file) {
+                                     min_shared_genes,
+                                     rctd_n_hvg = DECONV_DEFAULT_N_HVG, log_file) {
 
   write_mirai_log(log_file, "Ouverture de la matrice BPCells...", 1, 5)
   mat <- BPCells::open_matrix_dir(bpcells_dir)
@@ -93,12 +96,32 @@ run_spatial_deconv_body <- function(bpcells_dir, pass_idx, coords, mode,
     if (!inherits(ref_counts, c("dgCMatrix", "matrix"))) {
       ref_counts <- methods::as(ref_counts, "dgCMatrix")
     }
+
+    # Backlog #6 (RAM): cap to top-N HVG BEFORE building Reference()/
+    # SpatialRNA() -- bounds RAM/CPU regardless of the full gene panel size
+    # (e.g. ~20k genes on Visium HD). The intersection with the reference is
+    # done here so both matrices stay gene-aligned for spacexr.
+    hvg <- select_hvg_for_deconv(mat, n_hvg = rctd_n_hvg %||% DECONV_DEFAULT_N_HVG)
+    shared_hvg_genes <- intersect(hvg, rownames(ref_counts))
+    if (length(shared_hvg_genes) < 50L) {
+      stop("Moins de 50 genes communs entre reference et donnees spatiales apres capping HVG -- ",
+           "dans l'onglet Deconvolution, augmentez 'Max genes (HVG) avant RCTD', ou verifiez ",
+           "les identifiants de genes de la reference.", call. = FALSE)
+    }
+    if (length(shared_hvg_genes) < nrow(mat)) {
+      write_mirai_log(log_file, sprintf("Capping HVG : %d -> %d genes conserves pour RCTD.",
+                                         nrow(mat), length(shared_hvg_genes)), 2, 5)
+    }
+    mat_idx    <- match(shared_hvg_genes, rownames(mat)); mat_idx <- mat_idx[!is.na(mat_idx)]
+    mat_hvg    <- mat[mat_idx, , drop = FALSE]
+    ref_counts <- ref_counts[shared_hvg_genes, , drop = FALSE]
+
     write_mirai_log(log_file, sprintf("Reference relue : %d cellules x %d genes.",
                                        ncol(ref_counts), nrow(ref_counts)), 2, 5)
     reference <- spacexr::Reference(counts = ref_counts, cell_types = reloaded$cell_types)
 
     write_mirai_log(log_file, "Construction du 'puck' spatial (SpatialRNA)...", 3, 5)
-    counts_dense <- methods::as(mat, "dgCMatrix")
+    counts_dense <- methods::as(mat_hvg, "dgCMatrix")
     puck <- spacexr::SpatialRNA(coords = coords_df, counts = counts_dense)
 
     write_mirai_log(log_file, "RCTD (mode full, mono-coeur — pas de sous-processus imbrique)...", 4, 5)
@@ -197,8 +220,18 @@ run_spatial_deconv_body <- function(bpcells_dir, pass_idx, coords, mode,
       !requireNamespace("slam", quietly = TRUE)) {
     stop("Packages 'STdeconvolve', 'topicmodels' et 'slam' requis.")
   }
+  # Backlog #6 (RAM): pre-filter to a bounded HVG pool BEFORE densifying
+  # with as.matrix() -- restrictCorpus() still does its own over-dispersion
+  # selection down to n_top_od, but never sees more than this budget of genes.
+  write_mirai_log(log_file, "Selection des genes variables (RAM-safety)...", 2, 5)
+  hvg_budget <- min(max(n_top_od * 3L, 2000L), 5000L)
+  cap <- cap_matrix_to_hvg(mat, n_hvg = hvg_budget)
+  if (isTRUE(cap$was_capped)) {
+    write_mirai_log(log_file, sprintf("Capping HVG : %d -> %d genes conserves avant densification.",
+                                       cap$n_before, cap$n_after), 2, 5)
+  }
   write_mirai_log(log_file, "Pretraitement (genes surdisperses)...", 2, 5)
-  counts_dense <- as.matrix(methods::as(mat, "dgCMatrix"))
+  counts_dense <- as.matrix(methods::as(cap$matrix, "dgCMatrix"))
   storage.mode(counts_dense) <- "integer"
   corpus <- STdeconvolve::restrictCorpus(
     counts_dense, alpha = 0.05,
