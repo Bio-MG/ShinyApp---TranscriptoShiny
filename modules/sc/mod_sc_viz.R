@@ -344,6 +344,28 @@ build_sc_viz_plot <- function(obj, cfg, sc_palette = "default", manual_colors = 
     return(p)
   }
 
+  # 12. Heatmap Hierarchique -- returns a DRAWN ComplexHeatmap, NOT a ggplot.
+  # Caller MUST route via the static render path, never ggsave()/ggplotly().
+  if (type == "heatmap_hier") {
+    valid <- intersect(cfg$feat_sel %||% character(0), rownames(obj))
+    if (!length(valid)) stop("Aucun gène valide sélectionné pour la heatmap")
+    return(build_sc_hierarchical_heatmap(
+      obj, features = valid, group_by = grp, max_features = 50L,
+      max_cells = as.integer(cfg$hier_max_cells %||% 5000L),
+      palette = sc_palette, manual_colors = manual_colors
+    ))
+  }
+
+  # 13. Densite d'Expression 2D (Nebulosa-like) --------------------------------
+  if (type == "density_2d") {
+    gene <- cfg$density_gene
+    if (is.null(gene) || !nzchar(gene %||% "")) stop("Aucun gène sélectionné pour la densité")
+    red <- cfg$density_reduction %||% "umap"
+    if (!red %in% names(obj@reductions)) stop("Réduction non calculée : ", red)
+    return(plot_sc_expression_density_2d(obj, feature = gene, reduction = red,
+                                         max_cells = as.integer(cfg$density_max_cells %||% 50000L)) + theme_fn)
+  }
+
   stop("Type de visualisation non supporté: ", type)
 }
 
@@ -367,7 +389,10 @@ mod_sc_viz_ui <- function(id) {
         "Heatmap"                                   = "heatmap",
         "Matrice Correlation"                        = "correlation_matrix",
         "Comparaison Multi-Echantillons"             = "multi_sample",
-        "Volcano Plot"                               = "volcano"
+        "Volcano Plot"                               = "volcano",
+        "Heatmap Hierarchique (ComplexHeatmap)"      = "heatmap_hier",
+        "Densite d'Expression 2D"                    = "density_2d",
+        "Reduction 3D (interactif)"                  = "reduction_3d"
       )
     ),
 
@@ -414,7 +439,7 @@ mod_sc_viz_ui <- function(id) {
 
     # Gene basket (hidden for scatter / multi_sample / volcano)
     conditionalPanel(
-      condition = "input.viz_type != 'scatter' && input.viz_type != 'multi_sample' && input.viz_type != 'volcano'",
+      condition = "input.viz_type != 'scatter' && input.viz_type != 'multi_sample' && input.viz_type != 'volcano' && input.viz_type != 'density_2d' && input.viz_type != 'reduction_3d'",
       ns = ns,
       div(
         class = "border-bottom pb-2 mb-2",
@@ -447,6 +472,40 @@ mod_sc_viz_ui <- function(id) {
       checkboxInput(ns("volcano_show_labels"), "Afficher labels gènes sig.", value=TRUE),
       actionButton(ns("volcano_add_sig"), "-> Add Sig. Genes to Viz",
                    class="btn-sm btn-success w-100")
+    ),
+
+    conditionalPanel(
+      condition = "input.viz_type == 'heatmap_hier'", ns = ns,
+      div(style="background:#f8f9fa;padding:10px;border-radius:5px;margin-bottom:10px;",
+          h6("Heatmap Hierarchique", style="font-weight:bold;"),
+          helpText("Genes du panier ci-dessus (max 50). Clustering hierarchique lignes/colonnes."),
+          numericInput(ns("hier_max_cells"), "Max cellules avant agregation par groupe",
+                       value = 5000, min = 200, max = 20000, step = 500))
+    ),
+
+    conditionalPanel(
+      condition = "input.viz_type == 'density_2d'", ns = ns,
+      div(style="background:#f8f9fa;padding:10px;border-radius:5px;margin-bottom:10px;",
+          h6("Densite d'Expression 2D", style="font-weight:bold;"),
+          selectizeInput(ns("density_gene"), "Gene", choices = NULL, multiple = FALSE,
+                         options = list(placeholder = "Ex: CD3D")),
+          selectInput(ns("density_reduction"), "Reduction (2D)",
+                      choices = c("UMAP"="umap","PCA"="pca","t-SNE"="tsne"), selected = "umap"),
+          numericInput(ns("density_max_cells"), "Max cellules (estimation densite)",
+                       value = 50000, min = 1000, max = 200000, step = 1000),
+          div(class="text-muted", style="font-size:0.72em;",
+              "Visualisation descriptive -- ne constitue pas une inference de lignage."))
+    ),
+
+    conditionalPanel(
+      condition = "input.viz_type == 'reduction_3d'", ns = ns,
+      div(style="background:#f8f9fa;padding:10px;border-radius:5px;margin-bottom:10px;",
+          h6("Reduction 3D", style="font-weight:bold;"),
+          selectInput(ns("reduction_3d_pick"), "Reduction (>= 3 dimensions)", choices = NULL),
+          numericInput(ns("reduction_3d_max_cells"), "Max cellules affichees",
+                       value = 50000, min = 1000, max = 200000, step = 1000),
+          div(class="text-muted", style="font-size:0.72em;",
+              "Utilise 'Grouper/Colorer par' ci-dessous. Si vide, choisissez PCA (UMAP/t-SNE sont 2D par defaut)."))
     ),
 
     sliderInput(ns("pt_size"), "Taille points", 0.1, 3, 0.5, 0.1),
@@ -586,7 +645,13 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
         sc_palette         = input$sc_palette,
         sc_manual_colors   = if (identical(input$sc_palette, "manual")) sc_manual_colors_vec() else NULL,
         sc_gradient        = if (identical(input$sc_palette, "manual")) sc_gradient_vec() else NULL,
-        sc_volcano_colors  = if (identical(input$sc_palette, "manual")) sc_volcano_colors_vec() else NULL
+        sc_volcano_colors  = if (identical(input$sc_palette, "manual")) sc_volcano_colors_vec() else NULL,
+        hier_max_cells         = input$hier_max_cells,
+        density_gene           = input$density_gene,
+        density_reduction      = input$density_reduction,
+        density_max_cells      = input$density_max_cells,
+        reduction_3d_pick      = input$reduction_3d_pick,
+        reduction_3d_max_cells = input$reduction_3d_max_cells
       )
     }
 
@@ -755,6 +820,14 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
       updateSelectInput(session, "viz_reduction",
                         choices  = red_choices,
                         selected = if ("umap" %in% red_choices) "umap" else red_choices[1])
+
+      updateSelectizeInput(session, "density_gene", choices = gene_choices, server = TRUE)
+
+      red_3d <- avail_red[vapply(avail_red, function(r) {
+        tryCatch(ncol(Embeddings(obj, r)) >= 3L, error = function(e) FALSE)
+      }, logical(1))]
+      updateSelectInput(session, "reduction_3d_pick", choices = red_3d,
+                        selected = if ("pca" %in% red_3d) "pca" else if (length(red_3d)) red_3d[1] else character(0))
     }, ignoreInit = TRUE)
 
     # ── FIX: Volcano group pickers — separate reactive on BOTH sc_obj AND
@@ -789,8 +862,10 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
 
     # ── Plot container router ────────────────────────────────────────────────
     output$plot_container <- renderUI({
-      if (isTRUE(input$viz_type %in% c("heatmap", "stacked_violin")))
+      if (isTRUE(input$viz_type %in% c("heatmap", "stacked_violin", "heatmap_hier", "density_2d")))
         plotOutput(ns("plot_static"), height="600px")
+      else if (identical(input$viz_type, "reduction_3d"))
+        plotlyOutput(ns("plot_3d"), height="600px")
       else
         plotlyOutput(ns("plot_interactive"), height="600px")
     })
@@ -800,17 +875,21 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
       req(global_data$sc_obj)
       obj  <- global_data$sc_obj
       type <- input$viz_type
-      if (!type %in% c("heatmap", "stacked_violin")) return(NULL)
+      if (!type %in% c("heatmap", "stacked_violin", "heatmap_hier", "density_2d")) return(NULL)
 
       cfg <- list(type=type, feat_sel=input$feat_sel, group_by=input$group_by,
-                  pt_size=input$pt_size, plot_theme=input$plot_theme)
+                  pt_size=input$pt_size, plot_theme=input$plot_theme,
+                  hier_max_cells=input$hier_max_cells,
+                  density_gene=input$density_gene, density_reduction=input$density_reduction,
+                  density_max_cells=input$density_max_cells)
 
       p <- tryCatch(
         build_sc_viz_plot(obj, cfg, input$sc_palette, sc_manual_colors_vec(), sc_gradient_vec()),
         error = function(e)
           ggplot() + annotate("text",x=1,y=1,label=paste("Erreur:", e$message)) + theme_void()
       )
-      current_plot(p)
+      # ComplexHeatmap n'est pas un ggplot -- jamais dans current_plot() (ggsave sinon)
+      if (!identical(type, "heatmap_hier")) current_plot(p)
       p
     })
 
@@ -820,7 +899,7 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
       obj  <- global_data$sc_obj
       type <- input$viz_type
 
-      if (type %in% c("heatmap","stacked_violin")) return(plotly_empty())
+      if (type %in% c("heatmap","stacked_violin","heatmap_hier","density_2d")) return(plotly_empty())
 
       cfg <- list(
         type               = type,
@@ -904,6 +983,19 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
                error = function(e) plotly_empty())
     })
 
+    output$plot_3d <- renderPlotly({
+      req(global_data$sc_obj, input$reduction_3d_pick)
+      tryCatch(
+        plot_sc_reduction_3d(global_data$sc_obj, reduction = input$reduction_3d_pick,
+                             color_by = input$group_by %||% "seurat_clusters",
+                             max_cells = as.integer(input$reduction_3d_max_cells %||% 50000L)),
+        error = function(e) {
+          showNotification(paste("Erreur 3D:", conditionMessage(e)), type = "error", duration = 8)
+          plotly_empty()
+        }
+      )
+    })
+
     output$export_fidelity_note <- renderUI({
       req(global_data$sc_obj)
       type <- input$viz_type %||% "dim"
@@ -928,6 +1020,12 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
         req(global_data$sc_obj)
         cfg  <- .current_cfg()
         type <- cfg$type %||% "dim"
+
+        if (identical(type, "reduction_3d")) {
+          showNotification("Export non disponible pour la 3D (interactif uniquement).", type = "warning", duration = 8)
+          req(FALSE)
+        }
+
         n_cells <- ncol(global_data$sc_obj)
         is_slow <- type %in% .PREVIEW_CELL_TYPES && n_cells > .PREVIEW_MAX_CELLS
 
@@ -937,19 +1035,32 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
                     format(n_cells, big.mark=" "))
           else "Export...",
           value = 0.3, {
-            p <- tryCatch(
-              build_sc_viz_plot(global_data$sc_obj, cfg, cfg$sc_palette %||% input$sc_palette,
-                                cfg$sc_manual_colors, cfg$sc_gradient, cfg$sc_volcano_colors),
-              error = function(e) {
-                showNotification(paste("Erreur export:", conditionMessage(e)), type="error", duration=10)
-                stop(e)
-              }
-            )
-            incProgress(0.6, detail = "Écriture du fichier...")
-            ggsave(file, plot=p,
-                   width  = (input$plot_width  %||% 800) / 100,
-                   height = (input$plot_height %||% 600) / 100,
-                   dpi    = 300)
+            if (identical(type, "heatmap_hier")) {
+              incProgress(0.3, detail = "Rendu de la heatmap...")
+              fmt <- input$export_format %||% "png"
+              if (fmt == "pdf") pdf(file, width = (input$plot_width %||% 800)/100, height = (input$plot_height %||% 600)/100)
+              else png(file, width = input$plot_width %||% 800, height = input$plot_height %||% 600, res = 100)
+              tryCatch({
+                build_sc_viz_plot(global_data$sc_obj, cfg, cfg$sc_palette %||% input$sc_palette,
+                                  cfg$sc_manual_colors, cfg$sc_gradient, cfg$sc_volcano_colors)
+              }, error = function(e) {
+                showNotification(paste("Erreur export heatmap:", conditionMessage(e)), type="error", duration=10)
+              }, finally = { grDevices::dev.off() })
+            } else {
+              p <- tryCatch(
+                build_sc_viz_plot(global_data$sc_obj, cfg, cfg$sc_palette %||% input$sc_palette,
+                                  cfg$sc_manual_colors, cfg$sc_gradient, cfg$sc_volcano_colors),
+                error = function(e) {
+                  showNotification(paste("Erreur export:", conditionMessage(e)), type="error", duration=10)
+                  stop(e)
+                }
+              )
+              incProgress(0.6, detail = "Écriture du fichier...")
+              ggsave(file, plot=p,
+                     width  = (input$plot_width  %||% 800) / 100,
+                     height = (input$plot_height %||% 600) / 100,
+                     dpi    = 300)
+            }
           }
         )
       }
@@ -958,7 +1069,13 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
     # ── "📌 Ajouter au Rapport" ──────────────────────────────────────────────
     observeEvent(input$add_to_report, {
       req(global_data$sc_obj)
-      cfg   <- .current_cfg()
+      cfg <- .current_cfg()
+      if (cfg$type %in% c("heatmap_hier", "reduction_3d")) {
+        showNotification(
+          "Ce type de visualisation n'est pas encore integrable au rapport HTML/PDF (live uniquement).",
+          type = "warning", duration = 8)
+        return()
+      }
       title <- paste0(cfg$type, "_", format(Sys.time(), "%H%M%S"))
       current <- shared_rv$report_viz_list %||% list()
       current[[title]] <- cfg

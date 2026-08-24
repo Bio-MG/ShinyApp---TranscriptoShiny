@@ -1789,3 +1789,222 @@ map_ensembl_matrix_to_symbol <- function(mat, organism = c("human", "mouse")) {
   mat_dense <- as.matrix(mat)
   rowsum(mat_dense, group = rownames(mat_dense), reorder = FALSE)
 }
+
+#' Build a hierarchical single-cell heatmap (ComplexHeatmap)
+#'
+#' Scaled expression of selected genes, at single-cell resolution or
+#' AGGREGATED (mean per group, via Seurat::AverageExpression) when the
+#' object exceeds `max_cells` -- never densifies a genes x cells matrix
+#' beyond that cap. Mirrors helpers_bulk.R::plot_heatmap_bulk()'s explicit
+#' draw()-inside-renderPlot() convention.
+#'
+#' @param seurat_obj Seurat object.
+#' @param features Character vector of genes.
+#' @param group_by Metadata column for column annotation / aggregation.
+#' @param max_features Max genes kept (head(), no re-ranking).
+#' @param max_cells Cells shown at single-cell resolution before falling
+#'   back to per-group aggregation.
+#' @param assay Assay name, or NULL for DefaultAssay().
+#' @param palette "default"|"okabeito"|"viridis"|"set2"|"manual".
+#' @param manual_colors Named vector (level -> hex), palette=="manual" only.
+#' @return Invisibly, the drawn ComplexHeatmap object (call inside renderPlot()).
+#' @export
+build_sc_hierarchical_heatmap <- function(seurat_obj, features, group_by = "seurat_clusters",
+                                          max_features = 50L, max_cells = 5000L, assay = NULL,
+                                          palette = "default", manual_colors = NULL) {
+  if (!requireNamespace("ComplexHeatmap", quietly = TRUE)) {
+    stop("Package 'ComplexHeatmap' requis pour la heatmap hierarchique.")
+  }
+  if (is.null(seurat_obj)) stop("Aucun objet Single-Cell charge.")
+  assay <- assay %||% Seurat::DefaultAssay(seurat_obj)
+  if (!group_by %in% colnames(seurat_obj@meta.data)) {
+    stop(sprintf("Colonne de groupe '%s' introuvable dans les metadonnees.", group_by))
+  }
+
+  valid_features <- intersect(features, rownames(seurat_obj))
+  n_dropped <- length(features) - length(valid_features)
+  if (length(valid_features) < 2L) stop("Au moins 2 genes valides sont requis pour la heatmap hierarchique.")
+  if (n_dropped > 0) warning(sprintf("%d gene(s) demande(s) introuvable(s) -- ignore(s).", n_dropped))
+  if (length(valid_features) > max_features) {
+    warning(sprintf("Selection reduite a %d genes (sur %d) -- max_features=%d.",
+                    max_features, length(valid_features), max_features))
+    valid_features <- head(valid_features, max_features)
+  }
+
+  set.seed(1L)  # reproducible subsampling/order across re-renders
+  grp_vec <- as.character(seurat_obj@meta.data[[group_by]])
+  n_cells <- ncol(seurat_obj)
+
+  if (n_cells > max_cells) {
+    warning(sprintf(
+      "%d cellules > max_cells (%d) -- expression agregee (moyenne) par '%s' (%d groupes).",
+      n_cells, max_cells, group_by, length(unique(grp_vec))
+    ))
+    Seurat::Idents(seurat_obj) <- factor(grp_vec)
+    avg <- tryCatch(
+      Seurat::AverageExpression(seurat_obj, features = valid_features, assays = assay,
+                                layer = "data", verbose = FALSE)[[assay]],
+      error = function(e) tryCatch(
+        Seurat::AverageExpression(seurat_obj, features = valid_features, assays = assay,
+                                  slot = "data", verbose = FALSE)[[assay]],
+        error = function(e2) stop("Agregation par groupe impossible : ", conditionMessage(e2))
+      )
+    )
+    mat <- as.matrix(avg)
+    mat <- mat[valid_features[valid_features %in% rownames(mat)], , drop = FALSE]
+    mat_scaled <- t(scale(t(mat)))
+    mat_scaled[!is.finite(mat_scaled)] <- 0
+    ann_levels <- colnames(mat_scaled)
+    ann_colors <- sc_discrete_colors(ann_levels, palette, manual_colors)
+    col_ann <- if (!is.null(ann_colors)) {
+      ComplexHeatmap::HeatmapAnnotation(Groupe = ann_levels,
+                                        col = list(Groupe = stats::setNames(ann_colors, ann_levels)))
+    } else ComplexHeatmap::HeatmapAnnotation(Groupe = ann_levels)
+    subtitle <- sprintf("Moyenne agregee par groupe (%d cellules -> %d colonnes)", n_cells, ncol(mat_scaled))
+  } else {
+    ord <- order(grp_vec, colnames(seurat_obj))
+    cell_ids <- colnames(seurat_obj)[ord]
+    mat <- tryCatch(
+      as.matrix(SeuratObject::LayerData(seurat_obj, assay = assay, layer = "data")[valid_features, cell_ids, drop = FALSE]),
+      error = function(e) as.matrix(Seurat::GetAssayData(seurat_obj, assay = assay, slot = "data")[valid_features, cell_ids, drop = FALSE])
+    )
+    mat_scaled <- t(scale(t(mat)))
+    mat_scaled[!is.finite(mat_scaled)] <- 0
+    ann_vec <- grp_vec[ord]
+    ann_levels <- sort(unique(ann_vec))
+    ann_colors <- sc_discrete_colors(ann_levels, palette, manual_colors)
+    col_ann <- if (!is.null(ann_colors)) {
+      ComplexHeatmap::HeatmapAnnotation(Groupe = ann_vec,
+                                        col = list(Groupe = stats::setNames(ann_colors, ann_levels)))
+    } else ComplexHeatmap::HeatmapAnnotation(Groupe = ann_vec)
+    subtitle <- sprintf("%d cellules x %d genes (resolution cellule)", ncol(mat_scaled), nrow(mat_scaled))
+  }
+
+  ht <- ComplexHeatmap::Heatmap(
+    mat_scaled, name = "Z-score", top_annotation = col_ann,
+    show_column_names = ncol(mat_scaled) <= 60, show_row_names = nrow(mat_scaled) <= 60,
+    column_title = paste0("Heatmap Hierarchique -- ", subtitle),
+    clustering_distance_rows = "euclidean", clustering_method_rows = "complete",
+    clustering_distance_columns = "euclidean", clustering_method_columns = "complete"
+  )
+  old_mar <- graphics::par("mar")
+  on.exit(graphics::par(mar = old_mar), add = TRUE)
+  graphics::par(mar = c(1, 1, 1, 1))
+  invisible(ComplexHeatmap::draw(ht))
+}
+
+#' Build a two-dimensional expression density plot (Nebulosa-like)
+#'
+#' NOT the Nebulosa package. Weighted 2D KDE (MASS::kde2d) of a gene's
+#' expression over a 2D reduction -- purely descriptive visualization, not
+#' a statement about lineage/abundance significance.
+#'
+#' @param seurat_obj Seurat object.
+#' @param feature Gene symbol or metadata column.
+#' @param reduction Reduction name (>= 2 dims).
+#' @param bandwidth Optional length-2 numeric (kde2d `h`); NULL = MASS default.
+#' @param max_cells Deterministic subsample cap.
+#' @return A ggplot object.
+#' @export
+plot_sc_expression_density_2d <- function(seurat_obj, feature, reduction = "umap",
+                                          bandwidth = NULL, max_cells = 50000L) {
+  if (!requireNamespace("MASS", quietly = TRUE)) stop("Package 'MASS' requis pour la densite 2D (MASS::kde2d).")
+  if (is.null(seurat_obj)) stop("Aucun objet Single-Cell charge.")
+  if (is.null(feature) || !nzchar(feature %||% "")) stop("Aucun gene/feature selectionne.")
+  if (!reduction %in% names(seurat_obj@reductions)) stop(sprintf("Reduction '%s' non calculee.", reduction))
+  emb <- Seurat::Embeddings(seurat_obj, reduction = reduction)
+  if (ncol(emb) < 2L) stop(sprintf("La reduction '%s' a moins de 2 dimensions.", reduction))
+
+  fetch_var <- if (feature %in% rownames(seurat_obj)) feature
+              else if (feature %in% colnames(seurat_obj@meta.data)) feature
+              else stop(sprintf("Feature '%s' introuvable (ni gene ni colonne de metadonnees).", feature))
+
+  df <- data.frame(dim1 = emb[, 1], dim2 = emb[, 2],
+                   value = as.numeric(Seurat::FetchData(seurat_obj, vars = fetch_var)[, 1]))
+  df <- df[stats::complete.cases(df), , drop = FALSE]
+  if (nrow(df) == 0L) stop("Aucune cellule avec une valeur exploitable pour ce feature.")
+
+  n_before <- nrow(df)
+  if (n_before > max_cells) { set.seed(1L); df <- df[sample.int(n_before, max_cells), , drop = FALSE] }
+
+  subtitle <- "Densite ponderee par l'expression -- visualisation descriptive uniquement (pas une inference biologique)"
+  expr_pos <- df[df$value > 0, , drop = FALSE]
+
+  p <- ggplot2::ggplot(df, ggplot2::aes(x = dim1, y = dim2)) +
+    ggplot2::geom_point(color = "grey85", size = 0.4, alpha = 0.5)  # background: every sampled cell
+
+  if (nrow(expr_pos) == 0L) {
+    subtitle <- "Gene non detecte (expression nulle) dans les cellules affichees"
+  } else if (nrow(expr_pos) < 5L) {
+    subtitle <- "Trop peu de cellules expressives pour une densite fiable (<5) -- points bruts affiches"
+    p <- p + ggplot2::geom_point(data = expr_pos, ggplot2::aes(color = value), size = 1.1) +
+      ggplot2::scale_color_viridis_c(option = "plasma", name = "Expression")
+  } else {
+    kde_bw <- bandwidth %||% c(MASS::bandwidth.nrd(expr_pos$dim1), MASS::bandwidth.nrd(expr_pos$dim2))
+    kde_bw[!is.finite(kde_bw) | kde_bw <= 0] <- 1e-3
+    dens <- MASS::kde2d(expr_pos$dim1, expr_pos$dim2, h = kde_bw, n = 100,
+                        lims = c(range(df$dim1), range(df$dim2)))
+    dens_df <- data.frame(x = rep(dens$x, times = length(dens$y)),
+                          y = rep(dens$y, each = length(dens$x)), z = as.vector(dens$z))
+    p <- p +
+      ggplot2::geom_raster(data = dens_df, ggplot2::aes(x = x, y = y, fill = z), interpolate = TRUE) +
+      ggplot2::geom_point(data = expr_pos, ggplot2::aes(x = dim1, y = dim2), color = "black", size = 0.15, alpha = 0.25) +
+      ggplot2::scale_fill_viridis_c(option = "plasma", name = "Densite\n(ponderee expr.)")
+  }
+
+  p + ggplot2::coord_fixed() + ggplot2::theme_minimal(base_size = 12) +
+    ggplot2::labs(title = sprintf("Densite d'expression 2D -- %s (%s)", feature, toupper(reduction)),
+                 subtitle = subtitle, x = paste0(toupper(reduction), "_1"), y = paste0(toupper(reduction), "_2")) +
+    ggplot2::theme(plot.title = ggplot2::element_text(face = "bold", size = 13),
+                  plot.subtitle = ggplot2::element_text(size = 9, color = "grey40"))
+}
+
+#' Build an interactive 3D reduction plot (plotly)
+#'
+#' Requires >= 3 embedding dimensions -- PCA usually qualifies; UMAP/t-SNE
+#' are computed 2D by default in this app's pipelines and will raise a
+#' clear French error instead of a cryptic index error.
+#'
+#' @param seurat_obj Seurat object.
+#' @param reduction Reduction name.
+#' @param color_by Metadata column.
+#' @param max_cells Deterministic subsample cap.
+#' @return A plotly widget.
+#' @export
+plot_sc_reduction_3d <- function(seurat_obj, reduction = "umap",
+                                 color_by = "seurat_clusters", max_cells = 50000L) {
+  if (!requireNamespace("plotly", quietly = TRUE)) stop("Le package plotly est requis pour la visualisation 3D.")
+  if (is.null(seurat_obj)) stop("Aucun objet Single-Cell charge.")
+  if (!reduction %in% names(seurat_obj@reductions)) stop(sprintf("Reduction '%s' non calculee.", reduction))
+  emb <- Seurat::Embeddings(seurat_obj, reduction = reduction)
+  if (ncol(emb) < 3L) {
+    stop(sprintf(
+      "La reduction '%s' n'a que %d dimension(s) -- 3 minimum requises. UMAP/t-SNE sont calcules en 2D par defaut ; essayez 'pca'.",
+      reduction, ncol(emb)))
+  }
+  if (!color_by %in% colnames(seurat_obj@meta.data)) stop(sprintf("Colonne '%s' introuvable.", color_by))
+
+  df <- data.frame(dim1 = emb[, 1], dim2 = emb[, 2], dim3 = emb[, 3],
+                   id = colnames(seurat_obj), value = seurat_obj@meta.data[[color_by]])
+  n_before <- nrow(df)
+  subsampled <- n_before > max_cells
+  if (subsampled) { set.seed(1L); df <- df[sample.int(n_before, max_cells), , drop = FALSE] }
+
+  is_num <- is.numeric(df$value)
+  p <- if (is_num) {
+    plotly::plot_ly(df, x = ~dim1, y = ~dim2, z = ~dim3, type = "scatter3d", mode = "markers",
+                    marker = list(size = 2.5, color = ~value, colorscale = "Viridis", showscale = TRUE,
+                                 colorbar = list(title = color_by)),
+                    text = ~paste0("ID: ", id, "<br>", color_by, ": ", round(value, 3)), hoverinfo = "text")
+  } else {
+    plotly::plot_ly(df, x = ~dim1, y = ~dim2, z = ~dim3, type = "scatter3d", mode = "markers",
+                    color = ~as.character(value), marker = list(size = 2.5),
+                    text = ~paste0("ID: ", id, "<br>", color_by, ": ", value), hoverinfo = "text")
+  }
+  plotly::layout(p,
+    title = sprintf("Reduction 3D -- %s%s", toupper(reduction),
+                    if (subsampled) sprintf(" (echantillon %s/%s)", format(nrow(df), big.mark=" "), format(n_before, big.mark=" ")) else ""),
+    scene = list(xaxis = list(title = paste0(toupper(reduction), "_1")),
+                yaxis = list(title = paste0(toupper(reduction), "_2")),
+                zaxis = list(title = paste0(toupper(reduction), "_3"))))
+}
