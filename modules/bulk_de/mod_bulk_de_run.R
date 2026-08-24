@@ -20,6 +20,13 @@
 
 .de_run_server <- function(input, output, session, ns, global_data, shared_rv, helpers) {
 
+  .tr <- function(key) {
+    tr <- global_data$i18n
+    if (is.null(tr)) return(key)
+    tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+  }
+
+
   # ── Polish UI: disable the DE button until Step 1 has actually run ──────
   observe({
     shinyjs::toggleState("run_de", condition = !is.null(shared_rv$filtered_counts))
@@ -33,14 +40,14 @@
         input$de_engine)
 
     if (input$group_ref == input$group_target) {
-      showNotification("⚠️ Le groupe Référence et le groupe Cible doivent être différents.",
+      showNotification(.tr("⚠️ Le groupe Référence et le groupe Cible doivent être différents."),
                        type = "warning"); return()
     }
 
     meta <- global_data$bulk_obj$metadata
     grp_n <- table(meta[[input$condition_col]])
     if (any(grp_n[c(input$group_ref, input$group_target)] < 2)) {
-      showNotification("⚠️ Au moins un groupe a < 2 réplicats — résultats peu fiables.",
+      showNotification(.tr("⚠️ Au moins un groupe a < 2 réplicats — résultats peu fiables."),
                        type = "warning", duration = 6)
     }
 
@@ -81,14 +88,14 @@
     }
 
     p <- shiny::Progress$new(); on.exit(p$close())
-    p$set(message = "Analyse différentielle...", value = 0.2)
+    p$set(message = .tr("Analyse différentielle..."), value = 0.2)
 
     tryCatch({
       design_str <- helpers$design_str()
 
       res <- NULL
       if (input$de_engine == "deseq2") {
-        p$set(0.4, "Ajustement DESeq2...")
+        p$set(0.4, .tr("Ajustement DESeq2..."))
         dds_full <- build_dds(shared_rv$filtered_counts, meta, design_formula = design_str, run_deseq = TRUE)
         shared_rv$dds_full <- dds_full
         res <- run_bulk_de_dispatch("deseq2", shared_rv$filtered_counts, meta, input$condition_col,
@@ -120,7 +127,7 @@
                        type = "message", duration = 6)
 
     }, error = function(e) {
-      showNotification(paste("Erreur DE:", e$message), type = "error", duration = 10)
+      showNotification(paste(.tr("Erreur DE:"), e$message), type = "error", duration = 10)
     })
   })
 
@@ -135,6 +142,7 @@
   })
 
   output$adhoc_readiness <- renderUI({
+    global_data$language
     a <- input$adhoc_group_a %||% character(0)
     b <- input$adhoc_group_b %||% character(0)
     issues <- character(0)
@@ -150,11 +158,11 @@
     req(shared_rv$filtered_counts, input$de_engine)
     a <- input$adhoc_group_a %||% character(0)
     b <- input$adhoc_group_b %||% character(0)
-    if (length(intersect(a, b)) > 0) { showNotification("❌ Même échantillon dans les 2 groupes.", type = "error", duration = 6); return() }
-    if (length(a) == 0 || length(b) == 0) { showNotification("❌ Sélectionnez au moins 1 échantillon / groupe.", type = "error", duration = 6); return() }
+    if (length(intersect(a, b)) > 0) { showNotification(.tr("❌ Même échantillon dans les 2 groupes."), type = "error", duration = 6); return() }
+    if (length(a) == 0 || length(b) == 0) { showNotification(.tr("❌ Sélectionnez au moins 1 échantillon / groupe."), type = "error", duration = 6); return() }
 
     p <- shiny::Progress$new(); on.exit(p$close())
-    p$set(message = "Analyse ad-hoc...", value = 0.2)
+    p$set(message = .tr("Analyse ad-hoc..."), value = 0.2)
     tryCatch({
       counts_sub <- shared_rv$filtered_counts[, c(a, b), drop = FALSE]
       meta_adhoc <- data.frame(
@@ -174,6 +182,6 @@
       updateSelectInput(session, "active_contrast_view", choices = names(shared_rv$contrasts), selected = cname)
       n_sig <- sum(res$padj < input$padj_thresh & abs(res$log2FoldChange) > input$lfc_thresh, na.rm = TRUE)
       showNotification(sprintf("✓ Ad-hoc '%s': %d gènes sig.", cname, n_sig), type = "message", duration = 6)
-    }, error = function(e) showNotification(paste("Erreur DE ad-hoc:", e$message), type = "error", duration = 10))
+    }, error = function(e) showNotification(paste(.tr("Erreur DE ad-hoc:"), e$message), type = "error", duration = 10))
   })
 }

@@ -217,6 +217,18 @@ if (I18N_AVAILABLE) {
   template
 }
 
+#' Translation-function factory for pure helpers (plot/report builders).
+#' Returns the session translator's `$t` method, or identity (French) if the
+#' translator is unavailable. ALWAYS call inside a reactive context that ALSO
+#' reads `global_data$language`, so plots re-render on language switch.
+#' (Reading `global_data$i18n` alone is NOT enough: set_translation_language()
+#' mutates the R6 object in place, which does not invalidate reactive readers.)
+.tr_fn <- function(gd) {
+  tr <- gd$i18n
+  if (is.null(tr)) return(function(x, ...) x)
+  tr$t
+}
+
 # --- i18n helpers (Phase 2 hardening) ----------------------------------------
 # Strip shiny.i18n's <span class="i18n" data-key="...">...</span> wrapping
 # (emitted whenever $t() runs OUTSIDE an active session) back to a plain

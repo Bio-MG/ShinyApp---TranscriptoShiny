@@ -898,7 +898,9 @@ bulk_role_colors <- function(palette = "default", manual_colors = NULL) {
 #' Bulk PCA plot colored/shaped by metadata
 
 plot_bulk_pca <- function(vst_matrix, metadata, color_by = NULL, shape_by = NULL, ntop = 500,
-                          palette = "default", manual_colors = NULL) {
+                          palette = "default", manual_colors = NULL, tr = NULL) {
+
+  tr <- tr %||% function(x) x
 
   rv   <- apply(vst_matrix, 1, var)
 
@@ -977,7 +979,7 @@ plot_bulk_pca <- function(vst_matrix, metadata, color_by = NULL, shape_by = NULL
 
   p + geom_text(size = 3, vjust = -1, check_overlap = TRUE) +
 
-    labs(title = "PCA — Échantillons Bulk RNA-seq",
+    labs(title = tr("PCA — Échantillons Bulk RNA-seq"),
 
          x = paste0("PC1 (", pct[1], "%)"), y = paste0("PC2 (", pct[2], "%)"),
 
@@ -996,7 +998,9 @@ plot_bulk_pca <- function(vst_matrix, metadata, color_by = NULL, shape_by = NULL
 #' Volcano plot for bulk DE results
 
 plot_volcano_bulk <- function(res_df, lfc_thresh = 1, padj_thresh = 0.05, top_label = 10,
-                              up_color = "#E74C3C", down_color = "#2980B9", ns_color = "#BDC3C7") {
+                              up_color = "#E74C3C", down_color = "#2980B9", ns_color = "#BDC3C7", tr = NULL) {
+
+  tr <- tr %||% function(x) x
 
   res_df <- res_df[!is.na(res_df$padj), ]
 
@@ -1032,9 +1036,9 @@ plot_volcano_bulk <- function(res_df, lfc_thresh = 1, padj_thresh = 0.05, top_la
 
     geom_text(aes(label = label), size = 2.8, na.rm = TRUE, vjust = -0.6, show.legend = FALSE) +
 
-    labs(title = "Volcano Plot — Analyse Différentielle",
+    labs(title = tr("Volcano Plot — Analyse Différentielle"),
 
-         x = "Log2 Fold Change", y = "-Log10(P-adj)", color = "Statut") +
+         x = tr("Log2 Fold Change"), y = tr("-Log10(P-adj)"), color = tr("Statut")) +
 
     theme_minimal() +
 
@@ -1047,7 +1051,9 @@ plot_volcano_bulk <- function(res_df, lfc_thresh = 1, padj_thresh = 0.05, top_la
 #' MA-plot for bulk DE results
 
 plot_ma_bulk <- function(res_df, lfc_thresh = 1, padj_thresh = 0.05,
-                         sig_color = "#E74C3C", ns_color = "#BDC3C7") {
+                         sig_color = "#E74C3C", ns_color = "#BDC3C7", tr = NULL) {
+
+  tr <- tr %||% function(x) x
 
   res_df <- res_df[!is.na(res_df$padj) & !is.na(res_df$baseMean), ]
 
@@ -1061,7 +1067,7 @@ plot_ma_bulk <- function(res_df, lfc_thresh = 1, padj_thresh = 0.05,
 
     geom_hline(yintercept = 0, color = "grey30") +
 
-    labs(title = "MA-Plot", x = "Log10(Expression Moyenne + 1)", y = "Log2 Fold Change") +
+    labs(title = tr("MA-Plot"), x = tr("Log10(Expression Moyenne + 1)"), y = tr("Log2 Fold Change")) +
 
     theme_minimal() +
 
@@ -1075,7 +1081,9 @@ plot_ma_bulk <- function(res_df, lfc_thresh = 1, padj_thresh = 0.05,
 
 plot_heatmap_bulk <- function(vst_matrix, genes, metadata, annotation_col = NULL, scale_rows = TRUE,
 
-                              palette = "default", manual_colors = NULL) {
+                              palette = "default", manual_colors = NULL, tr = NULL) {
+
+  tr <- tr %||% function(x) x
 
   genes <- intersect(genes, rownames(vst_matrix))
 
@@ -1109,11 +1117,11 @@ plot_heatmap_bulk <- function(vst_matrix, genes, metadata, annotation_col = NULL
 
     }
 
-    ht <- ComplexHeatmap::Heatmap(mat, name = "Z-score", top_annotation = ann,
+    ht <- ComplexHeatmap::Heatmap(mat, name = tr("Z-score"), top_annotation = ann,
 
                                   show_row_names = nrow(mat) <= 60,
 
-                                  column_title = "Heatmap — Gènes Différentiels")
+                                  column_title = tr("Heatmap — Gènes Différentiels"))
 
     # Draw explicitly here (with the same margin safety as
     # plot_upset_contrasts()/plot_venn_contrasts()) rather than returning
@@ -1138,7 +1146,7 @@ plot_heatmap_bulk <- function(vst_matrix, genes, metadata, annotation_col = NULL
 
     geom_tile() +
 
-    scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#B2182B", midpoint = 0, name = "Z-score") +
+    scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#B2182B", midpoint = 0, name = tr("Z-score")) +
 
     theme_minimal() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
@@ -1174,7 +1182,9 @@ plot_sample_correlation_heatmap <- function(vst_matrix, metadata = NULL,
 
                                              annotation_col = NULL, method = "pearson",
 
-                                             palette = "default", manual_colors = NULL) {
+                                             palette = "default", manual_colors = NULL, tr = NULL) {
+
+  tr <- tr %||% function(x) x
 
   if (ncol(vst_matrix) < 2) stop("Au moins 2 échantillons requis pour la corrélation.")
 
@@ -1216,7 +1226,7 @@ plot_sample_correlation_heatmap <- function(vst_matrix, metadata = NULL,
 
       show_column_names  = TRUE,
 
-      column_title       = "Corrélation Inter-Échantillons (QC)",
+      column_title       = tr("Corrélation Inter-Échantillons (QC)"),
 
       cell_fun = function(j, i, x, y, width, height, fill) {
 
@@ -1240,7 +1250,7 @@ plot_sample_correlation_heatmap <- function(vst_matrix, metadata = NULL,
 
     scale_fill_gradient(low = "white", high = "#2C3E50", name = toupper(method)) +
 
-    labs(title = "Corrélation Inter-Échantillons (QC)", x = NULL, y = NULL) +
+    labs(title = tr("Corrélation Inter-Échantillons (QC)"), x = NULL, y = NULL) +
 
     theme_minimal() +
 
@@ -1482,7 +1492,8 @@ summarize_contrasts_updown <- function(contrasts, lfc_thresh = 1, padj_thresh = 
 #' Up/Down summary barchart — one or several contrasts side by side
 #' @param summary_df Output of `summarize_contrasts_updown()`.
 #' @return ggplot object (grouped bar chart, counts labelled).
-plot_updown_barchart <- function(summary_df) {
+plot_updown_barchart <- function(summary_df, tr = NULL) {
+  tr <- tr %||% function(x) x
   if (is.null(summary_df) || nrow(summary_df) == 0) {
     stop("Aucun contraste calculé.")
   }
@@ -1499,8 +1510,8 @@ plot_updown_barchart <- function(summary_df) {
     geom_text(aes(label = Count), position = position_dodge(width = 0.7),
               vjust = -0.3, size = 3.4) +
     scale_fill_manual(values = c(Up = "#E74C3C", Down = "#2980B9")) +
-    labs(title = "Gènes significatifs Up / Down par contraste",
-         x = NULL, y = "Nombre de gènes", fill = NULL) +
+    labs(title = tr("Gènes significatifs Up / Down par contraste"),
+         x = NULL, y = tr("Nombre de gènes"), fill = NULL) +
     theme_minimal(base_size = 12) +
     theme(plot.title = element_text(face = "bold", size = 14),
           axis.text.x = element_text(angle = if (nrow(summary_df) > 4) 30 else 0, hjust = 1))
@@ -1516,7 +1527,8 @@ plot_updown_barchart <- function(summary_df) {
 #' @param ntop Number of most-variable genes used (must match plot_bulk_pca()).
 #' @param max_pc Maximum number of components to display.
 #' @return ggplot object (bars = % variance per PC, line = cumulative %).
-plot_scree_bulk <- function(vst_matrix, ntop = 500, max_pc = 10) {
+plot_scree_bulk <- function(vst_matrix, ntop = 500, max_pc = 10, tr = NULL) {
+  tr <- tr %||% function(x) x
   rv   <- apply(vst_matrix, 1, var)
   ntop <- min(ntop, nrow(vst_matrix))
   sel  <- order(rv, decreasing = TRUE)[seq_len(ntop)]
@@ -1532,8 +1544,8 @@ plot_scree_bulk <- function(vst_matrix, ntop = 500, max_pc = 10) {
     geom_line(aes(y = cum_pct, group = 1), color = "#2C3E50", linewidth = 0.8) +
     geom_point(aes(y = cum_pct), color = "#2C3E50", size = 2) +
     geom_text(aes(y = pct, label = paste0(round(pct, 1), "%")), vjust = -0.6, size = 3) +
-    labs(title = "Scree Plot — Variance Expliquée", x = NULL,
-         y = "% Variance (barres) / % Cumulée (ligne)") +
+    labs(title = tr("Scree Plot — Variance Expliquée"), x = NULL,
+         y = tr("% Variance (barres) / % Cumulée (ligne)")) +
     theme_minimal(base_size = 12) +
     theme(plot.title = element_text(face = "bold", size = 13))
 }

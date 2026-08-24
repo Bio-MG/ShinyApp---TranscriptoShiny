@@ -47,43 +47,43 @@ mod_bulk_report_ui <- function(id) {
     div(class = "alert alert-light", style = "font-size:0.85em;border-left:3px solid #2C3E50;",
         "Rapport autonome (PCA, QC, Volcano, Heatmap, Pathways) — partageable sans R."),
 
-    textInput(ns("report_title"), "Titre du rapport",
-              value = "Analyse RNA-seq Bulk", placeholder = "Ex: Projet — Cov2 vs Mock"),
-    textInput(ns("report_subtitle"), "Sous-titre (optionnel)", placeholder = "Ex: GSE164073"),
-    textAreaInput(ns("report_notes"), "Notes / Commentaires (markdown supporté)",
+    textInput(ns("report_title"), i18n$t("Titre du rapport"),
+              value = i18n$t("Analyse RNA-seq Bulk"), placeholder = "Ex: Projet — Cov2 vs Mock"),
+    textInput(ns("report_subtitle"), i18n$t("Sous-titre (optionnel)"), placeholder = "Ex: GSE164073"),
+    textAreaInput(ns("report_notes"), i18n$t("Notes / Commentaires (markdown supporté)"),
                   rows = 3, placeholder = "Ex: Fichier GSE164073, donneur D3."),
 
-    checkboxGroupInput(ns("report_sections"), "Sections à inclure",
-      choices = c("PCA" = "pca", "QC Échantillons" = "qc",
-                  "Volcano + MA-Plot" = "volcano", "Heatmap Top Gènes" = "heatmap",
-                  "Table DE complète" = "table", "Pathway Enrichment" = "pathway"),
+    checkboxGroupInput(ns("report_sections"), i18n$t("Sections à inclure"),
+      choices = stats::setNames(c("pca","qc","volcano","heatmap","table","pathway"),
+        c("PCA", i18n$t("QC Échantillons"), i18n$t("Volcano + MA-Plot"), i18n$t("Heatmap Top Gènes"), i18n$t("Table DE complète"), "Pathway Enrichment")),
       selected = c("pca", "qc", "volcano", "heatmap", "table", "pathway")),
 
     # Step-3.5: choix de mise en page pour la section "Toutes les paires"
     # (Volcano/MA/Heatmap pairwise) — grille compacte ou 1 plot pleine page.
-    radioButtons(ns("pairwise_layout"), "Mise en page \"Toutes les paires\" (Volcano/MA/Heatmap)",
-      choices = c("Petits multiples compilés (grille)" = "grid",
-                  "Grand format (1 par contraste)" = "full"),
+    radioButtons(ns("pairwise_layout"), i18n$t("Mise en page \"Toutes les paires\" (Volcano/MA/Heatmap)"),
+      choices = stats::setNames(c("grid","full"),
+        c(i18n$t("Petits multiples compilés (grille)"), i18n$t("Grand format (1 par contraste)"))),
       selected = "grid", inline = TRUE),
 
-    radioButtons(ns("report_format"), "Format de sortie",
-      choices = c("HTML interactif" = "html", "PDF statique" = "pdf", "Les deux (.zip)" = "both"),
+    radioButtons(ns("report_format"), i18n$t("Format de sortie"),
+      choices = stats::setNames(c("html","pdf","both"),
+        c(i18n$t("HTML interactif"), i18n$t("PDF statique"), i18n$t("Les deux (.zip)"))),
       selected = "html"),
 
     conditionalPanel(condition = "input.report_format != 'pdf'", ns = ns,
       checkboxInput(ns("report_interactive"),
-                    "Graphiques interactifs (PCA, Volcano, MA individuel) — HTML uniquement", value = TRUE)),
-    div(class = "small text-muted", "Le PDF requiert LaTeX (tinytex::install_tinytex())."),
+                    i18n$t("Graphiques interactifs (PCA, Volcano, MA individuel) — HTML uniquement"), value = TRUE)),
+    div(class = "small text-muted", i18n$t("Le PDF requiert LaTeX (tinytex::install_tinytex()).")),
 
-    downloadButton(ns("dl_report"), "\U0001f4c4 G\u00e9n\u00e9rer le Rapport",
+    downloadButton(ns("dl_report"), i18n$t("📄 Générer le Rapport"),
                    class = "btn-dark w-100 mt-2"),
     hr(),
     div(class = "alert alert-light", style = "font-size:0.82em;border-left:3px solid #18BC9C;",
         bsicons::bs_icon("code-slash"),
-        " Export script R reproductible (.zip) \u2014 contient le script + counts_raw.rds + metadata.rds. ",
-        "Pour l'ex\u00e9cuter : d\u00e9compressez le .zip, ouvrez R/RStudio dans CE dossier ",
-        "(ou faites setwd() dessus), puis source(\"analyse_bulk_....R\") ou ex\u00e9cutez-le ligne par ligne."),
-    downloadButton(ns("dl_r_script"), "\U0001f9fe Export Script R Reproductible (.zip)",
+        " Export script R reproductible (.zip) — contient le script + counts_raw.rds + metadata.rds. ",
+        "Pour l'exécuter : décompressez le .zip, ouvrez R/RStudio dans CE dossier ",
+        "(ou faites setwd() dessus), puis source(\"analyse_bulk_....R\") ou exécutez-le ligne par ligne."),
+    downloadButton(ns("dl_r_script"), i18n$t("🧾 Export Script R Reproductible (.zip)"),
                    class = "btn-outline-secondary w-100"),
     div(class = "small text-muted mt-1", textOutput(ns("report_status")))
   )
@@ -92,14 +92,22 @@ mod_bulk_report_ui <- function(id) {
 mod_bulk_report_server <- function(id, global_data, shared_rv) {
   moduleServer(id, function(input, output, session) {
 
+    .tr <- function(key) {
+      tr <- global_data$i18n
+      if (is.null(tr)) return(key)
+      tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+    }
+
+
     observe({
       shinyjs::toggleState("dl_report",   condition = !is.null(shared_rv$vst_mat))
       shinyjs::toggleState("dl_r_script", condition = !is.null(shared_rv$filtered_counts))
     })
 
     output$report_status <- renderText({
-      if (is.null(shared_rv$vst_mat)) "Lancez d'abord l'\u00e9tape 1 (Filtrage & VST)."
-      else "Pr\u00eat \u2014 s\u00e9lectionnez les sections puis cliquez sur 'G\u00e9n\u00e9rer Rapport'."
+      global_data$language
+      if (is.null(shared_rv$vst_mat)) .tr("Lancez d'abord l'\u00e9tape 1 (Filtrage & VST).")
+      else .tr("Pr\u00eat \u2014 s\u00e9lectionnez les sections puis cliquez sur 'G\u00e9n\u00e9rer Rapport'.")
     })
 
     # ── HTML / PDF Report ──────────────────────────────────────────────────
@@ -129,6 +137,41 @@ mod_bulk_report_server <- function(id, global_data, shared_rv) {
         tmp_rmd <- file.path(tempdir(), "bulk_report_template.Rmd")
         file.copy(template_path, tmp_rmd, overwrite = TRUE)
 
+        # ── Phase 4: resolve ALL report strings for the CURRENT language ────
+        # The Rmd is decoupled from shiny.i18n — it receives a plain named
+        # list, never the Translator. Missing keys fall back to French (the key).
+        local_tr <- .tr_fn(global_data)
+        report_keys <- c(
+          "Résumé", "Aucune analyse différentielle disponible au moment de l'export.",
+          "Tous les contrastes calculés", "Seuils appliqués : |Log2FC| > {lfc}, P-adj < {padj}.",
+          "Contraste", "Gènes testés",
+          "Résumé de TOUS les contrastes calculés dans cette session (pas seulement le contraste actif détaillé plus bas).",
+          "Comparaison des gènes significatifs entre contrastes (UpSet)", "Diagramme non disponible :",
+          "PCA — Échantillons", "QC — Corrélation Inter-Échantillons",
+          "Détecte les échantillons mal étiquetés ou les outliers avant interprétation du contraste.",
+          "Volcano Plot & MA-Plot", "Heatmap — Top Gènes Différentiels",
+          "Pas assez de gènes communs pour générer la heatmap.",
+          "Toutes les paires — Volcano & MA-Plot", "grille compacte", "grand format (1 par contraste)",
+          "Package 'patchwork' manquant — grille ignorée.", "Heatmap top gènes — par paire",
+          "Table Complète — Expression Différentielle",
+          "Top 100 gènes (table complète disponible en export CSV depuis l'application)",
+          "Pathway Enrichment", "Multi-méthodes — DESeq2 / edgeR / limma-voom",
+          "Table consensus (top 20 par rang moyen)",
+          "Consensus de rang — table complète disponible en export CSV depuis l'app.",
+          "Aucune comparaison multi-méthodes disponible — cliquez \"Comparer\" avant l'export.",
+          "Rapport généré automatiquement par TranscriptoShiny — module Bulk RNA-seq.",
+          "Contraste actif : {c} | Échantillons : {n} | Gènes testés : {g} | Gènes significatifs : {s}",
+          "Petits multiples pour chacun des {n} contrastes calculés — mise en page : {layout}.",
+          "Heatmaps par paire non affichées ({n} contrastes > 6) — changez le contraste actif dans l'onglet Heatmap.",
+          "Comparaison du même contraste avec {n} méthodes : {m}.",
+          # shared plot helpers used by the report
+          "Volcano Plot — Analyse Différentielle", "Log2 Fold Change", "-Log10(P-adj)", "Statut",
+          "MA-Plot", "Log10(Expression Moyenne + 1)", "Heatmap — Gènes Différentiels", "Z-score",
+          "Corrélation Inter-Échantillons (QC)", "PCA — Échantillons Bulk RNA-seq",
+          "Top", "Pathways", "Nombre de gènes", "Dotplot Pathways", "Ratio de gènes", "Nb Gènes"
+        )
+        i18n_strings <- stats::setNames(vapply(report_keys, local_tr, character(1)), report_keys)
+
         render_params <- list(
           vst_mat               = shared_rv$vst_mat,
           metadata              = global_data$bulk_obj$metadata,
@@ -152,13 +195,15 @@ mod_bulk_report_server <- function(id, global_data, shared_rv) {
           multimethod_consensus = shared_rv$multimethod_consensus,
           # Step-3.5: choix de mise en page pour "Toutes les paires".
           pairwise_layout       = input$pairwise_layout %||% "grid",
-          report_title          = input$report_title %||% "Analyse RNA-seq Bulk",
+          report_title          = input$report_title %||% .tr("Analyse RNA-seq Bulk"),
           report_subtitle       = input$report_subtitle %||% "",
           report_notes          = input$report_notes %||% "",
+          i18n_strings          = i18n_strings,          # NEW (Phase 4)
+          report_language       = global_data$language,  # NEW (for date/number formatting if needed)
           interactive           = isTRUE(input$report_interactive) && input$report_format != "pdf"
         )
 
-        withProgress(message = "G\u00e9n\u00e9ration du rapport...", value = 0.2, {
+        withProgress(message = .tr("G\u00e9n\u00e9ration du rapport..."), value = 0.2, {
           formats_needed <- switch(input$report_format,
             html = "html_document", pdf = "pdf_document",
             both = c("html_document", "pdf_document"))

@@ -33,13 +33,20 @@
 
 .de_multimethod_server <- function(input, output, session, ns, global_data, shared_rv, helpers) {
 
+  .tr <- function(key) {
+    tr <- global_data$i18n
+    if (is.null(tr)) return(key)
+    tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+  }
+
+
   multimethod_status_rv <- reactiveVal(NULL)
 
   observeEvent(input$run_multimethod, {
     req(shared_rv$filtered_counts, input$condition_col, input$group_ref, input$group_target)
 
     if (input$group_ref == input$group_target) {
-      showNotification("⚠️ Le groupe Référence et le groupe Cible doivent être différents.",
+      showNotification(.tr("⚠️ Le groupe Référence et le groupe Cible doivent être différents."),
                        type = "warning"); return()
     }
     meta <- global_data$bulk_obj$metadata
@@ -57,7 +64,7 @@
     }
 
     p <- shiny::Progress$new(); on.exit(p$close())
-    p$set(message = "Comparaison multi-méthodes...", value = 0.15)
+    p$set(message = .tr("Comparaison multi-méthodes..."), value = 0.15)
 
     tryCatch({
       design_str <- helpers$design_str()
@@ -71,13 +78,13 @@
       needs_fit <- is.null(dds_full) ||
         !isTRUE(identical(attr(dds_full, "design_str_cache"), design_str))
       if (needs_fit) {
-        p$set(0.3, "Ajustement DESeq2 (requis pour le consensus)...")
+        p$set(0.3, .tr("Ajustement DESeq2 (requis pour le consensus)..."))
         dds_full <- build_dds(shared_rv$filtered_counts, meta, design_formula = design_str, run_deseq = TRUE)
         attr(dds_full, "design_str_cache") <- design_str
         shared_rv$dds_full <- dds_full
       }
 
-      p$set(0.5, "DESeq2 + edgeR + limma-voom...")
+      p$set(0.5, .tr("DESeq2 + edgeR + limma-voom..."))
       de_list <- getAllDE(shared_rv$filtered_counts, meta, input$condition_col,
                           input$group_target, input$group_ref,
                           dds_full = dds_full, shrink = input$shrink_lfc,
@@ -88,7 +95,7 @@
             " a réussi). Vérifiez que edgeR/limma sont installés.")
       }
 
-      p$set(0.85, "Consensus de rang...")
+      p$set(0.85, .tr("Consensus de rang..."))
       cons <- tryCatch(
         rankConsensus(de_list, input$lfc_thresh, input$padj_thresh),
         error = function(e) { warning(conditionMessage(e)); NULL }
@@ -104,8 +111,8 @@
         length(de_list), paste(names(de_list), collapse = ", "),
         input$group_target, input$group_ref
       ))
-      showNotification(sprintf("✓ Comparaison multi-méthodes terminée (%s)",
-                               paste(names(de_list), collapse = ", ")),
+      showNotification(.t_fmt(.tr("Comparaison multi-méthodes terminée ({methods})"),
+                               methods = paste(names(de_list), collapse = ", ")),
                        type = "message", duration = 6)
       shared_rv$active_tab <- "tab_multimethod"
 
@@ -113,15 +120,19 @@
       multimethod_status_rv(NULL)
       shared_rv$multimethod_de        <- NULL
       shared_rv$multimethod_consensus <- NULL
-      showNotification(paste("Erreur comparaison multi-méthodes:", e$message),
+      showNotification(paste(.tr("Erreur comparaison multi-méthodes:"), e$message),
                        type = "error", duration = 10)
     })
   })
 
   output$multimethod_status_ui <- renderUI({
+    global_data$language
+    .trl <- function(key) { tr <- global_data$i18n; if (is.null(tr)) return(key)
+                            tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key) }
+
     if (is.null(multimethod_status_rv())) {
       div(class = "alert alert-info", style = "font-size:0.85em;",
-          "Cliquez \"🔬 Comparer DESeq2 / edgeR / limma-voom\" dans le panneau Step 2.")
+          .trl("Cliquez \"🔬 Comparer DESeq2 / edgeR / limma-voom\" dans le panneau Step 2."))
     } else {
       div(class = "alert alert-success", style = "font-size:0.85em;", multimethod_status_rv())
     }
@@ -136,6 +147,7 @@
   })
 
   output$mm_venn_plot <- renderPlot({
+    global_data$language                     # i18n trigger (diagrams are language-neutral)
     w <- session$clientData[[paste0("output_", "mm_venn_plot", "_width")]]
     h <- session$clientData[[paste0("output_", "mm_venn_plot", "_height")]]
     if (isTRUE(w < 30) || isTRUE(h < 30)) {

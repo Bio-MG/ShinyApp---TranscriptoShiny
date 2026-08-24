@@ -22,6 +22,13 @@
 
 .de_viz_server <- function(input, output, session, ns, global_data, shared_rv) {
 
+  .tr <- function(key) {
+    tr <- global_data$i18n
+    if (is.null(tr)) return(key)
+    tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+  }
+
+
   # Reactive accessor for the currently displayed DE result (local to this
   # function — sibling functions read shared_rv$contrasts[[shared_rv$active_contrast]]
   # directly since they don't need req()-based reactive semantics here)
@@ -95,10 +102,12 @@
   })
 
   volcano_plot <- reactive({
+    global_data$language                     # i18n trigger
     req(active_de_results())
     rc <- volcano_role_colors()
     plot_volcano_bulk(active_de_results(), lfc_thresh = input$lfc_thresh, padj_thresh = input$padj_thresh,
-                      up_color = rc[["Up"]], down_color = rc[["Down"]], ns_color = rc[["NS"]])
+                      up_color = rc[["Up"]], down_color = rc[["Down"]], ns_color = rc[["NS"]],
+                      tr = .tr_fn(global_data))
   })
   output$plot_volcano <- renderPlot({ volcano_plot() })
 
@@ -158,10 +167,11 @@
   # NS unchanged) — one fewer control to keep in sync, see helpText on the
   # MA-Plot tab pointing back to Volcano.
   ma_plot <- reactive({
+    global_data$language                     # i18n trigger
     req(active_de_results())
     rc <- volcano_role_colors()
     plot_ma_bulk(active_de_results(), lfc_thresh = input$lfc_thresh, padj_thresh = input$padj_thresh,
-                sig_color = rc[["Up"]], ns_color = rc[["NS"]])
+                sig_color = rc[["Up"]], ns_color = rc[["NS"]], tr = .tr_fn(global_data))
   })
   output$plot_ma <- renderPlot({ ma_plot() })
 
@@ -279,11 +289,13 @@
   })
 
   .heatmap_obj <- function() {
+    global_data$language                     # i18n trigger
     annot <- if (nzchar(input$heatmap_annot %||% "")) input$heatmap_annot else NULL
     pal   <- shared_rv$bulk_palette %||% "default"
     plot_heatmap_bulk(shared_rv$vst_mat, heatmap_genes(), global_data$bulk_obj$metadata,
                       annotation_col = annot, palette = pal,
-                      manual_colors = if (identical(pal, "manual")) heatmap_manual_colors() else NULL)
+                      manual_colors = if (identical(pal, "manual")) heatmap_manual_colors() else NULL,
+                      tr = .tr_fn(global_data))
   }
 
   output$plot_heatmap <- renderPlot({ .heatmap_obj() })

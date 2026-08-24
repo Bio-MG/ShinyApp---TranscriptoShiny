@@ -502,7 +502,9 @@ run_gsea_enrichment <- function(de_results, organism = "human",
 
 #' Top-N pathway barplot (shared by mod_sc_pathways.R and mod_bulk.R)
 
-plot_pathway_barplot <- function(df, db_label = "", top_n = 15) {
+plot_pathway_barplot <- function(df, db_label = "", top_n = 15, tr = NULL) {
+
+  tr <- tr %||% function(x) x
 
   df_top <- head(df, top_n)
 
@@ -514,9 +516,9 @@ plot_pathway_barplot <- function(df, db_label = "", top_n = 15) {
 
     scale_fill_viridis_c(option = "plasma", direction = -1) +
 
-    labs(title = paste("Top", top_n, "Pathways -", db_label),
+    labs(title = paste(tr("Top"), top_n, tr("Pathways"), "-", db_label),
 
-         x = "Nombre de gènes", y = NULL, fill = "-log10(P-adj)") +
+         x = tr("Nombre de gènes"), y = NULL, fill = "-log10(P-adj)") +
 
     theme_minimal(base_size = 12) +
 
@@ -530,7 +532,9 @@ plot_pathway_barplot <- function(df, db_label = "", top_n = 15) {
 
 #' Pathway dotplot (shared)
 
-plot_pathway_dotplot <- function(df, db_label = "", top_n = 20) {
+plot_pathway_dotplot <- function(df, db_label = "", top_n = 20, tr = NULL) {
+
+  tr <- tr %||% function(x) x
 
   df_top <- head(df, top_n)
 
@@ -558,9 +562,9 @@ plot_pathway_dotplot <- function(df, db_label = "", top_n = 20) {
 
     scale_color_viridis_c(option = "magma", direction = -1) +
 
-    labs(title = paste("Dotplot Pathways -", db_label),
+    labs(title = paste(tr("Dotplot Pathways"), "-", db_label),
 
-         x = "Ratio de gènes", y = NULL, color = "-log10(P-adj)", size = "Nb gènes") +
+         x = tr("Ratio de gènes"), y = NULL, color = "-log10(P-adj)", size = tr("Nombre de gènes")) +
 
     theme_minimal(base_size = 12) +
 
@@ -574,13 +578,15 @@ plot_pathway_dotplot <- function(df, db_label = "", top_n = 20) {
 
 #' Pathway results DT table (shared)
 
-build_pathway_dt <- function(df) {
+build_pathway_dt <- function(df, tr = NULL) {
+
+  tr <- tr %||% function(x) x
 
   cols_available <- intersect(c("ID", "Description", "p.adjust", "Count", "GeneRatio"), colnames(df))
 
   df_display <- df[, cols_available, drop = FALSE]
 
-  colnames(df_display) <- c("ID", "Description", "P-adj", "Nb Gènes", "Ratio")[seq_along(cols_available)]
+  colnames(df_display) <- c("ID", "Description", "P-adj", tr("Nb Gènes"), "Ratio")[seq_along(cols_available)]
 
   DT::datatable(df_display, filter = "top", rownames = FALSE,
 

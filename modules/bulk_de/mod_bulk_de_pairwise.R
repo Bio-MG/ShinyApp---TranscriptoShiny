@@ -17,10 +17,18 @@
 
 .de_pairwise_server <- function(input, output, session, ns, global_data, shared_rv, helpers) {
 
+  .tr <- function(key) {
+    tr <- global_data$i18n
+    if (is.null(tr)) return(key)
+    tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+  }
+
+
   # =========================================================================
   # PAIRWISE AUTO — visible only when condition_col has > 2 levels
   # =========================================================================
   output$pairwise_btn_ui <- renderUI({
+    global_data$language
     req(global_data$bulk_obj, input$condition_col)
     meta <- global_data$bulk_obj$metadata
     req(input$condition_col %in% colnames(meta))
@@ -28,7 +36,7 @@
     if (length(lvls) > 2) {
       n_pairs <- choose(length(lvls), 2)
       actionButton(ns("run_pairwise"),
-                  sprintf("⚡ Calculer les %d paires possibles", n_pairs),
+                  .t_fmt(.tr("⚡ Calculer les {n} paires possibles"), n = n_pairs),
                   class = "btn-outline-success w-100 mt-1", icon = icon("layer-group"))
     } else NULL
   })
@@ -39,13 +47,13 @@
 
   .run_pairwise_now <- function(pairs, meta) {
     n_pairs <- length(pairs)
-    withProgress(message = "Calcul des contrastes pairwise...", value = 0, {
+    withProgress(message = .tr("Calcul des contrastes pairwise..."), value = 0, {
       dds_full <- NULL
       if (input$de_engine == "deseq2") {
         dds_full <- tryCatch(
           build_dds(shared_rv$filtered_counts, meta, design_formula = helpers$design_str(), run_deseq = TRUE),
           error = function(e) {
-            showNotification(paste("Erreur ajustement DESeq2:", conditionMessage(e)), type = "error", duration = 10)
+            showNotification(paste(.tr("Erreur ajustement DESeq2:"), conditionMessage(e)), type = "error", duration = 10)
             NULL
           }
         )

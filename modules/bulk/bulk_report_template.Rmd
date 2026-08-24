@@ -38,6 +38,8 @@ params:
   report_title: "Analyse RNA-seq Bulk"
   report_subtitle: ""
   report_notes: ""
+  i18n_strings: NULL
+  report_language: "fr"
   interactive: TRUE
 ---
 
@@ -50,6 +52,18 @@ knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE,
 # bug "heatmap affichee pres du sommaire au lieu de sa position reelle".
 sections <- params$sections
 `%||%` <- function(a, b) if (is.null(a)) b else a
+
+# ── Phase 4: i18n — the report is decoupled from shiny.i18n. It receives a
+# plain named list (params$i18n_strings). tr() returns the current-language
+# string for a key, falling back to the key itself (French). ───────────────
+.strings <- params$i18n_strings %||% list()
+tr <- function(key) if (!is.null(key) && key %in% names(.strings)) .strings[[key]] else key
+# Placeholder interpolation helper (mirrors .t_fmt in global.R).
+tr_fmt <- function(key, ...) {
+  tpl <- tr(key); vals <- list(...)
+  for (nm in names(vals)) tpl <- gsub(paste0("{", nm, "}"), format(vals[[nm]]), tpl, fixed = TRUE)
+  tpl
+}
 
 # Renders a ggplot as an interactive plotly widget in HTML output (when
 # params$interactive is TRUE), or leaves it as a static ggplot otherwise.
@@ -84,31 +98,33 @@ render_plot <- function(p, allow_interactive = TRUE) {
 cat("> ", gsub("\n", "\n> ", params$report_notes), "\n\n", sep = "")
 ```
 
-# Resume
+```{r resume_header, results='asis'}
+cat("#", tr("Résumé"), "\n\n")
+```
 
 ```{r resume_active_contrast, results='asis'}
 if (!is.null(params$de_results)) {
   n_sig <- sum(params$de_results$padj < params$padj_thresh &
                abs(params$de_results$log2FoldChange) > params$lfc_thresh, na.rm = TRUE)
-  cat(sprintf(
-    "Contraste actif affiche en detail ci-dessous : **%s**\n\nEchantillons : %d | Genes testes : %d | Genes significatifs : %d\n",
-    params$contrast_name %||% "-", ncol(params$vst_mat), nrow(params$de_results), n_sig
-  ))
+  cat(tr_fmt("Contraste actif : {c} | Échantillons : {n} | Gènes testés : {g} | Gènes significatifs : {s}",
+             c = params$contrast_name %||% "-", n = ncol(params$vst_mat),
+             g = nrow(params$de_results), s = n_sig), "\n\n")
 } else {
-  cat("Aucune analyse differentielle disponible au moment de l'export.")
+  cat(tr("Aucune analyse différentielle disponible au moment de l'export."), "\n\n")
 }
 ```
 
 ```{r all_contrasts_section, eval=!is.null(params$all_contrasts_summary) && nrow(params$all_contrasts_summary) > 1, results='asis'}
-cat("\n\n### Tous les contrastes calcules\n\n")
-cat(sprintf("Seuils appliques : |Log2FC| > %s, P-adj < %s.\n\n", params$lfc_thresh, params$padj_thresh))
+cat("\n\n###", tr("Tous les contrastes calculés"), "\n\n")
+cat(tr_fmt("Seuils appliqués : |Log2FC| > {lfc}, P-adj < {padj}.",
+           lfc = params$lfc_thresh, padj = params$padj_thresh), "\n\n")
 ```
 ```{r all_contrasts_table, eval=!is.null(params$all_contrasts_summary) && nrow(params$all_contrasts_summary) > 1}
 tbl <- params$all_contrasts_summary
 tbl$actif <- ifelse(tbl$actif, "-> actif", "")
-colnames(tbl) <- c("Contraste", "Genes testes", "Significatifs", "Up", "Down", "")
+colnames(tbl) <- c(tr("Contraste"), tr("Gènes testés"), "Significatifs", "Up", "Down", "")
 knitr::kable(tbl, row.names = FALSE,
-            caption = "Resume de TOUS les contrastes calcules dans cette session (pas seulement le contraste actif detaille plus bas).")
+            caption = tr("Résumé de TOUS les contrastes calculés dans cette session (pas seulement le contraste actif détaillé plus bas)."))
 ```
 
 ```{r upset_contrasts_check, include=FALSE}
@@ -122,7 +138,7 @@ knitr::kable(tbl, row.names = FALSE,
 # "### titre" a l'interieur produit un "#" litteral hors contexte de macro et
 # fait planter xelatex ("You can't use `macro parameter character #' in
 # vertical mode."). Le titre doit rester en dehors du bloc raw LaTeX.
-cat("\n\n### Comparaison des genes significatifs entre contrastes (UpSet)\n\n")
+cat("\n\n###", tr("Comparaison des gènes significatifs entre contrastes (UpSet)"), "\n\n")
 .tex_landscape_start()
 ```
 ```{r upset_contrasts_plot, eval=.show_upset, fig.width=11, fig.height=6.5}
@@ -133,7 +149,7 @@ gene_sets <- build_contrast_gene_sets(
 )
 tryCatch(
   plot_upset_contrasts(gene_sets),
-  error = function(e) cat("Diagramme non disponible :", conditionMessage(e))
+  error = function(e) cat(tr("Diagramme non disponible :"), conditionMessage(e))
 )
 ```
 ```{r upset_landscape_end, eval=.show_upset, results='asis'}
@@ -143,33 +159,33 @@ tryCatch(
 ---
 
 ```{r pca_section, eval="pca" %in% sections, results='asis'}
-cat("\n\n# PCA -- Echantillons\n\n")
+cat("\n\n#", tr("PCA — Échantillons"), "\n\n")
 ```
 ```{r pca_plot, eval="pca" %in% sections}
 render_plot(plot_bulk_pca(params$vst_mat, params$metadata, color_by = params$pca_color_by,
                           palette = params$pca_palette %||% "default",
-                          manual_colors = params$pca_manual_colors))
+                          manual_colors = params$pca_manual_colors, tr = tr))
 ```
 
 ---
 
 ```{r qc_section, eval="qc" %in% sections, results='asis'}
-cat("\n\n# QC -- Correlation Inter-Echantillons\n\n")
-cat("Detecte les echantillons mal etiquetes ou les outliers avant interpretation du contraste.\n\n")
+cat("\n\n#", tr("QC — Corrélation Inter-Échantillons"), "\n\n")
+cat(tr("Détecte les échantillons mal étiquetés ou les outliers avant interprétation du contraste."), "\n\n")
 ```
 ```{r qc_plot, eval="qc" %in% sections}
-print(plot_sample_correlation_heatmap(params$vst_mat, params$metadata))
+print(plot_sample_correlation_heatmap(params$vst_mat, params$metadata, tr = tr))
 ```
 
 ---
 
 ```{r volcano_section, eval="volcano" %in% sections && !is.null(params$de_results), results='asis'}
-cat("\n\n# Volcano Plot & MA-Plot\n\n")
+cat("\n\n#", tr("Volcano Plot & MA-Plot"), "\n\n")
 ```
 ```{r volcano_plot, eval="volcano" %in% sections && !is.null(params$de_results)}
 rc <- params$role_colors %||% c(Up = "#E74C3C", Down = "#2980B9", NS = "#BDC3C7")
 render_plot(plot_volcano_bulk(params$de_results, lfc_thresh = params$lfc_thresh, padj_thresh = params$padj_thresh,
-                              up_color = rc[["Up"]], down_color = rc[["Down"]], ns_color = rc[["NS"]]))
+                              up_color = rc[["Up"]], down_color = rc[["Down"]], ns_color = rc[["NS"]], tr = tr))
 ```
 ```{r ma_plot, eval="volcano" %in% sections && !is.null(params$de_results)}
 # Step-3.5: le MA-plot du contraste ACTIF (celui-ci, hors section pairwise)
@@ -177,13 +193,13 @@ render_plot(plot_volcano_bulk(params$de_results, lfc_thresh = params$lfc_thresh,
 # toujours statique. Reste statique en PDF quel que soit le toggle.
 rc <- params$role_colors %||% c(Up = "#E74C3C", Down = "#2980B9", NS = "#BDC3C7")
 render_plot(plot_ma_bulk(params$de_results, lfc_thresh = params$lfc_thresh, padj_thresh = params$padj_thresh,
-                         sig_color = rc[["Up"]], ns_color = rc[["NS"]]))
+                         sig_color = rc[["Up"]], ns_color = rc[["NS"]], tr = tr))
 ```
 
 ---
 
 ```{r heatmap_section, eval="heatmap" %in% sections && !is.null(params$de_results), results='asis'}
-cat("\n\n# Heatmap -- Top Genes Differentiels\n\n")
+cat("\n\n#", tr("Heatmap — Top Gènes Différentiels"), "\n\n")
 ```
 ```{r heatmap_plot, eval="heatmap" %in% sections && !is.null(params$de_results)}
 res <- params$de_results
@@ -191,9 +207,9 @@ res <- res[!is.na(res$padj), ]
 valid_genes <- intersect(res$gene[order(res$padj)], rownames(params$vst_mat))
 genes <- head(valid_genes, params$heatmap_top_n)
 if (length(genes) >= 2) {
-  plot_heatmap_bulk(params$vst_mat, genes, params$metadata)
+  plot_heatmap_bulk(params$vst_mat, genes, params$metadata, tr = tr)
 } else {
-  cat("Pas assez de genes communs pour generer la heatmap.")
+  cat(tr("Pas assez de gènes communs pour générer la heatmap."))
 }
 ```
 
@@ -205,9 +221,11 @@ if (length(genes) >= 2) {
 .pw_full <- .show_pw && identical(params$pairwise_layout, "full")
 ```
 ```{r pairwise_title, eval=.show_pw, results='asis'}
-cat("\n\n# Toutes les paires -- Volcano & MA-Plot\n\n")
-cat(sprintf("Petits multiples pour chacun des %d contrastes calcules -- mise en page : **%s**.\n\n",
-            length(params$all_contrasts), ifelse(.pw_grid, "grille compacte", "grand format (1 par contraste)")))
+cat("\n\n#", tr("Toutes les paires — Volcano & MA-Plot"), "\n\n")
+cat(tr_fmt("Petits multiples pour chacun des {n} contrastes calculés — mise en page : {layout}.",
+           n = length(params$all_contrasts),
+           layout = ifelse(.pw_grid, paste0("**", tr("grille compacte"), "**"),
+                           paste0("**", tr("grand format (1 par contraste)"), "**"))), "\n\n")
 ```
 
 <!-- ============ MODE GRILLE (petits multiples compiles, statique) ============ -->
@@ -216,22 +234,22 @@ rc <- params$role_colors %||% c(Up = "#E74C3C", Down = "#2980B9", NS = "#BDC3C7"
 if (requireNamespace("patchwork", quietly = TRUE)) {
   plots <- lapply(names(params$all_contrasts), function(nm) {
     plot_volcano_bulk(params$all_contrasts[[nm]], lfc_thresh = params$lfc_thresh, padj_thresh = params$padj_thresh,
-                      up_color = rc[["Up"]], down_color = rc[["Down"]], ns_color = rc[["NS"]]) +
+                      up_color = rc[["Up"]], down_color = rc[["Down"]], ns_color = rc[["NS"]], tr = tr) +
       ggplot2::labs(title = nm) + ggplot2::theme(legend.position = "none", plot.title = ggplot2::element_text(size = 9))
   })
   patchwork::wrap_plots(plots, ncol = min(3, length(plots)))
-} else cat("Package 'patchwork' manquant -- grille ignoree.")
+} else cat(tr("Package 'patchwork' manquant — grille ignorée."))
 ```
 ```{r pairwise_ma_grid, eval=.pw_grid, fig.width=11, fig.height=max(3.2, ceiling(length(params$all_contrasts %||% list())/3)*3.2)}
 rc <- params$role_colors %||% c(Up = "#E74C3C", Down = "#2980B9", NS = "#BDC3C7")
 if (requireNamespace("patchwork", quietly = TRUE)) {
   plots <- lapply(names(params$all_contrasts), function(nm) {
     plot_ma_bulk(params$all_contrasts[[nm]], lfc_thresh = params$lfc_thresh, padj_thresh = params$padj_thresh,
-                sig_color = rc[["Up"]], ns_color = rc[["NS"]]) +
+                sig_color = rc[["Up"]], ns_color = rc[["NS"]], tr = tr) +
       ggplot2::labs(title = nm) + ggplot2::theme(legend.position = "none", plot.title = ggplot2::element_text(size = 9))
   })
   patchwork::wrap_plots(plots, ncol = min(3, length(plots)))
-} else cat("Package 'patchwork' manquant -- grille ignoree.")
+} else cat(tr("Package 'patchwork' manquant — grille ignorée."))
 ```
 
 <!-- ============ MODE GRAND FORMAT (1 plot pleine page/contraste, interactif en HTML) ============ -->
@@ -241,9 +259,9 @@ for (nm in names(params$all_contrasts)) {
   cat(sprintf("\n\n#### %s\n\n", nm))
   res_nm <- params$all_contrasts[[nm]]
   p_v <- plot_volcano_bulk(res_nm, lfc_thresh = params$lfc_thresh, padj_thresh = params$padj_thresh,
-                           up_color = rc[["Up"]], down_color = rc[["Down"]], ns_color = rc[["NS"]])
+                           up_color = rc[["Up"]], down_color = rc[["Down"]], ns_color = rc[["NS"]], tr = tr)
   p_m <- plot_ma_bulk(res_nm, lfc_thresh = params$lfc_thresh, padj_thresh = params$padj_thresh,
-                      sig_color = rc[["Up"]], ns_color = rc[["NS"]])
+                      sig_color = rc[["Up"]], ns_color = rc[["NS"]], tr = tr)
   if (isTRUE(params$interactive) && knitr::is_html_output() && requireNamespace("plotly", quietly = TRUE)) {
     print(htmltools::tagList(plotly::ggplotly(p_v)))
     print(htmltools::tagList(plotly::ggplotly(p_m)))
@@ -257,7 +275,7 @@ for (nm in names(params$all_contrasts)) {
 .show_pw_hm <- .show_pw && length(params$all_contrasts) <= 6
 ```
 ```{r pairwise_hm_title, eval=.show_pw_hm, results='asis'}
-cat("\n\n### Heatmap top genes -- par paire\n\n")
+cat("\n\n###", tr("Heatmap top gènes — par paire"), "\n\n")
 ```
 ```{r pairwise_hm_grid, eval=.show_pw_hm, fig.height=4}
 for (nm in names(params$all_contrasts)) {
@@ -265,19 +283,19 @@ for (nm in names(params$all_contrasts)) {
   genes_p <- head(intersect(res_p$gene[order(res_p$padj)], rownames(params$vst_mat)), 15)
   if (length(genes_p) >= 2) {
     cat(sprintf("\n\n**%s**\n\n", nm))
-    print(plot_heatmap_bulk(params$vst_mat, genes_p, params$metadata))
+    print(plot_heatmap_bulk(params$vst_mat, genes_p, params$metadata, tr = tr))
   }
 }
 ```
 ```{r pairwise_hm_note, eval=.show_pw && !.show_pw_hm, results='asis'}
-cat(sprintf("Heatmaps par paire non affichees (%d contrastes > 6) -- changez le contraste actif dans l'onglet Heatmap.\n\n",
-            length(params$all_contrasts)))
+cat(tr_fmt("Heatmaps par paire non affichées ({n} contrastes > 6) — changez le contraste actif dans l'onglet Heatmap.",
+           n = length(params$all_contrasts)), "\n\n")
 ```
 
 ---
 
 ```{r table_section, eval="table" %in% sections && !is.null(params$de_results), results='asis'}
-cat("\n\n# Table Complete -- Expression Differentielle\n\n")
+cat("\n\n#", tr("Table Complète — Expression Différentielle"), "\n\n")
 ```
 ```{r table_render, eval="table" %in% sections && !is.null(params$de_results) && knitr::is_html_output()}
 # NOTE: interactive DT widgets cannot render in PDF -- for PDF output we fall
@@ -293,19 +311,19 @@ res_pdf_display <- data.frame(
   PValue = format(res_pdf$pvalue, scientific = TRUE, digits = 3),
   Padj = format(res_pdf$padj, scientific = TRUE, digits = 3)
 )
-knitr::kable(head(res_pdf_display, 100), caption = "Top 100 genes (table complete disponible en export CSV depuis l'application)")
+knitr::kable(head(res_pdf_display, 100), caption = tr("Top 100 gènes (table complète disponible en export CSV depuis l'application)"))
 ```
 
 ---
 
 ```{r pathway_section, eval="pathway" %in% sections && !is.null(params$pathway_results), results='asis'}
-cat("\n\n# Pathway Enrichment --", params$pathway_db, "\n\n")
+cat("\n\n#", tr("Pathway Enrichment"), "--", params$pathway_db, "\n\n")
 ```
 ```{r pathway_barplot, eval="pathway" %in% sections && !is.null(params$pathway_results)}
-plot_pathway_barplot(params$pathway_results, db_label = params$pathway_db, top_n = 15)
+plot_pathway_barplot(params$pathway_results, db_label = params$pathway_db, top_n = 15, tr = tr)
 ```
 ```{r pathway_table, eval="pathway" %in% sections && !is.null(params$pathway_results) && knitr::is_html_output()}
-build_pathway_dt(params$pathway_results)
+build_pathway_dt(params$pathway_results, tr = tr)
 ```
 ```{r pathway_table_pdf, eval="pathway" %in% sections && !is.null(params$pathway_results) && !knitr::is_html_output()}
 cols <- intersect(c("ID", "Description", "p.adjust", "Count", "GeneRatio"), colnames(params$pathway_results))
@@ -318,18 +336,19 @@ knitr::kable(head(params$pathway_results[, cols, drop = FALSE], 20))
 .show_mm <- !is.null(params$multimethod_de) && length(params$multimethod_de) >= 2
 ```
 ```{r mm_title, eval=.show_mm, results='asis'}
-cat("\n\n# Multi-methodes -- DESeq2 / edgeR / limma-voom\n\n")
-cat(sprintf("Comparaison du meme contraste avec %d methodes : %s.\n\n",
-            length(params$multimethod_de), paste(names(params$multimethod_de), collapse = ", ")))
+cat("\n\n#", tr("Multi-méthodes — DESeq2 / edgeR / limma-voom"), "\n\n")
+cat(tr_fmt("Comparaison du même contraste avec {n} méthodes : {m}.",
+           n = length(params$multimethod_de),
+           m = paste(names(params$multimethod_de), collapse = ", ")), "\n\n")
 ```
 ```{r mm_upset, eval=.show_mm && requireNamespace("ComplexHeatmap", quietly = TRUE), fig.width=9, fig.height=6}
 mm_sets <- build_contrast_gene_sets(params$multimethod_de, lfc_thresh = params$lfc_thresh, padj_thresh = params$padj_thresh)
-tryCatch(plot_upset_contrasts(mm_sets), error = function(e) cat("Diagramme non disponible :", conditionMessage(e)))
+tryCatch(plot_upset_contrasts(mm_sets), error = function(e) cat(tr("Diagramme non disponible :"), conditionMessage(e)))
 ```
 ```{r mm_consensus_title, eval=.show_mm && !is.null(params$multimethod_consensus), results='asis'}
 # Step-3.5 FIX: meme correctif que la section UpSet -- titre AVANT
 # \begin{landscape}, jamais a l'interieur (voir commentaire detaille plus haut).
-cat("\n\n### Table consensus (top 20 par rang moyen)\n\n")
+cat("\n\n###", tr("Table consensus (top 20 par rang moyen)"), "\n\n")
 .tex_landscape_start()
 ```
 ```{r mm_consensus_table, eval=.show_mm && !is.null(params$multimethod_consensus)}
@@ -338,15 +357,15 @@ cons <- cons[order(cons$mean_rank), ]
 cons_top <- head(cons, 20)
 num_cols <- setdiff(colnames(cons_top), c("gene", "consistent_sign"))
 for (cl in num_cols) cons_top[[cl]] <- round(cons_top[[cl]], 4)
-.kable_wide(cons_top, caption = "Consensus de rang -- table complete disponible en export CSV depuis l'app.")
+.kable_wide(cons_top, caption = tr("Consensus de rang — table complète disponible en export CSV depuis l'app."))
 ```
 ```{r mm_landscape_end, eval=.show_mm && !is.null(params$multimethod_consensus), results='asis'}
 .tex_landscape_end()
 ```
 ```{r mm_none, eval=is.null(params$multimethod_de) || length(params$multimethod_de) < 2, results='asis'}
-cat("*Aucune comparaison multi-methodes disponible -- cliquez \"Comparer\" avant l'export.*\n\n")
+cat("*", tr("Aucune comparaison multi-méthodes disponible — cliquez \"Comparer\" avant l'export."), "*\n\n")
 ```
 
 ---
 
-<small>Rapport genere automatiquement par TranscriptoShiny -- module Bulk RNA-seq.</small>
+<small>`r tr("Rapport généré automatiquement par TranscriptoShiny — module Bulk RNA-seq.")`</small>

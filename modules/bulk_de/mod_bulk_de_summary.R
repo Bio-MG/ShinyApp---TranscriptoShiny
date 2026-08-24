@@ -10,6 +10,13 @@
 
 .de_summary_server <- function(input, output, session, ns, global_data, shared_rv) {
 
+  .tr <- function(key) {
+    tr <- global_data$i18n
+    if (is.null(tr)) return(key)
+    tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+  }
+
+
   updown_summary <- reactive({
     req(length(shared_rv$contrasts) > 0)
     summarize_contrasts_updown(shared_rv$contrasts, lfc_thresh = input$lfc_thresh,
@@ -17,11 +24,14 @@
                                active_contrast = shared_rv$active_contrast)
   })
 
-  updown_plot <- reactive({ plot_updown_barchart(updown_summary()) })
+  updown_plot <- reactive({
+    global_data$language                     # i18n trigger
+    plot_updown_barchart(updown_summary(), tr = .tr_fn(global_data))
+  })
 
   output$plot_updown <- renderPlot({
     validate(need(length(shared_rv$contrasts) > 0,
-                  "Aucun contraste calculé — lancez l'Étape 2 (DE) d'abord."))
+                  .tr("Aucun contraste calculé — lancez l'Étape 2 (DE) d'abord.")))
     updown_plot()
   })
 

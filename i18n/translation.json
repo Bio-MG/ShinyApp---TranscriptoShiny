@@ -1,50 +1,1173 @@
 {
   "cultural_date_format": "%d/%m/%Y",
-  "languages": ["fr", "en"],
+  "languages": [
+    "fr",
+    "en"
+  ],
   "translation": [
-    { "fr": "Langue", "en": "Language" },
-    { "fr": "Système", "en": "System" },
-    { "fr": "Import Données", "en": "Data Import" },
-    { "fr": "Single-Cell", "en": "Single-Cell" },
-    { "fr": "RNA Bulk", "en": "Bulk RNA" },
-    { "fr": "Spatial", "en": "Spatial" },
-    { "fr": "Analyse Single-Cell", "en": "Single-Cell Analysis" },
-    { "fr": "Analyse Bulk RNA", "en": "Bulk RNA Analysis" },
-    { "fr": "Analyse Spatiale", "en": "Spatial Analysis" },
-
-    { "fr": "Étape facultative — uniquement si vos identifiants de gènes ne sont PAS déjà des symboles (ex: ENSG00000141510, 7157, '1007_s_at'). Si vos données utilisent déjà des symboles (TP53, ACTB...), ignorez cette étape.",
-      "en": "Optional step — only if your gene identifiers are NOT already symbols (e.g. ENSG00000141510, 7157, '1007_s_at'). If your data already uses symbols (TP53, ACTB...), skip this step." },
-    { "fr": "Organisme", "en": "Organism" },
-    { "fr": "Humain", "en": "Human" },
-    { "fr": "Souris", "en": "Mouse" },
-    { "fr": "Type source", "en": "Source type" },
-    { "fr": "Ensembl Gene ID", "en": "Ensembl Gene ID" },
-    { "fr": "Entrez ID", "en": "Entrez ID" },
-    { "fr": "Probe Affymetrix", "en": "Affymetrix Probe" },
-    { "fr": "Retirer le suffixe de version Ensembl (ENSG...5 → ENSG...)",
-      "en": "Remove Ensembl version suffix (ENSG...5 → ENSG...)" },
-    { "fr": "Fusion des doublons (plusieurs ID → même symbole)",
-      "en": "Duplicate merging (multiple IDs → same symbol)" },
-    { "fr": "Somme des counts (recommandé)", "en": "Sum of counts (recommended)" },
-    { "fr": "Garder l'ID le plus exprimé", "en": "Keep the most highly expressed ID" },
-    { "fr": "Appliquer le Mapping", "en": "Apply Mapping" },
-    { "fr": "Annuler le Mapping", "en": "Undo Mapping" },
-    { "fr": "Aucun mapping appliqué.", "en": "No mapping applied." },
-    { "fr": "Mapping des identifiants...", "en": "Mapping identifiers..." },
-    { "fr": "Type d'identifiant NON reconnu (ex. trouvé dans vos données : {example}). Si ce ne sont PAS des identifiants de gènes (ex: comptages personnalisés, autre type de feature), ignorez cette étape facultative et passez directement à l'étape 1.",
-      "en": "Identifier type NOT recognized (example found in your data: '{example}'). If these are NOT standard gene identifiers (e.g. custom counts, another feature type), skip this optional step and go directly to step 1." },
-    { "fr": "Symbole — déjà mappé, cette étape est probablement inutile",
-      "en": "Symbol — already mapped, this step is probably unnecessary" },
-    { "fr": "Type détecté automatiquement : {label} (ex: '{example}').",
-      "en": "Automatically detected type: {label} (e.g. '{example}')." },
-    { "fr": "⚠️ {pct}% des identifiants n'ont pas pu être mappés. Vérifiez l'organisme et le type source.",
-      "en": "⚠️ {pct}% of identifiers could not be mapped. Check the organism and source type." },
-    { "fr": "✓ {mapped} mappés, {unmapped} non-mappés ({pct}%), {collapsed} fusion(s) de doublon → {final} gènes finaux. Relancez l'étape 1 (Filtrage & VST) pour appliquer.",
-      "en": "✓ {mapped} mapped, {unmapped} unmapped ({pct}%), {collapsed} duplicate merge(s) → {final} final genes. Re-run step 1 (Filtering & VST) to apply." },
-    { "fr": "✓ Mapping appliqué — relancez l'étape 1 (Filtrage & VST) pour l'utiliser.",
-      "en": "✓ Mapping applied — re-run step 1 (Filtering & VST) to use it." },
-    { "fr": "Erreur de mapping:", "en": "Mapping error:" },
-    { "fr": "↩ Mapping annulé — relancez l'étape 1 pour revenir aux identifiants originaux.",
-      "en": "↩ Mapping undone — re-run step 1 to return to the original identifiers." }
+    {
+      "fr": "Langue",
+      "en": "Language"
+    },
+    {
+      "fr": "Système",
+      "en": "System"
+    },
+    {
+      "fr": "Import Données",
+      "en": "Data Import"
+    },
+    {
+      "fr": "Single-Cell",
+      "en": "Single-Cell"
+    },
+    {
+      "fr": "RNA Bulk",
+      "en": "Bulk RNA"
+    },
+    {
+      "fr": "Spatial",
+      "en": "Spatial"
+    },
+    {
+      "fr": "Analyse Single-Cell",
+      "en": "Single-Cell Analysis"
+    },
+    {
+      "fr": "Analyse Bulk RNA",
+      "en": "Bulk RNA Analysis"
+    },
+    {
+      "fr": "Analyse Spatiale",
+      "en": "Spatial Analysis"
+    },
+    {
+      "fr": "Étape facultative — uniquement si vos identifiants de gènes ne sont PAS déjà des symboles (ex: ENSG00000141510, 7157, '1007_s_at'). Si vos données utilisent déjà des symboles (TP53, ACTB...), ignorez cette étape.",
+      "en": "Optional step — only if your gene identifiers are NOT already symbols (e.g. ENSG00000141510, 7157, '1007_s_at'). If your data already uses symbols (TP53, ACTB...), skip this step."
+    },
+    {
+      "fr": "Organisme",
+      "en": "Organism"
+    },
+    {
+      "fr": "Humain",
+      "en": "Human"
+    },
+    {
+      "fr": "Souris",
+      "en": "Mouse"
+    },
+    {
+      "fr": "Type source",
+      "en": "Source type"
+    },
+    {
+      "fr": "Ensembl Gene ID",
+      "en": "Ensembl Gene ID"
+    },
+    {
+      "fr": "Entrez ID",
+      "en": "Entrez ID"
+    },
+    {
+      "fr": "Probe Affymetrix",
+      "en": "Affymetrix Probe"
+    },
+    {
+      "fr": "Retirer le suffixe de version Ensembl (ENSG...5 → ENSG...)",
+      "en": "Remove Ensembl version suffix (ENSG...5 → ENSG...)"
+    },
+    {
+      "fr": "Fusion des doublons (plusieurs ID → même symbole)",
+      "en": "Duplicate merging (multiple IDs → same symbol)"
+    },
+    {
+      "fr": "Somme des counts (recommandé)",
+      "en": "Sum of counts (recommended)"
+    },
+    {
+      "fr": "Garder l'ID le plus exprimé",
+      "en": "Keep the most highly expressed ID"
+    },
+    {
+      "fr": "Appliquer le Mapping",
+      "en": "Apply Mapping"
+    },
+    {
+      "fr": "Annuler le Mapping",
+      "en": "Undo Mapping"
+    },
+    {
+      "fr": "Aucun mapping appliqué.",
+      "en": "No mapping applied."
+    },
+    {
+      "fr": "Mapping des identifiants...",
+      "en": "Mapping identifiers..."
+    },
+    {
+      "fr": "Type d'identifiant NON reconnu (ex. trouvé dans vos données : {example}). Si ce ne sont PAS des identifiants de gènes (ex: comptages personnalisés, autre type de feature), ignorez cette étape facultative et passez directement à l'étape 1.",
+      "en": "Identifier type NOT recognized (example found in your data: '{example}'). If these are NOT standard gene identifiers (e.g. custom counts, another feature type), skip this optional step and go directly to step 1."
+    },
+    {
+      "fr": "Symbole — déjà mappé, cette étape est probablement inutile",
+      "en": "Symbol — already mapped, this step is probably unnecessary"
+    },
+    {
+      "fr": "Type détecté automatiquement : {label} (ex: '{example}').",
+      "en": "Automatically detected type: {label} (e.g. '{example}')."
+    },
+    {
+      "fr": "⚠️ {pct}% des identifiants n'ont pas pu être mappés. Vérifiez l'organisme et le type source.",
+      "en": "⚠️ {pct}% of identifiers could not be mapped. Check the organism and source type."
+    },
+    {
+      "fr": "✓ {mapped} mappés, {unmapped} non-mappés ({pct}%), {collapsed} fusion(s) de doublon → {final} gènes finaux. Relancez l'étape 1 (Filtrage & VST) pour appliquer.",
+      "en": "✓ {mapped} mapped, {unmapped} unmapped ({pct}%), {collapsed} duplicate merge(s) → {final} final genes. Re-run step 1 (Filtering & VST) to apply."
+    },
+    {
+      "fr": "✓ Mapping appliqué — relancez l'étape 1 (Filtrage & VST) pour l'utiliser.",
+      "en": "✓ Mapping applied — re-run step 1 (Filtering & VST) to use it."
+    },
+    {
+      "fr": "Erreur de mapping:",
+      "en": "Mapping error:"
+    },
+    {
+      "fr": "↩ Mapping annulé — relancez l'étape 1 pour revenir aux identifiants originaux.",
+      "en": "↩ Mapping undone — re-run step 1 to return to the original identifiers."
+    },
+    {
+      "fr": "RNA Bulk — Analyse",
+      "en": "Bulk RNA — Analysis"
+    },
+    {
+      "fr": "Importez d'abord vos données dans l'onglet 'Import Données > RNA Bulk'.",
+      "en": "First import your data in the 'Data Import > Bulk RNA' tab."
+    },
+    {
+      "fr": "Lancer Pipeline Complet",
+      "en": "Run Complete Pipeline"
+    },
+    {
+      "fr": "0. Mapping IDs (Optionnel)",
+      "en": "0. Mapping IDs (Optional)"
+    },
+    {
+      "fr": "1. Filtrage & VST",
+      "en": "1. Filtering & VST"
+    },
+    {
+      "fr": "2. Design & Contrastes",
+      "en": "2. Design & Contrasts"
+    },
+    {
+      "fr": "3. Pathway Enrichment",
+      "en": "3. Pathway Enrichment"
+    },
+    {
+      "fr": "4. Rapport Complet",
+      "en": "4. Complete Report"
+    },
+    {
+      "fr": "QC Échantillons",
+      "en": "Sample QC"
+    },
+    {
+      "fr": "Table DE",
+      "en": "DE Table"
+    },
+    {
+      "fr": "Résumé Up/Down",
+      "en": "Up/Down Summary"
+    },
+    {
+      "fr": "Multi-méthodes",
+      "en": "Multi-method"
+    },
+    {
+      "fr": "Counts totaux minimum / gène",
+      "en": "Minimum total counts / gene"
+    },
+    {
+      "fr": "Un gène doit avoir au moins ce nombre de reads, cumulés sur tous les échantillons, pour être conservé. Élimine le bruit de fond sans biaiser l'analyse différentielle.",
+      "en": "A gene must have at least this many reads, summed across all samples, to be kept. Removes background noise without biasing the differential analysis."
+    },
+    {
+      "fr": "Nb échantillons min. au-dessus du seuil",
+      "en": "Min samples above threshold"
+    },
+    {
+      "fr": "Seuil par échantillon",
+      "en": "Threshold per sample"
+    },
+    {
+      "fr": "La transformation VST (variance-stabilizing) est utilisée pour la PCA et la heatmap. Si < 4 échantillons : repli automatique sur log2(counts normalisés + 1).",
+      "en": "The VST (variance-stabilizing) transform is used for PCA and the heatmap. If < 4 samples: automatic fallback to log2(normalized counts + 1)."
+    },
+    {
+      "fr": "Lancer Filtrage & VST",
+      "en": "Run Filtering & VST"
+    },
+    {
+      "fr": "Palette de couleurs (PCA)",
+      "en": "Color palette (PCA)"
+    },
+    {
+      "fr": "Couleurs utilisées pour les groupes sur la PCA. Okabe-Ito = sûre pour daltoniens.",
+      "en": "Colors used for groups on the PCA. Okabe-Ito = colorblind-safe."
+    },
+    {
+      "fr": "Défaut (ggplot)",
+      "en": "Default (ggplot)"
+    },
+    {
+      "fr": "Okabe-Ito (daltonien)",
+      "en": "Okabe-Ito (colorblind)"
+    },
+    {
+      "fr": "Set2 (ColorBrewer)",
+      "en": "Set2 (ColorBrewer)"
+    },
+    {
+      "fr": "Manuel (choisir chaque couleur)",
+      "en": "Manual (pick each color)"
+    },
+    {
+      "fr": "Colorer par",
+      "en": "Color by"
+    },
+    {
+      "fr": "Forme par (optionnel)",
+      "en": "Shape by (optional)"
+    },
+    {
+      "fr": "Interactif (Plotly — survol pour identifier l'échantillon)",
+      "en": "Interactive (Plotly — hover to identify the sample)"
+    },
+    {
+      "fr": "Export PNG (statique)",
+      "en": "Export PNG (static)"
+    },
+    {
+      "fr": "Scree Plot — Variance Expliquée",
+      "en": "Scree Plot — Explained Variance"
+    },
+    {
+      "fr": "Combien de composantes principales faut-il regarder ? Une chute nette (\"coude\") indique où le signal biologique s'arrête et où le bruit commence.",
+      "en": "How many principal components should you look at? A sharp drop (\"elbow\") shows where biological signal ends and noise begins."
+    },
+    {
+      "fr": "Export PNG",
+      "en": "Export PNG"
+    },
+    {
+      "fr": "Annotation",
+      "en": "Annotation"
+    },
+    {
+      "fr": "Méthode",
+      "en": "Method"
+    },
+    {
+      "fr": "Détecte les échantillons mal étiquetés, les outliers ou doublons inattendus AVANT de lancer l'analyse différentielle. Des échantillons d'un même groupe devraient corréler fortement entre eux (cellules sombres groupées).",
+      "en": "Detects mislabeled samples, outliers or unexpected duplicates BEFORE running differential analysis. Samples from the same group should correlate strongly (dark cells clustered together)."
+    },
+    {
+      "fr": "Matrice volumineuse — le filtrage va réduire la taille avant VST/PCA.",
+      "en": "Large matrix — filtering will reduce the size before VST/PCA."
+    },
+    {
+      "fr": "Les contrastes calculés précédemment seront invalidés par ce nouveau filtrage.",
+      "en": "Previously computed contrasts will be invalidated by this new filtering."
+    },
+    {
+      "fr": "Filtrage & VST...",
+      "en": "Filtering & VST..."
+    },
+    {
+      "fr": "Construction DESeqDataSet (design ~1)...",
+      "en": "Building DESeqDataSet (design ~1)..."
+    },
+    {
+      "fr": "Transformation VST...",
+      "en": "VST transformation..."
+    },
+    {
+      "fr": "✓ {n} gènes conservés sur {m} échantillons",
+      "en": "✓ {n} genes kept across {m} samples"
+    },
+    {
+      "fr": "Erreur filtrage/VST:",
+      "en": "Filtering/VST error:"
+    },
+    {
+      "fr": "En attente du filtrage...",
+      "en": "Waiting for filtering..."
+    },
+    {
+      "fr": "✓ {n} gènes × {m} échantillons",
+      "en": "✓ {n} genes × {m} samples"
+    },
+    {
+      "fr": "Variable de Condition (principale)",
+      "en": "Condition Variable (main)"
+    },
+    {
+      "fr": "Covariables additionnelles (optionnel)",
+      "en": "Additional covariates (optional)"
+    },
+    {
+      "fr": "Groupe Référence",
+      "en": "Reference Group"
+    },
+    {
+      "fr": "Groupe Cible",
+      "en": "Target Group"
+    },
+    {
+      "fr": "Moteur Statistique",
+      "en": "Statistical Engine"
+    },
+    {
+      "fr": "DESeq2 (recommandé)",
+      "en": "DESeq2 (recommended)"
+    },
+    {
+      "fr": "Shrinkage LFC (apeglm) — DESeq2 uniquement",
+      "en": "LFC Shrinkage (apeglm) — DESeq2 only"
+    },
+    {
+      "fr": "Réduit les Log2FC artificiellement élevés sur les gènes à faible expression (haute variance d'échantillonnage). Recommandé pour le classement/visualisation ; laissez activé sauf besoin spécifique.",
+      "en": "Reduces artificially inflated Log2FC for lowly-expressed genes (high sampling variance). Recommended for ranking/visualization; keep enabled unless you have a specific need."
+    },
+    {
+      "fr": "Seuil |Log2FC|",
+      "en": "|Log2FC| Threshold"
+    },
+    {
+      "fr": "Seuil p-adj",
+      "en": "P-adj Threshold"
+    },
+    {
+      "fr": "Nom du contraste (auto si vide)",
+      "en": "Contrast name (auto if empty)"
+    },
+    {
+      "fr": "Lancer l'Analyse Différentielle",
+      "en": "Run Differential Analysis"
+    },
+    {
+      "fr": "Comparer DESeq2 / edgeR / limma-voom",
+      "en": "Compare DESeq2 / edgeR / limma-voom"
+    },
+    {
+      "fr": "Lance le MÊME contraste (Cible/Référence ci-dessus) avec les 3 moteurs, puis calcule un consensus de rang — voir l'onglet \"Multi-méthodes\".",
+      "en": "Runs the SAME contrast (Target/Reference above) with all 3 engines, then computes a rank consensus — see the \"Multi-method\" tab."
+    },
+    {
+      "fr": "Contraste Ad-hoc (sélection manuelle d'échantillons)",
+      "en": "Ad-hoc Contrast (manual sample selection)"
+    },
+    {
+      "fr": "Ignore la colonne condition — reconstruit une métadonnée minimale à la volée.",
+      "en": "Ignores the condition column — rebuilds a minimal metadata on the fly."
+    },
+    {
+      "fr": "Groupe A",
+      "en": "Group A"
+    },
+    {
+      "fr": "Groupe B",
+      "en": "Group B"
+    },
+    {
+      "fr": "Nom du contraste",
+      "en": "Contrast name"
+    },
+    {
+      "fr": "Lancer l'Analyse (Ad-hoc)",
+      "en": "Run Analysis (Ad-hoc)"
+    },
+    {
+      "fr": "Contrastes calculés:",
+      "en": "Computed contrasts:"
+    },
+    {
+      "fr": "Aucun contraste calculé.",
+      "en": "No contrast computed."
+    },
+    {
+      "fr": "Contraste actif:",
+      "en": "Active contrast:"
+    },
+    {
+      "fr": "Aucun moteur DE disponible (installez DESeq2, edgeR ou limma).",
+      "en": "No DE engine available (install DESeq2, edgeR or limma)."
+    },
+    {
+      "fr": "Top N gènes (par p-adj)",
+      "en": "Top N genes (by p-adj)"
+    },
+    {
+      "fr": "Annotation colonnes",
+      "en": "Column annotation"
+    },
+    {
+      "fr": "Sous-ensemble",
+      "en": "Subset"
+    },
+    {
+      "fr": "Tous (par p-adj)",
+      "en": "All (by p-adj)"
+    },
+    {
+      "fr": "Significatifs (Up+Down)",
+      "en": "Significant (Up+Down)"
+    },
+    {
+      "fr": "Up-régulés",
+      "en": "Up-regulated"
+    },
+    {
+      "fr": "Down-régulés",
+      "en": "Down-regulated"
+    },
+    {
+      "fr": "Non-significatifs",
+      "en": "Not significant"
+    },
+    {
+      "fr": "Format export",
+      "en": "Export format"
+    },
+    {
+      "fr": "Export Heatmap",
+      "en": "Export Heatmap"
+    },
+    {
+      "fr": "Contrastes à comparer",
+      "en": "Contrasts to compare"
+    },
+    {
+      "fr": "Type de diagramme",
+      "en": "Diagram type"
+    },
+    {
+      "fr": "UpSet (recommandé)",
+      "en": "UpSet (recommended)"
+    },
+    {
+      "fr": "Venn (2-4 contrastes)",
+      "en": "Venn (2-4 contrasts)"
+    },
+    {
+      "fr": "Distinguer Up / Down (chaque contraste devient 2 ensembles)",
+      "en": "Distinguish Up / Down (each contrast becomes 2 sets)"
+    },
+    {
+      "fr": "Export gènes par intersection (CSV)",
+      "en": "Export genes per intersection (CSV)"
+    },
+    {
+      "fr": "Table des intersections",
+      "en": "Intersection table"
+    },
+    {
+      "fr": "Venn / UpSet (méthodes)",
+      "en": "Venn / UpSet (methods)"
+    },
+    {
+      "fr": "Table consensus",
+      "en": "Consensus table"
+    },
+    {
+      "fr": "Triée par rang moyen (mean_rank) — les gènes les plus consistants entre méthodes apparaissent en premier.",
+      "en": "Sorted by mean rank — the genes most consistent across methods appear first."
+    },
+    {
+      "fr": "Cliquez \"🔬 Comparer DESeq2 / edgeR / limma-voom\" dans le panneau Step 2.",
+      "en": "Click \"🔬 Compare DESeq2 / edgeR / limma-voom\" in the Step 2 panel."
+    },
+    {
+      "fr": "Comparaison multi-méthodes terminée ({methods})",
+      "en": "Multi-method comparison finished ({methods})"
+    },
+    {
+      "fr": "Erreur comparaison multi-méthodes:",
+      "en": "Multi-method comparison error:"
+    },
+    {
+      "fr": "Comparaison multi-méthodes...",
+      "en": "Multi-method comparison..."
+    },
+    {
+      "fr": "Méthode d'enrichissement",
+      "en": "Enrichment method"
+    },
+    {
+      "fr": "ORA — sur gènes significatifs (classique)",
+      "en": "ORA — on significant genes (classic)"
+    },
+    {
+      "fr": "GSEA — sur tous les gènes classés (sans seuil)",
+      "en": "GSEA — on all ranked genes (no threshold)"
+    },
+    {
+      "fr": "GSEA n'a pas besoin de seuil de significativité arbitraire — elle classe tous les gènes par Log2FC et teste l'enrichissement cumulé. Plus robuste statistiquement, recommandée si peu de gènes passent vos seuils.",
+      "en": "GSEA needs no arbitrary significance threshold — it ranks all genes by Log2FC and tests cumulative enrichment. Statistically more robust, recommended when few genes pass your thresholds."
+    },
+    {
+      "fr": "Source de gènes",
+      "en": "Gene source"
+    },
+    {
+      "fr": "Gènes Up (significatifs)",
+      "en": "Up genes (significant)"
+    },
+    {
+      "fr": "Gènes Down (significatifs)",
+      "en": "Down genes (significant)"
+    },
+    {
+      "fr": "Tous gènes significatifs",
+      "en": "All significant genes"
+    },
+    {
+      "fr": "Sélection manuelle",
+      "en": "Manual selection"
+    },
+    {
+      "fr": "Gènes",
+      "en": "Genes"
+    },
+    {
+      "fr": "Base de données",
+      "en": "Database"
+    },
+    {
+      "fr": "P-value cutoff",
+      "en": "P-value cutoff"
+    },
+    {
+      "fr": "Lancer Enrichissement",
+      "en": "Run Enrichment"
+    },
+    {
+      "fr": "Export CSV",
+      "en": "Export CSV"
+    },
+    {
+      "fr": "Aucune analyse en cours",
+      "en": "No analysis running"
+    },
+    {
+      "fr": "✓ {n} pathways trouvés [ {db} ]",
+      "en": "✓ {n} pathways found [ {db} ]"
+    },
+    {
+      "fr": "⚠️ Lancez d'abord l'étape 2 (Analyse Différentielle).",
+      "en": "⚠️ Run step 2 (Differential Analysis) first."
+    },
+    {
+      "fr": "GSEA en cours...",
+      "en": "Running GSEA..."
+    },
+    {
+      "fr": "ℹ️ Aucun pathway enrichi trouvé (GSEA).",
+      "en": "ℹ️ No enriched pathway found (GSEA)."
+    },
+    {
+      "fr": "✅ {n} pathways enrichis (GSEA)",
+      "en": "✅ {n} enriched pathways (GSEA)"
+    },
+    {
+      "fr": "❌ Erreur GSEA: {msg}",
+      "en": "❌ GSEA error: {msg}"
+    },
+    {
+      "fr": "Enrichissement...",
+      "en": "Enrichment..."
+    },
+    {
+      "fr": "⚠️ Trop peu de gènes ({n}). Minimum 10 requis.",
+      "en": "⚠️ Too few genes ({n}). Minimum 10 required."
+    },
+    {
+      "fr": "ℹ️ Aucun pathway enrichi trouvé.",
+      "en": "ℹ️ No enriched pathway found."
+    },
+    {
+      "fr": "✅ {n} pathways enrichis",
+      "en": "✅ {n} enriched pathways"
+    },
+    {
+      "fr": "❌ Erreur pathway: {msg}",
+      "en": "❌ Pathway error: {msg}"
+    },
+    {
+      "fr": "Disponible uniquement pour les résultats GSEA — relancez l'enrichissement en mode GSEA (panneau de gauche).",
+      "en": "Available only for GSEA results — re-run the enrichment in GSEA mode (left panel)."
+    },
+    {
+      "fr": "Pathway (tapez pour rechercher)",
+      "en": "Pathway (type to search)"
+    },
+    {
+      "fr": "Afficher la table p-value sur le graphique",
+      "en": "Show the p-value table on the plot"
+    },
+    {
+      "fr": "Barplot Top 15",
+      "en": "Barplot Top 15"
+    },
+    {
+      "fr": "Dotplot",
+      "en": "Dotplot"
+    },
+    {
+      "fr": "Table",
+      "en": "Table"
+    },
+    {
+      "fr": "Courbe GSEA",
+      "en": "GSEA Curve"
+    },
+    {
+      "fr": "Titre du rapport",
+      "en": "Report title"
+    },
+    {
+      "fr": "Sous-titre (optionnel)",
+      "en": "Subtitle (optional)"
+    },
+    {
+      "fr": "Notes / Commentaires (markdown supporté)",
+      "en": "Notes / Comments (markdown supported)"
+    },
+    {
+      "fr": "Sections à inclure",
+      "en": "Sections to include"
+    },
+    {
+      "fr": "Volcano + MA-Plot",
+      "en": "Volcano + MA-Plot"
+    },
+    {
+      "fr": "Heatmap Top Gènes",
+      "en": "Heatmap Top Genes"
+    },
+    {
+      "fr": "Table DE complète",
+      "en": "Full DE table"
+    },
+    {
+      "fr": "Mise en page \"Toutes les paires\" (Volcano/MA/Heatmap)",
+      "en": "\"All pairs\" layout (Volcano/MA/Heatmap)"
+    },
+    {
+      "fr": "Petits multiples compilés (grille)",
+      "en": "Compiled small multiples (grid)"
+    },
+    {
+      "fr": "Grand format (1 par contraste)",
+      "en": "Large format (1 per contrast)"
+    },
+    {
+      "fr": "Format de sortie",
+      "en": "Output format"
+    },
+    {
+      "fr": "HTML interactif",
+      "en": "Interactive HTML"
+    },
+    {
+      "fr": "PDF statique",
+      "en": "Static PDF"
+    },
+    {
+      "fr": "Les deux (.zip)",
+      "en": "Both (.zip)"
+    },
+    {
+      "fr": "Graphiques interactifs (PCA, Volcano, MA individuel) — HTML uniquement",
+      "en": "Interactive plots (PCA, Volcano, individual MA) — HTML only"
+    },
+    {
+      "fr": "Le PDF requiert LaTeX (tinytex::install_tinytex()).",
+      "en": "PDF requires LaTeX (tinytex::install_tinytex())."
+    },
+    {
+      "fr": "📄 Générer le Rapport",
+      "en": "📄 Generate Report"
+    },
+    {
+      "fr": "🧾 Export Script R Reproductible (.zip)",
+      "en": "🧾 Export Reproducible R Script (.zip)"
+    },
+    {
+      "fr": "Lancez d'abord l'étape 1 (Filtrage & VST).",
+      "en": "Run step 1 (Filtering & VST) first."
+    },
+    {
+      "fr": "Prêt — sélectionnez les sections puis cliquez sur 'Générer Rapport'.",
+      "en": "Ready — select the sections then click 'Generate Report'."
+    },
+    {
+      "fr": "Génération du rapport...",
+      "en": "Generating report..."
+    },
+    {
+      "fr": "Analyse RNA-seq Bulk",
+      "en": "Bulk RNA-seq Analysis"
+    },
+    {
+      "fr": "Map",
+      "en": "Map"
+    },
+    {
+      "fr": "Filtre",
+      "en": "Filter"
+    },
+    {
+      "fr": "DE",
+      "en": "DE"
+    },
+    {
+      "fr": "Pathway",
+      "en": "Pathway"
+    },
+    {
+      "fr": "Rapport",
+      "en": "Report"
+    },
+    {
+      "fr": "Pipeline Complet — Paramètres",
+      "en": "Complete Pipeline — Parameters"
+    },
+    {
+      "fr": "0. Mapping IDs (auto)",
+      "en": "0. Mapping IDs (auto)"
+    },
+    {
+      "fr": "Détecter + convertir Ensembl/Entrez/Affy → Symbol",
+      "en": "Detect + convert Ensembl/Entrez/Affy → Symbol"
+    },
+    {
+      "fr": "Organisme (mapping)",
+      "en": "Organism (mapping)"
+    },
+    {
+      "fr": "Ignoré automatiquement si vos identifiants sont déjà des symboles.",
+      "en": "Automatically skipped if your identifiers are already symbols."
+    },
+    {
+      "fr": "1. Filtrage",
+      "en": "1. Filtering"
+    },
+    {
+      "fr": "Counts min / gène",
+      "en": "Min counts / gene"
+    },
+    {
+      "fr": "Nb échantillons min",
+      "en": "Min samples"
+    },
+    {
+      "fr": "2. DE",
+      "en": "2. DE"
+    },
+    {
+      "fr": "Colonne condition",
+      "en": "Condition column"
+    },
+    {
+      "fr": "Calculer TOUTES les paires (pairwise) si > 2 groupes",
+      "en": "Compute ALL pairs (pairwise) if > 2 groups"
+    },
+    {
+      "fr": "Sinon, seuls les 2 groupes les plus représentés sont comparés.",
+      "en": "Otherwise, only the 2 most represented groups are compared."
+    },
+    {
+      "fr": "Moteur",
+      "en": "Engine"
+    },
+    {
+      "fr": "|Log2FC| seuil",
+      "en": "|Log2FC| threshold"
+    },
+    {
+      "fr": "P-adj seuil",
+      "en": "P-adj threshold"
+    },
+    {
+      "fr": "Options supplémentaires",
+      "en": "Additional options"
+    },
+    {
+      "fr": "Multi-méthodes (DESeq2 + edgeR + limma) après contraste principal (ignoré si pairwise)",
+      "en": "Multi-method (DESeq2 + edgeR + limma) after main contrast (skipped if pairwise)"
+    },
+    {
+      "fr": "Pathway Enrichment après DE",
+      "en": "Pathway Enrichment after DE"
+    },
+    {
+      "fr": "ORA — gènes significatifs (seuil)",
+      "en": "ORA — significant genes (threshold)"
+    },
+    {
+      "fr": "GSEA — tous les gènes classés (sans seuil)",
+      "en": "GSEA — all ranked genes (no threshold)"
+    },
+    {
+      "fr": "Base",
+      "en": "Database"
+    },
+    {
+      "fr": "Annuler",
+      "en": "Cancel"
+    },
+    {
+      "fr": "Lancer",
+      "en": "Run"
+    },
+    {
+      "fr": "Par défaut, seuls les 2 groupes les plus représentés sont comparés (case pairwise ci-dessus décochée). Le Venn/UpSet multi-contrastes reste disponible manuellement (onglet dédié) dès que ≥ 2 contrastes existent.",
+      "en": "By default, only the 2 most represented groups are compared (pairwise box above unchecked). The multi-contrast Venn/UpSet stays available manually (dedicated tab) as soon as ≥ 2 contrasts exist."
+    },
+    {
+      "fr": "Au moins 2 groupes requis.",
+      "en": "At least 2 groups required."
+    },
+    {
+      "fr": "Mapping IDs...",
+      "en": "Mapping IDs..."
+    },
+    {
+      "fr": "Mapping IDs auto détecté ({type})...",
+      "en": "Auto-detected mapping IDs ({type})..."
+    },
+    {
+      "fr": "Mapping ignoré :",
+      "en": "Mapping skipped:"
+    },
+    {
+      "fr": "✓ Mapping : {n} gènes finaux",
+      "en": "✓ Mapping: {n} final genes"
+    },
+    {
+      "fr": "Mapping IDs : symboles déjà détectés (ou type inconnu) — étape ignorée.",
+      "en": "Mapping IDs: symbols already detected (or unknown type) — step skipped."
+    },
+    {
+      "fr": "Filtrage...",
+      "en": "Filtering..."
+    },
+    {
+      "fr": "DE pairwise...",
+      "en": "Pairwise DE..."
+    },
+    {
+      "fr": "Pairwise : {g} groupes → {p} paires...",
+      "en": "Pairwise: {g} groups → {p} pairs..."
+    },
+    {
+      "fr": "Pairwise {i}/{n}...",
+      "en": "Pairwise {i}/{n}..."
+    },
+    {
+      "fr": "Aucune paire n'a pu être calculée (voir échecs).",
+      "en": "No pair could be computed (see failures)."
+    },
+    {
+      "fr": "✓ {ok}/{n} paires calculées — actif: {c}",
+      "en": "✓ {ok}/{n} pairs computed — active: {c}"
+    },
+    {
+      "fr": "DE...",
+      "en": "DE..."
+    },
+    {
+      "fr": "DE:",
+      "en": "DE:"
+    },
+    {
+      "fr": "✓ {n} sig. ({a} vs {b})",
+      "en": "✓ {n} sig. ({a} vs {b})"
+    },
+    {
+      "fr": "Multi-méthodes ignoré en mode pairwise (nécessite un contraste unique — utilisez l'onglet dédié manuellement).",
+      "en": "Multi-method skipped in pairwise mode (needs a single contrast — use the dedicated tab manually)."
+    },
+    {
+      "fr": "Multi-méthodes...",
+      "en": "Multi-method..."
+    },
+    {
+      "fr": "Multi-méthodes (DESeq2 + edgeR + limma)...",
+      "en": "Multi-method (DESeq2 + edgeR + limma)..."
+    },
+    {
+      "fr": "Multi-méthodes:",
+      "en": "Multi-method:"
+    },
+    {
+      "fr": "✓ {n} méthodes ({m})",
+      "en": "✓ {n} methods ({m})"
+    },
+    {
+      "fr": "GSEA...",
+      "en": "GSEA..."
+    },
+    {
+      "fr": "GSEA (tous les gènes classés)...",
+      "en": "GSEA (all ranked genes)..."
+    },
+    {
+      "fr": "⚠️ GSEA : aucun pathway enrichi.",
+      "en": "⚠️ GSEA: no enriched pathway."
+    },
+    {
+      "fr": "Pathway ORA...",
+      "en": "Pathway ORA..."
+    },
+    {
+      "fr": "Pathway:",
+      "en": "Pathway:"
+    },
+    {
+      "fr": "Pathway ignoré:",
+      "en": "Pathway skipped:"
+    },
+    {
+      "fr": "gènes",
+      "en": "genes"
+    },
+    {
+      "fr": "✓ Pipeline terminé — {n} contraste(s) pairwise calculé(s).",
+      "en": "✓ Pipeline finished — {n} pairwise contrast(s) computed."
+    },
+    {
+      "fr": "✓ Pipeline terminé — PCA disponible.",
+      "en": "✓ Pipeline finished — PCA available."
+    },
+    {
+      "fr": "Erreur:",
+      "en": "Error:"
+    },
+    {
+      "fr": "Erreur pipeline:",
+      "en": "Pipeline error:"
+    },
+    {
+      "fr": "PCA — Échantillons Bulk RNA-seq",
+      "en": "PCA — Bulk RNA-seq Samples"
+    },
+    {
+      "fr": "Volcano Plot — Analyse Différentielle",
+      "en": "Volcano Plot — Differential Analysis"
+    },
+    {
+      "fr": "Log2 Fold Change",
+      "en": "Log2 Fold Change"
+    },
+    {
+      "fr": "-Log10(P-adj)",
+      "en": "-Log10(P-adj)"
+    },
+    {
+      "fr": "Statut",
+      "en": "Status"
+    },
+    {
+      "fr": "MA-Plot",
+      "en": "MA-Plot"
+    },
+    {
+      "fr": "Log10(Expression Moyenne + 1)",
+      "en": "Log10(Mean Expression + 1)"
+    },
+    {
+      "fr": "Heatmap — Gènes Différentiels",
+      "en": "Heatmap — Differential Genes"
+    },
+    {
+      "fr": "Z-score",
+      "en": "Z-score"
+    },
+    {
+      "fr": "Corrélation Inter-Échantillons (QC)",
+      "en": "Inter-Sample Correlation (QC)"
+    },
+    {
+      "fr": "Gènes significatifs Up / Down par contraste",
+      "en": "Significant Up / Down Genes per Contrast"
+    },
+    {
+      "fr": "Nombre de gènes",
+      "en": "Number of genes"
+    },
+    {
+      "fr": "% Variance (barres) / % Cumulée (ligne)",
+      "en": "% Variance (bars) / % Cumulative (line)"
+    },
+    {
+      "fr": "Gène",
+      "en": "Gene"
+    },
+    {
+      "fr": "Corrélation",
+      "en": "Correlation"
+    },
+    {
+      "fr": "Nb Gènes",
+      "en": "Gene Count"
+    },
+    {
+      "fr": "Ratio de gènes",
+      "en": "Gene ratio"
+    },
+    {
+      "fr": "Top",
+      "en": "Top"
+    },
+    {
+      "fr": "Pathways",
+      "en": "Pathways"
+    },
+    {
+      "fr": "Dotplot Pathways",
+      "en": "Pathway Dotplot"
+    },
+    {
+      "fr": "Résumé",
+      "en": "Summary"
+    },
+    {
+      "fr": "Aucune analyse différentielle disponible au moment de l'export.",
+      "en": "No differential analysis available at export time."
+    },
+    {
+      "fr": "Tous les contrastes calculés",
+      "en": "All computed contrasts"
+    },
+    {
+      "fr": "Seuils appliqués : |Log2FC| > {lfc}, P-adj < {padj}.",
+      "en": "Applied thresholds: |Log2FC| > {lfc}, P-adj < {padj}."
+    },
+    {
+      "fr": "Contraste",
+      "en": "Contrast"
+    },
+    {
+      "fr": "Gènes testés",
+      "en": "Genes tested"
+    },
+    {
+      "fr": "Résumé de TOUS les contrastes calculés dans cette session (pas seulement le contraste actif détaillé plus bas).",
+      "en": "Summary of ALL contrasts computed in this session (not only the active contrast detailed below)."
+    },
+    {
+      "fr": "Comparaison des gènes significatifs entre contrastes (UpSet)",
+      "en": "Significant-gene comparison across contrasts (UpSet)"
+    },
+    {
+      "fr": "Diagramme non disponible :",
+      "en": "Diagram unavailable:"
+    },
+    {
+      "fr": "PCA — Échantillons",
+      "en": "PCA — Samples"
+    },
+    {
+      "fr": "QC — Corrélation Inter-Échantillons",
+      "en": "QC — Inter-Sample Correlation"
+    },
+    {
+      "fr": "Détecte les échantillons mal étiquetés ou les outliers avant interprétation du contraste.",
+      "en": "Detects mislabeled samples or outliers before interpreting the contrast."
+    },
+    {
+      "fr": "Volcano Plot & MA-Plot",
+      "en": "Volcano Plot & MA-Plot"
+    },
+    {
+      "fr": "Heatmap — Top Gènes Différentiels",
+      "en": "Heatmap — Top Differential Genes"
+    },
+    {
+      "fr": "Pas assez de gènes communs pour générer la heatmap.",
+      "en": "Not enough common genes to generate the heatmap."
+    },
+    {
+      "fr": "Toutes les paires — Volcano & MA-Plot",
+      "en": "All pairs — Volcano & MA-Plot"
+    },
+    {
+      "fr": "grille compacte",
+      "en": "compact grid"
+    },
+    {
+      "fr": "grand format (1 par contraste)",
+      "en": "large format (1 per contrast)"
+    },
+    {
+      "fr": "Package 'patchwork' manquant — grille ignorée.",
+      "en": "Package 'patchwork' missing — grid skipped."
+    },
+    {
+      "fr": "Heatmap top gènes — par paire",
+      "en": "Top-gene heatmap — per pair"
+    },
+    {
+      "fr": "Table Complète — Expression Différentielle",
+      "en": "Full Table — Differential Expression"
+    },
+    {
+      "fr": "Top 100 gènes (table complète disponible en export CSV depuis l'application)",
+      "en": "Top 100 genes (full table available as CSV export from the app)"
+    },
+    {
+      "fr": "Pathway Enrichment",
+      "en": "Pathway Enrichment"
+    },
+    {
+      "fr": "Multi-méthodes — DESeq2 / edgeR / limma-voom",
+      "en": "Multi-method — DESeq2 / edgeR / limma-voom"
+    },
+    {
+      "fr": "Table consensus (top 20 par rang moyen)",
+      "en": "Consensus table (top 20 by mean rank)"
+    },
+    {
+      "fr": "Consensus de rang — table complète disponible en export CSV depuis l'app.",
+      "en": "Rank consensus — full table available as CSV export from the app."
+    },
+    {
+      "fr": "Aucune comparaison multi-méthodes disponible — cliquez \"Comparer\" avant l'export.",
+      "en": "No multi-method comparison available — click \"Compare\" before exporting."
+    },
+    {
+      "fr": "Rapport généré automatiquement par TranscriptoShiny — module Bulk RNA-seq.",
+      "en": "Report generated automatically by TranscriptoShiny — Bulk RNA-seq module."
+    },
+    {
+      "fr": "Contraste actif : {c} | Échantillons : {n} | Gènes testés : {g} | Gènes significatifs : {s}",
+      "en": "Active contrast: {c} | Samples: {n} | Genes tested: {g} | Significant genes: {s}"
+    },
+    {
+      "fr": "Petits multiples pour chacun des {n} contrastes calculés — mise en page : {layout}.",
+      "en": "Small multiples for each of the {n} computed contrasts — layout: {layout}."
+    },
+    {
+      "fr": "Heatmaps par paire non affichées ({n} contrastes > 6) — changez le contraste actif dans l'onglet Heatmap.",
+      "en": "Per-pair heatmaps not shown ({n} contrasts > 6) — change the active contrast in the Heatmap tab."
+    },
+    {
+      "fr": "Comparaison du même contraste avec {n} méthodes : {m}.",
+      "en": "Comparison of the same contrast with {n} methods: {m}."
+    }
   ]
 }

@@ -1,5 +1,6 @@
 # =============================================================================
 # mod_bulk_filter.R  —  Bulk Child 1: Filtering + VST, PCA & Sample-QC
+# i18n Phase 3.1 — static labels via i18n$t()/.tr_plain() + server push via update*Input
 # =============================================================================
 # Entry point of the bulk pipeline: raw counts -> filtered counts ->
 # DESeqDataSet(design = ~1) -> VST matrix. Everything downstream (DE, heatmap,
@@ -38,32 +39,31 @@ mod_bulk_filter_ui <- function(id) {
   ns <- NS(id)
   tagList(
     div(style = "display:flex;align-items:center;gap:6px;",
-        tags$label("Counts totaux minimum / gène", class = "control-label", style = "margin-bottom:0;"),
+        tags$label(i18n$t("Counts totaux minimum / g\u00e8ne"), class = "control-label", style = "margin-bottom:0;"),
         tooltip(bsicons::bs_icon("info-circle"),
-               "Un gène doit avoir au moins ce nombre de reads, cumulés sur tous les échantillons, pour être conservé. Élimine le bruit de fond sans biaiser l'analyse différentielle.")),
+                i18n$t("Un g\u00e8ne doit avoir au moins ce nombre de reads, cumul\u00e9s sur tous les \u00e9chantillons, pour \u00eatre conserv\u00e9. \u00c9limine le bruit de fond sans biaiser l'analyse diff\u00e9rentielle."))),
     numericInput(ns("min_count"), NULL, 10, min = 0, step = 1),
-    numericInput(ns("min_samples"), "Nb échantillons min. au-dessus du seuil", 1, min = 1, step = 1),
-    numericInput(ns("min_count_per_sample"), "Seuil par échantillon", 1, min = 0, step = 1),
+    numericInput(ns("min_samples"), i18n$t("Nb \u00e9chantillons min. au-dessus du seuil"), 1, min = 1, step = 1),
+    numericInput(ns("min_count_per_sample"), i18n$t("Seuil par \u00e9chantillon"), 1, min = 0, step = 1),
 
-    helpText("La transformation VST (variance-stabilizing) est utilisée pour la PCA et la heatmap. ",
-             "Si < 4 échantillons : repli automatique sur log2(counts normalisés + 1)."),
+    helpText(i18n$t("La transformation VST (variance-stabilizing) est utilis\u00e9e pour la PCA et la heatmap. Si < 4 \u00e9chantillons : repli automatique sur log2(counts normalis\u00e9s + 1).")),
 
-    actionButton(ns("run_filter_norm"), "🚀 Lancer Filtrage & VST",
-                 class = "btn-danger w-100", icon = icon("play")),
+    actionButton(ns("run_filter_norm"),
+                 tagList(icon("play"), i18n$t("Lancer Filtrage & VST")),
+                 class = "btn-danger w-100"),
 
     div(class = "small text-muted mt-2", textOutput(ns("filter_status"))),
 
     hr(),
     div(style = "display:flex;align-items:center;gap:6px;",
-        tags$label("🎨 Palette de couleurs (PCA)", class = "control-label", style = "margin-bottom:0;"),
+        tags$label(tagList("\U0001f3a8", i18n$t("Palette de couleurs (PCA)")), class = "control-label", style = "margin-bottom:0;"),
         tooltip(bsicons::bs_icon("info-circle"),
-               "Couleurs utilisées pour les groupes sur la PCA. Okabe-Ito = sûre pour daltoniens.")),
+                i18n$t("Couleurs utilis\u00e9es pour les groupes sur la PCA. Okabe-Ito = s\u00fbre pour daltoniens."))),
     selectInput(ns("palette_choice"), NULL,
-               choices = c("Défaut (ggplot)" = "default",
-                           "Okabe-Ito (daltonien)" = "okabeito",
-                           "Viridis" = "viridis",
-                           "Set2 (ColorBrewer)" = "set2",
-                           "Manuel (choisir chaque couleur)" = "manual"))
+               choices = stats::setNames(
+                 c("default","okabeito","viridis","set2","manual"),
+                 c(i18n$t("D\u00e9faut (ggplot)"), i18n$t("Okabe-Ito (daltonien)"), "Viridis",
+                   i18n$t("Set2 (ColorBrewer)"), i18n$t("Manuel (choisir chaque couleur)"))))
   )
 }
 
@@ -76,22 +76,21 @@ mod_bulk_filter_pca_ui <- function(id) {
     full_screen = TRUE,
     card_header("PCA"),
     fluidRow(
-      column(4, selectizeInput(ns("pca_color_by"), "Colorer par", choices = NULL,
-                               options = list(placeholder = "Aucun", allowEmptyOption = TRUE))),
-      column(4, selectizeInput(ns("pca_shape_by"), "Forme par (optionnel)", choices = NULL,
-                               options = list(placeholder = "Aucun", allowEmptyOption = TRUE)))
+      column(4, selectizeInput(ns("pca_color_by"), i18n$t("Colorer par"), choices = NULL,
+                               options = list(placeholder = .tr_placeholder(), allowEmptyOption = TRUE))),
+      column(4, selectizeInput(ns("pca_shape_by"), i18n$t("Forme par (optionnel)"), choices = NULL,
+                               options = list(placeholder = .tr_placeholder(), allowEmptyOption = TRUE)))
     ),
-    uiOutput(ns("manual_palette_ui")),   # only shown when palette == "manual" AND pca_color_by active
-    checkboxInput(ns("pca_interactive"), "📊 Interactif (Plotly — survol pour identifier l'échantillon)", value = FALSE),
+    uiOutput(ns("manual_palette_ui")),
+    checkboxInput(ns("pca_interactive"), i18n$t("Interactif (Plotly \u2014 survol pour identifier l'\u00e9chantillon)"), value = FALSE),
     div(style = "height:620px;overflow-y:auto;", uiOutput(ns("pca_container"))),
-    downloadButton(ns("dl_pca_png"), "Export PNG (statique)", class = "btn-sm btn-secondary mt-2"),
+    downloadButton(ns("dl_pca_png"), i18n$t("Export PNG (statique)"), class = "btn-sm btn-secondary mt-2"),
 
     hr(),
-    h6("Scree Plot — Variance Expliquée", style = "font-weight:bold;"),
-    helpText("Combien de composantes principales faut-il regarder ? Une chute nette (\"coude\") ",
-             "indique où le signal biologique s'arrête et où le bruit commence."),
+    h6(i18n$t("Scree Plot \u2014 Variance Expliqu\u00e9e"), style = "font-weight:bold;"),
+    helpText(i18n$t("Combien de composantes principales faut-il regarder ? Une chute nette (\"coude\") indique o\u00f9 le signal biologique s'arr\u00eate et o\u00f9 le bruit commence.")),
     div(style = "height:400px;overflow-y:auto;", plotOutput(ns("plot_scree"), height = "380px")),
-    downloadButton(ns("dl_scree_png"), "Export PNG", class = "btn-sm btn-secondary mt-2")
+    downloadButton(ns("dl_scree_png"), i18n$t("Export PNG"), class = "btn-sm btn-secondary mt-2")
   )
 }
 
@@ -102,23 +101,25 @@ mod_bulk_filter_qc_ui <- function(id) {
   ns <- NS(id)
   card(
     full_screen = TRUE,
-    card_header("QC Échantillons"),
+    card_header(i18n$t("QC \u00c9chantillons")),
     div(class = "alert alert-light", style = "font-size:0.85em;",
         bsicons::bs_icon("info-circle"),
-        " Détecte les échantillons mal étiquetés, les outliers ou doublons inattendus ",
-        "AVANT de lancer l'analyse différentielle. Des échantillons d'un même groupe ",
-        "devraient corréler fortement entre eux (cellules sombres groupées)."),
+        " ", i18n$t("D\u00e9tecte les \u00e9chantillons mal \u00e9tiquet\u00e9s, les outliers ou doublons inattendus AVANT de lancer l'analyse diff\u00e9rentielle. Des \u00e9chantillons d'un m\u00eame groupe devraient corr\u00e9ler fortement entre eux (cellules sombres group\u00e9es).")),
     fluidRow(
-      column(4, selectizeInput(ns("qc_corr_annot"), "Annotation", choices = NULL,
-                               options = list(placeholder = "Aucun", allowEmptyOption = TRUE))),
-      column(4, selectInput(ns("qc_corr_method"), "Méthode",
+      column(4, selectizeInput(ns("qc_corr_annot"), i18n$t("Annotation"), choices = NULL,
+                               options = list(placeholder = .tr_placeholder(), allowEmptyOption = TRUE))),
+      column(4, selectInput(ns("qc_corr_method"), i18n$t("M\u00e9thode"),
                             choices = c("Pearson" = "pearson", "Spearman" = "spearman")))
     ),
     uiOutput(ns("qc_manual_palette_ui")),
     div(style = "height:640px;overflow-y:auto;", plotOutput(ns("plot_sample_corr"), height = "620px")),
-    downloadButton(ns("dl_sample_corr_png"), "Export PNG", class = "btn-sm btn-secondary mt-2")
+    downloadButton(ns("dl_sample_corr_png"), i18n$t("Export PNG"), class = "btn-sm btn-secondary mt-2")
   )
 }
+
+# tiny helper for selectize placeholders (returns French by default; JS shim
+# does not touch placeholders, so keep them neutral/short).
+.tr_placeholder <- function() "\u2014"
 
 
 # ── Server ────────────────────────────────────────────────────────────────────
@@ -126,6 +127,29 @@ mod_bulk_filter_qc_ui <- function(id) {
 mod_bulk_filter_server <- function(id, global_data, shared_rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    .tr <- function(key) {
+      tr <- global_data$i18n
+      if (is.null(tr)) return(key)
+      tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+    }
+
+    # ── i18n: push translated labels/choices on language switch ──────────
+    observeEvent(global_data$language, {
+      updateNumericInput(session, "min_samples",         label = .tr("Nb \u00e9chantillons min. au-dessus du seuil"))
+      updateNumericInput(session, "min_count_per_sample",label = .tr("Seuil par \u00e9chantillon"))
+      updateSelectInput(session, "palette_choice",
+        choices = stats::setNames(c("default","okabeito","viridis","set2","manual"),
+          c(.tr("D\u00e9faut (ggplot)"), .tr("Okabe-Ito (daltonien)"), "Viridis",
+            .tr("Set2 (ColorBrewer)"), .tr("Manuel (choisir chaque couleur)"))))
+      updateSelectizeInput(session, "pca_color_by",  label = .tr("Colorer par"))
+      updateSelectizeInput(session, "pca_shape_by",  label = .tr("Forme par (optionnel)"))
+      updateCheckboxInput(session, "pca_interactive", label = .tr("Interactif (Plotly \u2014 survol pour identifier l'\u00e9chantillon)"))
+      updateSelectizeInput(session, "qc_corr_annot", label = .tr("Annotation"))
+      updateSelectInput(session, "qc_corr_method", label = .tr("M\u00e9thode"))
+      updateActionButton(session, "run_filter_norm",
+                         label = paste0("\U0001f680 ", .tr("Lancer Filtrage & VST")))
+    }, ignoreInit = TRUE)
 
     # ── Refresh metadata-driven choices when bulk_obj changes ────────────────
     observeEvent(global_data$bulk_obj, {
@@ -164,7 +188,7 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
 
       if (ncol(counts) > 500 || nrow(counts) > 60000) {
         showNotification(
-          "⚠️ Matrice volumineuse — le filtrage va réduire la taille avant VST/PCA.",
+          .tr("Matrice volumineuse \u2014 le filtrage va r\u00e9duire la taille avant VST/PCA."),
           type = "warning", duration = 5
         )
       }
@@ -174,7 +198,7 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
       # (this caused a heatmap crash when filtering was re-run after a DE pass).
       if (length(shared_rv$contrasts) > 0) {
         showNotification(
-          "⚠️ Les contrastes calculés précédemment seront invalidés par ce nouveau filtrage.",
+          .tr("Les contrastes calcul\u00e9s pr\u00e9c\u00e9demment seront invalid\u00e9s par ce nouveau filtrage."),
           type = "warning", duration = 6
         )
         shared_rv$contrasts       <- list()
@@ -182,35 +206,37 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
       }
 
       p <- shiny::Progress$new(); on.exit(p$close())
-      p$set(message = "Filtrage & VST...", value = 0.2)
+      p$set(message = .tr("Filtrage & VST..."), value = 0.2)
 
       tryCatch({
         filtered <- filter_bulk_counts(
           counts, min_count = input$min_count, min_samples = input$min_samples,
           min_count_per_sample = input$min_count_per_sample
         )
-        p$set(0.5, "Construction DESeqDataSet (design ~1)...")
+        p$set(0.5, .tr("Construction DESeqDataSet (design ~1)..."))
         dds_blind <- build_dds(filtered, meta, design_formula = "~1", run_deseq = FALSE)
         dds_blind <- DESeq2::estimateSizeFactors(dds_blind)
 
-        p$set(0.8, "Transformation VST...")
+        p$set(0.8, .tr("Transformation VST..."))
         vst_mat <- get_vst_matrix(dds_blind)
 
         shared_rv$filtered_counts <- filtered
         shared_rv$dds_blind       <- dds_blind
         shared_rv$vst_mat         <- vst_mat
 
-        showNotification(sprintf("✓ %d gènes conservés sur %d échantillons",
-                                  nrow(filtered), ncol(filtered)),
+        showNotification(.t_fmt(.tr("\u2713 {n} g\u00e8nes conserv\u00e9s sur {m} \u00e9chantillons"),
+                                n = nrow(filtered), m = ncol(filtered)),
                          type = "message", duration = 5)
       }, error = function(e) {
-        showNotification(paste("Erreur filtrage/VST:", e$message), type = "error", duration = 8)
+        showNotification(paste(.tr("Erreur filtrage/VST:"), e$message), type = "error", duration = 8)
       })
     })
 
     output$filter_status <- renderText({
-      if (is.null(shared_rv$filtered_counts)) "En attente du filtrage..."
-      else sprintf("✓ %d gènes × %d échantillons", nrow(shared_rv$filtered_counts), ncol(shared_rv$filtered_counts))
+      global_data$language
+      if (is.null(shared_rv$filtered_counts)) .tr("En attente du filtrage...")
+      else .t_fmt(.tr("\u2713 {n} g\u00e8nes \u00d7 {m} \u00e9chantillons"),
+                  n = nrow(shared_rv$filtered_counts), m = ncol(shared_rv$filtered_counts))
     })
 
     # =========================================================================
@@ -231,14 +257,14 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
       if (!identical(input$palette_choice, "manual")) return(NULL)
       if (!nzchar(input$pca_color_by %||% "")) {
         return(div(class = "alert alert-warning", style = "font-size:0.8em;",
-                   "Sélectionnez d'abord une variable \"Colorer par\" pour personnaliser ses couleurs."))
+                   "S\u00e9lectionnez d'abord une variable \"Colorer par\" pour personnaliser ses couleurs."))
       }
       lvls <- tryCatch(manual_pca_levels(), error = function(e) character(0))
       if (length(lvls) == 0) return(NULL)
       ids <- paste0("manual_color_", seq_along(lvls))
       div(
         class = "border rounded p-2 mb-2", style = "background:#f8f9fa;",
-        h6(paste("Couleurs manuelles —", input$pca_color_by),
+        h6(paste("Couleurs manuelles \u2014", input$pca_color_by),
            style = "font-size:0.85em;font-weight:bold;margin-bottom:6px;"),
         manual_color_picker_ui(ns, ids, lvls, .default_manual_colors(length(lvls)))
       )
@@ -257,13 +283,15 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
     })
 
     pca_plot <- reactive({
+      global_data$language                     # i18n trigger
       req(shared_rv$vst_mat)
       pal <- input$palette_choice %||% "default"
       plot_bulk_pca(shared_rv$vst_mat, global_data$bulk_obj$metadata,
                     color_by = if (nzchar(input$pca_color_by %||% "")) input$pca_color_by else NULL,
                     shape_by = if (nzchar(input$pca_shape_by %||% "")) input$pca_shape_by else NULL,
                     palette  = pal,
-                    manual_colors = if (identical(pal, "manual")) manual_palette_vec() else NULL)
+                    manual_colors = if (identical(pal, "manual")) manual_palette_vec() else NULL,
+                    tr = .tr_fn(global_data))
     })
     output$plot_pca <- renderPlot({
       .safe_plot_render(session, "plot_pca", function() pca_plot())
@@ -292,8 +320,9 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
     # computation; same ntop=500 variable-gene selection as plot_bulk_pca()).
     # =========================================================================
     scree_plot <- reactive({
+      global_data$language                     # i18n trigger
       req(shared_rv$vst_mat)
-      plot_scree_bulk(shared_rv$vst_mat)
+      plot_scree_bulk(shared_rv$vst_mat, tr = .tr_fn(global_data))
     })
     output$plot_scree <- renderPlot({
       .safe_plot_render(session, "plot_scree", function() scree_plot())
@@ -322,14 +351,14 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
       if (!identical(input$palette_choice, "manual")) return(NULL)
       if (!nzchar(input$qc_corr_annot %||% "")) {
         return(div(class = "alert alert-warning", style = "font-size:0.8em;",
-                   "Sélectionnez d'abord une \"Annotation\" pour personnaliser ses couleurs."))
+                   "S\u00e9lectionnez d'abord une \"Annotation\" pour personnaliser ses couleurs."))
       }
       lvls <- tryCatch(manual_qc_levels(), error = function(e) character(0))
       if (length(lvls) == 0) return(NULL)
       ids <- paste0("qc_manual_color_", seq_along(lvls))
       div(
         class = "border rounded p-2 mb-2", style = "background:#f8f9fa;",
-        h6(paste("Couleurs manuelles —", input$qc_corr_annot),
+        h6(paste("Couleurs manuelles \u2014", input$qc_corr_annot),
            style = "font-size:0.85em;font-weight:bold;margin-bottom:6px;"),
         manual_color_picker_ui(ns, ids, lvls, .default_manual_colors(length(lvls)))
       )
@@ -348,14 +377,15 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
     })
 
     sample_corr_plot_fn <- function() {
+      global_data$language                     # i18n trigger
       req(shared_rv$vst_mat)
       annot <- if (nzchar(input$qc_corr_annot %||% "")) input$qc_corr_annot else NULL
       pal   <- input$palette_choice %||% "default"
       plot_sample_correlation_heatmap(
         shared_rv$vst_mat, global_data$bulk_obj$metadata,
         annotation_col = annot, method = input$qc_corr_method %||% "pearson",
-        palette = pal, manual_colors = if (identical(pal, "manual")) qc_manual_colors() else NULL
-      )
+        palette = pal, manual_colors = if (identical(pal, "manual")) qc_manual_colors() else NULL,
+        tr = .tr_fn(global_data))
     }
     output$plot_sample_corr <- renderPlot({
       req(shared_rv$vst_mat)

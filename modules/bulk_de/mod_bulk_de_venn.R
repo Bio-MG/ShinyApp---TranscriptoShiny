@@ -17,6 +17,13 @@
 
 .de_venn_server <- function(input, output, session, ns, global_data, shared_rv) {
 
+  .tr <- function(key) {
+    tr <- global_data$i18n
+    if (is.null(tr)) return(key)
+    tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+  }
+
+
   # Populate the contrast picker whenever shared_rv$contrasts changes
   # (new single-pair run, pairwise-auto batch, etc.) — default selection:
   # all of them, capped at 6 for readability.
@@ -25,12 +32,13 @@
     updateSelectizeInput(session, "venn_contrasts", choices = nm, selected = head(nm, 6), server = TRUE)
   })
 
-  output$venn_gate_message <- renderUI({
+   output$venn_gate_message <- renderUI({
+    global_data$language
     n <- length(input$venn_contrasts)
     if (length(shared_rv$contrasts) < 2) {
       div(class = "alert alert-warning", style = "font-size:0.85em;",
-          "Lancez au moins 2 contrastes (Step 2 simple répété, ou ", tags$em("Pairwise auto"),
-          ") pour pouvoir les comparer ici.")
+          .tr("Lancez au moins 2 contrastes (Step 2 simple répété, ou "), tags$em(.tr("Pairwise auto")),
+          .tr(") pour pouvoir les comparer ici."))
     } else if (n < 2) {
       div(class = "alert alert-info", style = "font-size:0.85em;", "Sélectionnez au moins 2 contrastes ci-dessus.")
     } else if (input$venn_type == "venn" && (n < 2 || n > 4)) {
@@ -59,6 +67,7 @@
   })
 
   output$venn_plot <- renderPlot({
+    global_data$language                     # i18n trigger (diagrams are language-neutral)
     # Soft pre-check only — if the clientData width/height ever resolves to
     # something genuinely tiny, show the friendly message proactively
     # instead of attempting to plot. isTRUE() makes this safe: if the key
