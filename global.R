@@ -170,6 +170,92 @@ if (require("future", quietly = TRUE)) {
 
 
 
+# --- i18n (shiny.i18n) --------------------------------------------------------
+#   - Keys ARE the French strings (shiny.i18n pattern); fr/en values live in
+#     i18n/translation.json.
+#   - The GLOBAL `i18n` object is used ONLY at UI build time (static labels in
+#     *_ui() functions). Dynamic/server content uses the per-session
+#     translator `global_data$i18n` (created in app.R via
+#     .new_session_i18n()) so concurrent users never share language state.
+I18N_AVAILABLE        <- requireNamespace("shiny.i18n", quietly = TRUE)
+I18N_DEFAULT_LANG     <- "fr"
+I18N_TRANSLATION_FILE <- file.path("i18n", "translation.json")
+
+if (I18N_AVAILABLE) {
+  i18n <- shiny.i18n::Translator$new(translation_json_path = I18N_TRANSLATION_FILE)
+  i18n$set_translation_language(I18N_DEFAULT_LANG)
+} else {
+  warning("Package 'shiny.i18n' absent — interface affichée en français uniquement. ",
+          "Installez-le via install.packages('shiny.i18n') pour activer le multilingue.")
+  # Minimal no-op fallback: every i18n$t() / i18n_plain() call site keeps
+  # working (returns the French key unchanged) instead of crashing the app.
+  i18n <- list(
+    t                        = function(key, ...) key,
+    set_translation_language = function(language) invisible(NULL),
+    get_translation_language = function() I18N_DEFAULT_LANG
+  )
+}
+
+#' Fresh session-scoped translator (called once per session in app.R server).
+.new_session_i18n <- function() {
+  if (I18N_AVAILABLE) {
+    tr <- shiny.i18n::Translator$new(translation_json_path = I18N_TRANSLATION_FILE)
+    tr$set_translation_language(I18N_DEFAULT_LANG)
+    tr
+  } else {
+    i18n  # global fallback object
+  }
+}
+
+#' Named-placeholder interpolation for translated templates.
+#' Usage: .t_fmt(global_data$i18n$t("✓ {n} gènes retenus."), n = 42)
+.t_fmt <- function(template, ...) {
+  vals <- list(...)
+  for (nm in names(vals)) {
+    template <- gsub(paste0("{", nm, "}"), format(vals[[nm]]), template, fixed = TRUE)
+  }
+  template
+}
+
+# --- i18n helpers (Phase 2 hardening) ----------------------------------------
+# Strip shiny.i18n's <span class="i18n" data-key="...">...</span> wrapping
+# (emitted whenever $t() runs OUTSIDE an active session) back to a plain
+# length-1 string. Safe to call on already-plain strings too.
+.strip_i18n_html <- function(res) {
+  if (inherits(res, c("shiny.tag", "shiny.tag.list")) || length(res) > 1L) {
+    flat <- paste(as.character(res), collapse = "")
+    return(gsub("^<span[^>]*>|</span\\s*>$", "", flat))
+  }
+  res
+}
+
+#' Plain-scalar translation for UI BUILD TIME, non-HTML contexts ONLY:
+#' setNames()/choices vectors, plot labels, anything requiring length-1 text.
+#' Returns the DEFAULT language (fr) at build time; live switching for these
+#' elements is done SERVER-SIDE via update*Input() on language change —
+#' they are deliberately invisible to the client-side JS shim.
+.tr_plain <- function(key) {
+  if (!exists("I18N_AVAILABLE") || !isTRUE(I18N_AVAILABLE)) return(key)
+  res <- tryCatch(i18n$t(key), error = function(e) key)
+  .strip_i18n_html(res)
+}
+
+#' Scalar-safe translation for NON-HTML contexts: setNames() name vectors,
+#' sprintf templates, notification/log strings...
+#'
+#' The GLOBAL Translator runs in usei18n()/JS-shim mode: at UI-build time
+#' (no active Shiny session) $t() wraps each translation in a
+#' <span class="i18n" data-key="..."> shiny.tag so update_lang() can swap
+#' static labels client-side. Correct for HTML UI nodes — fatal wherever a
+#' length-1 plain string is required ("'names' attribute [6] must be the
+#' same length as the vector [2]" from stats::setNames).
+#'
+#' Static HTML labels MUST keep calling i18n$t(); use this helper ONLY where
+#' plain text is needed. In-session calls ($t with reactive domain) already
+#' return raw strings and pass through unchanged.
+#' Kept as alias to .tr_plain() for backward compatibility (Phase 1 callers).
+i18n_plain <- function(key) .tr_plain(key)
+
 my_theme <- bs_theme(
   
   version = 5,

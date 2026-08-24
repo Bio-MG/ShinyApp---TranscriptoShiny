@@ -130,6 +130,17 @@ ui <- page_navbar(
   title = "TranscriptoShiny v2 - Multi-Omics Platform",
   
   theme = my_theme,
+
+  # ── i18n (Phase 1): client-side translation shim ──────────────────────────
+  # MUST appear exactly once in the UI. Injects the JS handler that
+  # re-translates all STATIC labels (i18n$t() calls inside *_ui() functions)
+  # in-browser when the server calls shiny.i18n::update_lang() — no page
+  # reload, no UI rebuild.
+  # FIX: injected via `header=` — page_navbar() strictly validates its `...`
+  # children (nav_panel/nav_menu/nav_spacer only); a raw usei18n() fragment
+  # among them aborts UI build with "Navigation containers expect a
+  # collection of nav_panel()s".
+  header = if (I18N_AVAILABLE) shiny.i18n::usei18n(i18n),
   
   
   
@@ -137,9 +148,19 @@ ui <- page_navbar(
   
   sidebar = sidebar(
     
-    title = "Système",
+    title = i18n$t("Système"),
     
     width = 250,
+    
+    # ── i18n (Phase 1): language selector ────────────────────────────────────
+    # VALUES ("fr"/"en") are the contract — server logic keys off them.
+    # DISPLAY names are endonyms (each language in its own name) and are
+    # deliberately NEVER translated. Hidden entirely if shiny.i18n is absent.
+    if (I18N_AVAILABLE) {
+      selectInput("selected_lang", label = i18n$t("Langue"),
+                  choices = c("Français" = "fr", "English" = "en"),
+                  selected = I18N_DEFAULT_LANG, width = "100%")
+    } else NULL,
     
     
     
@@ -235,13 +256,13 @@ ui <- page_navbar(
   
   nav_menu(
     
-    "📥 Import Données",
+    tagList("📥 ", i18n$t("Import Données")),
     
     icon = icon("upload"),
     
     
     
-    nav_panel("Single-Cell", 
+    nav_panel(i18n$t("Single-Cell"), 
               
               icon = icon("braille"),
               
@@ -249,7 +270,7 @@ ui <- page_navbar(
     
     
     
-    nav_panel("RNA Bulk", 
+    nav_panel(i18n$t("RNA Bulk"), 
               
               icon = icon("table"),
               
@@ -257,7 +278,7 @@ ui <- page_navbar(
     
     
     
-    nav_panel("Spatial", 
+    nav_panel(i18n$t("Spatial"), 
               
               icon = icon("map"),
               
@@ -275,7 +296,9 @@ ui <- page_navbar(
   
   
   
-  nav_panel("🔬 Single-Cell Analysis", 
+  # NB: titles are French-by-default as required; English on switch via the
+  # shiny.i18n JS shim (usei18n above + update_lang in the server observer).
+  nav_panel(tagList("🔬 ", i18n$t("Analyse Single-Cell")),
             
             icon = icon("microscope"),
             
@@ -283,7 +306,7 @@ ui <- page_navbar(
   
   
   
-  nav_panel("📊 Bulk RNA Analysis", 
+  nav_panel(tagList("📊 ", i18n$t("Analyse Bulk RNA")),
             
             icon = icon("chart-line"),
             
@@ -291,7 +314,7 @@ ui <- page_navbar(
   
   
   
-  nav_panel("🗺️ Spatial Analysis", 
+  nav_panel(tagList("🗺️ ", i18n$t("Analyse Spatiale")),
             
             icon = icon("layer-group"),
             
@@ -342,9 +365,35 @@ server <- function(input, output, session) {
     # n_per_dataset=, reduction_used=, datasets=, computed_at=) ou NULL.
     spatial_multi_integration = NULL,
     
-    spatial_reimport_signal = NULL   # {name=, at=} -- signal re-import sous nom deja actif (voir mod_spatial.R)
+    spatial_reimport_signal = NULL,   # {name=, at=} -- signal re-import sous nom deja actif (voir mod_spatial.R)
+
+    # ── i18n (Phase 1) ──────────────────────────────────────────────────────
+    # language : reactive TRIGGER — every language-aware renderUI reads it,
+    #            so those outputs re-render automatically on switch.
+    # i18n     : SESSION-scoped Translator for all dynamic content
+    #            (showNotification, renderUI, Progress, plot titles...).
+    #            The global \`i18n\` is never mutated here (multi-user safety).
+    language = I18N_DEFAULT_LANG,
+    i18n     = .new_session_i18n()
     
   )
+  
+  # ── i18n (Phase 1): language switch ───────────────────────────────────────
+  # Three coordinated effects:
+  #   1) session translator updated → every future dynamic string (notifs,
+  #      Progress, renderUI rebuilds) uses the new language;
+  #   2) global_data$language mutated → invalidates and re-renders every
+  #      language-aware renderUI in every module (they read this field);
+  #   3) shiny.i18n::update_lang() → the JS shim re-translates all STATIC
+  #      labels (i18n$t() in *_ui() functions) in-browser, no reload.
+  # ignoreInit=TRUE: avoids a pointless fr→fr round-trip at session start.
+  observeEvent(input$selected_lang, {
+    lang <- input$selected_lang
+    if (is.null(lang) || !lang %in% c("fr", "en")) return()
+    global_data$language <- lang
+    global_data$i18n$set_translation_language(lang)
+    if (I18N_AVAILABLE) shiny.i18n::update_lang(language = lang, session = session)
+  }, ignoreInit = TRUE)
   
   
   
