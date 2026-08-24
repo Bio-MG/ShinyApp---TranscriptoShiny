@@ -376,23 +376,43 @@ mod_sc_viz_ui <- function(id) {
   ns <- NS(id)
   tagList(
 
+    div(class = "alert alert-light", style = "font-size:0.78em;border-left:3px solid #2C3E50;",
+        bsicons::bs_icon("diagram-3"), tags$strong(" Bloc 1 — Exploration Core"),
+        " : réductions, expression, profils, heatmaps, densité 2D, 3D."),
+
+    # Step 5 (UI reorg, Phase 1): grouped <optgroup> choices instead of a flat
+    # list -- purely presentational (native <select> optgroup rendering),
+    # input$viz_type keeps its EXACT contract (same values, same server-side
+    # switches downstream) -- zero reactivity change.
     selectInput(
       ns("viz_type"), "Style de Visualisation",
-      choices = c(
-        "Reduction Dimensionnelle (UMAP/PCA/t-SNE)" = "dim",
-        "Feature Plot (Expression sur Reduction)"   = "feature",
-        "Correlation Genes (Scatter Ameliore)"      = "scatter",
-        "Distribution (Violin)"                     = "violin",
-        "Stacked Violin Plot"                        = "stacked_violin",
-        "Densite (Ridge Plot)"                       = "ridge",
-        "DotPlot"                                   = "dot",
-        "Heatmap"                                   = "heatmap",
-        "Matrice Correlation"                        = "correlation_matrix",
-        "Comparaison Multi-Echantillons"             = "multi_sample",
-        "Volcano Plot"                               = "volcano",
-        "Heatmap Hierarchique (ComplexHeatmap)"      = "heatmap_hier",
-        "Densite d'Expression 2D"                    = "density_2d",
-        "Reduction 3D (interactif)"                  = "reduction_3d"
+      choices = list(
+        "Réductions" = c(
+          "Réduction Dimensionnelle (UMAP/PCA/t-SNE)" = "dim"
+        ),
+        "Expression" = c(
+          "Feature Plot (Expression sur Réduction)" = "feature",
+          "DotPlot" = "dot"
+        ),
+        "Profils" = c(
+          "Distribution (Violin)" = "violin",
+          "Stacked Violin Plot" = "stacked_violin",
+          "Densité (Ridge Plot)" = "ridge",
+          "Corrélation Gènes (Scatter Amélioré)" = "scatter",
+          "Matrice Corrélation" = "correlation_matrix",
+          "Comparaison Multi-Échantillons" = "multi_sample",
+          "Volcano Plot" = "volcano"
+        ),
+        "Heatmap" = c(
+          "Heatmap (DoHeatmap)" = "heatmap",
+          "Heatmap Hiérarchique (ComplexHeatmap)" = "heatmap_hier"
+        ),
+        "Densité 2D" = c(
+          "Densité d'Expression 2D" = "density_2d"
+        ),
+        "Visualisation 3D" = c(
+          "Réduction 3D (interactif)" = "reduction_3d"
+        )
       )
     ),
 
@@ -525,7 +545,15 @@ mod_sc_viz_ui <- function(id) {
                             "Manuel"                 = "manual")),
     uiOutput(ns("sc_manual_palette_ui")),
     uiOutput(ns("sc_manual_gradient_ui")),
-    uiOutput(ns("sc_manual_volcano_ui"))
+    uiOutput(ns("sc_manual_volcano_ui")),
+
+    hr(),
+    div(class = "alert alert-light", style = "font-size:0.72em;opacity:0.55;",
+        bsicons::bs_icon("hourglass-split"), tags$strong(" Bloc 2 — Régulation & Fonction"),
+        " (à venir — régulons, cartes d'enrichissement)."),
+    div(class = "alert alert-light", style = "font-size:0.72em;opacity:0.55;margin-bottom:0;",
+        bsicons::bs_icon("hourglass-split"), tags$strong(" Bloc 3 — Dynamique & Écosystème"),
+        " (à venir — vélocité ARN, communication cellulaire, Milo, scCODA).")
   )
 }
 
@@ -565,6 +593,7 @@ mod_sc_viz_output_ui <- function(id) {
       )
     ),
     uiOutput(ns("preview_badge")),
+    uiOutput(ns("viz_category_badge")),
     div(style="height:650px;overflow:auto;",
         uiOutput(ns("plot_container")))
   )
@@ -613,8 +642,27 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
       if (!isTRUE(preview_subsampled())) return(NULL)
       div(class="alert alert-info py-1 px-2 mb-1", style="font-size:0.78em;",
           bsicons::bs_icon("info-circle"),
-          sprintf(" Aper\u00e7u sous-échantillonn\u00e9 (max %s cellules) pour la fluidit\u00e9 \u2014 l'export utilise le dataset complet.",
+          sprintf(" Aper\u00e7u sous-\u00e9chantillonn\u00e9 (max %s cellules) pour la fluidit\u00e9 \u2014 l'export utilise le dataset complet.",
                  format(.PREVIEW_MAX_CELLS, big.mark=" ")))
+    })
+
+    # Step 5 (UI reorg): maps the flat viz_type value back to its conceptual
+    # group for display -- purely informational, no new reactive contract.
+    .viz_category_map <- c(
+      dim = "Réductions", reduction_3d = "Visualisation 3D",
+      feature = "Expression", dot = "Expression",
+      violin = "Profils", stacked_violin = "Profils", ridge = "Profils",
+      scatter = "Profils", correlation_matrix = "Profils",
+      multi_sample = "Profils", volcano = "Profils",
+      heatmap = "Heatmap", heatmap_hier = "Heatmap",
+      density_2d = "Densité 2D"
+    )
+    output$viz_category_badge <- renderUI({
+      req(input$viz_type)
+      cat_label <- .viz_category_map[[input$viz_type]] %||% "Exploration"
+      div(class = "text-muted", style = "font-size:0.75em;margin-bottom:4px;",
+          bsicons::bs_icon("diagram-3"),
+          sprintf(" Bloc 1 — Exploration Core / %s", cat_label))
     })
 
     # ── Helper: config snapshot (used ONLY for report basket — NOT for renders
