@@ -81,6 +81,7 @@ source("modules/sc/mod_sc_markers.R")
 source("modules/sc/mod_sc_corr.R")
 source("modules/sc/mod_sc_pathways.R")
 source("modules/sc/mod_sc_trajectory.R")
+source("modules/sc/mod_sc_velocity.R")
 source("modules/sc/mod_sc_mapping.R")
 source("modules/sc/mod_sc.R")
 

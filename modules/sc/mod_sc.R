@@ -48,8 +48,10 @@ mod_sc_ui <- function(id) {
                         mod_sc_pathways_ui(ns("pathways"))),
         accordion_panel("7. Trajectory Analysis",icon=icon("route"),
                         mod_sc_trajectory_ui(ns("trajectory"))),
+        accordion_panel("8. RNA Velocity", icon=icon("wind"),
+                        mod_sc_velocity_ui(ns("velocity"))),
         accordion_panel(
-          "8. Rapport Complet", icon=icon("file-export"),
+          "9. Rapport Complet", icon=icon("file-export"),
           div(class="alert alert-light",style="font-size:0.85em;border-left:3px solid #2C3E50;",
               "Rapport autonome (QC, Réduction, Annotation, Marqueurs, Pathways, Trajectoire)."),
           textInput(ns("report_title"),    "Titre",    value="Analyse Single-Cell"),
@@ -97,6 +99,7 @@ mod_sc_ui <- function(id) {
       nav_panel("Gènes Corrélés",   value="tab_correlation", mod_sc_corr_output_ui(ns("corr"))),
       nav_panel("Pathways",         value="tab_pathway",     mod_sc_pathways_output_ui(ns("pathways"))),
       nav_panel("Trajectory",       value="tab_trajectory",  mod_sc_trajectory_output_ui(ns("trajectory"))),
+      nav_panel("Velocity",         value="tab_velocity",    mod_sc_velocity_output_ui(ns("velocity"))),
       nav_panel("QC", value="tab_qc",
         card(max_height=750,
           div(class="card-header bg-light", h5("Contrôle Qualité", class="card-title mb-0")),
@@ -225,6 +228,7 @@ mod_sc_server <- function(id, global_data) {
     mod_sc_corr_server(      "corr",      global_data, shared_rv)
     mod_sc_pathways_server(  "pathways",  global_data, shared_rv)
     mod_sc_trajectory_server("trajectory",global_data, shared_rv)
+    mod_sc_velocity_server("velocity", global_data, shared_rv)
 
     # ── traj_reduction / traj_genes mirrors (written by mod_sc_trajectory_server)
 
