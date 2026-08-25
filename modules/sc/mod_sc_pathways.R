@@ -172,11 +172,15 @@ mod_sc_pathways_server <- function(id, global_data, shared_rv) {
 
     output$pathway_barplot <- renderPlot({
       req(pathway_rv())
-      plot_pathway_barplot(pathway_rv(), db_label=input$pathway_db, top_n=15)
+      plot_pathway_barplot(pathway_rv(), db_label=input$pathway_db, top_n=15,
+                           palette = shared_rv$sc_palette %||% "default",
+                           manual_gradient = shared_rv$sc_manual_gradient)
     })
     output$pathway_dotplot <- renderPlot({
       req(pathway_rv())
-      plot_pathway_dotplot(pathway_rv(), db_label=input$pathway_db, top_n=20)
+      plot_pathway_dotplot(pathway_rv(), db_label=input$pathway_db, top_n=20,
+                           palette = shared_rv$sc_palette %||% "default",
+                           manual_gradient = shared_rv$sc_manual_gradient)
     })
     output$pathway_table <- renderDT({
       req(pathway_rv()); build_pathway_dt(pathway_rv())

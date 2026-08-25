@@ -1179,15 +1179,8 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     # Couleur discrete partagee cluster/niche/generique. "default" renvoie
     # NULL depuis sc_discrete_colors() (R/palettes.R) -> repli Dark 3
     # inchange si l'utilisateur ne touche pas au selecteur.
-    discrete_palette_colors <- function(lv) {
-      if (length(lv) == 0) return(NULL)
-      pal <- input$color_palette %||% "default"
-      if (identical(pal, "manual")) pal <- "default"  # pas de picker par niveau -- repli
-      cols <- sc_discrete_colors(lv, palette = pal)
-      if (is.null(cols)) cols <- grDevices::hcl.colors(length(lv), palette = "Dark 3")
-      stats::setNames(cols, lv)
-    }
-
+    # (La 1ere definition morte de discrete_palette_colors() a ete supprimee :
+    # la seconde, ci-dessous, ecrasait deja la premiere a chaque lancement.)
     cluster_palette <- function(cluster_vec) spatial_discrete_colors(cluster_vec, shared_rv, kind = "cluster")
     discrete_palette_colors <- function(lv) spatial_discrete_colors(lv, shared_rv, kind = if (identical(input$color_by, "niche")) "niche" else if (identical(input$color_by, "deconv")) "celltype" else "cluster")
     color_values <- function(df) {
@@ -1217,16 +1210,9 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
           c(input$fixed_scale_min, input$fixed_scale_max)
         } else range(df$value[valid])
 
-        palette_arg <- switch(input$color_palette %||% "default",
-          "manual"   = grDevices::colorRampPalette(
-                         c(input$grad_low %||% "#2166AC", input$grad_high %||% "#B2182B"))(256),
-          "okabeito" = grDevices::colorRampPalette(c("#FFFFFF", "#D55E00"))(256),
-          "set2"     = if (requireNamespace("RColorBrewer", quietly = TRUE)) {
-                         grDevices::colorRampPalette(RColorBrewer::brewer.pal(8, "Set2"))(256)
-                       } else "viridis",
-          "viridis"
-        )
-        pal <- leaflet::colorNumeric(palette = palette_arg, domain = domain, na.color = "#CCCCCC")
+        # Rampe 256 stops factorisee dans R/palettes.R::spatial_color_ramp_hex()
+        # (meme logique, meme repli "viridis" pour la palette Defaut).
+        pal <- leaflet::colorNumeric(palette = spatial_color_ramp_hex(shared_rv), domain = domain, na.color = "#CCCCCC")
         cols <- as.character(pal(df$value))
         cols[!valid | is.na(cols) | !nzchar(cols)] <- "#CCCCCC"
 

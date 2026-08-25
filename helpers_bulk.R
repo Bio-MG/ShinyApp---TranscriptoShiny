@@ -729,150 +729,15 @@ get_vst_matrix <- function(dds) {
 
 
 
-#' Resolve a categorical ggplot color scale from a palette name
-#'
-#' Centralises palette choice so it can be reused by any bulk plot that
-#' colors by a metadata grouping variable. "manual" takes priority over
-#' `palette` when a non-empty `manual_colors` named vector is supplied —
-#' this lets `palette = "manual"` mean "use whatever the user picked in the
-#' color-picker UI for each level", falling back to the Okabe-Ito sequence
-#' if a level is missing a manual entry (defensive, should not happen in
-#' normal use since the UI always renders one picker per detected level).
-#'
-#' @param palette Character: "default" | "okabeito" | "viridis" | "set2" | "manual".
-#' @param manual_colors Optional named character vector (level -> hex color),
-#'   used only when `palette == "manual"`.
-#' @return A ggplot2 discrete color scale layer, or NULL.
-bulk_color_scale <- function(palette = "default", manual_colors = NULL) {
-  if (identical(palette, "manual") && !is.null(manual_colors) && length(manual_colors) > 0) {
-    return(scale_color_manual(values = manual_colors))
-  }
-  switch(palette %||% "default",
-    okabeito = scale_color_manual(values = c(
-      "#E69F00", "#56B4E9", "#009E73", "#F0E442",
-      "#0072B2", "#D55E00", "#CC79A7", "#999999"
-    )),
-    viridis  = scale_color_viridis_d(),
-    set2     = scale_color_brewer(palette = "Set2"),
-    NULL
-  )
-}
-
-#' Okabe-Ito sequence, recycled — starting point for the manual color pickers
-#' so the user tweaks from a colorblind-safe baseline instead of pure black.
-.default_manual_colors <- function(n) {
-  base <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442",
-           "#0072B2", "#D55E00", "#CC79A7", "#999999")
-  rep_len(base, n)
-}
-
-#' Native HTML5 color-picker row, zero extra package dependency
-#'
-#' Renders one `<input type="color">` per id/label/default triple, wired
-#' straight to Shiny via an inline `onchange` -> `Shiny.setInputValue()`
-#' (no `colourpicker` package needed — keeps the dependency footprint flat,
-#' per project guidance on RAM/CPU-only constraints). Reusable by ANY module
-#' that wants a "Manuel" palette mode — currently wired into PCA; queued for
-#' Heatmap annotation / Volcano / MA in a follow-up.
-#'
-#' @param ns Namespacing function for the CURRENT module server (`session$ns`).
-#' @param ids Character vector of un-namespaced input ids, one per swatch.
-#' @param labels Character vector of display labels (e.g. group level names).
-#' @param defaults Character vector of starting hex colors, same length.
-#' @return A `tagList` — one inline color swatch + label per id.
-manual_color_picker_ui <- function(ns, ids, labels, defaults) {
-  tagList(
-    div(
-      style = "display:flex;flex-wrap:wrap;gap:14px;align-items:center;padding:8px 0;",
-      lapply(seq_along(ids), function(i) {
-        full_id <- ns(ids[i])
-        div(
-          style = "display:flex;align-items:center;gap:6px;",
-          tags$input(
-            type     = "color",
-            id       = full_id,
-            value    = defaults[i],
-            style    = "width:34px;height:28px;border:1px solid #ccc;border-radius:4px;padding:0;cursor:pointer;",
-            onchange = sprintf("Shiny.setInputValue('%s', this.value)", full_id)
-          ),
-          tags$span(labels[i], style = "font-size:0.85em;")
-        )
-      })
-    )
-  )
-}
-
-
-#' Named color vector for categorical levels — ComplexHeatmap annotation flavor
-#'
-#' Companion to `bulk_color_scale()` (which returns a ggplot scale object).
-#' `HeatmapAnnotation(col = list(...))` wants a plain named character vector
-#' instead, hence this separate variant. Returns NULL for "default" so the
-#' caller skips `col=` entirely and ComplexHeatmap keeps its own built-in
-#' auto-assigned colors — fully backward-compatible unless the user
-#' explicitly picks a non-default palette.
-#'
-#' @param levels Character vector of the metadata levels needing a color
-#'   (duplicates allowed — only unique values are used).
-#' @param palette "default" | "okabeito" | "viridis" | "set2" | "manual".
-#' @param manual_colors Optional named vector (level -> hex), used only
-#'   when `palette == "manual"`; missing levels fall back to Okabe-Ito.
-#' @return Named character vector (one color per unique level), or NULL.
-bulk_annotation_colors <- function(levels, palette = "default", manual_colors = NULL) {
-  palette <- palette %||% "default"
-  if (identical(palette, "default")) return(NULL)
-  levels <- unique(as.character(levels))
-  n <- length(levels)
-  if (n == 0) return(NULL)
-
-  if (identical(palette, "manual")) {
-    defaults <- .default_manual_colors(n)
-    vals <- vapply(seq_along(levels), function(i) {
-      v <- if (levels[i] %in% names(manual_colors)) manual_colors[[levels[i]]] else NA_character_
-      if (is.null(v) || is.na(v) || !nzchar(v)) defaults[i] else v
-    }, character(1))
-    return(setNames(vals, levels))
-  }
-
-  cols <- switch(palette,
-    okabeito = .default_manual_colors(n),
-    viridis  = viridisLite::viridis(n),
-    set2     = RColorBrewer::brewer.pal(max(3, n), "Set2")[seq_len(n)],
-    .default_manual_colors(n)
-  )
-  setNames(cols, levels)
-}
-
-#' Semantic role colors (Up / Down / NS) for Volcano + MA-Plot
-#'
-#' Volcano/MA don't color by an arbitrary metadata grouping — they color by
-#' a FIXED 2-3 way significance role. This keeps that role-based scheme
-#' visually in sync with whichever app-wide palette is active, without
-#' forcing the N-level categorical machinery onto a fixed role scheme.
-#'
-#' @param palette "default" | "okabeito" | "viridis" | "set2" | "manual".
-#' @param manual_colors Optional named vector with any of Up/Down/NS keys,
-#'   used only when `palette == "manual"` — overrides just the supplied keys,
-#'   any role not present keeps its current-palette default.
-#' @return Named character vector with keys Up, Down, NS (always all three —
-#'   MA-Plot just uses Up (as "significant") + NS and ignores Down).
-bulk_role_colors <- function(palette = "default", manual_colors = NULL) {
-  presets <- list(
-    default  = c(Up = "#E74C3C", Down = "#2980B9", NS = "#BDC3C7"),
-    okabeito = c(Up = "#D55E00", Down = "#0072B2", NS = "#999999"),
-    viridis  = { v <- viridisLite::viridis(3); c(Up = v[3], Down = v[1], NS = "#BDC3C7") },
-    set2     = { s <- RColorBrewer::brewer.pal(3, "Set2"); c(Up = s[1], Down = s[2], NS = "#BDC3C7") }
-  )
-  base <- presets[[palette %||% "default"]]
-  if (is.null(base)) base <- presets$default
-  if (identical(palette, "manual") && !is.null(manual_colors)) {
-    for (role in intersect(names(manual_colors), names(base))) {
-      v <- manual_colors[[role]]
-      if (!is.null(v) && nzchar(v)) base[[role]] <- v
-    }
-  }
-  base
-}
+# -----------------------------------------------------------------------------
+# Palette helpers REMOVED (generalisation) : bulk_color_scale(),
+# .default_manual_colors(), manual_color_picker_ui(), bulk_annotation_colors()
+# et bulk_role_colors() vivaient en DOUBLE ici et dans R/palettes.R. app.R
+# source R/palettes.R APRES ce fichier, donc la copie de palettes.R ecrasait
+# silencieusement celle-ci a chaque lancement. Une seule source de verite
+# desormais (R/palettes.R), etendue aux resolvers partages SC/Bulk/Spatial :
+# diverging_ramp_colors() / sequential_ramp_colors() / role_colors_generic().
+# -----------------------------------------------------------------------------
 
 
 #' Safe plot render guard — "figure margins too large" (Bug C)
@@ -1119,6 +984,8 @@ plot_heatmap_bulk <- function(vst_matrix, genes, metadata, annotation_col = NULL
 
     ht <- ComplexHeatmap::Heatmap(mat, name = tr("Z-score"), top_annotation = ann,
 
+                                  col = bulk_diverging_ramp(range(mat, na.rm = TRUE), palette = palette),
+
                                   show_row_names = nrow(mat) <= 60,
 
                                   column_title = tr("Heatmap — Gènes Différentiels"))
@@ -1220,7 +1087,7 @@ plot_sample_correlation_heatmap <- function(vst_matrix, metadata = NULL,
 
       top_annotation     = ann,
 
-      col                = circlize::colorRamp2(c(min(cor_mat), 1), c("white", "#2C3E50")),
+      col                = bulk_sequential_ramp(c(min(cor_mat), 1), palette = palette),
 
       show_row_names     = TRUE,
 
@@ -1378,7 +1245,7 @@ plot_upset_contrasts <- function(gene_sets, min_comb_size = 1) {
 
 #' Venn diagram from gene sets — readable for 2 to 4 sets only.
 #' @return invisible(NULL); draws directly onto the current grid device (call inside renderPlot).
-plot_venn_contrasts <- function(gene_sets) {
+plot_venn_contrasts <- function(gene_sets, palette = "default") {
   n <- length(gene_sets)
   if (n < 2 || n > 4) {
     stop("Le diagramme de Venn n'est lisible que pour 2 à 4 contrastes (vous en avez ",
@@ -1416,9 +1283,15 @@ plot_venn_contrasts <- function(gene_sets) {
     futile.logger::flog.threshold(futile.logger::ERROR, name = "VennDiagramLogger")
   }
   grid::grid.newpage()
+  fill_cols <- if (identical(palette %||% "default", "default")) {
+    grDevices::rainbow(n, alpha = 0.5)
+  } else {
+    cols <- bulk_annotation_colors(names(gene_sets), palette) %||% .default_manual_colors(n)
+    scales::alpha(unname(cols)[seq_len(n)], 0.5)
+  }
   v <- VennDiagram::venn.diagram(
     x = gene_sets, filename = NULL,
-    fill = grDevices::rainbow(n, alpha = 0.5),
+    fill = fill_cols,
     main = "", cex = 1, cat.cex = 0.9
   )
   grid::grid.draw(v)
@@ -1492,7 +1365,7 @@ summarize_contrasts_updown <- function(contrasts, lfc_thresh = 1, padj_thresh = 
 #' Up/Down summary barchart — one or several contrasts side by side
 #' @param summary_df Output of `summarize_contrasts_updown()`.
 #' @return ggplot object (grouped bar chart, counts labelled).
-plot_updown_barchart <- function(summary_df, tr = NULL) {
+plot_updown_barchart <- function(summary_df, tr = NULL, palette = "default", manual_colors = NULL) {
   tr <- tr %||% function(x) x
   if (is.null(summary_df) || nrow(summary_df) == 0) {
     stop("Aucun contraste calculé.")
@@ -1505,11 +1378,13 @@ plot_updown_barchart <- function(summary_df, tr = NULL) {
   long_df$Contraste <- factor(long_df$Contraste, levels = summary_df$Contraste)
   long_df$Direction <- factor(long_df$Direction, levels = c("Up", "Down"))
 
+  role_cols <- bulk_role_colors(palette, manual_colors)
+
   ggplot(long_df, aes(x = Contraste, y = Count, fill = Direction)) +
     geom_col(position = position_dodge(width = 0.7), width = 0.6) +
     geom_text(aes(label = Count), position = position_dodge(width = 0.7),
               vjust = -0.3, size = 3.4) +
-    scale_fill_manual(values = c(Up = "#E74C3C", Down = "#2980B9")) +
+    scale_fill_manual(values = c(Up = role_cols[["Up"]], Down = role_cols[["Down"]])) +
     labs(title = tr("Gènes significatifs Up / Down par contraste"),
          x = NULL, y = tr("Nombre de gènes"), fill = NULL) +
     theme_minimal(base_size = 12) +

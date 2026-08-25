@@ -7,13 +7,10 @@
 # Plain function called from the orchestrator's moduleServer().
 # =============================================================================
 
-.deconv_refviz_server <- function(input, output, session, ns, global_data, ref_state, input_ref_celltype_col) {
+.deconv_refviz_server <- function(input, output, session, ns, global_data, shared_rv, ref_state, input_ref_celltype_col) {
 
-  discrete_palette_colors_fallback <- function(lv) {
-    cols <- sc_discrete_colors(lv, palette = "okabeito")
-    if (is.null(cols)) cols <- grDevices::hcl.colors(max(length(lv), 1), palette = "Dark 3")
-    stats::setNames(cols, lv)
-  }
+  # discrete_palette_colors_fallback() supprimee : spatial_discrete_colors()
+  # (R/palettes.R) suit la palette globale de l'onglet Visualisation.
 
   ref_viz_log_file <- spatial_log_path(session, "ref_viz")
   ref_viz_tracker  <- create_reactive_tracker(session, ref_viz_log_file)
@@ -122,7 +119,7 @@
     req(ref_viz_result())
     emb <- ref_viz_result()
     lv  <- sort(unique(stats::na.omit(as.character(emb$cell_type))))
-    pal <- stats::setNames(grDevices::hcl.colors(max(length(lv), 1), palette = "Dark 3"), lv)
+    pal <- spatial_discrete_colors(lv, shared_rv, kind = "celltype")
     centroids <- stats::aggregate(cbind(dim1, dim2) ~ cell_type, data = emb, FUN = stats::median)
     ggplot2::ggplot(emb, ggplot2::aes(x = dim1, y = dim2, color = cell_type)) +
       ggplot2::geom_point(size = 0.6, alpha = 0.7) +
@@ -140,7 +137,7 @@
     req(ref_viz_result())
     emb <- ref_viz_result()
     lv  <- sort(unique(stats::na.omit(as.character(emb$cell_type))))
-    pal <- discrete_palette_colors_fallback(lv)
+    pal <- spatial_discrete_colors(lv, shared_rv, kind = "celltype")
     plotly::plot_ly(emb, x = ~dim1, y = ~dim2, color = ~cell_type, colors = pal,
                     type = "scattergl", mode = "markers",
                     marker = list(size = 5, opacity = 0.75),

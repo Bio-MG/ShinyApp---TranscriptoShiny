@@ -174,7 +174,8 @@ cat("\n\n#", tr("QC — Corrélation Inter-Échantillons"), "\n\n")
 cat(tr("Détecte les échantillons mal étiquetés ou les outliers avant interprétation du contraste."), "\n\n")
 ```
 ```{r qc_plot, eval="qc" %in% sections}
-print(plot_sample_correlation_heatmap(params$vst_mat, params$metadata, tr = tr))
+print(plot_sample_correlation_heatmap(params$vst_mat, params$metadata, tr = tr,
+                                      palette = params$pca_palette %||% "default"))
 ```
 
 ---
@@ -207,7 +208,8 @@ res <- res[!is.na(res$padj), ]
 valid_genes <- intersect(res$gene[order(res$padj)], rownames(params$vst_mat))
 genes <- head(valid_genes, params$heatmap_top_n)
 if (length(genes) >= 2) {
-  plot_heatmap_bulk(params$vst_mat, genes, params$metadata, tr = tr)
+  plot_heatmap_bulk(params$vst_mat, genes, params$metadata, tr = tr,
+                    palette = params$pca_palette %||% "default")
 } else {
   cat(tr("Pas assez de gènes communs pour générer la heatmap."))
 }
@@ -283,7 +285,8 @@ for (nm in names(params$all_contrasts)) {
   genes_p <- head(intersect(res_p$gene[order(res_p$padj)], rownames(params$vst_mat)), 15)
   if (length(genes_p) >= 2) {
     cat(sprintf("\n\n**%s**\n\n", nm))
-    print(plot_heatmap_bulk(params$vst_mat, genes_p, params$metadata, tr = tr))
+    print(plot_heatmap_bulk(params$vst_mat, genes_p, params$metadata, tr = tr,
+                            palette = params$pca_palette %||% "default"))
   }
 }
 ```
@@ -320,7 +323,8 @@ knitr::kable(head(res_pdf_display, 100), caption = tr("Top 100 gènes (table com
 cat("\n\n#", tr("Pathway Enrichment"), "--", params$pathway_db, "\n\n")
 ```
 ```{r pathway_barplot, eval="pathway" %in% sections && !is.null(params$pathway_results)}
-plot_pathway_barplot(params$pathway_results, db_label = params$pathway_db, top_n = 15, tr = tr)
+plot_pathway_barplot(params$pathway_results, db_label = params$pathway_db, top_n = 15, tr = tr,
+                     palette = params$pca_palette %||% "default")
 ```
 ```{r pathway_table, eval="pathway" %in% sections && !is.null(params$pathway_results) && knitr::is_html_output()}
 build_pathway_dt(params$pathway_results, tr = tr)

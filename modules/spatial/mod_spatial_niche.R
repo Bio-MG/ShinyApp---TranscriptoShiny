@@ -242,7 +242,7 @@ mod_spatial_niche_server <- function(id, global_data, shared_rv) {
       long <- reshape2::melt(df, id.vars = "niche", variable.name = "groupe", value.name = "proportion")
       ggplot2::ggplot(long, ggplot2::aes(x = groupe, y = niche, fill = proportion)) +
         ggplot2::geom_tile() +
-        ggplot2::scale_fill_viridis_c(option = "magma", limits = c(0, 1)) +
+        spatial_continuous_scale(shared_rv, aesthetic = "fill", limits = c(0, 1)) +
         ggplot2::theme_minimal(base_size = 12) +
         ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
         ggplot2::labs(x = NULL, y = NULL, fill = "Proportion\nmoyenne")
@@ -354,8 +354,7 @@ mod_spatial_niche_server <- function(id, global_data, shared_rv) {
       ggplot2::ggplot(df, ggplot2::aes(x = to, y = from, fill = z_score)) +
         ggplot2::geom_tile() +
         ggplot2::geom_text(ggplot2::aes(label = ifelse(is.na(z_score), "", sprintf("%.1f", z_score))), size = 3) +
-        ggplot2::scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#B2182B",
-                                      midpoint = 0, na.value = "grey85") +
+        spatial_diverging_scale(shared_rv, aesthetic = "fill", na.value = "grey85") +
         ggplot2::theme_minimal(base_size = 12) +
         ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
         ggplot2::labs(x = "Voisin", y = "Origine", fill = "z-score",
@@ -464,7 +463,7 @@ mod_spatial_niche_server <- function(id, global_data, shared_rv) {
         ggplot2::geom_line(ggplot2::aes(y = k_perm_mean), color = "grey40", linetype = "dashed") +
         ggplot2::geom_line(ggplot2::aes(y = k_observed), color = "#D55E00", linewidth = 1) +
         ggplot2::geom_point(ggplot2::aes(y = k_observed, color = signif), size = 2.8) +
-        ggplot2::scale_color_manual(values = c("Agregation" = "#D55E00", "Dispersion" = "#0072B2", "NS" = "grey40")) +
+        ggplot2::scale_color_manual(values = spatial_ripley_colors(shared_rv)) +
         ggplot2::theme_minimal(base_size = 12) +
         ggplot2::labs(x = "Rayon r", y = "K(r)", color = "Significativite", title = title_txt,
                       subtitle = "Bande grise = enveloppe 95% (etiquetage aleatoire)")

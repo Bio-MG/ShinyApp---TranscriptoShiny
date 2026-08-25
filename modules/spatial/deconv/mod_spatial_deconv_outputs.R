@@ -10,11 +10,9 @@
 
 .deconv_outputs_server <- function(input, output, session, ns, shared_rv) {
 
-  discrete_palette_colors_fallback <- function(lv) {
-    cols <- sc_discrete_colors(lv, palette = "okabeito")
-    if (is.null(cols)) cols <- grDevices::hcl.colors(max(length(lv), 1), palette = "Dark 3")
-    stats::setNames(cols, lv)
-  }
+  # discrete_palette_colors_fallback() supprimee (morte) : les plots ci-dessous
+  # passent desormais par spatial_discrete_colors()/spatial_diverging_scale()
+  # (R/palettes.R), qui suivent la palette globale de l'onglet Visualisation.
 
   # ── Bar plot (proportions per spot) ─────────────────────────────────────
   output$deconv_bar_plot <- renderPlot({
@@ -25,6 +23,7 @@
     ggplot2::ggplot(long[long$id %in% ids_show, ],
                      ggplot2::aes(x = id, y = proportion, fill = cell_type)) +
       ggplot2::geom_col() +
+      ggplot2::scale_fill_manual(values = spatial_discrete_colors(unique(long$cell_type), shared_rv, kind = "celltype")) +
       ggplot2::theme_minimal() +
       ggplot2::theme(axis.text.x = ggplot2::element_blank(),
                      legend.text = ggplot2::element_text(size = 8)) +
@@ -49,8 +48,7 @@
     ggplot2::ggplot(long, ggplot2::aes(x = Type1, y = Type2, fill = correlation)) +
       ggplot2::geom_tile() +
       ggplot2::geom_text(ggplot2::aes(label = sprintf("%.2f", correlation)), size = 3) +
-      ggplot2::scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#B2182B",
-                                    midpoint = 0, limits = c(-1, 1)) +
+      spatial_diverging_scale(shared_rv, aesthetic = "fill", limits = c(-1, 1)) +
       ggplot2::theme_minimal(base_size = 11) +
       ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
       ggplot2::labs(x = NULL, y = NULL, fill = "Correlation\n(Pearson)",

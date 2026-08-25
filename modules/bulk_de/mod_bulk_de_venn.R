@@ -87,7 +87,7 @@
     validate(need(!is.null(sets), .tr("S\u00e9lectionnez au moins 2 contrastes.")))
     tryCatch({
       if (input$venn_type == "venn") {
-        plot_venn_contrasts(sets)
+        plot_venn_contrasts(sets, palette = shared_rv$bulk_palette %||% "default")
       } else {
         plot_upset_contrasts(sets)
       }
@@ -117,7 +117,7 @@
     content  = function(file) {
       sets <- venn_gene_sets()
       png(file, width = 9, height = 7, units = "in", res = 300)
-      if (input$venn_type == "venn") plot_venn_contrasts(sets) else plot_upset_contrasts(sets)
+      if (input$venn_type == "venn") plot_venn_contrasts(sets, palette = shared_rv$bulk_palette %||% "default") else plot_upset_contrasts(sets)
       dev.off()
     }
   )

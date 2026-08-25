@@ -168,7 +168,7 @@
     sets <- tryCatch(mm_gene_sets(), error = function(e) NULL)
     validate(need(!is.null(sets), .tr("Lancez d'abord la comparaison multi-m\u00e9thodes.")))
     tryCatch({
-      if (input$mm_venn_type == "venn") plot_venn_contrasts(sets) else plot_upset_contrasts(sets)
+      if (input$mm_venn_type == "venn") plot_venn_contrasts(sets, palette = shared_rv$bulk_palette %||% "default") else plot_upset_contrasts(sets)
     }, error = function(e) {
       grid::grid.newpage()
       grid::grid.text(paste0("Erreur : ", conditionMessage(e), "\n(ou conteneur trop petit — agrandissez la fenêtre/onglet)"),
@@ -181,7 +181,7 @@
     content  = function(file) {
       sets <- mm_gene_sets()
       png(file, width = 9, height = 7, units = "in", res = 300)
-      if (input$mm_venn_type == "venn") plot_venn_contrasts(sets) else plot_upset_contrasts(sets)
+      if (input$mm_venn_type == "venn") plot_venn_contrasts(sets, palette = shared_rv$bulk_palette %||% "default") else plot_upset_contrasts(sets)
       dev.off()
     }
   )

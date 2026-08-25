@@ -75,7 +75,7 @@ patchwork::wrap_plots(p1, p2, p3, ncol = 3)
 ```{r, eval=qc_ready && !is.null(.ds_base_df)}
 m <- match(.ds_base_df$id, res$qc_metrics$id)
 df_map <- data.frame(x = .ds_base_df$x, y = .ds_base_df$y, value = res$qc_metrics$nCount[m])
-render_plot_spatial(df_map, title = "nCount (carte)")
+render_plot_spatial(df_map, title = "nCount (carte)", histology = ds$histology_overlay)
 ```
 
 ```{r, eval=cluster_ready, results='asis'}
@@ -88,7 +88,7 @@ cat(sprintf("**%d clusters** sur %d elements.%s\n\n", length(unique(res$cluster_
 ```{r, eval=cluster_ready && !is.null(.ds_base_df)}
 df_map <- data.frame(x = .ds_base_df$x, y = .ds_base_df$y,
                      value = as.character(res$cluster_labels[.ds_base_df$id]))
-render_plot_spatial(df_map, title = "Clusters spatiaux")
+render_plot_spatial(df_map, title = "Clusters spatiaux", histology = ds$histology_overlay)
 ```
 ```{r, eval=cluster_ready && knitr::is_html_output()}
 tab <- as.data.frame(table(Cluster = res$cluster_labels))
@@ -156,7 +156,7 @@ cat(sprintf("**%d niches** sur %d elements.\n\n", length(unique(res$niche_labels
 ```{r, eval=niche_ready && !is.null(.ds_base_df)}
 df_map <- data.frame(x = .ds_base_df$x, y = .ds_base_df$y,
                      value = as.character(res$niche_labels[.ds_base_df$id]))
-render_plot_spatial(df_map, title = "Niches spatiales")
+render_plot_spatial(df_map, title = "Niches spatiales", histology = ds$histology_overlay)
 ```
 ```{r, eval=niche_ready && !is.null(res$niche_composition), fig.height=4}
 long <- reshape2::melt(res$niche_composition, id.vars = "niche", variable.name = "groupe", value.name = "proportion")
@@ -201,10 +201,10 @@ for (nm in names(viz_list)) {
   }
   interactive_ok <- isTRUE(params$interactive) && knitr::is_html_output() && requireNamespace("plotly", quietly = TRUE)
   if (interactive_ok) {
-    print(render_plot_spatial(df_v, title = nm))
+    print(render_plot_spatial(df_v, title = nm, histology = ds$histology_overlay))
   } else {
     tmp_png <- tempfile(fileext = ".png")
-    p_static <- render_spatial_static_map(df_v, title = nm)
+    p_static <- render_spatial_static_map(df_v, title = nm, histology = ds$histology_overlay)
     ggplot2::ggsave(tmp_png, p_static, width = 7, height = 7, dpi = 130, bg = "white")
     cat(sprintf("\n\n![%s](%s)\n\n", nm, tmp_png))
   }

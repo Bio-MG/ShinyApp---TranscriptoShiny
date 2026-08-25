@@ -184,13 +184,15 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
       global_data$language                     # i18n trigger
       req(shared_rv$pathway_results)
       plot_pathway_barplot(shared_rv$pathway_results, db_label = input$pathway_db, top_n = 15,
-                           tr = .tr_fn(global_data))
+                           tr = .tr_fn(global_data),
+                           palette = shared_rv$bulk_palette %||% "default")
     })
     output$pathway_dotplot <- renderPlot({
       global_data$language                     # i18n trigger
       req(shared_rv$pathway_results)
       plot_pathway_dotplot(shared_rv$pathway_results, db_label = input$pathway_db, top_n = 20,
-                           tr = .tr_fn(global_data))
+                           tr = .tr_fn(global_data),
+                           palette = shared_rv$bulk_palette %||% "default")
     })
     output$pathway_table <- renderDT({
       global_data$language                     # i18n trigger

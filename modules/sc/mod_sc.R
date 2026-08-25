@@ -127,7 +127,12 @@ mod_sc_server <- function(id, global_data) {
       traj_reduction   = NULL,      # mirrors last trajectory reduction used
       traj_method      = NULL,      # mirrors last trajectory method used ("exploratory_knn" | "slingshot")
       traj_genes       = character(0),  # Step-3.7: mirrors "Genes vs Pseudotemps" picker
-      max_cells_heavy  = Inf        # Step-3.7: RAM-safety cap (set by mod_sc_pipeline.R)
+      max_cells_heavy  = Inf,       # Step-3.7: RAM-safety cap (set by mod_sc_pipeline.R)
+      # Palette PARTAGEE (miroir ecrit par mod_sc_viz.R, meme patron que Spatial)
+      sc_palette              = "default",
+      sc_manual_colors        = NULL,
+      sc_manual_gradient      = NULL,
+      sc_manual_volcano_colors = NULL
     )
 
     observeEvent(shared_rv$active_tab, {
@@ -826,6 +831,9 @@ mod_sc_server <- function(id, global_data) {
           traj_genes       = shared_rv$traj_genes %||% character(0),  # Step-3.7
           saved_viz_list   = if (length(shared_rv$report_viz_list)) shared_rv$report_viz_list else NULL,
           group_by         = "seurat_clusters",
+          sc_palette         = shared_rv$sc_palette %||% "default",
+          sc_manual_colors   = shared_rv$sc_manual_colors,
+          sc_manual_gradient = shared_rv$sc_manual_gradient,
           report_title     = input$report_title    %||% "Analyse Single-Cell",
           report_subtitle  = input$report_subtitle %||% "",
           report_notes     = input$report_notes    %||% "",

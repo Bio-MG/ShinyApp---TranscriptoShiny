@@ -239,11 +239,10 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
     })
 
     # ── Per-section spatial maps (cheap, synchronous — sketch + coords) ──
-    cluster_palette <- function(v) {
-      lv <- sort(unique(stats::na.omit(as.character(v))))
-      if (length(lv) == 0) return(NULL)
-      stats::setNames(grDevices::hcl.colors(length(lv), palette = "Dark 3"), lv)
-    }
+    # Palette partagee (R/palettes.R::spatial_discrete_colors) : suit le
+    # selecteur global de l'onglet Visualisation ; repli Dark 3 inchange
+    # pour la palette "Defaut".
+    cluster_palette <- function(v, kind = "cluster") spatial_discrete_colors(v, shared_rv, kind = kind)
 
     section_df <- function(dataset_name) {
       obj <- global_data$spatial_datasets[[dataset_name]]
@@ -288,7 +287,7 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
             req(nrow(df) > 0)
 
             if (is.numeric(df$value)) {
-              pal <- leaflet::colorNumeric("viridis", domain = range(df$value, na.rm = TRUE), na.color = "#CCCCCC")
+              pal <- leaflet::colorNumeric(spatial_color_ramp_hex(shared_rv), domain = range(df$value, na.rm = TRUE), na.color = "#CCCCCC")
               cols <- pal(df$value)
             } else {
               pal <- cluster_palette(df$value)
@@ -315,7 +314,7 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
     output$umap_by_dataset <- plotly::renderPlotly({
       req(integration_result())
       emb <- integration_result()$embeddings
-      pal <- cluster_palette(emb$dataset)
+      pal <- cluster_palette(emb$dataset, kind = "dataset")
       plotly::plot_ly(emb, x = ~dim1, y = ~dim2, color = ~dataset, colors = pal,
                       type = "scattergl", mode = "markers",
                       marker = list(size = 5, opacity = 0.7)) |>
@@ -370,7 +369,7 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
       ggplot2::ggplot(res$residuals, ggplot2::aes(x = cluster, y = dataset, fill = std_resid)) +
         ggplot2::geom_tile() +
         ggplot2::geom_text(ggplot2::aes(label = sprintf("%.1f", std_resid)), size = 3.2) +
-        ggplot2::scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#B2182B", midpoint = 0) +
+        spatial_diverging_scale(shared_rv, aesthetic = "fill") +
         ggplot2::theme_minimal(base_size = 12) +
         ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
         ggplot2::labs(x = "Cluster", y = "Echantillon", fill = "Residu\nstandardise",
@@ -379,8 +378,10 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
 
     output$diffcomp_prop_plot <- renderPlot({
       res <- req(composition_diff_result())
+      lv  <- sort(unique(as.character(res$proportions$cluster)))
       ggplot2::ggplot(res$proportions, ggplot2::aes(x = dataset, y = proportion, fill = cluster)) +
         ggplot2::geom_col() +
+        ggplot2::scale_fill_manual(values = spatial_discrete_colors(lv, shared_rv, kind = "cluster")) +
         ggplot2::theme_minimal(base_size = 12) +
         ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 30, hjust = 1)) +
         ggplot2::labs(x = NULL, y = "Proportion", fill = "Cluster",

@@ -607,7 +607,9 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
             plot_slingshot_trajectory(
               embeddings = display_embedding,
               pseudotime = obj@meta.data$pseudotime,
-              curves     = NULL   # curves stay available in traj_result(); no fabricated overlay
+              curves     = NULL,   # curves stay available in traj_result(); no fabricated overlay
+              palette         = shared_rv$sc_palette %||% "default",
+              manual_gradient = shared_rv$sc_manual_gradient
             )
           } else {
             plot_trajectory(
@@ -615,7 +617,9 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
               pseudotime  = obj@meta.data$pseudotime,
               graph       = result$graph,
               root_cell   = result$root_cell,
-              show_edges  = isTRUE(input$traj_show_edges)
+              show_edges  = isTRUE(input$traj_show_edges),
+              palette         = shared_rv$sc_palette %||% "default",
+              manual_gradient = shared_rv$sc_manual_gradient
             )
           }
         } else {
@@ -633,14 +637,18 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
     output$pseudotime_distribution <- renderPlot({
       req(global_data$sc_obj)
       validate(need("pseudotime" %in% colnames(global_data$sc_obj@meta.data), "Pseudotemps non calculé."))
-      tryCatch(plot_pseudotime_distribution(global_data$sc_obj),
+      tryCatch(plot_pseudotime_distribution(global_data$sc_obj,
+                                            palette = shared_rv$sc_palette %||% "default",
+                                            manual_colors = shared_rv$sc_manual_colors),
                error = function(e) { validate(need(FALSE, e$message)) })
     })
 
     output$plot_pseudotime_dist <- renderPlot({
       req(global_data$sc_obj)
       validate(need("pseudotime" %in% colnames(global_data$sc_obj@meta.data), "Pseudotemps non calculé."))
-      tryCatch(plot_pseudotime_distribution(global_data$sc_obj),
+      tryCatch(plot_pseudotime_distribution(global_data$sc_obj,
+                                            palette = shared_rv$sc_palette %||% "default",
+                                            manual_colors = shared_rv$sc_manual_colors),
                error = function(e) { validate(need(FALSE, e$message)) })
     })
 
@@ -649,7 +657,9 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
     output$gene_pseudotime_plot <- renderPlot({
       req(global_data$sc_obj, input$traj_genes)
       validate(need("pseudotime" %in% colnames(global_data$sc_obj@meta.data), "Pseudotemps non calculé."))
-      tryCatch(plot_genes_vs_pseudotime(global_data$sc_obj, input$traj_genes, input$traj_smooth %||% "loess"),
+      tryCatch(plot_genes_vs_pseudotime(global_data$sc_obj, input$traj_genes, input$traj_smooth %||% "loess",
+                                        palette = shared_rv$sc_palette %||% "default",
+                                        manual_colors = shared_rv$sc_manual_colors),
                error = function(e) { validate(need(FALSE, e$message)) })
     })
 
@@ -778,7 +788,9 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
               plot_slingshot_trajectory(
                 embeddings = Seurat::Embeddings(obj, reduction = input$traj_reduction),
                 pseudotime = obj@meta.data$pseudotime,
-                curves     = NULL
+                curves     = NULL,
+                palette         = shared_rv$sc_palette %||% "default",
+                manual_gradient = shared_rv$sc_manual_gradient
               )
             } else {
               plot_trajectory(
@@ -786,7 +798,9 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
                 pseudotime = obj@meta.data$pseudotime,
                 graph      = result$graph,
                 root_cell  = result$root_cell,
-                show_edges = isTRUE(input$traj_show_edges)
+                show_edges = isTRUE(input$traj_show_edges),
+                palette         = shared_rv$sc_palette %||% "default",
+                manual_gradient = shared_rv$sc_manual_gradient
               )
             }
           } else {
@@ -804,7 +818,10 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
       filename = function() paste0("pseudotime_dist_", Sys.Date(), ".", input$traj_export_fmt %||% "png"),
       content = function(file) {
         req(global_data$sc_obj, "pseudotime" %in% colnames(global_data$sc_obj@meta.data))
-        p <- tryCatch(plot_pseudotime_distribution(global_data$sc_obj), error = function(e) NULL)
+        p <- tryCatch(plot_pseudotime_distribution(global_data$sc_obj,
+                                                   palette = shared_rv$sc_palette %||% "default",
+                                                   manual_colors = shared_rv$sc_manual_colors),
+                      error = function(e) NULL)
         req(p)
         ggsave(file, plot = p, width = 7, height = 5, dpi = 300,
                device = if ((input$traj_export_fmt %||% "png") == "pdf") "pdf" else "png")
@@ -815,7 +832,10 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
       content = function(file) {
         req(global_data$sc_obj, input$traj_genes, "pseudotime" %in% colnames(global_data$sc_obj@meta.data))
         p <- tryCatch(plot_genes_vs_pseudotime(global_data$sc_obj, input$traj_genes,
-                                               input$traj_smooth %||% "loess"), error = function(e) NULL)
+                                               input$traj_smooth %||% "loess",
+                                               palette = shared_rv$sc_palette %||% "default",
+                                               manual_colors = shared_rv$sc_manual_colors),
+                      error = function(e) NULL)
         req(p)
         ggsave(file, plot = p, width = 8, height = 6, dpi = 300,
                device = if ((input$traj_export_fmt %||% "png") == "pdf") "pdf" else "png")

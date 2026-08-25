@@ -52,6 +52,32 @@ build_spatial_report_dataset <- function(spatial_obj, results = list()) {
     # serialization -- it's the same bounded (<= max_sketch cells) object
     # already resident in global_data$spatial_datasets.
     sketch     = spatial_obj$sketch,
+    # Tissue background for report maps (bounds + rgba + plotly data URI).
+    # NULL-safe: datasets imported without images render spots-only.
+    histology_overlay = tryCatch({
+      if (is.null(spatial_obj$histology)) return(NULL)
+      .hi <- get_histology_raster(hist_data = spatial_obj$histology,
+                                  resolution = "hires")
+      if (is.null(.hi) || is.null(.hi$rgba) || is.null(.hi$dim) ||
+          length(.hi$dim) < 2L) return(NULL)
+      .npix <- as.double(dim(.hi$rgba)[1L]) * as.double(dim(.hi$rgba)[2L])
+      if (!is.finite(.npix) || .npix <= 0 || .npix > 40000000) return(NULL)
+      .sf <- .hi$scale_factor %||% 1
+      if (!is.finite(.sf) || .sf <= 0) .sf <- 1
+      .uri <- tryCatch({
+        .raw <- png::writePNG(.hi$rgba)
+        .u <- if (requireNamespace("base64enc", quietly = TRUE))
+          base64enc::dataURI(.raw, mime = "image/png") else NULL
+        if (!is.null(.u)) .u <- gsub("[\r\n[:space:]]+", "", .u)
+        .u
+      }, error = function(e) NULL)
+      list(
+        rgba     = .hi$rgba,
+        data_uri = .uri,
+        bounds   = list(x = c(0, .hi$dim[2L] / .sf),
+                        y = c(0, .hi$dim[1L] / .sf))
+      )
+    }, error = function(e) NULL),
     results    = results %||% list()
   )
 }

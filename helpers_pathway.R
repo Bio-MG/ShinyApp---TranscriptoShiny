@@ -502,7 +502,8 @@ run_gsea_enrichment <- function(de_results, organism = "human",
 
 #' Top-N pathway barplot (shared by mod_sc_pathways.R and mod_bulk.R)
 
-plot_pathway_barplot <- function(df, db_label = "", top_n = 15, tr = NULL) {
+plot_pathway_barplot <- function(df, db_label = "", top_n = 15, tr = NULL,
+                                 palette = "default", manual_gradient = NULL) {
 
   tr <- tr %||% function(x) x
 
@@ -514,7 +515,7 @@ plot_pathway_barplot <- function(df, db_label = "", top_n = 15, tr = NULL) {
 
     geom_bar(stat = "identity", width = 0.7) +
 
-    scale_fill_viridis_c(option = "plasma", direction = -1) +
+    expression_continuous_scale(palette, "fill", manual_gradient, base_option = "plasma", direction = -1) +
 
     labs(title = paste(tr("Top"), top_n, tr("Pathways"), "-", db_label),
 
@@ -532,7 +533,8 @@ plot_pathway_barplot <- function(df, db_label = "", top_n = 15, tr = NULL) {
 
 #' Pathway dotplot (shared)
 
-plot_pathway_dotplot <- function(df, db_label = "", top_n = 20, tr = NULL) {
+plot_pathway_dotplot <- function(df, db_label = "", top_n = 20, tr = NULL,
+                                 palette = "default", manual_gradient = NULL) {
 
   tr <- tr %||% function(x) x
 
@@ -560,7 +562,7 @@ plot_pathway_dotplot <- function(df, db_label = "", top_n = 20, tr = NULL) {
 
     geom_point(alpha = 0.85) +
 
-    scale_color_viridis_c(option = "magma", direction = -1) +
+    expression_continuous_scale(palette, "color", manual_gradient, base_option = "magma", direction = -1) +
 
     labs(title = paste(tr("Dotplot Pathways"), "-", db_label),
 

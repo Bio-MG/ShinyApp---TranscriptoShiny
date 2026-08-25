@@ -28,6 +28,9 @@ params:
   fig_height: 6
   saved_viz_list: NULL
   group_by: "seurat_clusters"
+  sc_palette: "default"
+  sc_manual_colors: NULL
+  sc_manual_gradient: NULL
   report_title: "Analyse Single-Cell"
   report_subtitle: ""
   report_notes: ""
@@ -164,9 +167,12 @@ cat("# Réduction Dimensionnelle —", toupper(params$reduction), "\n\n")
 ```{r dim_plot, eval="dim" %in% sections && !is.null(obj)}
 red <- .pick_red(params$reduction)
 if (!is.null(red)) {
-  render_plot(DimPlot(obj, reduction=red, group.by=params$group_by,
-                      label=TRUE, pt.size=0.5) +
-              ggtitle(paste(toupper(red), "—", params$group_by)))
+  p_dim <- DimPlot(obj, reduction=red, group.by=params$group_by,
+                   label=TRUE, pt.size=0.5) +
+           ggtitle(paste(toupper(red), "—", params$group_by))
+  pal_scale <- sc_discrete_scale(params$sc_palette %||% "default", params$sc_manual_colors)
+  if (!is.null(pal_scale)) p_dim <- suppressWarnings(p_dim + pal_scale)
+  render_plot(p_dim)
 } else { cat("Aucune réduction calculée — lancez le Pipeline.") }
 ```
 
@@ -179,9 +185,12 @@ cat("# Annotation Automatique (SingleR)\n\n")
 col_use <- tail(grep("^SingleR_", colnames(obj@meta.data), value=TRUE), 1)
 red_a   <- .pick_red("umap")
 if (!is.null(red_a)) {
-  render_plot(DimPlot(obj, reduction=red_a, group.by=col_use,
-                      label=TRUE, repel=TRUE, pt.size=0.5) +
-              ggtitle(paste("SingleR:", col_use)))
+  p_annot <- DimPlot(obj, reduction=red_a, group.by=col_use,
+                     label=TRUE, repel=TRUE, pt.size=0.5) +
+             ggtitle(paste("SingleR:", col_use))
+  pal_scale <- sc_discrete_scale(params$sc_palette %||% "default", params$sc_manual_colors)
+  if (!is.null(pal_scale)) p_annot <- suppressWarnings(p_annot + pal_scale)
+  render_plot(p_annot)
 } else { cat("UMAP non calculé.") }
 ```
 
@@ -236,7 +245,9 @@ knitr::kable(
 cat("# Pathway Enrichment —", params$pathway_db %||% "", "\n\n")
 ```
 ```{r pathway_barplot, eval="pathway" %in% sections && .has_pathway}
-plot_pathway_barplot(params$pathway_results, db_label=params$pathway_db %||% "", top_n=15)
+plot_pathway_barplot(params$pathway_results, db_label=params$pathway_db %||% "", top_n=15,
+                     palette = params$sc_palette %||% "default",
+                     manual_gradient = params$sc_manual_gradient)
 ```
 ```{r pathway_table_html, eval="pathway" %in% sections && .has_pathway && knitr::is_html_output()}
 build_pathway_dt(params$pathway_results)
@@ -309,10 +320,14 @@ if (exists("red_t", inherits = FALSE) && !is.null(red_t)) {
   render_plot(
     if (.is_slingshot_traj) {
       plot_slingshot_trajectory(embeddings = emb_t,
-                                pseudotime = obj@meta.data$pseudotime)
+                                pseudotime = obj@meta.data$pseudotime,
+                                palette         = params$sc_palette %||% "default",
+                                manual_gradient = params$sc_manual_gradient)
     } else {
       plot_trajectory(embeddings = emb_t,
-                      pseudotime = obj@meta.data$pseudotime)
+                      pseudotime = obj@meta.data$pseudotime,
+                      palette         = params$sc_palette %||% "default",
+                      manual_gradient = params$sc_manual_gradient)
     }
   )
 } else {
@@ -322,7 +337,9 @@ if (exists("red_t", inherits = FALSE) && !is.null(red_t)) {
 ```
 ```{r traj_dist, eval="trajectory" %in% sections && .has_traj}
 tryCatch(
-  print(plot_pseudotime_distribution(obj)),
+  print(plot_pseudotime_distribution(obj,
+                                     palette       = params$sc_palette %||% "default",
+                                     manual_colors = params$sc_manual_colors)),
   error = function(e) cat("Distribution non disponible :", conditionMessage(e))
 )
 ```
@@ -334,7 +351,9 @@ cat("\n\n## Gènes vs Pseudotemps\n\n")
 # Step-3.7: was entirely missing from the report — same helper as the live
 # "Genes vs Pseudotemps" tab (single source of truth, helpers_sc.R).
 tryCatch(
-  render_plot(plot_genes_vs_pseudotime(obj, .traj_genes_valid, smooth_method="loess")),
+  render_plot(plot_genes_vs_pseudotime(obj, .traj_genes_valid, smooth_method="loess",
+                                       palette       = params$sc_palette %||% "default",
+                                       manual_colors = params$sc_manual_colors)),
   error = function(e) cat("Plot non disponible :", conditionMessage(e))
 )
 ```

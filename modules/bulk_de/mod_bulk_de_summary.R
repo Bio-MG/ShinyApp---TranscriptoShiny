@@ -26,7 +26,9 @@
 
   updown_plot <- reactive({
     global_data$language                     # i18n trigger
-    plot_updown_barchart(updown_summary(), tr = .tr_fn(global_data))
+    plot_updown_barchart(updown_summary(), tr = .tr_fn(global_data),
+                         palette = shared_rv$bulk_palette %||% "default",
+                         manual_colors = shared_rv$volcano_role_colors)
   })
 
   output$plot_updown <- renderPlot({

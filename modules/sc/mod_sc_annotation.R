@@ -263,9 +263,12 @@ mod_sc_annotation_server <- function(id, global_data, shared_rv) {
       col_use <- tail(singler_cols, 1)
       validate(need("umap" %in% names(obj@reductions), "UMAP non calculé."))
       show_lbl <- isTRUE(input$annot_show_labels)
-      DimPlot(obj, reduction="umap", group.by=col_use, label=show_lbl, repel=show_lbl, pt.size=0.5) +
+      pal_scale <- sc_discrete_scale(shared_rv$sc_palette %||% "default", shared_rv$sc_manual_colors)
+      p_annot <- DimPlot(obj, reduction="umap", group.by=col_use, label=show_lbl, repel=show_lbl, pt.size=0.5) +
         labs(title=paste("SingleR:", col_use)) + theme_minimal() +
         theme(plot.title=element_text(face="bold",size=13))
+      if (!is.null(pal_scale)) p_annot <- suppressWarnings(p_annot + pal_scale)
+      p_annot
     })
 
     output$annot_table <- renderDT({

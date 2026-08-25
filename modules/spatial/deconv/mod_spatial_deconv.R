@@ -32,7 +32,7 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
 
     # ── Sub-server 2: Reference UMAP/PCA preview ──────────────────────────
     .deconv_refviz_server(
-      input, output, session, ns, global_data,
+      input, output, session, ns, global_data, shared_rv,
       ref_state = ref$ref_state,
       input_ref_celltype_col = reactive(input$ref_celltype_col)
     )

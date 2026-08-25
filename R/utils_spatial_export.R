@@ -54,22 +54,62 @@
 #'
 #' @param df data.frame(x, y, value).
 #' @param title Character, plot title.
+#' @param palette "default"|"okabeito"|"viridis"|"set2"|"manual" (Tier 5 :
+#'   suit la palette globale de l'onglet Visualisation quand elle est passee
+#'   par l'appelant ; "default" preserve le rendu historique a l'identique).
+#' @param manual_gradient Optional list(low=, high=), palette=="manual".
+#' @param manual_discrete Optional named vector (level -> hex), palette=="manual".
 #' @return A ggplot object.
-render_spatial_static_map <- function(df, title = NULL) {
+render_spatial_static_map <- function(df, title = NULL, palette = "default",
+                                      manual_gradient = NULL, manual_discrete = NULL,
+                                      histology = NULL) {
   df <- df[stats::complete.cases(df[, c("x", "y")]), , drop = FALSE]
   p <- ggplot2::ggplot(df, ggplot2::aes(x = x, y = -y, color = value))
+  # Optional tissue background (report/export parity with the app views).
+  .hist_bounds <- NULL
+  .ras <- NULL
+  if (!is.null(histology) && !is.null(histology$bounds) &&
+      !is.null(histology$rgba)) {
+    .rgba <- histology$rgba
+    .d3 <- dim(.rgba)
+    .npix <- if (length(.d3) >= 2L) as.double(.d3[1L]) * as.double(.d3[2L]) else NA_real_
+    if (length(.d3) == 3L && !is.na(.npix) && .npix > 0 && .npix <= 25000000) {
+      .ras <- tryCatch({
+        .alpha <- if (.d3[3L] >= 4L) as.vector(pmin(1, pmax(0, .rgba[, , 4L])))
+                  else rep(1, .d3[1L] * .d3[2L])
+        matrix(grDevices::as.raster(grDevices::rgb(
+          red   = as.vector(pmin(1, pmax(0, .rgba[, , 1L]))),
+          green = as.vector(pmin(1, pmax(0, .rgba[, , 2L]))),
+          blue  = as.vector(pmin(1, pmax(0, .rgba[, , 3L]))),
+          alpha = .alpha
+        )), nrow = .d3[1L], ncol = .d3[2L])
+      }, error = function(e) NULL)
+      if (!is.null(.ras)) .hist_bounds <- histology$bounds
+    }
+  }
+  if (!is.null(.ras)) {
+    p <- p + ggplot2::annotation_raster(
+      raster = .ras,
+      xmin = .hist_bounds$x[1L], xmax = .hist_bounds$x[2L],
+      ymin = -.hist_bounds$y[2L], ymax = -.hist_bounds$y[1L],
+      interpolate = TRUE
+    )
+  }
   p <- if (requireNamespace("scattermore", quietly = TRUE)) {
     p + scattermore::geom_scattermore(pointsize = 3, alpha = 0.85)
   } else {
     p + ggplot2::geom_point(size = 0.6, alpha = 0.85)
   }
-  p <- p + ggplot2::coord_fixed() + ggplot2::theme_void(base_size = 12) +
+  .xlim <- if (!is.null(.hist_bounds)) range(c(range(df$x), .hist_bounds$x)) else NULL
+  .ylim <- if (!is.null(.hist_bounds)) range(c(range(-df$y), -.hist_bounds$y)) else NULL
+  p <- p + ggplot2::coord_fixed(xlim = .xlim, ylim = .ylim) + ggplot2::theme_void(base_size = 12) +
     ggplot2::labs(title = title, color = NULL)
   if (is.numeric(df$value)) {
-    p + ggplot2::scale_color_viridis_c(na.value = "#CCCCCC")
+    p + sc_continuous_scale(palette = palette, aesthetic = "color", gradient = manual_gradient, na.value = "#CCCCCC")
   } else {
     lv  <- sort(unique(stats::na.omit(as.character(df$value))))
-    pal <- stats::setNames(grDevices::hcl.colors(max(length(lv), 1), palette = "Dark 3"), lv)
+    pal <- sc_discrete_colors(lv, palette = palette, manual_colors = manual_discrete)
+    if (is.null(pal)) pal <- stats::setNames(grDevices::hcl.colors(max(length(lv), 1), palette = "Dark 3"), lv)
     p + ggplot2::scale_color_manual(values = pal, na.value = "#CCCCCC")
   }
 }

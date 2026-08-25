@@ -144,7 +144,7 @@ mod_spatial_qc_ui <- function(id) {
     ),
 
     navset_card_underline(
-      nav_panel("Apercu du jeu de donnees",
+      nav_panel("Apercu",
                 uiOutput(ns("dataset_overview_ui")),
                 hr(),
                 h6("Metadata (sketch)", style = "font-weight:bold;"),
@@ -160,7 +160,7 @@ mod_spatial_qc_ui <- function(id) {
                      card_header("nCount vs nFeature (couleur = %MT)"),
                      plotOutput(ns("qc_scatter_plot"), height = "480px"))),
 
-      nav_panel("Genes spatialement variables (Moran's I)",
+      nav_panel("SVG (Moran's I)",
                 div(class = "alert alert-light", style = "font-size:0.78rem;",
                     "Grille des genes les plus spatialement structures (rang Moran's I) — ",
                     "necessite l'autocorrelation ci-contre (calculee au moins une fois)."),
@@ -173,7 +173,7 @@ mod_spatial_qc_ui <- function(id) {
                 hr(),
                 DT::DTOutput(ns("moran_table"))),
 
-      nav_panel("Hotspots locaux (Getis-Ord Gi*)",
+      nav_panel("Hotspots (Gi*)",
                 div(class = "alert alert-light small mb-2",
                     "Rouge = hotspot (voisinage significativement eleve, p < 0.05) ; ",
                     "bleu = coldspot ; gris = non significatif."),

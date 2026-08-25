@@ -49,9 +49,22 @@ render_plot <- function(p, allow_interactive = TRUE) {
 # cannot faithfully convert (known scattermore/plotly incompatibility).
 # Falls back to render_spatial_static_map() for PDF / non-interactive HTML,
 # where that raster approach is exactly the right (fast, large-N-safe) tool.
-render_plot_spatial <- function(df, title = NULL) {
+render_plot_spatial <- function(df, title = NULL, histology = NULL) {
   df <- df[stats::complete.cases(df[, c("x", "y")]), , drop = FALSE]
   if (nrow(df) == 0) return(invisible(NULL))
+
+  .hist_img <- NULL
+  if (!is.null(histology) && !is.null(histology$data_uri) &&
+      nzchar(histology$data_uri) && !is.null(histology$bounds)) {
+    .hb <- histology$bounds
+    .hist_img <- list(
+      source = histology$data_uri, xref = "x", yref = "y",
+      x = .hb$x[1L], y = -.hb$y[2L],
+      sizex = .hb$x[2L] - .hb$x[1L], sizey = .hb$y[2L] - .hb$y[1L],
+      xanchor = "left", yanchor = "bottom", sizing = "stretch",
+      opacity = 0.7, layer = "below"
+    )
+  }
 
   interactive_ok <- isTRUE(params$interactive) && knitr::is_html_output() &&
     requireNamespace("plotly", quietly = TRUE)
@@ -70,12 +83,15 @@ render_plot_spatial <- function(df, title = NULL) {
       p <- plotly::plot_ly(df_i, x = ~x, y = ~-y, color = ~value, type = "scattergl", mode = "markers",
                            marker = list(size = 4), text = ~paste0("Valeur: ", value), hoverinfo = "text")
     }
+    .xr <- if (!is.null(.hist_img)) range(c(range(df$x), .hb$x)) else NULL
+    .yr <- if (!is.null(.hist_img)) range(c(range(-df$y), -.hb$y)) else NULL
     p <- plotly::layout(p, title = title,
-                        xaxis = list(title = "", zeroline = FALSE, showgrid = FALSE),
-                        yaxis = list(title = "", zeroline = FALSE, showgrid = FALSE, scaleanchor = "x"))
+                        images = if (!is.null(.hist_img)) list(.hist_img) else list(),
+                        xaxis = list(title = "", zeroline = FALSE, showgrid = FALSE, range = .xr),
+                        yaxis = list(title = "", zeroline = FALSE, showgrid = FALSE, scaleanchor = "x", range = .yr))
     return(htmltools::tagList(p))
   }
-  print(render_spatial_static_map(df, title = title))
+  print(render_spatial_static_map(df, title = title, histology = histology))
 }
 ```
 

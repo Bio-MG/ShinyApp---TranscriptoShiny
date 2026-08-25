@@ -978,7 +978,9 @@ plot_trajectory <- function(
     graph = NULL,
     root_cell = NULL,
     show_edges = FALSE,
-    edge_subsample = 5000L
+    edge_subsample = 5000L,
+    palette = "default",
+    manual_gradient = NULL
 ) {
   embeddings <- as.data.frame(embeddings)
   if (ncol(embeddings) < 2L) {
@@ -995,8 +997,8 @@ plot_trajectory <- function(
 
   p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = dim1, y = dim2, colour = pseudotime)) +
     ggplot2::geom_point(size = 0.7, alpha = 0.75, na.rm = FALSE) +
-    ggplot2::scale_colour_viridis_c(option = "plasma", na.value = "grey80",
-                                     name = "Pseudotemps\n(sans unite)") +
+    expression_continuous_scale(palette, "color", manual_gradient, base_option = "plasma", na.value = "grey80") +
+    ggplot2::labs(colour = "Pseudotemps\n(sans unite)") +
     ggplot2::theme_classic() +
     ggplot2::labs(x = colnames(embeddings)[1], y = colnames(embeddings)[2],
                   subtitle = "Pseudotemps exploratoire (graphe kNN pondere)")
@@ -1056,7 +1058,9 @@ plot_trajectory <- function(
 plot_slingshot_trajectory <- function(
     embeddings,
     pseudotime,
-    curves = NULL
+    curves = NULL,
+    palette = "default",
+    manual_gradient = NULL
 ) {
   embeddings <- as.data.frame(embeddings)
 
@@ -1086,11 +1090,8 @@ plot_slingshot_trajectory <- function(
       alpha = 0.75,
       na.rm = FALSE
     ) +
-    ggplot2::scale_colour_viridis_c(
-      option = "plasma",
-      na.value = "grey80",
-      name = "Pseudotemps Slingshot"
-    ) +
+    expression_continuous_scale(palette, "color", manual_gradient, base_option = "plasma", na.value = "grey80") +
+    ggplot2::labs(colour = "Pseudotemps Slingshot") +
     ggplot2::theme_classic() +
     ggplot2::labs(
       x = colnames(embeddings)[1],
@@ -1346,7 +1347,7 @@ build_corr_dt <- function(df) {
 
 #' @return ggplot object.
 
-plot_pseudotime_distribution <- function(seurat_obj) {
+plot_pseudotime_distribution <- function(seurat_obj, palette = "default", manual_colors = NULL) {
 
   if (!"pseudotime" %in% colnames(seurat_obj@meta.data))
 
@@ -1368,11 +1369,17 @@ plot_pseudotime_distribution <- function(seurat_obj) {
 
 
 
-  ggplot(df, aes(x = pseudotime, fill = cluster)) +
+  pal_scale <- sc_discrete_scale(palette, manual_colors, "fill")
 
-    geom_density(alpha = 0.6) +
 
-    scale_fill_viridis_d(option = "turbo") +
+
+  p <- ggplot(df, aes(x = pseudotime, fill = cluster)) +
+
+    geom_density(alpha = 0.6)
+
+  p <- if (is.null(pal_scale)) p + scale_fill_viridis_d(option = "turbo") else suppressWarnings(p + pal_scale)
+
+  p +
 
     labs(title = "Distribution du Pseudotemps par Cluster",
 
@@ -1404,7 +1411,8 @@ plot_pseudotime_distribution <- function(seurat_obj) {
 
 #' @return ggplot object (faceted, one panel per gene).
 
-plot_genes_vs_pseudotime <- function(seurat_obj, genes, smooth_method = "loess") {
+plot_genes_vs_pseudotime <- function(seurat_obj, genes, smooth_method = "loess",
+                                     palette = "default", manual_colors = NULL) {
 
   if (!"pseudotime" %in% colnames(seurat_obj@meta.data))
 
@@ -1428,17 +1436,21 @@ plot_genes_vs_pseudotime <- function(seurat_obj, genes, smooth_method = "loess")
 
 
 
-  ggplot(expr_long, aes(x = pseudotime, y = expression, color = gene)) +
+  pal_scale <- sc_discrete_scale(palette, manual_colors, "color")
+
+
+
+  p <- ggplot(expr_long, aes(x = pseudotime, y = expression, color = gene)) +
 
     geom_point(alpha = 0.3, size = 0.6) +
 
     geom_smooth(method = smooth_method, se = TRUE, linewidth = 0.9, na.rm = TRUE) +
 
-    facet_wrap(~gene, scales = "free_y", ncol = 2) +
+    facet_wrap(~gene, scales = "free_y", ncol = 2)
 
-    scale_color_viridis_d(option = "turbo") +
+  p <- if (is.null(pal_scale)) p + scale_color_viridis_d(option = "turbo") else suppressWarnings(p + pal_scale)
 
-    labs(title = "Expression génique le long du Pseudotemps",
+  p + labs(title = "Expression génique le long du Pseudotemps",
 
          x = "Pseudotemps", y = "Expression Normalisée") +
 
@@ -1811,7 +1823,8 @@ map_ensembl_matrix_to_symbol <- function(mat, organism = c("human", "mouse")) {
 #' @export
 build_sc_hierarchical_heatmap <- function(seurat_obj, features, group_by = "seurat_clusters",
                                           max_features = 50L, max_cells = 5000L, assay = NULL,
-                                          palette = "default", manual_colors = NULL) {
+                                          palette = "default", manual_colors = NULL,
+                                          manual_gradient = NULL) {
   if (!requireNamespace("ComplexHeatmap", quietly = TRUE)) {
     stop("Package 'ComplexHeatmap' requis pour la heatmap hierarchique.")
   }
@@ -1882,6 +1895,7 @@ build_sc_hierarchical_heatmap <- function(seurat_obj, features, group_by = "seur
 
   ht <- ComplexHeatmap::Heatmap(
     mat_scaled, name = "Z-score", top_annotation = col_ann,
+    col = bulk_diverging_ramp(range(mat_scaled, na.rm = TRUE), palette = palette, manual_colors = manual_gradient),
     show_column_names = ncol(mat_scaled) <= 60, show_row_names = nrow(mat_scaled) <= 60,
     column_title = paste0("Heatmap Hierarchique -- ", subtitle),
     clustering_distance_rows = "euclidean", clustering_method_rows = "complete",
@@ -1907,7 +1921,8 @@ build_sc_hierarchical_heatmap <- function(seurat_obj, features, group_by = "seur
 #' @return A ggplot object.
 #' @export
 plot_sc_expression_density_2d <- function(seurat_obj, feature, reduction = "umap",
-                                          bandwidth = NULL, max_cells = 50000L) {
+                                          bandwidth = NULL, max_cells = 50000L,
+                                          palette = "default", manual_gradient = NULL) {
   if (!requireNamespace("MASS", quietly = TRUE)) stop("Package 'MASS' requis pour la densite 2D (MASS::kde2d).")
   if (is.null(seurat_obj)) stop("Aucun objet Single-Cell charge.")
   if (is.null(feature) || !nzchar(feature %||% "")) stop("Aucun gene/feature selectionne.")
@@ -1938,7 +1953,8 @@ plot_sc_expression_density_2d <- function(seurat_obj, feature, reduction = "umap
   } else if (nrow(expr_pos) < 5L) {
     subtitle <- "Trop peu de cellules expressives pour une densite fiable (<5) -- points bruts affiches"
     p <- p + ggplot2::geom_point(data = expr_pos, ggplot2::aes(color = value), size = 1.1) +
-      ggplot2::scale_color_viridis_c(option = "plasma", name = "Expression")
+      expression_continuous_scale(palette, "color", manual_gradient, base_option = "plasma") +
+      ggplot2::labs(color = "Expression")
   } else {
     kde_bw <- bandwidth %||% c(MASS::bandwidth.nrd(expr_pos$dim1), MASS::bandwidth.nrd(expr_pos$dim2))
     kde_bw[!is.finite(kde_bw) | kde_bw <= 0] <- 1e-3
@@ -1949,7 +1965,8 @@ plot_sc_expression_density_2d <- function(seurat_obj, feature, reduction = "umap
     p <- p +
       ggplot2::geom_raster(data = dens_df, ggplot2::aes(x = x, y = y, fill = z), interpolate = TRUE) +
       ggplot2::geom_point(data = expr_pos, ggplot2::aes(x = dim1, y = dim2), color = "black", size = 0.15, alpha = 0.25) +
-      ggplot2::scale_fill_viridis_c(option = "plasma", name = "Densite\n(ponderee expr.)")
+      expression_continuous_scale(palette, "fill", manual_gradient, base_option = "plasma") +
+      ggplot2::labs(fill = "Densite\n(ponderee expr.)")
   }
 
   p + ggplot2::coord_fixed() + ggplot2::theme_minimal(base_size = 12) +
@@ -1972,7 +1989,8 @@ plot_sc_expression_density_2d <- function(seurat_obj, feature, reduction = "umap
 #' @return A plotly widget.
 #' @export
 plot_sc_reduction_3d <- function(seurat_obj, reduction = "umap",
-                                 color_by = "seurat_clusters", max_cells = 50000L) {
+                                 color_by = "seurat_clusters", max_cells = 50000L,
+                                 palette = "default", manual_gradient = NULL, manual_colors = NULL) {
   if (!requireNamespace("plotly", quietly = TRUE)) stop("Le package plotly est requis pour la visualisation 3D.")
   if (is.null(seurat_obj)) stop("Aucun objet Single-Cell charge.")
   if (!reduction %in% names(seurat_obj@reductions)) stop(sprintf("Reduction '%s' non calculee.", reduction))
@@ -1992,13 +2010,18 @@ plot_sc_reduction_3d <- function(seurat_obj, reduction = "umap",
 
   is_num <- is.numeric(df$value)
   p <- if (is_num) {
-     plotly::plot_ly(df, x = ~dim1, y = ~dim2, z = ~dim3, type = "scatter3d", mode = "markers",
-                     marker = list(size = 2.5, color = ~value, colorscale = "Viridis", showscale = TRUE,
-                                  colorbar = list(title = color_by)),
-                     text = ~paste0("ID: ", id, "<br>", color_by, ": ", round(value, 3)), hoverinfo = "text")
+    colorscale_arg <- if (identical(palette, "manual") && !is.null(manual_gradient)) {
+      list(c(0, manual_gradient$low %||% "#2166AC"), c(1, manual_gradient$high %||% "#B2182B"))
+    } else "Viridis"
+    plotly::plot_ly(df, x = ~dim1, y = ~dim2, z = ~dim3, type = "scatter3d", mode = "markers",
+                    marker = list(size = 2.5, color = ~value, colorscale = colorscale_arg, showscale = TRUE,
+                                 colorbar = list(title = color_by)),
+                    text = ~paste0("ID: ", id, "<br>", color_by, ": ", round(value, 3)), hoverinfo = "text")
    } else {
+     lv   <- sort(unique(stats::na.omit(as.character(df$value))))
+     cols <- sc_discrete_colors(lv, palette = palette, manual_colors = manual_colors)
      plotly::plot_ly(df, x = ~dim1, y = ~dim2, z = ~dim3, type = "scatter3d", mode = "markers",
-                     color = ~as.character(value), marker = list(size = 2.5),
+                     color = ~as.character(value), colors = cols, marker = list(size = 2.5),
                      text = ~paste0("ID: ", id, "<br>", color_by, ": ", value), hoverinfo = "text")
    }
    plotly::layout(p,
