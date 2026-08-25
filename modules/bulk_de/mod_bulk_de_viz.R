@@ -46,16 +46,15 @@
   # instead of failing silently downstream.
   # =========================================================================
   sync_warning <- reactive({
+    global_data$language  # i18n: re-evaluate the banner on language switch
     res <- tryCatch(active_de_results(), error = function(e) NULL)
     if (is.null(res) || is.null(shared_rv$filtered_counts)) return(NULL)
     total   <- nrow(res)
     present <- sum(res$gene %in% rownames(shared_rv$filtered_counts))
     pct_missing <- if (total > 0) 100 * (total - present) / total else 0
     if (pct_missing > 1) {
-      sprintf(
-        "⚠️ %.0f%% des gènes du contraste '%s' ne sont plus présents dans les données filtrées actuelles. Le filtrage (Étape 1) a probablement été relancé après ce calcul — relancez l'Étape 2 pour resynchroniser.",
-        pct_missing, shared_rv$active_contrast
-      )
+      .t_fmt(.tr("\u26a0\ufe0f {pct}% des g\u00e8nes du contraste '{c}' ne sont plus pr\u00e9sents dans les donn\u00e9es filtr\u00e9es actuelles. Le filtrage (\u00c9tape 1) a probablement \u00e9t\u00e9 relanc\u00e9 apr\u00e8s ce calcul \u2014 relancez l'\u00c9tape 2 pour resynchroniser."),
+             pct = sprintf("%.0f", pct_missing), c = shared_rv$active_contrast)
     } else NULL
   })
 
@@ -75,10 +74,11 @@
   # for PCA/Heatmap/QC — same "Manuel" MODE (shared_rv$bulk_palette, set in
   # the Step 1 sidebar), but only 3 swatches regardless of dataset.
   output$volcano_manual_palette_ui <- renderUI({
+    global_data$language  # i18n
     if (!identical(shared_rv$bulk_palette, "manual")) return(NULL)
     div(
       class = "border rounded p-2 mb-2", style = "background:#f8f9fa;",
-      h6("Couleurs manuelles — Up / Down / Non-significatif",
+      h6(.tr("Couleurs manuelles \u2014 Up / Down / Non-significatif"),
          style = "font-size:0.85em;font-weight:bold;margin-bottom:6px;"),
       manual_color_picker_ui(ns, c("role_color_up", "role_color_down", "role_color_ns"),
                              c("Up-régulé", "Down-régulé", "Non-significatif"),
@@ -212,19 +212,27 @@
   )
 
   # =========================================================================
-  # HEATMAP — render + dedicated PNG/PDF export (no ggsave: ComplexHeatmap
-  # objects are grid grobs, not ggplot — need an explicit device + print()).
+  # HEATMAP — defensive rewrite
   # =========================================================================
+  # Hardened against the "objet 'res' introuvable" class of crash during the
+  # pairwise auto-pipeline's tab flip: active_de_results() is resolved inside
+  # tryCatch() so an absent/mismatched contrast short-circuits via req(NULL)
+  # instead of propagating a raw error, every threshold input is null-safe,
+  # and no bare symbol is ever referenced outside its local scope.
   heatmap_genes <- reactive({
-    req(shared_rv$vst_mat, active_de_results())
-    res <- active_de_results()
-    res <- res[!is.na(res$padj), ]
+    req(shared_rv$vst_mat)
+    res <- tryCatch(active_de_results(), error = function(e) NULL)
+    req(res)                                   # short-circuit if no DE result yet
+    if (!"padj" %in% colnames(res)) return(character(0))
+    res <- res[!is.na(res$padj), , drop = FALSE]
+    req(nrow(res) > 0)
 
     # ── Directional subset (BingleSeq-style: Tous/Sig/Up/Down/Non-sig) ────
     # Applied BEFORE ranking by p-adj, on the CURRENT lfc/padj thresholds —
     # consistent with Volcano/MA-plot which already read the same inputs.
     dir_choice <- input$heatmap_direction %||% "all"
-    lfc <- input$lfc_thresh; pval <- input$padj_thresh
+    lfc  <- input$lfc_thresh  %||% 1
+    pval <- input$padj_thresh %||% 0.05
     is_sig <- !is.na(res$padj) & res$padj < pval & abs(res$log2FoldChange) > lfc
     res <- switch(dir_choice,
       sig  = res[is_sig, , drop = FALSE],
@@ -234,15 +242,15 @@
       res  # "all" — unchanged, original behaviour
     )
     validate(need(nrow(res) > 0,
-                  "Aucun gène dans ce sous-ensemble (Up/Down/Sig/Non-sig) avec les seuils actuels."))
+                  .tr("Aucun g\u00e8ne dans ce sous-ensemble (Up/Down/Sig/Non-sig) avec les seuils actuels.")))
 
     ranked_genes <- res$gene[order(res$padj)]
     valid_genes  <- intersect(ranked_genes, rownames(shared_rv$vst_mat))
-    genes        <- head(valid_genes, input$heatmap_top_n)
+    genes        <- head(valid_genes, input$heatmap_top_n %||% 30)
     validate(need(
       length(genes) >= 2,
-      paste0("Pas assez de gènes communs entre le contraste actif et la matrice VST actuelle (",
-             length(valid_genes), " trouvés). Relancez l'étape 2 (DE) après tout changement de filtrage.")
+      .t_fmt(.tr("Pas assez de g\u00e8nes communs entre le contraste actif et la matrice VST actuelle ({n} trouv\u00e9s). Relancez l'\u00e9tape 2 (DE) apr\u00e8s tout changement de filtrage."),
+             n = length(valid_genes))
     ))
     genes
   })
@@ -260,17 +268,18 @@
   })
 
   output$heatmap_manual_palette_ui <- renderUI({
+    global_data$language  # i18n
     if (!identical(shared_rv$bulk_palette, "manual")) return(NULL)
     if (!nzchar(input$heatmap_annot %||% "")) {
       return(div(class = "alert alert-warning", style = "font-size:0.8em;",
-                 "Sélectionnez d'abord une \"Annotation colonnes\" pour personnaliser ses couleurs."))
+                 .tr("S\u00e9lectionnez d'abord une \"Annotation colonnes\" pour personnaliser ses couleurs.")))
     }
     lvls <- tryCatch(manual_heatmap_levels(), error = function(e) character(0))
     if (length(lvls) == 0) return(NULL)
     ids <- paste0("heatmap_manual_color_", seq_along(lvls))
     div(
       class = "border rounded p-2 mb-2", style = "background:#f8f9fa;",
-      h6(paste("Couleurs manuelles —", input$heatmap_annot),
+      h6(.t_fmt(.tr("Couleurs manuelles \u2014 {var}"), var = input$heatmap_annot),
          style = "font-size:0.85em;font-weight:bold;margin-bottom:6px;"),
       manual_color_picker_ui(ns, ids, lvls, .default_manual_colors(length(lvls)))
     )
@@ -298,7 +307,9 @@
                       tr = .tr_fn(global_data))
   }
 
-  output$plot_heatmap <- renderPlot({ .heatmap_obj() })
+  output$plot_heatmap <- renderPlot({
+    .safe_plot_render(session, "plot_heatmap", function() .heatmap_obj())
+  })
 
   output$dl_heatmap <- downloadHandler(
     filename = function() paste0("heatmap_", shared_rv$active_contrast, "_", Sys.Date(), ".", input$heatmap_export_fmt),

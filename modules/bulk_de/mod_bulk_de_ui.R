@@ -203,7 +203,7 @@ mod_bulk_de_venn_ui <- function(id) {
     fluidRow(
       column(7, selectizeInput(ns("venn_contrasts"), i18n$t("Contrastes \u00e0 comparer"),
                                choices = NULL, multiple = TRUE,
-                               options = list(maxItems = 6, placeholder = "2 \u00e0 6 contrastes"))),
+                               options = list(maxItems = 6, placeholder = .tr_plain("2 \u00e0 6 contrastes")))),
       column(5, radioButtons(ns("venn_type"), i18n$t("Type de diagramme"),
                              choices = stats::setNames(c("upset","venn"),
                                c(.tr_plain("UpSet (recommand\u00e9)"), .tr_plain("Venn (2-4 contrastes)"))),

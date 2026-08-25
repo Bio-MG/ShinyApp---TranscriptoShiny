@@ -34,7 +34,7 @@ mod_bulk_ui <- function(id) {
         )
       ),
       navset_card_underline(
-        id = ns("main_tabs"), title = "R\u00e9sultats Bulk RNA-seq",
+        id = ns("main_tabs"), title = i18n$t("R\u00e9sultats Bulk RNA-seq"),
         nav_panel("PCA",             value = "tab_pca",         mod_bulk_filter_pca_ui(ns("filter"))),
         nav_panel(i18n$t("QC \u00c9chantillons"), value = "tab_qc",  mod_bulk_filter_qc_ui(ns("filter"))),
         nav_panel("Volcano Plot",    value = "tab_volcano",     mod_bulk_de_volcano_ui(ns("de"))),

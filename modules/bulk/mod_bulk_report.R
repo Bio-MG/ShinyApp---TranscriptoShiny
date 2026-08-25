@@ -45,29 +45,29 @@ mod_bulk_report_ui <- function(id) {
   ns <- NS(id)
   tagList(
     div(class = "alert alert-light", style = "font-size:0.85em;border-left:3px solid #2C3E50;",
-        "Rapport autonome (PCA, QC, Volcano, Heatmap, Pathways) — partageable sans R."),
+        i18n$t("Rapport autonome (PCA, QC, Volcano, Heatmap, Pathways) \u2014 partageable sans R.")),
 
     textInput(ns("report_title"), i18n$t("Titre du rapport"),
-              value = i18n$t("Analyse RNA-seq Bulk"), placeholder = "Ex: Projet — Cov2 vs Mock"),
+              value = i18n_plain("Analyse RNA-seq Bulk"), placeholder = "Ex: Projet — Cov2 vs Mock"),
     textInput(ns("report_subtitle"), i18n$t("Sous-titre (optionnel)"), placeholder = "Ex: GSE164073"),
     textAreaInput(ns("report_notes"), i18n$t("Notes / Commentaires (markdown supporté)"),
-                  rows = 3, placeholder = "Ex: Fichier GSE164073, donneur D3."),
+                  rows = 3, placeholder = "Ex: file GSE164073, donor D3."),
 
-    checkboxGroupInput(ns("report_sections"), i18n$t("Sections à inclure"),
+    checkboxGroupInput(ns("report_sections"), i18n$t("Sections \u00e0 inclure"),
       choices = stats::setNames(c("pca","qc","volcano","heatmap","table","pathway"),
-        c("PCA", i18n$t("QC Échantillons"), i18n$t("Volcano + MA-Plot"), i18n$t("Heatmap Top Gènes"), i18n$t("Table DE complète"), "Pathway Enrichment")),
+        c("PCA", .tr_plain("QC \u00c9chantillons"), .tr_plain("Volcano + MA-Plot"), .tr_plain("Heatmap Top G\u00e8nes"), .tr_plain("Table DE compl\u00e8te"), "Pathway Enrichment")),
       selected = c("pca", "qc", "volcano", "heatmap", "table", "pathway")),
 
     # Step-3.5: choix de mise en page pour la section "Toutes les paires"
     # (Volcano/MA/Heatmap pairwise) — grille compacte ou 1 plot pleine page.
     radioButtons(ns("pairwise_layout"), i18n$t("Mise en page \"Toutes les paires\" (Volcano/MA/Heatmap)"),
       choices = stats::setNames(c("grid","full"),
-        c(i18n$t("Petits multiples compilés (grille)"), i18n$t("Grand format (1 par contraste)"))),
+        c(.tr_plain("Petits multiples compil\u00e9s (grille)"), .tr_plain("Grand format (1 par contraste)"))),
       selected = "grid", inline = TRUE),
 
     radioButtons(ns("report_format"), i18n$t("Format de sortie"),
       choices = stats::setNames(c("html","pdf","both"),
-        c(i18n$t("HTML interactif"), i18n$t("PDF statique"), i18n$t("Les deux (.zip)"))),
+        c(.tr_plain("HTML interactif"), .tr_plain("PDF statique"), .tr_plain("Les deux (.zip)"))),
       selected = "html"),
 
     conditionalPanel(condition = "input.report_format != 'pdf'", ns = ns,
@@ -80,9 +80,8 @@ mod_bulk_report_ui <- function(id) {
     hr(),
     div(class = "alert alert-light", style = "font-size:0.82em;border-left:3px solid #18BC9C;",
         bsicons::bs_icon("code-slash"),
-        " Export script R reproductible (.zip) — contient le script + counts_raw.rds + metadata.rds. ",
-        "Pour l'exécuter : décompressez le .zip, ouvrez R/RStudio dans CE dossier ",
-        "(ou faites setwd() dessus), puis source(\"analyse_bulk_....R\") ou exécutez-le ligne par ligne."),
+        " ",
+        i18n$t("Export script R reproductible (.zip) \u2014 contient le script + counts_raw.rds + metadata.rds. Pour l'ex\u00e9cuter : d\u00e9compressez le .zip, ouvrez R/RStudio dans CE dossier (ou faites setwd() dessus), puis source(\"analyse_bulk_....R\") ou ex\u00e9cutez-le ligne par ligne.")),
     downloadButton(ns("dl_r_script"), i18n$t("🧾 Export Script R Reproductible (.zip)"),
                    class = "btn-outline-secondary w-100"),
     div(class = "small text-muted mt-1", textOutput(ns("report_status")))
@@ -103,6 +102,28 @@ mod_bulk_report_server <- function(id, global_data, shared_rv) {
       shinyjs::toggleState("dl_report",   condition = !is.null(shared_rv$vst_mat))
       shinyjs::toggleState("dl_r_script", condition = !is.null(shared_rv$filtered_counts))
     })
+
+    # ── i18n: push translated labels/choices on language switch ──────────
+    # (.tr_plain() froze the choice DISPLAY NAMES at build time — this observer
+    # re-sends them in the CURRENT session language; values never change.)
+    observeEvent(global_data$language, {
+      updateTextInput(session, "report_title",    label = .tr("Titre du rapport"))
+      updateTextInput(session, "report_subtitle", label = .tr("Sous-titre (optionnel)"))
+      updateTextAreaInput(session, "report_notes", label = .tr("Notes / Commentaires (markdown support\u00e9)"))
+      updateCheckboxGroupInput(session, "report_sections", label = .tr("Sections \u00e0 inclure"),
+        choices = stats::setNames(c("pca","qc","volcano","heatmap","table","pathway"),
+          c("PCA", .tr("QC \u00c9chantillons"), .tr("Volcano + MA-Plot"), .tr("Heatmap Top G\u00e8nes"),
+            .tr("Table DE compl\u00e8te"), "Pathway Enrichment")))
+      updateRadioButtons(session, "pairwise_layout",
+        label = .tr("Mise en page \"Toutes les paires\" (Volcano/MA/Heatmap)"),
+        choices = stats::setNames(c("grid","full"),
+          c(.tr("Petits multiples compil\u00e9s (grille)"), .tr("Grand format (1 par contraste)"))))
+      updateRadioButtons(session, "report_format", label = .tr("Format de sortie"),
+        choices = stats::setNames(c("html","pdf","both"),
+          c(.tr("HTML interactif"), .tr("PDF statique"), .tr("Les deux (.zip)"))))
+      updateCheckboxInput(session, "report_interactive",
+        label = .tr("Graphiques interactifs (PCA, Volcano, MA individuel) \u2014 HTML uniquement"))
+    }, ignoreInit = TRUE)
 
     output$report_status <- renderText({
       global_data$language
@@ -195,9 +216,9 @@ mod_bulk_report_server <- function(id, global_data, shared_rv) {
           multimethod_consensus = shared_rv$multimethod_consensus,
           # Step-3.5: choix de mise en page pour "Toutes les paires".
           pairwise_layout       = input$pairwise_layout %||% "grid",
-          report_title          = input$report_title %||% .tr("Analyse RNA-seq Bulk"),
-          report_subtitle       = input$report_subtitle %||% "",
-          report_notes          = input$report_notes %||% "",
+          report_title          = if (is.null(input$report_title) || nchar(input$report_title) == 0) .tr("Analyse RNA-seq Bulk") else input$report_title,
+          report_subtitle       = if (is.null(input$report_subtitle) || nchar(input$report_subtitle) == 0) "" else input$report_subtitle,
+          report_notes          = if (is.null(input$report_notes) || nchar(input$report_notes) == 0) "" else input$report_notes,
           i18n_strings          = i18n_strings,          # NEW (Phase 4)
           report_language       = global_data$language,  # NEW (for date/number formatting if needed)
           interactive           = isTRUE(input$report_interactive) && input$report_format != "pdf"
@@ -230,7 +251,7 @@ mod_bulk_report_server <- function(id, global_data, shared_rv) {
               })
             if (!is.null(res)) out_files <- c(out_files, res)
           }
-          if (length(out_files) == 0) stop("Aucun format g\u00e9n\u00e9r\u00e9.")
+          if (length(out_files) == 0) stop(.tr("Aucun format g\u00e9n\u00e9r\u00e9."))
           else if (length(out_files) == 1) file.copy(out_files[1], file, overwrite = TRUE)
           else zip::zip(file, files = out_files, mode = "cherry-pick")
         })

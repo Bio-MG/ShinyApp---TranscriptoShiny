@@ -88,8 +88,8 @@
       updateSelectInput(session, "active_contrast_view",
                         choices = names(shared_rv$contrasts), selected = shared_rv$active_contrast)
 
-      msg <- sprintf("✓ %d/%d contrastes calculés.", ok, n_pairs)
-      if (length(failed) > 0) msg <- paste0(msg, " Échecs: ", paste(failed, collapse = ", "))
+      msg <- .t_fmt(.tr("\u2713 {ok}/{n} contrastes calcul\u00e9s."), ok = ok, n = n_pairs)
+      if (length(failed) > 0) msg <- paste(msg, paste(.tr("\u00c9checs:"), paste(failed, collapse = ", ")))
       showNotification(msg, type = if (length(failed) == 0) "message" else "warning", duration = 8)
     })
   }
@@ -98,7 +98,7 @@
     req(shared_rv$filtered_counts, input$condition_col, input$de_engine, global_data$bulk_obj)
     meta <- global_data$bulk_obj$metadata
     lvls <- unique(na.omit(as.character(meta[[input$condition_col]])))
-    validate(need(length(lvls) > 2, "Au moins 3 niveaux requis pour le mode pairwise."))
+    validate(need(length(lvls) > 2, .tr("Au moins 3 niveaux requis pour le mode pairwise.")))
 
     # Same two hard blocks as the single-pair path (confounding, single-
     # level covariate) — the pairwise path fits ONE shared dds_full reused
@@ -109,8 +109,8 @@
                          covariates_in_use)
     if (length(confounded) > 0) {
       showNotification(
-        sprintf("❌ Covariable(s) confondue(s) avec '%s' : %s. Retirez-la(les) du design ou revoyez votre plan d'expérience.",
-                input$condition_col, paste(confounded, collapse = ", ")),
+        .t_fmt(.tr("\u274c Covariable(s) confondue(s) avec '{col}' : {covs}. Retirez-la(les) du design ou revoyez votre plan d'exp\u00e9rience."),
+               col = input$condition_col, covs = paste(confounded, collapse = ", ")),
         type = "error", duration = 10
       )
       return()
@@ -119,8 +119,8 @@
                            covariates_in_use)
     if (length(single_level) > 0) {
       showNotification(
-        sprintf("❌ Covariable(s) à une seule modalité : %s. Elle(s) n'apporterai(en)t aucune information — retirez-la(les) du design.",
-                paste(single_level, collapse = ", ")),
+        .t_fmt(.tr("\u274c Covariable(s) \u00e0 une seule modalit\u00e9 : {covs}. Elle(s) n'apporterai(en)t aucune information \u2014 retirez-la(les) du design."),
+               covs = paste(single_level, collapse = ", ")),
         type = "error", duration = 10
       )
       return()
@@ -132,13 +132,12 @@
     if (n_pairs > 10) {
       pairwise_proceed_fn(function() .run_pairwise_now(pairs, meta))
       showModal(modalDialog(
-        title = "Confirmation — beaucoup de contrastes",
-        sprintf("Cela va lancer %d analyses différentielles (une par paire de '%s'). ",
-                n_pairs, input$condition_col),
-        "Cela peut prendre du temps selon le moteur statistique choisi. Continuer ?",
+        title = .tr("Confirmation \u2014 beaucoup de contrastes"),
+        .t_fmt(.tr("Cela va lancer {n} analyses diff\u00e9rentielles (une par paire de '{col}'). Cela peut prendre du temps selon le moteur statistique choisi. Continuer ?"),
+               n = n_pairs, col = input$condition_col),
         footer = tagList(
-          modalButton("Annuler"),
-          actionButton(ns("confirm_pairwise"), "Oui, lancer", class = "btn-success")
+          modalButton(.tr("Annuler")),
+          actionButton(ns("confirm_pairwise"), .tr("Oui, lancer"), class = "btn-success")
         )
       ))
     } else {

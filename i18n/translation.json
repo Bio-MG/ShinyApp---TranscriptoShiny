@@ -1168,6 +1168,290 @@
     {
       "fr": "Comparaison du même contraste avec {n} méthodes : {m}.",
       "en": "Comparison of the same contrast with {n} methods: {m}."
+    },
+    {
+      "fr": "Rapport autonome (PCA, QC, Volcano, Heatmap, Pathways) — partageable sans R.",
+      "en": "Standalone report (PCA, QC, Volcano, Heatmap, Pathways) — shareable without R."
+    },
+    {
+      "fr": "Export script R reproductible (.zip) — contient le script + counts_raw.rds + metadata.rds. Pour l'exécuter : décompressez le .zip, ouvrez R/RStudio dans CE dossier (ou faites setwd() dessus), puis source(\"analyse_bulk_....R\") ou exécutez-le ligne par ligne.",
+      "en": "Export reproducible R script (.zip) — contains the script + counts_raw.rds + metadata.rds. To run: unzip, open R/RStudio in THIS folder (or setwd() to it), then source(\"analyse_bulk_....R\") or execute line by line."
+    },
+    {
+      "fr": "Sélectionnez d'abord une variable \"Colorer par\" pour personnaliser ses couleurs.",
+      "en": "First select a \"Color by\" variable to customize its colors."
+    },
+    {
+      "fr": "Sélectionnez d'abord une \"Annotation\" pour personnaliser ses couleurs.",
+      "en": "First select an \"Annotation\" to customize its colors."
+    },
+    {
+      "fr": "Sélectionnez d'abord une \"Annotation colonnes\" pour personnaliser ses couleurs.",
+      "en": "First select a \"Column annotation\" to customize its colors."
+    },
+    {
+      "fr": "Couleurs manuelles — {var}",
+      "en": "Manual colors — {var}"
+    },
+    {
+      "fr": "Couleurs manuelles — Up / Down / Non-significatif",
+      "en": "Manual colors — Up / Down / Non-significant"
+    },
+    {
+      "fr": "❌ Covariable(s) confondue(s) avec '{col}' : {covs}. Retirez-la(les) du design ou revoyez votre plan d'expérience.",
+      "en": "❌ Confounded covariate(s) with '{col}': {covs}. Remove them from the design or revise your experimental plan."
+    },
+    {
+      "fr": "❌ Covariable(s) à une seule modalité : {covs}. Elle(s) n'apporterai(en)t aucune information — retirez-la(les) du design.",
+      "en": "❌ Single-level covariate(s): {covs}. They provide no information — remove them from the design."
+    },
+    {
+      "fr": "✓ Contraste '{c}': {n} gènes significatifs",
+      "en": "✓ Contrast '{c}': {n} significant genes"
+    },
+    {
+      "fr": "✓ Ad-hoc '{c}': {n} gènes sig.",
+      "en": "✓ Ad-hoc '{c}': {n} sig. genes"
+    },
+    {
+      "fr": "Échantillon(s) présent(s) dans les 2 groupes.",
+      "en": "Sample(s) present in both groups."
+    },
+    {
+      "fr": "Sélectionnez au moins 1 échantillon / groupe.",
+      "en": "Select at least 1 sample / group."
+    },
+    {
+      "fr": "Un groupe a < 2 réplicats — résultats peu fiables.",
+      "en": "A group has < 2 replicates — unreliable results."
+    },
+    {
+      "fr": "La colonne de condition doit avoir au moins 2 niveaux.",
+      "en": "The condition column must have at least 2 levels."
+    },
+    {
+      "fr": "Au moins 2 méthodes doivent réussir pour comparer ({n} réussies). Vérifiez que edgeR/limma sont installés.",
+      "en": "At least 2 methods must succeed to compare ({n} succeeded). Check that edgeR/limma are installed."
+    },
+    {
+      "fr": "✓ {n} méthode(s) comparée(s) : {m} ({a} vs {b}).",
+      "en": "✓ {n} method(s) compared: {m} ({a} vs {b})."
+    },
+    {
+      "fr": "Sélectionnez au moins 2 contrastes ci-dessus.",
+      "en": "Select at least 2 contrasts above."
+    },
+    {
+      "fr": "Le diagramme de Venn n'est lisible que pour 2 à 4 contrastes (vous en avez {n}) — passez en UpSet ou réduisez la sélection.",
+      "en": "The Venn diagram is only readable for 2 to 4 contrasts (you have {n}) — switch to UpSet or reduce the selection."
+    },
+    {
+      "fr": "Sélectionnez au moins 2 contrastes.",
+      "en": "Select at least 2 contrasts."
+    },
+    {
+      "fr": "Sélectionnez au moins 2 contrastes avec des gènes significatifs.",
+      "en": "Select at least 2 contrasts with significant genes."
+    },
+    {
+      "fr": "Aucun gène dans les intersections avec les seuils actuels.",
+      "en": "No genes in the intersections with the current thresholds."
+    },
+    {
+      "fr": "⚠️ {pct}% des gènes du contraste '{c}' ne sont plus présents dans les données filtrées actuelles. Le filtrage (Étape 1) a probablement été relancé après ce calcul — relancez l'Étape 2 pour resynchroniser.",
+      "en": "⚠️ {pct}% of the contrast '{c}' genes are no longer present in the current filtered data. Filtering (Step 1) was probably re-run after this computation — re-run Step 2 to resynchronize."
+    },
+    {
+      "fr": "Aucun gène dans ce sous-ensemble (Up/Down/Sig/Non-sig) avec les seuils actuels.",
+      "en": "No genes in this subset (Up/Down/Sig/Not-sig) with the current thresholds."
+    },
+    {
+      "fr": "Pas assez de gènes communs entre le contraste actif et la matrice VST actuelle ({n} trouvés). Relancez l'étape 2 (DE) après tout changement de filtrage.",
+      "en": "Not enough common genes between the active contrast and the current VST matrix ({n} found). Re-run step 2 (DE) after any filtering change."
+    },
+    {
+      "fr": "Significatifs",
+      "en": "Significant"
+    },
+    {
+      "fr": "Actif",
+      "en": "Active"
+    },
+    {
+      "fr": "→ actif",
+      "en": "→ active"
+    },
+    {
+      "fr": "Ajustement {engine} ...",
+      "en": "Fitting {engine} ..."
+    },
+    {
+      "fr": "✓ {ok}/{n} contrastes calculés.",
+      "en": "✓ {ok}/{n} contrasts computed."
+    },
+    {
+      "fr": "Échecs:",
+      "en": "Failures:"
+    },
+    {
+      "fr": "Au moins 3 niveaux requis pour le mode pairwise.",
+      "en": "At least 3 levels required for pairwise mode."
+    },
+    {
+      "fr": "Confirmation — beaucoup de contrastes",
+      "en": "Confirmation — many contrasts"
+    },
+    {
+      "fr": "Cela va lancer {n} analyses différentielles (une par paire de '{col}'). Cela peut prendre du temps selon le moteur statistique choisi. Continuer ?",
+      "en": "This will run {n} differential analyses (one per pair of '{col}'). This may take time depending on the selected statistical engine. Continue?"
+    },
+    {
+      "fr": "Oui, lancer",
+      "en": "Yes, run"
+    },
+    {
+      "fr": "✓ {n} pathways enrichis (GSEA)",
+      "en": "✓ {n} enriched pathways (GSEA)"
+    },
+    {
+      "fr": "✓ {n} pathways enrichis",
+      "en": "✓ {n} enriched pathways"
+    },
+    {
+      "fr": "Venn (2-3 méthodes)",
+      "en": "Venn (2-3 methods)"
+    },
+    {
+      "fr": "Étape 1 (Filtrage & VST) non lancée — obligatoire avant le calcul DE.",
+      "en": "Step 1 (Filtering & VST) not run yet — required before DE."
+    },
+    {
+      "fr": "Avant de lancer :",
+      "en": "Before running:"
+    },
+    {
+      "fr": "Ajustement DESeq2 (requis pour le consensus)...",
+      "en": "Fitting DESeq2 (required for consensus)..."
+    },
+    {
+      "fr": "DESeq2 + edgeR + limma-voom...",
+      "en": "DESeq2 + edgeR + limma-voom..."
+    },
+    {
+      "fr": "Consensus de rang...",
+      "en": "Rank consensus..."
+    },
+    {
+      "fr": "⚡ Calculer les {n} paires possibles",
+      "en": "⚡ Compute all {n} possible pairs"
+    },
+    {
+      "fr": "Calcul des contrastes pairwise...",
+      "en": "Computing pairwise contrasts..."
+    },
+    {
+      "fr": "Erreur ajustement DESeq2:",
+      "en": "DESeq2 fitting error:"
+    },
+    {
+      "fr": "Analyse différentielle...",
+      "en": "Running differential analysis..."
+    },
+    {
+      "fr": "Ajustement DESeq2...",
+      "en": "Fitting DESeq2..."
+    },
+    {
+      "fr": "Erreur DE:",
+      "en": "DE error:"
+    },
+    {
+      "fr": "Analyse ad-hoc...",
+      "en": "Running ad-hoc analysis..."
+    },
+    {
+      "fr": "Erreur DE ad-hoc:",
+      "en": "Ad-hoc DE error:"
+    },
+    {
+      "fr": "Interactif (Plotly — survol pour détails gène)",
+      "en": "Interactive (Plotly — hover for gene details)"
+    },
+    {
+      "fr": "Couleurs (Significatif / Non-sig.) réglables depuis l'onglet Volcano Plot (palette \"Manuel\" dans la barre latérale Étape 1).",
+      "en": "Colors (Significant / Non-sig.) adjustable from the Volcano Plot tab (\"Manual\" palette in the Step 1 sidebar)."
+    },
+    {
+      "fr": "Table récapitulative",
+      "en": "Summary table"
+    },
+    {
+      "fr": "Multi-méthodes (DESeq2 / edgeR / limma-voom)",
+      "en": "Multi-method (DESeq2 / edgeR / limma-voom)"
+    },
+    {
+      "fr": "Lancez au moins 2 contrastes (Step 2 simple répété, ou Pairwise auto) pour pouvoir les comparer ici.",
+      "en": "Run at least 2 contrasts (repeated Step 2, or Pairwise auto) to compare them here."
+    },
+    {
+      "fr": "⚠️ Le groupe Référence et le groupe Cible doivent être différents.",
+      "en": "⚠️ Reference group and Target group must be different."
+    },
+    {
+      "fr": "⚠️ Au moins un groupe a < 2 réplicats — résultats peu fiables.",
+      "en": "⚠️ At least one group has < 2 replicates — unreliable results."
+    },
+    {
+      "fr": "❌ Même échantillon dans les 2 groupes.",
+      "en": "❌ Same sample in both groups."
+    },
+    {
+      "fr": "❌ Sélectionnez au moins 1 échantillon / groupe.",
+      "en": "❌ Select at least 1 sample / group."
+    },
+    {
+      "fr": "Aucun contraste calculé — lancez l'Étape 2 (DE) d'abord.",
+      "en": "No contrast computed — run Step 2 (DE) first."
+    },
+    {
+      "fr": "Nombre de gènes Up / Down par contraste calculé, selon les seuils |Log2FC| / p-adj actuels (Étape 2) — se met à jour en direct si vous changez les seuils, sans recalcul DE.",
+      "en": "Number of Up / Down genes per computed contrast, based on current |Log2FC| / p-adj thresholds (Step 2) — updates live when you change thresholds, no DE recalculation."
+    },
+    {
+      "fr": "Compare les gènes significatifs ENTRE plusieurs contrastes (utile après un run Pairwise auto). Seuils utilisés : ceux du panneau Step 2 (|Log2FC| / p-adj) — se mettent à jour en direct si vous les changez, sans recalcul DE.",
+      "en": "Compares significant genes BETWEEN multiple contrasts (useful after a Pairwise auto run). Thresholds used: those from the Step 2 panel (|Log2FC| / p-adj) — update live when changed, no DE recalculation."
+    },
+    {
+      "fr": "Compare le MÊME contraste (Cible/Référence du panneau Step 2) avec les 3 moteurs statistiques disponibles. Le consensus de rang moyenne le classement p-value de chaque méthode — un gène cohérent entre méthodes (rang faible, même sens du Log2FC) est un candidat plus robuste qu'un gène significatif sur une seule méthode.",
+      "en": "Compares the SAME contrast (Target/Reference from Step 2 panel) with all 3 available statistical engines. The rank consensus averages each method's p-value ranking — a gene consistent across methods (low rank, same Log2FC direction) is a more robust candidate than a gene significant in only one method."
+    },
+    {
+      "fr": "Résultats Bulk RNA-seq",
+      "en": "Bulk RNA-seq Results"
+    },
+    {
+      "fr": "Lancez d'abord la comparaison multi-méthodes.",
+      "en": "Run the multi-method comparison first."
+    },
+    {
+      "fr": "Conteneur trop petit pour afficher le diagramme.",
+      "en": "Container too small to display the diagram."
+    },
+    {
+      "fr": "Conteneur trop petit pour afficher le diagramme.\nAgrandissez la fenêtre ou l'onglet.",
+      "en": "Container too small to display the diagram.\nEnlarge the window or the tab."
+    },
+    {
+      "fr": "Package 'enrichplot' requis (BiocManager::install('enrichplot')).",
+      "en": "Package 'enrichplot' required (BiocManager::install('enrichplot'))."
+    },
+    {
+      "fr": "Aucun format généré.",
+      "en": "No format generated."
+    },
+    {
+      "fr": "2 à 6 contrastes",
+      "en": "2 to 6 contrasts"
     }
   ]
 }

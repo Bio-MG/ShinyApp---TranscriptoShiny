@@ -184,6 +184,16 @@ I18N_TRANSLATION_FILE <- file.path("i18n", "translation.json")
 if (I18N_AVAILABLE) {
   i18n <- shiny.i18n::Translator$new(translation_json_path = I18N_TRANSLATION_FILE)
   i18n$set_translation_language(I18N_DEFAULT_LANG)
+  # CRITICAL (i18n live-switch fix): without use_js(), $t() returns PLAIN
+  # strings and NO <span class="i18n" data-key> wrappers are ever emitted.
+  # page_navbar() materialises its nav children BEFORE evaluating header=,
+  # so usei18n()'s own use_js() call came too late — the client shim
+  # (#i18n-state binding) had zero elements to translate and every static
+  # label stayed French after switching language. Calling use_js() HERE makes
+  # every build-time $t() emit a translatable span. Server-side $t() calls
+  # (with an active reactive domain) are unaffected — they still return
+  # plain strings via raw_translate().
+  i18n$use_js()
 } else {
   warning("Package 'shiny.i18n' absent — interface affichée en français uniquement. ",
           "Installez-le via install.packages('shiny.i18n') pour activer le multilingue.")
@@ -227,6 +237,37 @@ if (I18N_AVAILABLE) {
   tr <- gd$i18n
   if (is.null(tr)) return(function(x, ...) x)
   tr$t
+}
+
+#' shiny.i18n usei18n() with raw-JSON fix.
+#'
+#' usei18n() embeds the translation dictionary via
+#'   tags$script(glue("var i18n_translations = {toJSON(...)}"))
+#' and htmltools renders that script TEXT ENTITY-ESCAPED ("&" -> "&amp;",
+#' quotes -> numeric entities). The client shim then compares each element's
+#' browser-DECODED data-key (e.g. "1. Filtrage & VST") against the ESCAPED
+#' "_row" values ("1. Filtrage &amp; VST"), so every key containing & ' " < >
+#' silently fails to translate while plain keys work — a very confusing
+#' partial failure. Wrapping the generated JS in htmltools::HTML() keeps the
+#' JSON raw so lookups match exactly.
+.usei18n_fixed <- function(translator) {
+  ui <- shiny.i18n::usei18n(translator)
+  # ui is tagList(tags$head(script(dict), script(src=...)), i18n_state(...))
+  idx_head <- Position(function(x) inherits(x, "shiny.tag") && identical(x$name, "head"),
+                       ui, nomatch = NA_integer_)
+  if (!is.na(idx_head)) {
+    head_tag <- ui[[idx_head]]
+    for (i in seq_along(head_tag$children)) {
+      ch <- head_tag$children[[i]]
+      if (inherits(ch, "shiny.tag") && identical(ch$name, "script") &&
+          is.null(ch$attribs$src) && length(ch$children) >= 1 &&
+          is.character(ch$children[[1]]) && !inherits(ch$children[[1]], "html")) {
+        head_tag$children[[i]]$children[[1]] <- htmltools::HTML(ch$children[[1]])
+      }
+    }
+    ui[[idx_head]] <- head_tag
+  }
+  ui
 }
 
 # --- i18n helpers (Phase 2 hardening) ----------------------------------------

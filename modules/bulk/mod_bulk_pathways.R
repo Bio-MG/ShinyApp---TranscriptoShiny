@@ -5,8 +5,8 @@ mod_bulk_pathways_ui <- function(id) {
   tagList(
     radioButtons(ns("enrich_mode"), i18n$t("M\u00e9thode d'enrichissement"),
                 choices = stats::setNames(c("ora","gsea"),
-                  c(i18n$t("ORA \u2014 sur g\u00e8nes significatifs (classique)"),
-                    i18n$t("GSEA \u2014 sur tous les g\u00e8nes class\u00e9s (sans seuil)"))),
+                  c(.tr_plain("ORA \u2014 sur g\u00e8nes significatifs (classique)"),
+                    .tr_plain("GSEA \u2014 sur tous les g\u00e8nes class\u00e9s (sans seuil)"))),
                 selected = "ora"),
     div(class = "small text-muted mb-2",
         i18n$t("GSEA n'a pas besoin de seuil de significativit\u00e9 arbitraire \u2014 elle classe tous les g\u00e8nes par Log2FC et teste l'enrichissement cumul\u00e9. Plus robuste statistiquement, recommand\u00e9e si peu de g\u00e8nes passent vos seuils.")),
@@ -15,8 +15,8 @@ mod_bulk_pathways_ui <- function(id) {
       condition = "input.enrich_mode == 'ora'", ns = ns,
       selectInput(ns("pathway_source"), i18n$t("Source de g\u00e8nes"),
                   choices = stats::setNames(c("up","down","all_sig","manual"),
-                    c(i18n$t("G\u00e8nes Up (significatifs)"), i18n$t("G\u00e8nes Down (significatifs)"),
-                      i18n$t("Tous g\u00e8nes significatifs"), i18n$t("S\u00e9lection manuelle")))),
+                    c(.tr_plain("G\u00e8nes Up (significatifs)"), .tr_plain("G\u00e8nes Down (significatifs)"),
+                      .tr_plain("Tous g\u00e8nes significatifs"), .tr_plain("S\u00e9lection manuelle")))),
       conditionalPanel(
         condition = "input.pathway_source == 'manual'", ns = ns,
         selectizeInput(ns("pathway_genes"), i18n$t("G\u00e8nes"), choices = NULL, multiple = TRUE)
@@ -30,7 +30,7 @@ mod_bulk_pathways_ui <- function(id) {
                                         "Reactome"              = "Reactome"))),
       column(6, selectInput(ns("pathway_org"), i18n$t("Organisme"),
                             choices = stats::setNames(c("human","mouse"),
-                              c(i18n$t("Humain"), i18n$t("Souris")))))
+                              c(.tr_plain("Humain"), .tr_plain("Souris")))))
     ),
     numericInput(ns("pathway_pval"), i18n$t("P-value cutoff"), value = 0.05, min = 0.001, max = 0.1, step = 0.01),
 
@@ -229,7 +229,7 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
       gsea_obj <- attr(shared_rv$pathway_results, "gsea_obj")
       req(gsea_obj, input$gsea_curve_pathway)
       if (!requireNamespace("enrichplot", quietly = TRUE)) {
-        stop("Package 'enrichplot' requis (BiocManager::install('enrichplot')).")
+        stop(.tr("Package 'enrichplot' requis (BiocManager::install('enrichplot'))."))
       }
       enrichplot::gseaplot2(gsea_obj, geneSetID = input$gsea_curve_pathway,
                             title = input$gsea_curve_pathway,
@@ -237,11 +237,12 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
     }
 
     output$gsea_curve_plot <- renderPlot({
+      global_data$language  # i18n
       tryCatch(
         .gsea_curve_plot_fn(),
         error = function(e) {
           ggplot() +
-            annotate("text", x = 1, y = 1, label = paste("Erreur:", conditionMessage(e)), color = "red") +
+            annotate("text", x = 1, y = 1, label = paste(.tr("Erreur:"), conditionMessage(e)), color = "red") +
             theme_void()
         }
       )

@@ -37,14 +37,14 @@
     n <- length(input$venn_contrasts)
     if (length(shared_rv$contrasts) < 2) {
       div(class = "alert alert-warning", style = "font-size:0.85em;",
-          .tr("Lancez au moins 2 contrastes (Step 2 simple répété, ou "), tags$em(.tr("Pairwise auto")),
-          .tr(") pour pouvoir les comparer ici."))
+          .tr("Lancez au moins 2 contrastes (Step 2 simple r\u00e9p\u00e9t\u00e9, ou Pairwise auto) pour pouvoir les comparer ici."))
     } else if (n < 2) {
-      div(class = "alert alert-info", style = "font-size:0.85em;", "Sélectionnez au moins 2 contrastes ci-dessus.")
+      div(class = "alert alert-info", style = "font-size:0.85em;",
+          .tr("S\u00e9lectionnez au moins 2 contrastes ci-dessus."))
     } else if (input$venn_type == "venn" && (n < 2 || n > 4)) {
       div(class = "alert alert-warning", style = "font-size:0.85em;",
-          "Le diagramme de Venn n'est lisible que pour 2 à 4 contrastes (vous en avez ", n,
-          ") — passez en UpSet ou réduisez la sélection.")
+          .t_fmt(.tr("Le diagramme de Venn n'est lisible que pour 2 \u00e0 4 contrastes (vous en avez {n}) \u2014 passez en UpSet ou r\u00e9duisez la s\u00e9lection."),
+                 n = n))
     } else {
       NULL
     }
@@ -78,13 +78,13 @@
     h <- session$clientData[[paste0("output_", "venn_plot", "_height")]]
     if (isTRUE(w < 30) || isTRUE(h < 30)) {
       grid::grid.newpage()
-      grid::grid.text("Conteneur trop petit pour afficher le diagramme.\nAgrandissez la fenêtre ou l'onglet.",
+      grid::grid.text(.tr("Conteneur trop petit pour afficher le diagramme.\nAgrandissez la fen\u00eatre ou l'onglet."),
                       gp = grid::gpar(col = "grey40", fontsize = 12))
       return(invisible(NULL))
     }
 
     sets <- tryCatch(venn_gene_sets(), error = function(e) NULL)
-    validate(need(!is.null(sets), "Sélectionnez au moins 2 contrastes."))
+    validate(need(!is.null(sets), .tr("S\u00e9lectionnez au moins 2 contrastes.")))
     tryCatch({
       if (input$venn_type == "venn") {
         plot_venn_contrasts(sets)
@@ -102,11 +102,12 @@
   })
 
   output$venn_intersection_table <- renderDT({
+    global_data$language  # i18n
     sets <- tryCatch(venn_gene_sets(), error = function(e) NULL)
-    validate(need(!is.null(sets), "Sélectionnez au moins 2 contrastes avec des gènes significatifs."))
+    validate(need(!is.null(sets), .tr("S\u00e9lectionnez au moins 2 contrastes avec des g\u00e8nes significatifs.")))
     dt <- tryCatch(build_contrast_intersection_dt(sets), error = function(e) NULL)
     validate(need(!is.null(dt) && nrow(dt) > 0,
-                  "Aucun gène dans les intersections avec les seuils actuels."))
+                  .tr("Aucun g\u00e8ne dans les intersections avec les seuils actuels.")))
     datatable(dt, filter = "top", rownames = FALSE,
              options = list(pageLength = 15, scrollX = TRUE))
   })

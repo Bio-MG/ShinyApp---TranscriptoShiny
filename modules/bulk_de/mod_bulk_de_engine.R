@@ -135,7 +135,9 @@
     req(global_data$bulk_obj, input$condition_col)
     meta <- global_data$bulk_obj$metadata
     lvls <- unique(na.omit(as.character(meta[[input$condition_col]])))
-    validate(need(length(lvls) >= 2, "La colonne de condition doit avoir au moins 2 niveaux."))
+    .trl <- function(key) { tr <- global_data$i18n; if (is.null(tr)) return(key)
+                            tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key) }
+    validate(need(length(lvls) >= 2, .trl("La colonne de condition doit avoir au moins 2 niveaux.")))
     updateSelectInput(session, "group_ref",    choices = lvls, selected = lvls[1])
     updateSelectInput(session, "group_target", choices = lvls, selected = lvls[min(2, length(lvls))])
   })

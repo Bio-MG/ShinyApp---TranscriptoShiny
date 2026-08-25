@@ -62,8 +62,8 @@ mod_bulk_filter_ui <- function(id) {
     selectInput(ns("palette_choice"), NULL,
                choices = stats::setNames(
                  c("default","okabeito","viridis","set2","manual"),
-                 c(i18n$t("D\u00e9faut (ggplot)"), i18n$t("Okabe-Ito (daltonien)"), "Viridis",
-                   i18n$t("Set2 (ColorBrewer)"), i18n$t("Manuel (choisir chaque couleur)"))))
+                 c(.tr_plain("D\u00e9faut (ggplot)"), .tr_plain("Okabe-Ito (daltonien)"), "Viridis",
+                   .tr_plain("Set2 (ColorBrewer)"), .tr_plain("Manuel (choisir chaque couleur)"))))
   )
 }
 
@@ -254,17 +254,18 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
     })
 
     output$manual_palette_ui <- renderUI({
+      global_data$language  # i18n
       if (!identical(input$palette_choice, "manual")) return(NULL)
       if (!nzchar(input$pca_color_by %||% "")) {
         return(div(class = "alert alert-warning", style = "font-size:0.8em;",
-                   "S\u00e9lectionnez d'abord une variable \"Colorer par\" pour personnaliser ses couleurs."))
+                   .tr("S\u00e9lectionnez d'abord une variable \"Colorer par\" pour personnaliser ses couleurs.")))
       }
       lvls <- tryCatch(manual_pca_levels(), error = function(e) character(0))
       if (length(lvls) == 0) return(NULL)
       ids <- paste0("manual_color_", seq_along(lvls))
       div(
         class = "border rounded p-2 mb-2", style = "background:#f8f9fa;",
-        h6(paste("Couleurs manuelles \u2014", input$pca_color_by),
+        h6(.t_fmt(.tr("Couleurs manuelles \u2014 {var}"), var = input$pca_color_by),
            style = "font-size:0.85em;font-weight:bold;margin-bottom:6px;"),
         manual_color_picker_ui(ns, ids, lvls, .default_manual_colors(length(lvls)))
       )
@@ -348,17 +349,18 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
     })
 
     output$qc_manual_palette_ui <- renderUI({
+      global_data$language  # i18n
       if (!identical(input$palette_choice, "manual")) return(NULL)
       if (!nzchar(input$qc_corr_annot %||% "")) {
         return(div(class = "alert alert-warning", style = "font-size:0.8em;",
-                   "S\u00e9lectionnez d'abord une \"Annotation\" pour personnaliser ses couleurs."))
+                   .tr("S\u00e9lectionnez d'abord une \"Annotation\" pour personnaliser ses couleurs.")))
       }
       lvls <- tryCatch(manual_qc_levels(), error = function(e) character(0))
       if (length(lvls) == 0) return(NULL)
       ids <- paste0("qc_manual_color_", seq_along(lvls))
       div(
         class = "border rounded p-2 mb-2", style = "background:#f8f9fa;",
-        h6(paste("Couleurs manuelles \u2014", input$qc_corr_annot),
+        h6(.t_fmt(.tr("Couleurs manuelles \u2014 {var}"), var = input$qc_corr_annot),
            style = "font-size:0.85em;font-weight:bold;margin-bottom:6px;"),
         manual_color_picker_ui(ns, ids, lvls, .default_manual_colors(length(lvls)))
       )

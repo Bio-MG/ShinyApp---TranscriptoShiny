@@ -61,8 +61,8 @@
     )
     if (length(confounded) > 0) {
       showNotification(
-        sprintf("❌ Covariable(s) confondue(s) avec '%s' : %s. Retirez-la(les) du design ou revoyez votre plan d'expérience.",
-                input$condition_col, paste(confounded, collapse = ", ")),
+        .t_fmt(.tr("\u274c Covariable(s) confondue(s) avec '{col}' : {covs}. Retirez-la(les) du design ou revoyez votre plan d'exp\u00e9rience."),
+               col = input$condition_col, covs = paste(confounded, collapse = ", ")),
         type = "error", duration = 10
       )
       return()
@@ -80,8 +80,8 @@
     )
     if (length(single_level) > 0) {
       showNotification(
-        sprintf("❌ Covariable(s) à une seule modalité : %s. Elle(s) n'apporterai(en)t aucune information — retirez-la(les) du design.",
-                paste(single_level, collapse = ", ")),
+        .t_fmt(.tr("\u274c Covariable(s) \u00e0 une seule modalit\u00e9 : {covs}. Elle(s) n'apporterai(en)t aucune information \u2014 retirez-la(les) du design."),
+               covs = paste(single_level, collapse = ", ")),
         type = "error", duration = 10
       )
       return()
@@ -102,7 +102,7 @@
                                     input$group_target, input$group_ref,
                                     dds = dds_full, shrink = input$shrink_lfc)
       } else {
-        p$set(0.5, paste("Ajustement", input$de_engine, "..."))
+        p$set(0.5, .t_fmt(.tr("Ajustement {engine} ..."), engine = input$de_engine))
         res <- run_bulk_de_dispatch(input$de_engine, shared_rv$filtered_counts, meta,
                                     input$condition_col, input$group_target, input$group_ref,
                                     covariates = input$covariates %||% character(0))
@@ -123,7 +123,8 @@
                         choices = names(shared_rv$contrasts), selected = contrast_name)
 
       n_sig <- sum(res$padj < input$padj_thresh & abs(res$log2FoldChange) > input$lfc_thresh, na.rm = TRUE)
-      showNotification(sprintf("✓ Contraste '%s': %d gènes significatifs", contrast_name, n_sig),
+      showNotification(.t_fmt(.tr("\u2713 Contraste '{c}': {n} g\u00e8nes significatifs"),
+                              c = contrast_name, n = n_sig),
                        type = "message", duration = 6)
 
     }, error = function(e) {
@@ -146,9 +147,9 @@
     a <- input$adhoc_group_a %||% character(0)
     b <- input$adhoc_group_b %||% character(0)
     issues <- character(0)
-    if (length(intersect(a, b)) > 0) issues <- c(issues, "Échantillon(s) présent(s) dans les 2 groupes.")
-    if (length(a) == 0 || length(b) == 0) issues <- c(issues, "Sélectionnez au moins 1 échantillon / groupe.")
-    else if (length(a) < 2 || length(b) < 2) issues <- c(issues, "Un groupe a < 2 réplicats — résultats peu fiables.")
+    if (length(intersect(a, b)) > 0) issues <- c(issues, .tr("\u00c9chantillon(s) pr\u00e9sent(s) dans les 2 groupes."))
+    if (length(a) == 0 || length(b) == 0) issues <- c(issues, .tr("S\u00e9lectionnez au moins 1 \u00e9chantillon / groupe."))
+    else if (length(a) < 2 || length(b) < 2) issues <- c(issues, .tr("Un groupe a < 2 r\u00e9plicats \u2014 r\u00e9sultats peu fiables."))
     if (length(issues) == 0) return(NULL)
     div(class = "alert alert-warning", style = "font-size:0.78em;padding:4px 8px;",
         lapply(issues, tags$div))
@@ -181,7 +182,8 @@
       shared_rv$active_contrast <- cname
       updateSelectInput(session, "active_contrast_view", choices = names(shared_rv$contrasts), selected = cname)
       n_sig <- sum(res$padj < input$padj_thresh & abs(res$log2FoldChange) > input$lfc_thresh, na.rm = TRUE)
-      showNotification(sprintf("✓ Ad-hoc '%s': %d gènes sig.", cname, n_sig), type = "message", duration = 6)
+      showNotification(.t_fmt(.tr("\u2713 Ad-hoc '{c}': {n} g\u00e8nes sig."), c = cname, n = n_sig),
+                       type = "message", duration = 6)
     }, error = function(e) showNotification(paste(.tr("Erreur DE ad-hoc:"), e$message), type = "error", duration = 10))
   })
 }

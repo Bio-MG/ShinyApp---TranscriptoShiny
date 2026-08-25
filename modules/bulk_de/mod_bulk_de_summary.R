@@ -41,11 +41,13 @@
   )
 
   output$table_updown <- renderDT({
+    global_data$language  # i18n
     req(updown_summary())
     df <- updown_summary()
-    df$Actif <- ifelse(df$actif, "→ actif", "")
+    df$Actif <- ifelse(df$actif, .tr("\u2192 actif"), "")
     df$actif <- NULL
-    colnames(df) <- c("Contraste", "Gènes testés", "Significatifs", "Up", "Down", "Actif")
+    colnames(df) <- c(.tr("Contraste"), .tr("G\u00e8nes test\u00e9s"), .tr("Significatifs"),
+                      "Up", "Down", .tr("Actif"))
     datatable(df, rownames = FALSE, options = list(pageLength = 10, scrollX = TRUE))
   })
 

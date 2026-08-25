@@ -58,8 +58,8 @@
     confounded <- Filter(function(cov) check_design_confounding(meta, input$condition_col, cov),
                          covariates_in_use)
     if (length(confounded) > 0) {
-      showNotification(sprintf("❌ Covariable(s) confondue(s) avec '%s' : %s.",
-                               input$condition_col, paste(confounded, collapse = ", ")),
+      showNotification(.t_fmt(.tr("\u274c Covariable(s) confondue(s) avec '{col}' : {covs}. Retirez-la(les) du design ou revoyez votre plan d'exp\u00e9rience."),
+                              col = input$condition_col, covs = paste(confounded, collapse = ", ")),
                        type = "error", duration = 10); return()
     }
 
@@ -91,8 +91,8 @@
                           covariates = input$covariates %||% character(0))
 
       if (length(de_list) < 2) {
-        stop("Au moins 2 méthodes doivent réussir pour comparer (", length(de_list),
-            " a réussi). Vérifiez que edgeR/limma sont installés.")
+        stop(.t_fmt(.tr("Au moins 2 m\u00e9thodes doivent r\u00e9ussir pour comparer ({n} r\u00e9ussies). V\u00e9rifiez que edgeR/limma sont install\u00e9s."),
+                    n = length(de_list)))
       }
 
       p$set(0.85, .tr("Consensus de rang..."))
@@ -106,10 +106,15 @@
       shared_rv$multimethod_de        <- de_list
       shared_rv$multimethod_consensus <- cons
 
-      multimethod_status_rv(sprintf(
-        "✓ %d méthode(s) comparée(s) : %s (%s vs %s)",
-        length(de_list), paste(names(de_list), collapse = ", "),
-        input$group_target, input$group_ref
+      # i18n-safe STATE: language-neutral data only — the display sentence is
+      # rebuilt at render time in the CURRENT language (see
+      # output$multimethod_status_ui below), mirroring the mapping module's
+      # mapping_summary_data pattern.
+      multimethod_status_rv(list(
+        n_methods = length(de_list),
+        methods   = paste(names(de_list), collapse = ", "),
+        target    = input$group_target,
+        ref       = input$group_ref
       ))
       showNotification(.t_fmt(.tr("Comparaison multi-méthodes terminée ({methods})"),
                                methods = paste(names(de_list), collapse = ", ")),
@@ -130,11 +135,15 @@
     .trl <- function(key) { tr <- global_data$i18n; if (is.null(tr)) return(key)
                             tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key) }
 
-    if (is.null(multimethod_status_rv())) {
+    st <- multimethod_status_rv()
+    if (is.null(st)) {
       div(class = "alert alert-info", style = "font-size:0.85em;",
           .trl("Cliquez \"🔬 Comparer DESeq2 / edgeR / limma-voom\" dans le panneau Step 2."))
     } else {
-      div(class = "alert alert-success", style = "font-size:0.85em;", multimethod_status_rv())
+      # Rebuild the sentence in the CURRENT language from language-neutral data
+      div(class = "alert alert-success", style = "font-size:0.85em;",
+          .t_fmt(.trl("✓ {n} méthode(s) comparée(s) : {m} ({a} vs {b})."),
+                 n = st$n_methods, m = st$methods, a = st$target, b = st$ref))
     }
   })
 
@@ -152,12 +161,12 @@
     h <- session$clientData[[paste0("output_", "mm_venn_plot", "_height")]]
     if (isTRUE(w < 30) || isTRUE(h < 30)) {
       grid::grid.newpage()
-      grid::grid.text("Conteneur trop petit pour afficher le diagramme.",
+      grid::grid.text(.tr("Conteneur trop petit pour afficher le diagramme."),
                       gp = grid::gpar(col = "grey40", fontsize = 12))
       return(invisible(NULL))
     }
     sets <- tryCatch(mm_gene_sets(), error = function(e) NULL)
-    validate(need(!is.null(sets), "Lancez d'abord la comparaison multi-méthodes."))
+    validate(need(!is.null(sets), .tr("Lancez d'abord la comparaison multi-m\u00e9thodes.")))
     tryCatch({
       if (input$mm_venn_type == "venn") plot_venn_contrasts(sets) else plot_upset_contrasts(sets)
     }, error = function(e) {

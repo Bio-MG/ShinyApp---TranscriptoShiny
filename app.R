@@ -140,7 +140,11 @@ ui <- page_navbar(
   # children (nav_panel/nav_menu/nav_spacer only); a raw usei18n() fragment
   # among them aborts UI build with "Navigation containers expect a
   # collection of nav_panel()s".
-  header = if (I18N_AVAILABLE) shiny.i18n::usei18n(i18n),
+  # FIX 2 (.usei18n_fixed, global.R): stock usei18n() lets htmltools
+  # entity-escape the embedded translation dict ("&" -> "&amp;"), so every
+  # key containing & ' " < > silently failed client-side lookup. The wrapper
+  # re-renders the dict <script> as raw HTML.
+  header = if (I18N_AVAILABLE) .usei18n_fixed(i18n),
   
   
   
