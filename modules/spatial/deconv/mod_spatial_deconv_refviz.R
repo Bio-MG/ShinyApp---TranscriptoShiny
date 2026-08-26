@@ -5,9 +5,19 @@
 # outputs for the reference preview panel.
 #
 # Plain function called from the orchestrator's moduleServer().
+#
+# i18n: mirai task body stays COMPLETELY UNCHANGED (daemons have no
+# global_data/i18n — write_mirai_log strings remain French).
 # =============================================================================
 
 .deconv_refviz_server <- function(input, output, session, ns, global_data, shared_rv, ref_state, input_ref_celltype_col) {
+
+  # Session-scoped scalar translation (plain strings, never HTML spans).
+  .tr <- function(key) {
+    tr <- global_data$i18n
+    if (is.null(tr)) return(key)
+    tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+  }
 
   # discrete_palette_colors_fallback() supprimee : spatial_discrete_colors()
   # (R/palettes.R) suit la palette globale de l'onglet Visualisation.
@@ -87,7 +97,7 @@
     } else {
       # "local" mode: use the ref_state$obj uploaded in this session
       if (is.null(ref_state$obj) || is.null(input_ref_celltype_col())) {
-        showNotification("Chargez d'abord une reference et choisissez la colonne 'type cellulaire'.",
+        showNotification(.tr("Chargez d'abord une reference et choisissez la colonne 'type cellulaire'."),
                          type = "warning", duration = 8)
         return()
       }
@@ -104,18 +114,20 @@
     if (ref_viz_task$status() == "success") {
       ref_viz_result(ref_viz_task$result())
     } else if (ref_viz_task$status() == "error") {
-      showNotification("Erreur lors du calcul UMAP/PCA de la reference -- voir le journal.",
+      showNotification(.tr("Erreur pendant le calcul UMAP/PCA de la reference -- voir le journal."),
                        type = "error", duration = 10)
     }
   })
 
   output$ref_viz_progress_text <- renderText({
+    global_data$language  # i18n: re-render on language switch
     lines <- ref_viz_tracker()
-    if (length(lines) == 0) return("En attente...")
+    if (length(lines) == 0) return(.tr("En attente..."))
     paste(lines, collapse = "\n")
   })
 
   output$ref_viz_plot <- renderPlot({
+    global_data$language  # i18n: re-render on language switch
     req(ref_viz_result())
     emb <- ref_viz_result()
     lv  <- sort(unique(stats::na.omit(as.character(emb$cell_type))))
@@ -129,11 +141,12 @@
       ggplot2::theme_minimal() +
       ggplot2::labs(x = paste0(toupper(input$ref_viz_reduction), "_1"),
                     y = paste0(toupper(input$ref_viz_reduction), "_2"),
-                    title = "Reference scRNA-seq") +
+                    title = .tr("Reference scRNA-seq")) +
       ggplot2::theme(legend.position = "none")
   })
 
   output$ref_viz_plotly <- plotly::renderPlotly({
+    global_data$language  # i18n: re-render on language switch
     req(ref_viz_result())
     emb <- ref_viz_result()
     lv  <- sort(unique(stats::na.omit(as.character(emb$cell_type))))
@@ -141,7 +154,7 @@
     plotly::plot_ly(emb, x = ~dim1, y = ~dim2, color = ~cell_type, colors = pal,
                     type = "scattergl", mode = "markers",
                     marker = list(size = 5, opacity = 0.75),
-                    text = ~paste0("Type: ", cell_type), hoverinfo = "text") |>
+                    text = ~paste0(.tr("Type: "), cell_type), hoverinfo = "text") |>
       plotly::layout(
         xaxis = list(title = paste0(toupper(input$ref_viz_reduction), "_1")),
         yaxis = list(title = paste0(toupper(input$ref_viz_reduction), "_2")),

@@ -58,91 +58,78 @@ mod_spatial_multi_ui <- function(id) {
   ns <- NS(id)
   layout_sidebar(
     sidebar = sidebar(
-      title = "Multi-echantillons", width = 360,
+      title = i18n$t("Multi-echantillons"), width = 360,
 
       div(class = "alert alert-light", style = "font-size:0.8rem;",
           bsicons::bs_icon("info-circle"),
-          " Comparez et integrez conjointement plusieurs echantillons spatiaux deja importes ",
-          "(onglet Import > Spatial). L'integration s'execute sur les \"sketches\" en RAM ",
-          "(echantillon <= max_sketch cellules par jeu de donnees, jamais les matrices ",
-          "pleine resolution) pour rester leger sur une machine CPU/32 Go."),
+          i18n$t(" Comparez et integrez conjointement plusieurs echantillons spatiaux deja importes (onglet Import > Spatial). L'integration s'execute sur les \"sketches\" en RAM (echantillon <= max_sketch cellules par jeu de donnees, jamais les matrices pleine resolution) pour rester leger sur une machine CPU/32 Go.")),
 
       uiOutput(ns("dataset_picker_ui")),
 
-      numericInput(ns("npcs"), "Composantes PCA", 30, min = 5, max = 50, step = 5),
-      numericInput(ns("resolution"), "Resolution (Leiden)", 0.8, min = 0.1, max = 3, step = 0.1),
-      checkboxInput(ns("use_harmony"), "Correction de batch (Harmony, groupe = echantillon)", value = TRUE),
+      numericInput(ns("npcs"), i18n$t("Composantes PCA"), 30, min = 5, max = 50, step = 5),
+      numericInput(ns("resolution"), i18n$t("Resolution (Leiden)"), 0.8, min = 0.1, max = 3, step = 0.1),
+      checkboxInput(ns("use_harmony"), i18n$t("Correction de batch (Harmony, groupe = echantillon)"), value = TRUE),
       div(class = "alert alert-light", style = "font-size:0.72rem;",
-          "Recommande pour comparer des echantillons/conditions differents. Desactivez si vos ",
-          "coupes proviennent du meme tissu/bloc (ex: 2 moities d'un meme cerveau) — comportement ",
-          "de la vignette Seurat par defaut, sans correction."),
+          i18n$t("Recommande pour comparer des echantillons/conditions differents. Desactivez si vos coupes proviennent du meme tissu/bloc (ex: 2 moities d'un meme cerveau) — comportement de la vignette Seurat par defaut, sans correction.")),
 
-      bslib::input_task_button(ns("btn_integrate"), "Lancer l'integration",
+      bslib::input_task_button(ns("btn_integrate"), i18n$t("Lancer l'integration"),
                                 icon = icon("layer-group")),
       verbatimTextOutput(ns("integrate_progress_text"), placeholder = TRUE),
 
       hr(),
-      radioButtons(ns("section_color_by"), "Colorer les cartes par section",
-                   choices = c("nCount (avant integration)" = "ncount",
-                               "Cluster integre (apres integration)" = "cluster"),
+      radioButtons(ns("section_color_by"), i18n$t("Colorer les cartes par section"),
+                   choices = stats::setNames(c("ncount", "cluster"),
+                                             c(.tr_plain("nCount (avant integration)"),
+                                               .tr_plain("Cluster integre (apres integration)"))),
                    selected = "ncount"),
 
       hr(),
       div(class = "alert alert-light", style = "font-size:0.72rem;",
           bsicons::bs_icon("bar-chart-steps"),
-          " Le test de composition differentielle (onglet \"Composition differentielle\") se ",
-          "recalcule automatiquement des qu'une integration conjointe est disponible ci-dessus ",
-          "— aucun bouton separe.")
+          i18n$t(" Le test de composition differentielle (onglet \"Composition differentielle\") se recalcule automatiquement des qu'une integration conjointe est disponible ci-dessus — aucun bouton separe."))
     ),
 
     navset_card_underline(
       nav_panel(
-        "Cartes par section",
+        i18n$t("Cartes par section"),
         div(class = "alert alert-light small mt-2 mb-2",
-            "Equivalent de SpatialDimPlot(brain.merge) : une carte par echantillon selectionne, ",
-            "cote a cote, meme metrique/coloration pour comparaison directe."),
+            i18n$t("Equivalent de SpatialDimPlot(brain.merge) : une carte par echantillon selectionne, cote a cote, meme metrique/coloration pour comparaison directe.")),
         uiOutput(ns("section_maps_ui"))
       ),
       nav_panel(
-        "UMAP conjoint",
+        i18n$t("UMAP conjoint"),
         div(class = "alert alert-light small mt-2 mb-2",
-            "Equivalent de DimPlot(brain.merge, group.by=c(\"ident\",\"orig.ident\")) : le panneau de ",
-            "gauche verifie l'effet de lot (les echantillons doivent bien se melanger si Harmony est ",
-            "actif) ; celui de droite montre les clusters biologiques resultants."),
+            i18n$t("Equivalent de DimPlot(brain.merge, group.by=c(\"ident\",\"orig.ident\")) : le panneau de gauche verifie l'effet de lot (les echantillons doivent bien se melanger si Harmony est actif) ; celui de droite montre les clusters biologiques resultants.")),
         layout_columns(
           col_widths = c(6, 6),
           row_heights = "460px",
           card(full_screen = TRUE, height = "460px",
-               card_header("Colore par echantillon (effet de lot)"),
+               card_header(i18n$t("Colore par echantillon (effet de lot)")),
                card_body(class = "p-0", plotly::plotlyOutput(ns("umap_by_dataset"), height = "100%"))),
           card(full_screen = TRUE, height = "460px",
-               card_header("Colore par cluster integre"),
+               card_header(i18n$t("Colore par cluster integre")),
                card_body(class = "p-0", plotly::plotlyOutput(ns("umap_by_cluster"), height = "100%")))
         )
       ),
       nav_panel(
-        "Composition differentielle",
+        i18n$t("Composition differentielle"),
         div(class = "alert alert-light small mt-2 mb-2",
-            "Test du Chi2 d'independance (table de contingence dataset x cluster) sur ",
-            "l'integration conjointe -- repli automatique sur un p simule (2000 replicats) si ",
-            "des effectifs attendus sont trop faibles (< 5). Les residus standardises indiquent ",
-            "QUELS clusters/echantillons s'ecartent le plus de l'independance (|residu| > ~2 = ",
-            "ecart notable)."),
+            i18n$t("Test du Chi2 d'independance (table de contingence dataset x cluster) sur l'integration conjointe -- repli automatique sur un p simule (2000 replicats) si des effectifs attendus sont trop faibles (< 5). Les residus standardises indiquent QUELS clusters/echantillons s'ecartent le plus de l'independance (|residu| > ~2 = ecart notable).")),
         uiOutput(ns("diffcomp_summary_ui")),
         layout_columns(
           col_widths = c(6, 6),
           row_heights = "520px",
           card(full_screen = TRUE, height = "520px",
-               card_header("Residus standardises (dataset x cluster)"),
+               card_header(i18n$t("Residus standardises (dataset x cluster)")),
                card_body(class = "p-0", plotOutput(ns("diffcomp_resid_plot"), height = "100%"))),
           card(full_screen = TRUE, height = "520px",
-               card_header("Proportions par echantillon"),
+               card_header(i18n$t("Proportions par echantillon")),
                card_body(class = "p-0", plotOutput(ns("diffcomp_prop_plot"), height = "100%")))
         ),
         DT::DTOutput(ns("diffcomp_contingency_table"))
       ),
       nav_panel(
-        "Resume",
+        i18n$t("Resume"),
         uiOutput(ns("summary_ui")),
         DT::DTOutput(ns("n_per_dataset_table"))
       )
@@ -154,16 +141,37 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+    # Session-scoped scalar translation (plain strings, never HTML spans).
+    .tr <- function(key) {
+      tr <- global_data$i18n
+      if (is.null(tr)) return(key)
+      tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+    }
+
+    # i18n: push translated labels/choices for build-time-frozen inputs on
+    # every language change (values NEVER change; selection is preserved).
+    observeEvent(global_data$language, {
+      updateNumericInput(session, "npcs", label = .tr("Composantes PCA"))
+      updateNumericInput(session, "resolution", label = .tr("Resolution (Leiden)"))
+      updateCheckboxInput(session, "use_harmony",
+        label = .tr("Correction de batch (Harmony, groupe = echantillon)"))
+      updateRadioButtons(session, "section_color_by",
+        label = .tr("Colorer les cartes par section"),
+        choices = stats::setNames(c("ncount", "cluster"),
+                                  c(.tr("nCount (avant integration)"),
+                                    .tr("Cluster integre (apres integration)"))))
+    }, ignoreInit = TRUE)
+
     # ── Dataset picker (dynamic: reflects whatever has been imported) ────
     output$dataset_picker_ui <- renderUI({
+      global_data$language  # re-render on language switch
       ds_names <- names(global_data$spatial_datasets)
       if (length(ds_names) < 2) {
         return(div(class = "alert alert-warning", style = "font-size:0.8rem;",
-                    sprintf(paste0("%d echantillon(s) importe(s) — importez-en au moins 2 ",
-                                   "(onglet Import > Spatial) pour utiliser cette page."),
+                    sprintf(.tr("%d echantillon(s) importe(s) — importez-en au moins 2 (onglet Import > Spatial) pour utiliser cette page."),
                             length(ds_names))))
       }
-      checkboxGroupInput(ns("selected_datasets"), "Echantillons a comparer",
+      checkboxGroupInput(ns("selected_datasets"), .tr("Echantillons a comparer"),
                          choices = ds_names, selected = ds_names)
     })
 
@@ -195,7 +203,7 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
     observeEvent(input$btn_integrate, {
       ds <- selected_ds()
       if (length(ds) < 2) {
-        showNotification("Selectionnez au moins 2 echantillons.", type = "warning", duration = 6)
+        showNotification(.tr("Selectionnez au moins 2 echantillons."), type = "warning", duration = 6)
         return()
       }
       reset_log(log_file)
@@ -224,17 +232,18 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
           computed_at = Sys.time()
         )
         updateRadioButtons(session, "section_color_by", selected = "cluster")
-        showNotification("Integration terminee.", type = "message", duration = 5)
+        showNotification(.tr("Integration terminee."), type = "message", duration = 5)
       } else if (integrate_task$status() == "error") {
         showNotification(
-          "Erreur (ou depassement du delai) pendant l'integration multi-echantillons — voir le log. Essayez 'Reinitialiser les daemons' dans l'entete Spatial puis relancez.",
+          .tr("Erreur (ou depassement du delai) pendant l'integration multi-echantillons — voir le log. Essayez 'Reinitialiser les daemons' dans l'entete Spatial puis relancez."),
           type = "error", duration = 12)
       }
     })
 
     output$integrate_progress_text <- renderText({
+      global_data$language  # re-render on language switch
       lines <- tracker()
-      if (length(lines) == 0) return("En attente...")
+      if (length(lines) == 0) return(.tr("En attente..."))
       paste(lines, collapse = "\n")
     })
 
@@ -344,7 +353,7 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
       tryCatch(
         compute_composition_differential(integration_result()$embeddings),
         error = function(e) {
-          showNotification(paste("Erreur test de composition differentielle :", conditionMessage(e)),
+          showNotification(paste(.tr("Erreur test de composition differentielle :"), conditionMessage(e)),
                            type = "error", duration = 8)
           NULL
         }
@@ -352,19 +361,20 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
     })
 
     output$diffcomp_summary_ui <- renderUI({
+      global_data$language  # re-render on language switch
       res <- composition_diff_result()
       if (is.null(res)) {
         return(div(class = "alert alert-light",
-                    "Calculez d'abord une integration conjointe (bouton \"Lancer l'integration\" ",
-                    "dans le panneau lateral)."))
+                    .tr("Calculez d'abord une integration conjointe (bouton \"Lancer l'integration\" dans le panneau lateral).")))
       }
-      sig <- if (res$chisq$p_value < 0.05) "SIGNIFICATIVE" else "non significative"
+      sig <- if (res$chisq$p_value < 0.05) .tr("SIGNIFICATIVE") else .tr("non significative")
       div(class = if (res$chisq$p_value < 0.05) "alert alert-success" else "alert alert-light",
-          sprintf("Chi2 = %.1f, p = %.4g (%s) — composition %s entre echantillons (seuil 0.05).",
+          sprintf(.tr("Chi2 = %.1f, p = %.4g (%s) — composition %s entre echantillons (seuil 0.05)."),
                   res$chisq$statistic, res$chisq$p_value, res$chisq$method, sig))
     })
 
     output$diffcomp_resid_plot <- renderPlot({
+      global_data$language  # re-render on language switch
       res <- req(composition_diff_result())
       ggplot2::ggplot(res$residuals, ggplot2::aes(x = cluster, y = dataset, fill = std_resid)) +
         ggplot2::geom_tile() +
@@ -372,11 +382,12 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
         spatial_diverging_scale(shared_rv, aesthetic = "fill") +
         ggplot2::theme_minimal(base_size = 12) +
         ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
-        ggplot2::labs(x = "Cluster", y = "Echantillon", fill = "Residu\nstandardise",
-                      title = "Ecarts a l'independance (dataset x cluster)")
+        ggplot2::labs(x = .tr("Cluster"), y = .tr("Echantillon"), fill = .tr("Residu\nstandardise"),
+                      title = .tr("Ecarts a l'independance (dataset x cluster)"))
     })
 
     output$diffcomp_prop_plot <- renderPlot({
+      global_data$language  # re-render on language switch
       res <- req(composition_diff_result())
       lv  <- sort(unique(as.character(res$proportions$cluster)))
       ggplot2::ggplot(res$proportions, ggplot2::aes(x = dataset, y = proportion, fill = cluster)) +
@@ -384,35 +395,39 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
         ggplot2::scale_fill_manual(values = spatial_discrete_colors(lv, shared_rv, kind = "cluster")) +
         ggplot2::theme_minimal(base_size = 12) +
         ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 30, hjust = 1)) +
-        ggplot2::labs(x = NULL, y = "Proportion", fill = "Cluster",
-                      title = "Composition en clusters par echantillon")
+        ggplot2::labs(x = NULL, y = .tr("Proportion"), fill = .tr("Cluster"),
+                      title = .tr("Composition en clusters par echantillon"))
     })
 
     output$diffcomp_contingency_table <- DT::renderDT({
+      global_data$language  # re-render on language switch
       res <- req(composition_diff_result())
       tab <- as.data.frame.matrix(res$contingency)
       tab <- cbind(Echantillon = rownames(tab), tab)
+      colnames(tab)[1] <- .tr("Echantillon")
       DT::datatable(tab, rownames = FALSE, options = list(pageLength = 10, scrollX = TRUE))
     })
 
     # ── Summary ───────────────────────────────────────────────────────────
     output$summary_ui <- renderUI({
+      global_data$language  # re-render on language switch
       res <- integration_result()
       if (is.null(res)) {
         return(div(class = "alert alert-light",
-                    "Aucune integration calculee pour le moment. Selectionnez des echantillons et ",
-                    "cliquez \"Lancer l'integration\"."))
+                    .tr("Aucune integration calculee pour le moment. Selectionnez des echantillons et cliquez \"Lancer l'integration\".")))
       }
       div(class = "alert alert-success",
-          sprintf("Integration terminee — reduction utilisee : %s ; %d elements au total sur %d echantillon(s).",
-                   res$reduction_used, nrow(res$embeddings), length(unique(res$embeddings$dataset))))
+          .t_fmt(.tr("Integration terminee — reduction utilisee : {red} ; {n} elements au total sur {ds} echantillon(s)."),
+                 red = res$reduction_used, n = nrow(res$embeddings),
+                 ds = length(unique(res$embeddings$dataset))))
     })
 
     output$n_per_dataset_table <- DT::renderDT({
+      global_data$language  # re-render on language switch
       res <- integration_result()
       req(res)
       tab <- as.data.frame(res$n_per_dataset)
-      colnames(tab) <- c("Echantillon", "Elements (sketch)")
+      colnames(tab) <- c(.tr("Echantillon"), .tr("Elements (sketch)"))
       DT::datatable(tab, options = list(pageLength = 10), rownames = FALSE)
     })
   })

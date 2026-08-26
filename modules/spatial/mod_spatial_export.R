@@ -1,6 +1,9 @@
 # =============================================================================
 # modules/spatial/mod_spatial_export.R — Export ("paquet complet" + script R)
 # =============================================================================
+# i18n Phase 5 : labels statiques via i18n$t()/.tr_plain(), contenu dynamique
+#    serveur via le proxy .tr() + .t_fmt() ; renderUI lit global_data$language.
+#
 # v2 (vague 5 — Phase 6 stats + "exporter tout ce qui est en memoire") :
 #   1. 3 nouvelles sections cochables : "Enrichissement de voisinage" (B1),
 #      "Hotspots (Getis-Ord)" (B4), "Ripley's K" (B6) -- memes conventions
@@ -33,43 +36,37 @@ mod_spatial_export_ui <- function(id) {
   ns <- NS(id)
   layout_sidebar(
     sidebar = sidebar(
-      title = "Export", width = 360,
+      title = i18n$t("Export"), width = 360,
 
       div(class = "alert alert-light", style = "font-size:0.8rem;",
           bsicons::bs_icon("archive"),
-          " Regroupe les resultats DEJA CALCULES (QC, clustering, deconvolution, ",
-          "niches, statistiques spatiales avancees, cartes) pour l'echantillon actif ",
-          "dans une archive .zip, ou genere un script R autonome (+ contexte) pour ",
-          "reproduire le pipeline hors Shiny."),
+          i18n$t("Regroupe les resultats DEJA CALCULES (QC, clustering, deconvolution, niches, statistiques spatiales avancees, cartes) pour l'echantillon actif dans une archive .zip, ou genere un script R autonome (+ contexte) pour reproduire le pipeline hors Shiny.")),
 
       div(class = "d-flex gap-2 mb-1",
-          actionLink(ns("btn_select_all"), "Tout selectionner", style = "font-size:0.75rem;"),
+          actionLink(ns("btn_select_all"), i18n$t("Tout selectionner"), style = "font-size:0.75rem;"),
           tags$span("\u00b7", class = "text-muted"),
-          actionLink(ns("btn_select_none"), "Tout deselectionner", style = "font-size:0.75rem;")),
-      checkboxGroupInput(ns("sections"), "Sections a inclure dans le paquet complet",
-        choices = c("QC" = "qc", "Clustering" = "cluster", "Deconvolution" = "deconv",
-                    "Niches" = "niche", "Moran's I (SVGs)" = "moran",
-                    "Enrichissement de voisinage" = "enrichment",
-                    "Hotspots (Getis-Ord Gi*)" = "hotspots",
-                    "Ripley's K" = "ripley",
-                    "Cartes (PNG)" = "maps",
-                    "Multi-echantillons (integration + composition diff.)" = "multi",
-                    "Vues sauvegardees (onglet 4)" = "custom_viz"),
+          actionLink(ns("btn_select_none"), i18n$t("Tout deselectionner"), style = "font-size:0.75rem;")),
+      checkboxGroupInput(ns("sections"), i18n$t("Sections a inclure dans le paquet complet"),
+        choices = stats::setNames(
+          c("qc", "cluster", "deconv", "niche", "moran",
+            "enrichment", "hotspots", "ripley", "maps", "multi", "custom_viz"),
+          c(.tr_plain("QC"), .tr_plain("Clustering"), .tr_plain("Deconvolution"),
+            .tr_plain("Niches"), .tr_plain("Moran's I (SVGs)"),
+            .tr_plain("Enrichissement de voisinage"),
+            .tr_plain("Hotspots (Getis-Ord Gi*)"),
+            .tr_plain("Ripley's K"),
+            .tr_plain("Cartes (PNG)"),
+            .tr_plain("Multi-echantillons (integration + composition diff.)"),
+            .tr_plain("Vues sauvegardees (onglet 4)"))),
         selected = .SPATIAL_EXPORT_ALL_SECTIONS),
-      downloadButton(ns("dl_bundle"), "\U0001F4E6 Paquet complet (.zip)",
+      downloadButton(ns("dl_bundle"), i18n$t("\U0001F4E6 Paquet complet (.zip)"),
                      class = "btn-success w-100 mb-3"),
 
       hr(),
       div(class = "alert alert-light", style = "font-size:0.75rem;",
           bsicons::bs_icon("code-slash"),
-          " Le script reproduit UNIQUEMENT les etapes DEJA LANCEES dans l'app (QC/",
-          "clustering/deconvolution RCTD/niches) avec les MEMES parametres. Necessite ",
-          "que le dossier BPCells reste accessible au meme chemin (voir README/",
-          "commentaires inclus dans le script). Les statistiques spatiales avancees ",
-          "(enrichissement/hotspots/Ripley's K) ne sont PAS re-executees par ce script ",
-          "-- leurs resultats DEJA calcules restent disponibles en CSV dans le paquet ",
-          "complet ci-dessus."),
-      downloadButton(ns("dl_script"), "\U0001F9FE Script R reproductible (.zip)",
+          i18n$t("Le script reproduit UNIQUEMENT les etapes DEJA LANCEES dans l'app (QC/clustering/deconvolution RCTD/niches) avec les MEMES parametres. Necessite que le dossier BPCells reste accessible au meme chemin (voir README/commentaires inclus dans le script). Les statistiques spatiales avancees (enrichissement/hotspots/Ripley's K) ne sont PAS re-executees par ce script -- leurs resultats DEJA calcules restent disponibles en CSV dans le paquet complet ci-dessus.")),
+      downloadButton(ns("dl_script"), i18n$t("\U0001F9FE Script R reproductible (.zip)"),
                      class = "btn-outline-secondary w-100")
     ),
     uiOutput(ns("export_preview_ui"))
@@ -79,6 +76,13 @@ mod_spatial_export_ui <- function(id) {
 mod_spatial_export_server <- function(id, global_data, shared_rv) {
   moduleServer(id, function(input, output, session) {
 
+    # ── i18n proxy ──────────────────────────────────────────────────────────
+    .tr <- function(key) {
+      tr <- global_data$i18n
+      if (is.null(tr)) return(key)
+      tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+    }
+
     observeEvent(input$btn_select_all, {
       updateCheckboxGroupInput(session, "sections", selected = .SPATIAL_EXPORT_ALL_SECTIONS)
     })
@@ -87,24 +91,25 @@ mod_spatial_export_server <- function(id, global_data, shared_rv) {
     })
 
     output$export_preview_ui <- renderUI({
+      global_data$language  # re-render on language switch
       obj <- global_data$spatial_obj
       if (is.null(obj)) {
         return(div(class = "alert alert-danger",
-                    "Aucune donnee spatiale chargee. Allez dans l'onglet 'Import Donnees > Spatial'."))
+                    .tr("Aucune donnee spatiale chargee. Allez dans l'onglet 'Import Donnees > Spatial'.")))
       }
       row <- function(label, value) tags$tr(tags$td(label), tags$td(value))
       tagList(
-        h6("Etat actuel de l'echantillon (ce qui sera exporte)", style = "font-weight:bold;"),
+        h6(.tr("Etat actuel de l'echantillon (ce qui sera exporte)"), style = "font-weight:bold;"),
         tags$table(class = "table table-sm table-striped",
-          row("Echantillon actif", obj$project %||% "-"),
-          row("QC applique", if (!is.null(shared_rv$qc_pass_idx)) sprintf("%d elements retenus", length(shared_rv$qc_pass_idx)) else "Non"),
-          row("Clustering", if (!is.null(shared_rv$cluster_labels)) sprintf("%d clusters", length(unique(shared_rv$cluster_labels))) else "Non calcule"),
-          row("Deconvolution", if (!is.null(shared_rv$deconv_props)) sprintf("%d types cellulaires", ncol(shared_rv$deconv_props) - 1) else "Non calculee"),
-          row("Niches", if (!is.null(shared_rv$niche_labels)) sprintf("%d niches", length(unique(shared_rv$niche_labels))) else "Non calculees"),
-          row("Moran's I", if (!is.null(shared_rv$moran_results)) sprintf("%d genes testes", nrow(shared_rv$moran_results)) else "Non calcule"),
-          row("Enrichissement de voisinage", if (!is.null(shared_rv$enrichment_result)) sprintf("%d niveaux", length(shared_rv$enrichment_result$levels)) else "Non calcule"),
-          row("Hotspots (Getis-Ord)", if (!is.null(shared_rv$hotspot_result)) sprintf("%d elements testes", nrow(shared_rv$hotspot_result)) else "Non calcules"),
-          row("Ripley's K", if (!is.null(shared_rv$ripley_result)) sprintf("cible '%s'", shared_rv$ripley_result$target_level) else "Non calcule")
+          row(.tr("Echantillon actif"), obj$project %||% "-"),
+          row(.tr("QC applique"), if (!is.null(shared_rv$qc_pass_idx)) .t_fmt(.tr("{n} elements retenus"), n = length(shared_rv$qc_pass_idx)) else .tr("Non")),
+          row(.tr("Clustering"), if (!is.null(shared_rv$cluster_labels)) .t_fmt(.tr("{n} clusters"), n = length(unique(shared_rv$cluster_labels))) else .tr("Non calcule")),
+          row(.tr("Deconvolution"), if (!is.null(shared_rv$deconv_props)) .t_fmt(.tr("{n} types cellulaires"), n = ncol(shared_rv$deconv_props) - 1) else .tr("Non calculee")),
+          row(.tr("Niches"), if (!is.null(shared_rv$niche_labels)) .t_fmt(.tr("{n} niches"), n = length(unique(shared_rv$niche_labels))) else .tr("Non calculees")),
+          row(.tr("Moran's I"), if (!is.null(shared_rv$moran_results)) .t_fmt(.tr("{n} genes testes"), n = nrow(shared_rv$moran_results)) else .tr("Non calcule")),
+          row(.tr("Enrichissement de voisinage"), if (!is.null(shared_rv$enrichment_result)) .t_fmt(.tr("{n} niveaux"), n = length(shared_rv$enrichment_result$levels)) else .tr("Non calcule")),
+          row(.tr("Hotspots (Getis-Ord)"), if (!is.null(shared_rv$hotspot_result)) .t_fmt(.tr("{n} elements testes"), n = nrow(shared_rv$hotspot_result)) else .tr("Non calcules")),
+          row(.tr("Ripley's K"), if (!is.null(shared_rv$ripley_result)) .t_fmt(.tr("cible '{target}'"), target = shared_rv$ripley_result$target_level) else .tr("Non calcule"))
         )
       )
     })
@@ -135,7 +140,7 @@ mod_spatial_export_server <- function(id, global_data, shared_rv) {
         tmp_dir <- tempfile("spatial_export_"); dir.create(tmp_dir)
         on.exit(unlink(tmp_dir, recursive = TRUE), add = TRUE)
 
-        withProgress(message = "Preparation du paquet complet...", value = 0.2, {
+        withProgress(message = .tr("Preparation du paquet complet..."), value = 0.2, {
           written <- tryCatch(
             build_spatial_export_bundle(
               spatial_obj = global_data$spatial_obj,
@@ -145,11 +150,11 @@ mod_spatial_export_server <- function(id, global_data, shared_rv) {
               multi_integration = global_data$spatial_multi_integration
             ),
             error = function(e) {
-              showNotification(paste("Erreur export :", conditionMessage(e)), type = "error", duration = 10)
+              showNotification(paste(.tr("Erreur export :"), conditionMessage(e)), type = "error", duration = 10)
               character(0)
             }
           )
-          incProgress(0.6, detail = "Compression (.zip)...")
+          incProgress(0.6, detail = .tr("Compression (.zip)..."))
           if (length(written) == 0) {
             fallback <- file.path(tmp_dir, "README.txt")
             writeLines("Aucune section disponible/selectionnee -- rien a exporter.", fallback)

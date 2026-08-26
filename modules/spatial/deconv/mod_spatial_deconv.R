@@ -23,6 +23,47 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+    # Session-scoped scalar translation (plain strings, never HTML spans).
+    .tr <- function(key) {
+      tr <- global_data$i18n
+      if (is.null(tr)) return(key)
+      tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+    }
+
+    # ── i18n: push translated labels/choices for build-time-frozen inputs on
+    # every language change (values NEVER change; selection is preserved).
+    # The bslib task buttons cannot be relabelled server-side
+    # (update_task_button() has no label argument) — they keep their
+    # client-side JS-shim translation from i18n$t() at build time.
+    observeEvent(global_data$language, {
+      updateRadioButtons(session, "mode",
+        label = .tr("Methode"),
+        choices = stats::setNames(
+          c("rctd", "labeltransfer", "stdeconvolve"),
+          c(.tr("Avec reference scRNA-seq (RCTD)"),
+            .tr("Transfert d'ancres (Label Transfer, Seurat)"),
+            .tr("Sans reference (LDA, type STdeconvolve)"))))
+      updateNumericInput(session, "rctd_n_hvg",
+                         label = .tr("Max genes (HVG) avant RCTD (RAM/vitesse)"))
+      updateRadioButtons(session, "lt_norm_method",
+        label = .tr("Normalisation"),
+        choices = stats::setNames(
+          c("lognorm", "sct"),
+          c(.tr("LogNormalize (rapide, recommande CPU)"),
+            .tr("SCTransform (vignette Seurat, plus lent)"))))
+      updateNumericInput(session, "lt_ncells",
+                         label = .tr("Cellules pour l'apprentissage SCTransform (ncells)"))
+      updateNumericInput(session, "lt_npcs",
+                         label = .tr("Composantes PCA (requete spatiale)"))
+      updateNumericInput(session, "n_topics",
+                         label = .tr("Nombre de types cellulaires (K)"))
+      updateNumericInput(session, "n_top_od",
+                         label = .tr("Genes surdisperses maximum (vitesse)"))
+      updateSelectInput(session, "ref_viz_reduction", label = .tr("Reduction"))
+      updateCheckboxInput(session, "ref_viz_interactive",
+                          label = .tr("Vue interactive (Plotly)"))
+    }, ignoreInit = TRUE)
+
     log_file <- spatial_log_path(session, "deconv")
     tracker  <- create_reactive_tracker(session, log_file)
     last_deconv_mode <- reactiveVal(NULL)
@@ -38,7 +79,7 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
     )
 
     # ── Sub-server 3: Result outputs (bar plot, DT, colocalisation) ───────
-    .deconv_outputs_server(input, output, session, ns, shared_rv)
+    .deconv_outputs_server(input, output, session, ns, global_data, shared_rv)
 
     # ── Main deconvolution task (calls shared body) ───────────────────────
     deconv_task <- ExtendedTask$new(function(bpcells_dir, pass_idx, coords, mode,
@@ -74,21 +115,22 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
       if (input$mode %in% c("rctd", "labeltransfer")) {
         if (!ref$reference_is_ready()) {
           reason <- if (ref$using_shared_ref()) {
-            "reference partagee introuvable ou invalide -- reimportez-la depuis l'onglet Import > Spatial"
+            .tr("reference partagee introuvable ou invalide -- reimportez-la depuis l'onglet Import > Spatial")
           } else {
             switch(ref$ref_state$status,
-              "empty"   = "aucune reference chargee (section 'Reference scRNA-seq')",
-              "loading" = "chargement de la reference encore en cours -- patientez puis reessayez",
-              "error"   = sprintf("la reference a echoue au chargement (%s)", ref$ref_state$message %||% "cause inconnue"),
+              "empty"   = .tr("Aucune reference chargee (section 'Reference scRNA-seq')"),
+              "loading" = .tr("chargement de la reference encore en cours -- patientez puis reessayez"),
+              "error"   = sprintf(.tr("la reference a echoue au chargement (%s)"),
+                                  ref$ref_state$message %||% .tr("cause inconnue")),
               "loaded"  = if (is.null(input$ref_celltype_col) || !nzchar(input$ref_celltype_col)) {
-                "aucune colonne 'type cellulaire' selectionnee"
+                .tr("aucune colonne 'type cellulaire' selectionnee")
               } else {
-                "reference pas encore preparee -- cliquez '1) Preparer la reference (disque)' puis reessayez"
+                .tr("reference pas encore preparee -- cliquez '1) Preparer la reference (disque)' puis reessayez")
               },
-              "cause inconnue"
+              .tr("cause inconnue")
             )
           }
-          showNotification(paste0("Chargez d'abord une reference scRNA-seq complete : ", reason),
+          showNotification(paste(.tr("Chargez d'abord une reference scRNA-seq complete :"), reason),
                             type = "warning", duration = 14)
           return()
         }
@@ -97,25 +139,25 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
       if (identical(input$mode, "rctd")) {
         ref_check <- tryCatch(readRDS(ref$effective_ref_path()), error = function(e) NULL)
         if (is.null(ref_check)) {
-          showNotification("Reference introuvable ou illisible — reimportez le fichier de reference.",
+          showNotification(.tr("Reference introuvable ou illisible — reimportez le fichier de reference."),
                             type = "error", duration = 8)
           return()
         }
         tab <- table(as.character(ref_check$cell_types))
         too_small <- names(tab)[tab < RCTD_CELL_MIN_INSTANCE]
         if (length(too_small) > 0) {
-          showNotification(sprintf(
-            "RCTD necessite au moins %d cellules par type dans la reference. Type(s) insuffisant(s) : %s. ",
-            RCTD_CELL_MIN_INSTANCE,
-            paste(sprintf("%s (%d)", too_small, as.integer(tab[too_small])), collapse = ", ")
+          showNotification(.t_fmt(
+            .tr("RCTD necessite au moins {min_cells} cellules par type dans la reference. Type(s) insuffisant(s) : {bad_types}. "),
+            min_cells = RCTD_CELL_MIN_INSTANCE,
+            bad_types = paste(sprintf("%s (%d)", too_small, as.integer(tab[too_small])), collapse = ", ")
           ), type = "error", duration = 14)
           showNotification(
             if (ref$using_shared_ref()) {
-              paste0("Repreparez la reference partagee depuis l'onglet Import > Spatial ",
-                    "(case 'Fusionner/exclure les types rares') avant de relancer.")
+              .tr(paste0("Repreparez la reference partagee depuis l'onglet Import > Spatial ",
+                         "(case 'Fusionner/exclure les types rares') avant de relancer."))
             } else {
-              paste0("Cochez 'Fusionner/exclure les types rares' (sidebar) puis cliquez a nouveau ",
-                    "'1) Preparer la reference' avant de relancer.")
+              .tr(paste0("Cochez 'Fusionner/exclure les types rares' (sidebar) puis cliquez a nouveau ",
+                         "'1) Preparer la reference' avant de relancer."))
             },
             type = "warning", duration = 14)
           return()
@@ -155,22 +197,23 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
     observeEvent(deconv_task$status(), {
       if (deconv_task$status() == "success") {
         shared_rv$deconv_props <- deconv_task$result()
-        showNotification("Deconvolution terminee.", type = "message", duration = 5)
+        showNotification(.tr("Deconvolution terminee."), type = "message", duration = 5)
       } else if (deconv_task$status() == "error") {
         ceiling_txt <- switch(last_deconv_mode() %||% "?",
                               "labeltransfer" = "45 min",
                               "rctd"          = "40 min",
                               "20 min")
-        showNotification(sprintf(
-          "Erreur (ou depassement du delai de %s) pendant la deconvolution — voir le log. Essayez 'Reinitialiser les daemons' dans l'entete Spatial puis relancez.",
-          ceiling_txt
+        showNotification(.t_fmt(
+          .tr("Erreur (ou depassement du delai de {ceiling}) pendant la deconvolution — voir le log. Essayez 'Reinitialiser les daemons' dans l'entete Spatial puis relancez."),
+          ceiling = ceiling_txt
         ), type = "error", duration = 12)
       }
     })
 
     output$deconv_progress_text <- renderText({
+      global_data$language  # i18n: re-render on language switch
       lines <- tracker()
-      if (length(lines) == 0) return("En attente...")
+      if (length(lines) == 0) return(.tr("En attente..."))
       paste(lines, collapse = "\n")
     })
   })

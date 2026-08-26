@@ -1,6 +1,12 @@
 # =============================================================================
 # modules/spatial/mod_spatial.R — Parent Module (router)
 # =============================================================================
+# i18n Phase 5 : tous les labels statiques passent par i18n$t() (HTML, traduits
+#    cote client par le shim JS), le contenu dynamique serveur passe par le
+#    proxy .tr() (traducteur de session) + .t_fmt() pour l'interpolation.
+#    Chaque renderUI lit global_data$language en premiere ligne pour se
+#    re-rendre au changement de langue.
+#
 # v13 (vague 5 — Phase 6 stats) : shared_rv gagne 6 nouveaux champs pour les
 #    sous-onglets B1 (enrichissement de voisinage) et B6 (Ripley's K) de
 #    mod_spatial_niche.R : enrichment_result/enrichment_params,
@@ -91,39 +97,49 @@ mod_spatial_ui <- function(id) {
     navset_card_underline(
       id = ns("spatial_nav"),
 
-      nav_panel("\U0001F680 Pipeline auto", icon = icon("bolt"),
+      nav_panel(i18n$t("\U0001F680 Pipeline auto"), icon = icon("bolt"),
+                value = "pipeline",
                 mod_spatial_pipeline_ui(ns("pipeline"))),
 
-      nav_panel("1. QC & Autocorrelation", icon = icon("filter"),
+      nav_panel(i18n$t("1. QC & Autocorrelation"), icon = icon("filter"),
+                value = "qc",
                 mod_spatial_qc_ui(ns("qc"))),
-      
-      nav_panel("2. Clustering (BANKSY-lite)", icon = icon("shapes"),
+
+      nav_panel(i18n$t("2. Clustering (BANKSY-lite)"), icon = icon("shapes"),
+                value = "cluster",
                 mod_spatial_cluster_ui(ns("cluster"))),
-      
-      nav_panel("3. Deconvolution", icon = icon("puzzle-piece"),
+
+      nav_panel(i18n$t("3. Deconvolution"), icon = icon("puzzle-piece"),
+                value = "deconv",
                 mod_spatial_deconv_ui(ns("deconv"))),
-      
-      nav_panel("4. Visualisation", icon = icon("eye"),
+
+      nav_panel(i18n$t("4. Visualisation"), icon = icon("eye"),
+                value = "viz",
                 mod_spatial_viz_ui(ns("viz"))),
-      
-      nav_panel("5. Multi-echantillons", icon = icon("layer-group"),
+
+      nav_panel(i18n$t("5. Multi-echantillons"), icon = icon("layer-group"),
+                value = "multi",
                 mod_spatial_multi_ui(ns("multi"))),
-      
-      nav_panel("6. Niches spatiales", icon = icon("diagram-project"),
+
+      nav_panel(i18n$t("6. Niches spatiales"), icon = icon("diagram-project"),
+                value = "niche",
                 mod_spatial_niche_ui(ns("niche"))),
 
-      nav_panel("7. Export & Rapport", icon = icon("file-export"),
+      nav_panel(i18n$t("7. Export & Rapport"), icon = icon("file-export"),
+                value = "export_report",
                 navset_pill(
-                  nav_panel("Paquet & Script", mod_spatial_export_ui(ns("export"))),
-                  nav_panel("Rapport HTML/PDF", mod_spatial_report_ui(ns("report")))
+                  nav_panel(i18n$t("Paquet & Script"), value = "export",
+                            mod_spatial_export_ui(ns("export"))),
+                  nav_panel(i18n$t("Rapport HTML/PDF"), value = "report",
+                            mod_spatial_report_ui(ns("report")))
                 )),
-      
+
       nav_spacer(),
       nav_item(uiOutput(ns("active_dataset_ui"))),
       bslib::nav_menu(
-        title = tagList(icon("gear"), "Session"), align = "right",
+        title = tagList(icon("gear"), i18n$t("Session")), align = "right",
         nav_item(uiOutput(ns("daemon_status_ui"))),
-        nav_item(actionButton(ns("btn_reset_daemons"), "Reinitialiser les daemons",
+        nav_item(actionButton(ns("btn_reset_daemons"), i18n$t("Reinitialiser les daemons"),
                               class = "btn-outline-warning btn-sm w-100 mt-1", icon = icon("rotate")))
       )
     )
@@ -133,12 +149,18 @@ mod_spatial_ui <- function(id) {
 mod_spatial_server <- function(id, global_data) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
-    
+
+    # ── i18n proxy ──────────────────────────────────────────────────────────
+    .tr <- function(key) {
+      tr <- global_data$i18n
+      if (is.null(tr)) return(key)
+      tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+    }
+
     if (!spatial_daemons_ready()) init_spatial_daemons(n_daemons = 6)
-    
-    # ── Shared reactive bus for all child modules ─────────────────────────
+
     shared_rv <- reactiveValues(
-      active_tab       = "1. QC & Autocorrelation",
+      active_tab       = "qc",
       qc_metrics       = NULL,
       qc_pass_idx      = NULL,
       qc_params        = NULL,
@@ -178,12 +200,12 @@ mod_spatial_server <- function(id, global_data) {
       manual_gradient = list(low = "#2166AC", mid = "white", high = "#B2182B"),
       manual_discrete = list()   # list(cluster=c(...), niche=c(...), celltype=c(...), dataset=c(...))
     )
-    
+
     # ── v10 (backlog court-terme #2): per-dataset result cache, backed by
     # global_data$spatial_results_cache (see v10 changelog above).
     .get_cache <- function() global_data$spatial_results_cache %||% list()
     .set_cache <- function(cache) { global_data$spatial_results_cache <- cache }
-    
+
     .cacheable_fields <- c("qc_metrics", "qc_pass_idx", "qc_params", "moran_results", "moran_params",
                            "cluster_labels", "cluster_params", "deconv_props", "deconv_params",
                            "cluster_markers", "niche_labels", "niche_composition", "niche_params",
@@ -192,7 +214,7 @@ mod_spatial_server <- function(id, global_data) {
                            "enrichment_result", "enrichment_params",
                            "hotspot_result", "hotspot_params",
                            "ripley_result", "ripley_params")
-    
+
     .snapshot_shared_rv <- function() {
       stats::setNames(lapply(.cacheable_fields, function(f) shared_rv[[f]]), .cacheable_fields)
     }
@@ -202,14 +224,16 @@ mod_spatial_server <- function(id, global_data) {
     .clear_shared_rv <- function() {
       for (f in .cacheable_fields) shared_rv[[f]] <- NULL
     }
-    
+
+    # ── Daemon status (i18n-aware) ─────────────────────────────────────────
     output$daemon_status_ui <- renderUI({
+      global_data$language  # re-render trigger
       input$btn_reset_daemons
       status <- tryCatch(spatial_daemon_status(), error = function(e) "inactive")
       label <- switch(status,
-                      "ready"    = "\u2705 daemons actifs (verifies)",
-                      "degraded" = "\u26a0\ufe0f daemons actifs -- preload degrade",
-                      "\u26aa daemons inactifs"
+                      "ready"    = .tr("\u2705 daemons actifs (verifies)"),
+                      "degraded" = .tr("\u26a0\ufe0f daemons actifs -- preload degrade"),
+                      .tr("\u26aa daemons inactifs")
       )
       css_class <- switch(status, "ready" = "text-success", "degraded" = "text-warning", "text-muted")
       tagList(
@@ -224,23 +248,27 @@ mod_spatial_server <- function(id, global_data) {
         }
       )
     })
-    
+
     observeEvent(input$btn_reset_daemons, {
+      global_data$language  # notification language
       ok <- tryCatch(reset_spatial_daemons(6), error = function(e) FALSE)
       if (isTRUE(ok)) {
         st <- tryCatch(spatial_daemon_status(), error = function(e) "inactive")
         msg <- if (identical(st, "ready")) {
-          "\U1F504 Daemons mirai reinitialises et verifies — relancez votre tache."
+          .tr("\U0001F504 Daemons mirai reinitialises et verifies — relancez votre tache.")
         } else {
-          "\U1F504 Daemons mirai reinitialises, mais la verification reste en echec — voir le diagnostic."
+          .tr("\U0001F504 Daemons mirai reinitialises, mais la verification reste en echec — voir le diagnostic.")
         }
         showNotification(msg, type = if (identical(st, "ready")) "message" else "warning", duration = 6)
       } else {
-        showNotification("Echec de la reinitialisation des daemons — voir la console R.", type = "error", duration = 8)
+        showNotification(.tr("Echec de la reinitialisation des daemons — voir la console R."),
+                         type = "error", duration = 8)
       }
     })
-    
+
+    # ── Active dataset selector ─────────────────────────────────────────────
     output$active_dataset_ui <- renderUI({
+      global_data$language
       ds_names <- names(global_data$spatial_datasets)
       if (length(ds_names) < 2) return(NULL)
       tags$span(
@@ -249,7 +277,7 @@ mod_spatial_server <- function(id, global_data) {
           "#%s { text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }",
           ns("active_dataset_select")
         ))),
-        tags$span(class = "small text-muted", style = "flex-shrink:0;", "Actif :"),
+        tags$span(class = "small text-muted", style = "flex-shrink:0;", .tr("Actif :")),
         div(style = "min-width:0; flex:1 1 auto;",
             title = global_data$active_spatial_dataset %||% ds_names[1],
             selectInput(ns("active_dataset_select"), NULL, choices = ds_names,
@@ -257,67 +285,75 @@ mod_spatial_server <- function(id, global_data) {
                         width = "100%"))
       )
     })
-    
+
     observeEvent(input$active_dataset_select, {
       req(input$active_dataset_select %in% names(global_data$spatial_datasets))
       if (identical(input$active_dataset_select, global_data$active_spatial_dataset)) return()
       global_data$active_spatial_dataset <- input$active_dataset_select
     })
-    
+
     observeEvent(list(global_data$active_spatial_dataset, global_data$spatial_datasets), {
       nm <- global_data$active_spatial_dataset
       if (!is.null(nm) && nm %in% names(global_data$spatial_datasets)) {
         global_data$spatial_obj <- global_data$spatial_datasets[[nm]]
       }
     }, ignoreNULL = FALSE, ignoreInit = TRUE)
-    
+
     prev_active_dataset <- reactiveVal(NULL)
-    
+
     observeEvent(global_data$active_spatial_dataset, {
+      global_data$language  # for notification language
       new_name <- global_data$active_spatial_dataset
       old_name <- prev_active_dataset()
-      
+
       if (!is.null(old_name) && !identical(old_name, new_name) &&
           old_name %in% names(global_data$spatial_datasets)) {
         cache <- .get_cache()
         cache[[old_name]] <- .snapshot_shared_rv()
         .set_cache(cache)
       }
-      
+
       shared_rv$roi_ids     <- NULL
       shared_rv$roi_bbox    <- NULL
       shared_rv$roi_markers <- NULL
-      
+
       if (!is.null(new_name)) {
         cached <- .get_cache()[[new_name]]
         if (!is.null(cached)) {
           .restore_shared_rv(cached)
           if (!is.null(old_name)) {
-            showNotification(sprintf("Echantillon actif : %s (resultats precedents restaures).", new_name),
-                             type = "message", duration = 4)
+            showNotification(
+              .t_fmt(.tr("Echantillon actif : {name} (resultats precedents restaures)."), name = new_name),
+              type = "message", duration = 4)
           }
         } else {
           .clear_shared_rv()
           if (!is.null(old_name)) {
-            showNotification(sprintf("Echantillon actif : %s", new_name), type = "message", duration = 4)
+            showNotification(
+              .t_fmt(.tr("Echantillon actif : {name}"), name = new_name),
+              type = "message", duration = 4)
           }
         }
       }
-      
+
       prev_active_dataset(new_name)
     }, ignoreNULL = FALSE, ignoreInit = TRUE)
-    
+
     observeEvent(global_data$spatial_reimport_signal, {
+      global_data$language
       sig <- global_data$spatial_reimport_signal
       req(sig, identical(sig$name, global_data$active_spatial_dataset))
       .clear_shared_rv()
       cache <- .get_cache()
       cache[[sig$name]] <- NULL
       .set_cache(cache)
-      showNotification(sprintf("Echantillon '%s' re-importe (deja actif) : resultats precedents reinitialises.",
-                               sig$name), type = "message", duration = 5)
+      showNotification(
+        .t_fmt(.tr("Echantillon '{name}' re-importe (deja actif) : resultats precedents reinitialises."),
+               name = sig$name),
+        type = "message", duration = 5)
     }, ignoreInit = TRUE)
 
+    # ── Sub-module servers (unchanged wiring) ──────────────────────────────
     mod_spatial_qc_server("qc", global_data, shared_rv)
     mod_spatial_cluster_server("cluster", global_data, shared_rv)
     mod_spatial_deconv_server("deconv", global_data, shared_rv)
@@ -327,7 +363,7 @@ mod_spatial_server <- function(id, global_data) {
     mod_spatial_pipeline_server("pipeline", global_data, shared_rv)
     mod_spatial_export_server("export", global_data, shared_rv)
     mod_spatial_report_server("report", global_data, shared_rv)
-    
+
     observeEvent(input$spatial_nav, { shared_rv$active_tab <- input$spatial_nav })
   })
 }

@@ -8,7 +8,14 @@
 # Plain function called from the orchestrator's moduleServer().
 # =============================================================================
 
-.deconv_outputs_server <- function(input, output, session, ns, shared_rv) {
+.deconv_outputs_server <- function(input, output, session, ns, global_data, shared_rv) {
+
+  # Session-scoped scalar translation (plain strings, never HTML spans).
+  .tr <- function(key) {
+    tr <- global_data$i18n
+    if (is.null(tr)) return(key)
+    tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+  }
 
   # discrete_palette_colors_fallback() supprimee (morte) : les plots ci-dessous
   # passent desormais par spatial_discrete_colors()/spatial_diverging_scale()
@@ -16,6 +23,7 @@
 
   # ── Bar plot (proportions per spot) ─────────────────────────────────────
   output$deconv_bar_plot <- renderPlot({
+    global_data$language  # i18n: re-render on language switch
     req(shared_rv$deconv_props)
     df <- shared_rv$deconv_props
     long <- reshape2::melt(df, id.vars = "id", variable.name = "cell_type", value.name = "proportion")
@@ -27,7 +35,7 @@
       ggplot2::theme_minimal() +
       ggplot2::theme(axis.text.x = ggplot2::element_blank(),
                      legend.text = ggplot2::element_text(size = 8)) +
-      ggplot2::labs(x = "Spots/cellules (echantillon)", y = "Proportion", fill = "Type")
+      ggplot2::labs(x = .tr("Spots/cellules (echantillon)"), y = .tr("Proportion"), fill = .tr("Type"))
   })
 
   # ── DT table ────────────────────────────────────────────────────────────
@@ -39,10 +47,11 @@
 
   # ── Colocalisation heatmap ──────────────────────────────────────────────
   output$deconv_coloc_plot <- renderPlot({
+    global_data$language  # i18n: re-render on language switch
     req(shared_rv$deconv_props)
     df <- shared_rv$deconv_props
     cts <- setdiff(colnames(df), "id")
-    validate(need(length(cts) >= 2, "Au moins 2 types cellulaires necessaires."))
+    validate(need(length(cts) >= 2, .tr("Au moins 2 types cellulaires necessaires.")))
     cor_mat <- stats::cor(df[, cts, drop = FALSE], use = "pairwise.complete.obs", method = "pearson")
     long <- reshape2::melt(cor_mat, varnames = c("Type1", "Type2"), value.name = "correlation")
     ggplot2::ggplot(long, ggplot2::aes(x = Type1, y = Type2, fill = correlation)) +
@@ -51,7 +60,8 @@
       spatial_diverging_scale(shared_rv, aesthetic = "fill", limits = c(-1, 1)) +
       ggplot2::theme_minimal(base_size = 11) +
       ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
-      ggplot2::labs(x = NULL, y = NULL, fill = "Correlation\n(Pearson)",
-                    title = "Colocalisation des types cellulaires (proportions par spot)")
+      ggplot2::labs(x = NULL, y = NULL,
+                    fill = .tr("Correlation\n(Pearson)"),
+                    title = .tr("Colocalisation des types cellulaires (proportions par spot)"))
   })
 }

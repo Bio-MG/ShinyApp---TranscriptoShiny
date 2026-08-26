@@ -56,77 +56,72 @@ mod_spatial_qc_ui <- function(id) {
   ns <- NS(id)
   layout_sidebar(
     sidebar = sidebar(
-      title = "QC & filtres", width = 350,
+      title = i18n$t("QC & filtres"), width = 350,
 
       div(class = "alert alert-light", style = "font-size:0.8rem;",
           bsicons::bs_icon("info-circle"),
-          " Les seuils ci-dessous ne modifient pas les donnees sur disque : ils ",
-          "definissent quels spots/cellules sont inclus dans le clustering et la ",
-          "deconvolution. Ajustables a tout moment."),
+          " ",
+          i18n$t("Les seuils ci-dessous ne modifient pas les donnees sur disque : ils definissent quels spots/cellules sont inclus dans le clustering et la deconvolution. Ajustables a tout moment.")),
 
-      numericInput(ns("min_features"), "nFeature minimum", 200, min = 0, step = 10),
-      numericInput(ns("min_count"), "nCount minimum", 100, min = 0, step = 10),
-      sliderInput(ns("max_pct_mt"), "% Mitochondrial max", 0, 100, 20, step = 1),
+      numericInput(ns("min_features"), i18n$t("nFeature minimum"), 200, min = 0, step = 10),
+      numericInput(ns("min_count"), i18n$t("nCount minimum"), 100, min = 0, step = 10),
+      sliderInput(ns("max_pct_mt"), i18n$t("% Mitochondrial max"), 0, 100, 20, step = 1),
 
-      actionButton(ns("btn_apply_qc"), "Appliquer les seuils",
+      actionButton(ns("btn_apply_qc"), i18n$t("Appliquer les seuils"),
                    class = "btn-danger w-100 mt-2", icon = icon("filter")),
       uiOutput(ns("qc_pass_summary")),
 
       hr(),
-      h6("Autocorrelation spatiale (Indice de Moran)", style = "font-weight:bold;"),
+      h6(i18n$t("Autocorrelation spatiale (Indice de Moran)"), style = "font-weight:bold;"),
       div(class = "alert alert-light", style = "font-size:0.8rem;",
           bsicons::bs_icon("cpu"),
-          " Calcul asynchrone (mirai) sur les 1000 genes les plus variables — ",
-          "n'interrompt pas votre session."),
-      numericInput(ns("n_hvg_moran"), "Nombre de genes (HVG)", 1000, min = 100, max = 5000, step = 100),
+          " ",
+          i18n$t("Calcul asynchrone (mirai) sur les 1000 genes les plus variables — n'interrompt pas votre session.")),
+      numericInput(ns("n_hvg_moran"), i18n$t("Nombre de genes (HVG)"), 1000, min = 100, max = 5000, step = 100),
 
       # Long terme (carte blanche, voir handoff_spatial_bio-mg.md) : methode
       # alternative a l'indice de Moran. Mark variogram est l'autre methode
       # native de Seurat::FindSpatiallyVariableFeatures() (approche
       # Trendsceek-like) -- x.cuts/y.cuts (grille) ne s'appliquent qu'a
       # "moransi" cote Seurat, ignores automatiquement sinon.
-      radioButtons(ns("svg_method"), "Methode de detection",
-                   choices = c("Indice de Moran (rapide, recommande)" = "moransi",
-                               "Mark variogram (alternative, plus lent)" = "markvariogram"),
+      radioButtons(ns("svg_method"), i18n$t("Methode de detection"),
+                   choices = stats::setNames(c("moransi", "markvariogram"),
+                                             c(.tr_plain("Indice de Moran (rapide, recommande)"),
+                                               .tr_plain("Mark variogram (alternative, plus lent)"))),
                    selected = "moransi"),
       conditionalPanel(
         condition = sprintf("input['%s'] == 'markvariogram'", ns("svg_method")),
         div(class = "alert alert-warning", style = "font-size:0.72rem;",
             bsicons::bs_icon("exclamation-triangle"),
-            " Methode alternative -- le nom des colonnes internes de Seurat differe de ",
-            "'moransi' et n'est pas garanti stable entre versions ; le score affiche est ",
-            "detecte de facon defensive (generique) plutot que suppose. En cas de doute, ",
-            "preferez l'indice de Moran (par defaut).")
+            " ",
+            i18n$t("Methode alternative -- le nom des colonnes internes de Seurat differe de 'moransi' et n'est pas garanti stable entre versions ; le score affiche est detecte de facon defensive (generique) plutot que suppose. En cas de doute, preferez l'indice de Moran (par defaut)."))
       ),
 
       tags$details(
         tags$summary(style = "cursor:pointer; font-size:0.75rem; color:#666;",
-                     "Options avancees (gros jeux de donnees : Visium HD, Slide-seq)"),
+                     i18n$t("Options avancees (gros jeux de donnees : Visium HD, Slide-seq)")),
         div(class = "mt-2",
             div(class = "text-muted", style = "font-size:0.7rem;",
-                "Regroupe les elements sur une grille avant le calcul de Moran's I — accelere ",
-                "fortement le calcul sur un puck Slide-seq (dizaines de milliers de beads) ou du ",
-                "Visium HD, au prix d'une resolution spatiale legerement reduite. Laissez a 0 ",
-                "pour le comportement standard (calcul point-par-point, adapte a Visium classique)."),
-            numericInput(ns("moran_x_cuts"), "x.cuts (0 = desactive)", 0, min = 0, max = 500, step = 10),
-            numericInput(ns("moran_y_cuts"), "y.cuts (0 = desactive)", 0, min = 0, max = 500, step = 10)
+                i18n$t("Regroupe les elements sur une grille avant le calcul de Moran's I — accelere fortement le calcul sur un puck Slide-seq (dizaines de milliers de beads) ou du Visium HD, au prix d'une resolution spatiale legerement reduite. Laissez a 0 pour le comportement standard (calcul point-par-point, adapte a Visium classique).")),
+            numericInput(ns("moran_x_cuts"), i18n$t("x.cuts (0 = desactive)"), 0, min = 0, max = 500, step = 10),
+            numericInput(ns("moran_y_cuts"), i18n$t("y.cuts (0 = desactive)"), 0, min = 0, max = 500, step = 10)
         )
       ),
 
-      bslib::input_task_button(ns("btn_moran"), "Lancer l'autocorrelation spatiale",
+      bslib::input_task_button(ns("btn_moran"), i18n$t("Lancer l'autocorrelation spatiale"),
                                 icon = icon("wave-square")),
       verbatimTextOutput(ns("moran_progress_text"), placeholder = TRUE),
 
       hr(),
-      h6("Hotspots locaux (Getis-Ord Gi*)", style = "font-weight:bold;"),
+      h6(i18n$t("Hotspots locaux (Getis-Ord Gi*)"), style = "font-weight:bold;"),
       div(class = "alert alert-light", style = "font-size:0.78rem;",
           bsicons::bs_icon("fire"),
-          " Detecte les regions ou une metrique est significativement plus ELEVEE ",
-          "(hotspot, rouge) ou plus BASSE (coldspot, bleu) que la moyenne globale, en ",
-          "tenant compte du voisinage spatial. Calcul rapide (pas de permutation), ",
-          "synchrone -- pas de barre de progression necessaire."),
-      radioButtons(ns("hotspot_source"), "Metrique",
-                   choices = c("Metrique QC" = "qc", "Proportion (deconvolution, onglet 3)" = "deconv"),
+          " ",
+          i18n$t("Detecte les regions ou une metrique est significativement plus ELEVEE (hotspot, rouge) ou plus BASSE (coldspot, bleu) que la moyenne globale, en tenant compte du voisinage spatial. Calcul rapide (pas de permutation), synchrone -- pas de barre de progression necessaire.")),
+      radioButtons(ns("hotspot_source"), i18n$t("Metrique"),
+                   choices = stats::setNames(c("qc", "deconv"),
+                                             c(.tr_plain("Metrique QC"),
+                                               .tr_plain("Proportion (deconvolution, onglet 3)"))),
                    selected = "qc"),
       conditionalPanel(
         condition = sprintf("input['%s'] == 'qc'", ns("hotspot_source")),
@@ -137,51 +132,48 @@ mod_spatial_qc_ui <- function(id) {
         condition = sprintf("input['%s'] == 'deconv'", ns("hotspot_source")),
         uiOutput(ns("hotspot_deconv_celltype_ui"))
       ),
-      numericInput(ns("hotspot_k"), "Voisins spatiaux (k, self inclus)", 30, min = 5, max = 200, step = 5),
-      actionButton(ns("btn_hotspots"), "Detecter les hotspots",
+      numericInput(ns("hotspot_k"), i18n$t("Voisins spatiaux (k, self inclus)"), 30, min = 5, max = 200, step = 5),
+      actionButton(ns("btn_hotspots"), i18n$t("Detecter les hotspots"),
                    class = "btn-outline-primary w-100", icon = icon("fire")),
       uiOutput(ns("hotspot_status_ui"))
     ),
 
     navset_card_underline(
-      nav_panel("Apercu",
+      nav_panel(i18n$t("Apercu du jeu de donnees"), value = "overview",
                 uiOutput(ns("dataset_overview_ui")),
                 hr(),
-                h6("Metadata (sketch)", style = "font-weight:bold;"),
+                h6(i18n$t("Metadata (sketch)"), style = "font-weight:bold;"),
                 div(class = "text-muted small mb-2",
-                    "Colonnes disponibles dans les metadonnees de l'objet Seurat ",
-                    "(orig.ident, annotations importees, etc.) pour les elements du sketch en RAM."),
+                    i18n$t("Colonnes disponibles dans les metadonnees de l'objet Seurat (orig.ident, annotations importees, etc.) pour les elements du sketch en RAM.")),
                 DT::DTOutput(ns("metadata_table"))),
 
-      nav_panel("Distributions QC",
+      nav_panel(i18n$t("Distributions QC"),
                 card(full_screen = TRUE,
                      plotOutput(ns("qc_hist_plot"), height = "560px")),
                 card(full_screen = TRUE,
-                     card_header("nCount vs nFeature (couleur = %MT)"),
+                     card_header(i18n$t("nCount vs nFeature (couleur = %MT)")),
                      plotOutput(ns("qc_scatter_plot"), height = "480px"))),
 
-      nav_panel("SVG (Moran's I)",
+      nav_panel(i18n$t("Genes spatialement variables (Moran's I)"), value = "moran",
                 div(class = "alert alert-light", style = "font-size:0.78rem;",
-                    "Grille des genes les plus spatialement structures (rang Moran's I) — ",
-                    "necessite l'autocorrelation ci-contre (calculee au moins une fois)."),
+                    i18n$t("Grille des genes les plus spatialement structures (rang Moran's I) — necessite l'autocorrelation ci-contre (calculee au moins une fois).")),
                 fluidRow(
-                  column(6, numericInput(ns("n_top_svg"), "Nombre de genes (grille)", 9, min = 4, max = 30, step = 1)),
-                  column(6, actionButton(ns("btn_svg_grid"), "Afficher la grille des top SVGs",
+                  column(6, numericInput(ns("n_top_svg"), i18n$t("Nombre de genes (grille)"), 9, min = 4, max = 30, step = 1)),
+                  column(6, actionButton(ns("btn_svg_grid"), i18n$t("Afficher la grille des top SVGs"),
                                           class = "btn-sm btn-outline-primary mt-4", icon = icon("table-cells")))
                 ),
                 card(full_screen = TRUE, uiOutput(ns("svg_grid_plot_ui"))),
                 hr(),
                 DT::DTOutput(ns("moran_table"))),
 
-      nav_panel("Hotspots (Gi*)",
+      nav_panel(i18n$t("Hotspots locaux (Getis-Ord Gi*)"), value = "hotspots",
                 div(class = "alert alert-light small mb-2",
-                    "Rouge = hotspot (voisinage significativement eleve, p < 0.05) ; ",
-                    "bleu = coldspot ; gris = non significatif."),
+                    i18n$t("Rouge = hotspot (voisinage significativement eleve, p < 0.05) ; bleu = coldspot ; gris = non significatif.")),
                 layout_columns(
                   col_widths = c(7, 5),
-                  card(full_screen = TRUE, card_header("Carte des hotspots"),
+                  card(full_screen = TRUE, card_header(i18n$t("Carte des hotspots")),
                        plotOutput(ns("hotspot_map"), height = "520px")),
-                  card(full_screen = TRUE, card_header("Distribution du Gi*"),
+                  card(full_screen = TRUE, card_header(i18n$t("Distribution du Gi*")),
                        plotOutput(ns("hotspot_hist"), height = "520px"))
                 ),
                 DT::DTOutput(ns("hotspot_table")))
@@ -193,12 +185,36 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+    # Session-scoped scalar translation (plain strings, never HTML spans).
+    .tr <- function(key) {
+      tr <- global_data$i18n
+      if (is.null(tr)) return(key)
+      tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+    }
+
+    # i18n: push translated labels/choices for build-time-frozen inputs on
+    # every language change (values NEVER change; selection is preserved).
+    observeEvent(global_data$language, {
+      updateRadioButtons(session, "svg_method",
+        label = .tr("Methode de detection"),
+        choices = stats::setNames(c("moransi", "markvariogram"),
+                                  c(.tr("Indice de Moran (rapide, recommande)"),
+                                    .tr("Mark variogram (alternative, plus lent)"))))
+      updateRadioButtons(session, "hotspot_source",
+        label = .tr("Metrique"),
+        choices = stats::setNames(c("qc", "deconv"),
+                                  c(.tr("Metrique QC"),
+                                    .tr("Proportion (deconvolution, onglet 3)"))))
+    }, ignoreInit = TRUE)
+
     # ── Apercu du jeu de donnees (ex-bandeau vert, deplace ici) ───────────
     output$dataset_overview_ui <- renderUI({
+      global_data$language  # re-render on language switch
       if (is.null(global_data$spatial_obj)) {
         return(div(class = "alert alert-danger",
                     bsicons::bs_icon("exclamation-triangle"),
-                    " Aucune donnee spatiale chargee. Allez dans l'onglet 'Import Donnees > Spatial'."))
+                    " ",
+                    .tr("Aucune donnee spatiale chargee. Allez dans l'onglet 'Import Donnees > Spatial'.")))
       }
       obj <- global_data$spatial_obj
       disk_ok <- !is.null(obj$bpcells_dir) && dir.exists(obj$bpcells_dir)
@@ -208,29 +224,30 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
       tagList(
         layout_columns(
           col_widths = c(3, 3, 3, 3),
-          value_box(title = "Echantillon", value = obj$project %||% "-",
+          value_box(title = .tr("Echantillon"), value = obj$project %||% "-",
                      showcase = bsicons::bs_icon("bookmark"), theme = "primary"),
-          value_box(title = "Technologie", value = obj$technology,
+          value_box(title = .tr("Technologie"), value = obj$technology,
                      showcase = bsicons::bs_icon("diagram-3"), theme = "secondary"),
-          value_box(title = "Elements (total disque)", value = format(obj$n_total, big.mark = ","),
+          value_box(title = .tr("Elements (total disque)"), value = format(obj$n_total, big.mark = ","),
                      showcase = bsicons::bs_icon("grid-3x3"), theme = "info"),
-          value_box(title = "Sketch (RAM)",
+          value_box(title = .tr("Sketch (RAM)"),
                      value = sprintf("%s (%s)", format(ncol(obj$sketch), big.mark = ","), norm_label),
                      showcase = bsicons::bs_icon("cpu"), theme = "light")
         ),
         if (!disk_ok) {
           div(class = "alert alert-warning mt-2",
               bsicons::bs_icon("exclamation-triangle"),
-              " Donnees BPCells introuvables sur disque — le sketch reste utilisable pour la ",
-              "visualisation, mais reimportez pour relancer clustering/deconvolution/Moran.")
+              " ",
+              .tr("Donnees BPCells introuvables sur disque — le sketch reste utilisable pour la visualisation, mais reimportez pour relancer clustering/deconvolution/Moran."))
         }
       )
     })
 
     output$metadata_table <- DT::renderDT({
+      global_data$language  # re-render on language switch
       req(global_data$spatial_obj$sketch)
       meta <- global_data$spatial_obj$sketch@meta.data
-      validate(need(ncol(meta) > 0, "Aucune metadata disponible pour ce jeu de donnees."))
+      validate(need(ncol(meta) > 0, .tr("Aucune metadata disponible pour ce jeu de donnees.")))
       DT::datatable(meta, options = list(pageLength = 10, scrollX = TRUE), rownames = TRUE)
     })
 
@@ -240,13 +257,14 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
       shared_rv$qc_metrics <- tryCatch(
         compute_qc_metrics_fast(global_data$spatial_obj$bpcells_dir),
         error = function(e) {
-          showNotification(paste("Erreur calcul QC :", conditionMessage(e)), type = "error")
+          showNotification(paste(.tr("Erreur calcul QC :"), conditionMessage(e)), type = "error")
           NULL
         }
       )
     }, ignoreInit = TRUE)
 
     output$qc_hist_plot <- renderPlot({
+      global_data$language  # re-render on language switch
       req(shared_rv$qc_metrics)
       df <- shared_rv$qc_metrics
       p1 <- ggplot2::ggplot(df, ggplot2::aes(x = nCount)) +
@@ -260,10 +278,10 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
       p3 <- ggplot2::ggplot(df, ggplot2::aes(x = pct_mt)) +
         ggplot2::geom_histogram(bins = 50, fill = "#E74C3C") +
         ggplot2::geom_vline(xintercept = input$max_pct_mt, color = "red", linetype = "dashed") +
-        ggplot2::labs(title = "% Mitochondrial") + ggplot2::theme_minimal()
+        ggplot2::labs(title = .tr("% Mitochondrial")) + ggplot2::theme_minimal()
       p4 <- ggplot2::ggplot(df, ggplot2::aes(x = pct_ribo)) +
         ggplot2::geom_histogram(bins = 50, fill = "#8E44AD") +
-        ggplot2::labs(title = "% Ribosomal") + ggplot2::theme_minimal()
+        ggplot2::labs(title = .tr("% Ribosomal")) + ggplot2::theme_minimal()
       p5 <- ggplot2::ggplot(df, ggplot2::aes(x = log_nCount)) +
         ggplot2::geom_histogram(bins = 50, fill = "#F39C12") +
         ggplot2::labs(title = "log10(nCount + 1)") + ggplot2::theme_minimal()
@@ -271,6 +289,7 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
     })
 
     output$qc_scatter_plot <- renderPlot({
+      global_data$language  # re-render on language switch
       req(shared_rv$qc_metrics)
       df <- shared_rv$qc_metrics
       ggplot2::ggplot(df, ggplot2::aes(x = nCount, y = nFeature, color = pct_mt)) +
@@ -278,7 +297,7 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
         ggplot2::geom_vline(xintercept = input$min_count, color = "red", linetype = "dashed") +
         ggplot2::geom_hline(yintercept = input$min_features, color = "red", linetype = "dashed") +
         ggplot2::scale_color_viridis_c(option = "inferno", direction = -1, na.value = "grey70") +
-        ggplot2::labs(x = "nCount", y = "nFeature", color = "% MT") +
+        ggplot2::labs(x = "nCount", y = "nFeature", color = .tr("% MT")) +
         ggplot2::theme_minimal(base_size = 12)
     })
 
@@ -290,15 +309,16 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
       shared_rv$qc_pass_idx <- which(pass)
       shared_rv$qc_params <- list(min_count = input$min_count, min_features = input$min_features,
                                    max_pct_mt = input$max_pct_mt)
-      showNotification(sprintf("Seuils appliques : %d/%d elements conserves.",
-                                sum(pass), length(pass)), type = "message", duration = 4)
+      showNotification(.t_fmt(.tr("Seuils appliques : {kept}/{total} elements conserves."),
+                              kept = sum(pass), total = length(pass)), type = "message", duration = 4)
     })
 
     output$qc_pass_summary <- renderUI({
+      global_data$language  # re-render on language switch
       req(shared_rv$qc_pass_idx, shared_rv$qc_metrics)
       div(class = "alert alert-success", style = "font-size:0.8rem;",
-          sprintf("%d / %d elements passent les seuils actuels.",
-                   length(shared_rv$qc_pass_idx), nrow(shared_rv$qc_metrics)))
+          .t_fmt(.tr("{kept} / {total} elements retenus."),
+                 kept = length(shared_rv$qc_pass_idx), total = nrow(shared_rv$qc_metrics)))
     })
 
     # ── Async: Moran's I on top HVGs (ExtendedTask + mirai) ────────────────
@@ -397,17 +417,18 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
     observeEvent(moran_task$status(), {
       if (moran_task$status() == "success") {
         shared_rv$moran_results <- moran_task$result()
-        showNotification("Autocorrelation spatiale terminee.", type = "message", duration = 4)
+        showNotification(.tr("Autocorrelation spatiale terminee."), type = "message", duration = 4)
       } else if (moran_task$status() == "error") {
         showNotification(
-          "Erreur (ou depassement du delai) pendant le calcul de Moran — voir le log. Essayez 'Reinitialiser les daemons' puis relancez.",
+          .tr("Erreur (ou depassement du delai) pendant le calcul de Moran — voir le log. Essayez 'Reinitialiser les daemons' puis relancez."),
           type = "error", duration = 10)
       }
     })
 
     output$moran_progress_text <- renderText({
+      global_data$language  # re-render on language switch
       lines <- tracker()
-      if (length(lines) == 0) return("En attente...")
+      if (length(lines) == 0) return(.tr("En attente..."))
       paste(lines, collapse = "\n")
     })
 
@@ -425,8 +446,7 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
       top_genes <- utils::head(shared_rv$moran_results$gene[ord], input$n_top_svg)
       top_genes <- intersect(top_genes, rownames(global_data$spatial_obj$sketch))
       validate(need(length(top_genes) > 0,
-                    paste("Aucun des genes les mieux classes (Moran's I) n'est present dans le sketch (RAM).",
-                          "Relancez l'autocorrelation ou reduisez N.")))
+                    .tr("Aucun des genes les mieux classes (Moran's I) n'est present dans le sketch (RAM). Relancez l'autocorrelation ou reduisez N.")))
 
       sk <- global_data$spatial_obj$sketch
       if (!"data" %in% SeuratObject::Layers(sk)) sk <- Seurat::NormalizeData(sk, verbose = FALSE)
@@ -444,6 +464,7 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
     })
 
     output$svg_grid_plot <- renderPlot({
+      global_data$language  # re-render on language switch
       long <- svg_grid_long()
       n_facet_col <- 3
       p <- ggplot2::ggplot(long, ggplot2::aes(x = x, y = -y, color = expr))
@@ -453,8 +474,8 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
         p <- p + ggplot2::geom_point(size = 0.8)
       }
       method_lbl <- if (identical(shared_rv$moran_params$method, "markvariogram")) {
-        "mark variogram"
-      } else "indice de Moran"
+        .tr("mark variogram")
+      } else .tr("indice de Moran")
       p + ggplot2::facet_wrap(~gene, ncol = n_facet_col) +
         ggplot2::scale_color_viridis_c(option = "plasma") +
         ggplot2::coord_fixed() + ggplot2::theme_void(base_size = 15) +
@@ -463,8 +484,8 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
                        legend.title = ggplot2::element_text(size = 13),
                        plot.title = ggplot2::element_text(size = 17, face = "bold"),
                        panel.spacing = ggplot2::unit(1, "lines")) +
-        ggplot2::labs(color = "Expression",
-                      title = sprintf("Top %d genes spatialement variables (%s)",
+        ggplot2::labs(color = .tr("Expression"),
+                      title = sprintf(.tr("Top %d genes spatialement variables (%s)"),
                                        length(unique(long$gene)), method_lbl))
     })
 
@@ -505,7 +526,7 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
         compute_getis_ord_hotspots(coords = global_data$spatial_obj$coords, values = values,
                                     k_neighbors = input$hotspot_k),
         error = function(e) {
-          showNotification(paste("Erreur hotspots :", conditionMessage(e)), type = "error", duration = 8)
+          showNotification(paste(.tr("Erreur hotspots :"), conditionMessage(e)), type = "error", duration = 8)
           NULL
         }
       )
@@ -515,17 +536,19 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
     })
 
     output$hotspot_status_ui <- renderUI({
+      global_data$language  # re-render on language switch
       req(shared_rv$hotspot_result)
       n_hot <- sum(shared_rv$hotspot_result$hotspot == "Hotspot (chaud)")
       n_cold <- sum(shared_rv$hotspot_result$hotspot == "Coldspot (froid)")
       div(class = "alert alert-success", style = "font-size:0.75rem;",
-          sprintf("%d hotspot(s), %d coldspot(s) sur %d elements (p < 0.05).",
-                  n_hot, n_cold, nrow(shared_rv$hotspot_result)))
+          .t_fmt(.tr("{hot} hotspot(s), {cold} coldspot(s) sur {total} elements (p < 0.05)."),
+                 hot = n_hot, cold = n_cold, total = nrow(shared_rv$hotspot_result)))
     })
 
     .hotspot_palette <- c("Hotspot (chaud)" = "#D55E00", "Coldspot (froid)" = "#0072B2", "NS" = "#CCCCCC")
 
     output$hotspot_map <- renderPlot({
+      global_data$language  # re-render on language switch
       df <- hotspot_result()
       coords <- global_data$spatial_obj$coords
       m <- match(df$id, coords$id)
@@ -537,12 +560,16 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
       } else {
         p <- p + ggplot2::geom_point(size = 0.7, alpha = 0.85)
       }
-      p + ggplot2::scale_color_manual(values = .hotspot_palette) +
+      p + ggplot2::scale_color_manual(values = .hotspot_palette,
+                                      labels = c("Hotspot (chaud)" = .tr("Hotspot (chaud)"),
+                                                 "Coldspot (froid)" = .tr("Coldspot (froid)"),
+                                                 "NS" = .tr("NS"))) +
         ggplot2::coord_fixed() + ggplot2::theme_void(base_size = 12) +
-        ggplot2::labs(color = NULL, title = "Hotspots locaux (Getis-Ord Gi*)")
+        ggplot2::labs(color = NULL, title = .tr("Hotspots locaux (Getis-Ord Gi*)"))
     })
 
     output$hotspot_hist <- renderPlot({
+      global_data$language  # re-render on language switch
       req(shared_rv$hotspot_result)
       
       df <- shared_rv$hotspot_result
@@ -557,14 +584,17 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
           color = "grey30",
           linetype = "dashed"
         ) +
-        ggplot2::scale_fill_manual(values = .hotspot_palette) +
+        ggplot2::scale_fill_manual(values = .hotspot_palette,
+                                   labels = c("Hotspot (chaud)" = .tr("Hotspot (chaud)"),
+                                              "Coldspot (froid)" = .tr("Coldspot (froid)"),
+                                              "NS" = .tr("NS"))) +
         ggplot2::theme_minimal(base_size = 12) +
         ggplot2::labs(
           x = "Gi* (z-score)",
-          y = "Effectif",
+          y = .tr("Effectif"),
           fill = NULL,
-          title = "Distribution du Gi*",
-          subtitle = "Pointilles = seuil p < 0.05 (|z| > 1.96)"
+          title = .tr("Distribution du Gi*"),
+          subtitle = .tr("Pointilles = seuil p < 0.05 (|z| > 1.96)")
         )
     })
     

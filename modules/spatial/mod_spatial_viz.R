@@ -14,18 +14,19 @@ mod_spatial_viz_ui <- function(id) {
   
   layout_sidebar(
     sidebar = sidebar(
-      title = "Visualisation", width = 320,
+      title = i18n$t("Visualisation"), width = 320,
       
       uiOutput(ns("sketch_norm_status_ui")),
       
       selectInput(
-        ns("color_by"), "Colorer par",
-        choices = c(
-          "Metrique QC" = "qc",
-          "Cluster spatial" = "cluster",
-          "Type cellulaire (deconvolution)" = "deconv",
-          "Niche spatiale" = "niche",
-          "Gene" = "gene"
+        ns("color_by"), .tr_plain("Colorer par"),
+        choices = stats::setNames(
+          c("qc", "cluster", "deconv", "niche", "gene"),
+          c(.tr_plain("Metrique QC"),
+            .tr_plain("Cluster spatial"),
+            .tr_plain("Type cellulaire (deconvolution)"),
+            .tr_plain("Niche spatiale"),
+            .tr_plain("Gene"))
         ),
         selected = "qc"
       ),
@@ -44,7 +45,7 @@ mod_spatial_viz_ui <- function(id) {
           ns("gene"), NULL, choices = NULL,
           options = list(
             maxOptions = 3000,
-            placeholder = "Rechercher un gene..."
+            placeholder = .tr_plain("Rechercher un gene...")
           )
         ),
         # NEW: quick-pick from the Moran's I results (onglet "1. QC &
@@ -60,13 +61,13 @@ mod_spatial_viz_ui <- function(id) {
         condition = sprintf("input['%s'] == 'gene'", ns("color_by")),
         checkboxInput(
           ns("scale_alpha_by_expr"),
-          "Opacite proportionnelle a l'expression (SpatialFeaturePlot)",
+          i18n$t("Opacite proportionnelle a l'expression (SpatialFeaturePlot)"),
           value = TRUE
         ),
         conditionalPanel(
           condition = sprintf("input['%s']", ns("scale_alpha_by_expr")),
           sliderInput(
-            ns("alpha_range"), "Plage d'opacite (min-max)",
+            ns("alpha_range"), i18n$t("Plage d'opacite (min-max)"),
             0, 1, c(0.15, 1), step = 0.05
           )
         )
@@ -81,30 +82,33 @@ mod_spatial_viz_ui <- function(id) {
         condition = sprintf("input['%s'] == 'cluster'", ns("color_by")),
         checkboxInput(
           ns("show_cluster_labels"),
-          "Afficher les labels de cluster sur la carte (vignette: DimPlot label=TRUE)",
+          i18n$t("Afficher les labels de cluster sur la carte (vignette: DimPlot label=TRUE)"),
           value = FALSE
         )
       ),
       
-      sliderInput(ns("pt_radius"), "Taille des points", 1, 20, 6, step = 1),
-      sliderInput(ns("pt_opacity"), "Opacite des points (hors mode Gene)", 0.1, 1, 0.85, step = 0.05),
+      sliderInput(ns("pt_radius"), i18n$t("Taille des points"), 1, 20, 6, step = 1),
+      sliderInput(ns("pt_opacity"), i18n$t("Opacite des points (hors mode Gene)"), 0.1, 1, 0.85, step = 0.05),
 
       hr(),
       tags$details(
-        tags$summary(style = "cursor:pointer; font-weight:bold; font-size:0.85rem;", "Palette de couleurs"),
+        tags$summary(style = "cursor:pointer; font-weight:bold; font-size:0.85rem;", i18n$t("Palette de couleurs")),
         div(class = "mt-2",
-            selectInput(ns("color_palette"), "Jeu de couleurs",
-                        choices = c("Defaut" = "default", "Okabe-Ito (daltonien)" = "okabeito",
-                                    "Viridis" = "viridis", "Set2" = "set2", "Manuel" = "manual"),
+            selectInput(ns("color_palette"), i18n$t("Jeu de couleurs"),
+                        choices = stats::setNames(
+                          c("default", "okabeito", "viridis", "set2", "manual"),
+                          c(.tr_plain("Defaut"), .tr_plain("Okabe-Ito (daltonien)"),
+                            "Viridis", "Set2", .tr_plain("Manuel"))
+                        ),
                         selected = "default"),
             conditionalPanel(
               condition = sprintf("input['%s'] == 'manual'", ns("color_palette")),
-              div(class = "text-muted", style = "font-size:0.7rem;", "Degrade (metriques continues : QC, gene, Z-score...)"),
-              manual_color_picker_ui(ns, c("grad_low", "grad_high"), c("Bas", "Haut"), c("#2166AC", "#B2182B")),
-              div(class = "text-muted mt-2", style = "font-size:0.7rem;", "Couleurs discretes (categorie affichee actuellement) :"),
+              div(class = "text-muted", style = "font-size:0.7rem;", i18n$t("Degrade (metriques continues : QC, gene, Z-score...)")),
+              manual_color_picker_ui(ns, c("grad_low", "grad_high"), c(i18n$t("Bas"), i18n$t("Haut")), c("#2166AC", "#B2182B")),
+              div(class = "text-muted mt-2", style = "font-size:0.7rem;", i18n$t("Couleurs discretes (categorie affichee actuellement) :")),
               uiOutput(ns("manual_discrete_picker_ui"))
             ),
-            checkboxInput(ns("fixed_scale"), "Echelle de couleur fixe (point fixe min/max)", value = FALSE),
+            checkboxInput(ns("fixed_scale"), i18n$t("Echelle de couleur fixe (point fixe min/max)"), value = FALSE),
             conditionalPanel(
               condition = sprintf("input['%s']", ns("fixed_scale")),
               div(style = "display:flex; gap:8px;",
@@ -115,22 +119,22 @@ mod_spatial_viz_ui <- function(id) {
       ),
       hr(),
       
-      checkboxInput(ns("show_histology"), "Afficher l'image histologique (fond de coupe)", value = TRUE),
+      checkboxInput(ns("show_histology"), i18n$t("Afficher l'image histologique (fond de coupe)"), value = TRUE),
       conditionalPanel(
         condition = sprintf("input['%s'] == true", ns("show_histology")),
         selectInput(
-          ns("histology_resolution"), "Résolution du fond",
+          ns("histology_resolution"), i18n$t("Résolution du fond"),
           choices = NULL,          # sera mis à jour dynamiquement côté serveur
           selected = NULL
         ),
-        sliderInput(ns("histology_opacity"), "Opacité de l'image", 0, 1, 0.7, step = 0.05)
+        sliderInput(ns("histology_opacity"), i18n$t("Opacité de l'image"), 0, 1, 0.7, step = 0.05)
       ),
       
       uiOutput(ns("histology_status_ui")),
       conditionalPanel(
         condition = sprintf("input['%s'] == true", ns("show_histology")),
         downloadButton(
-          ns("dl_histology_raw"), "\U0001F41B Fond brut (debug PNG)",
+          ns("dl_histology_raw"), i18n$t("\U0001F41B Fond brut (debug PNG)"),
           class = "btn-sm btn-outline-secondary w-100 mb-1"
         )
       ),
@@ -139,17 +143,16 @@ mod_spatial_viz_ui <- function(id) {
         class = "border-top pt-2 mt-2",
         checkboxInput(
           ns("show_static_export_preview"),
-          "Afficher l'apercu PNG (a cote de la carte interactive)",
+          i18n$t("Afficher l'apercu PNG (a cote de la carte interactive)"),
           value = TRUE
         ),
         div(
           class = "text-muted mb-2",
           style = "font-size: 0.7rem;",
-          "Meme moteur que le bouton Export PNG ci-dessous. Decochez pour donner ",
-          "toute la largeur a la carte interactive Plotly."
+          i18n$t("Meme moteur que le bouton Export PNG ci-dessous. Decochez pour donner toute la largeur a la carte interactive Plotly.")
         ),
-        downloadButton(ns("dl_png"), "Export PNG", class = "btn-sm btn-outline-secondary w-100 mb-1"),
-        downloadButton(ns("dl_csv"), "Export CSV (donnees affichees)", class = "btn-sm btn-outline-secondary w-100")
+        downloadButton(ns("dl_png"), i18n$t("Export PNG"), class = "btn-sm btn-outline-secondary w-100 mb-1"),
+        downloadButton(ns("dl_csv"), i18n$t("Export CSV (donnees affichees)"), class = "btn-sm btn-outline-secondary w-100")
       ),
 
       # Feedback biologiste ("ajouter la fonction d'ajout au rapport") :
@@ -164,12 +167,11 @@ mod_spatial_viz_ui <- function(id) {
       # etape ensuite.
       div(
         class = "border-top pt-2 mt-2",
-        h6("Ajouter au rapport", style = "font-weight: bold; font-size:0.85rem;"),
+        h6(i18n$t("Ajouter au rapport"), style = "font-weight: bold; font-size:0.85rem;"),
         div(class = "text-muted", style = "font-size:0.7rem;",
-            "Sauvegarde la vue ACTUELLE (coloration + parametres ci-dessus) pour l'onglet ",
-            "\"7. Export & Rapport\", meme apres avoir change d'onglet ou d'echantillon."),
-        textInput(ns("viz_save_label"), NULL, placeholder = "Nom de cette vue (ex: Cluster 3 vs stroma)"),
-        actionButton(ns("btn_add_to_report"), "\u2795 Ajouter cette vue au rapport",
+            i18n$t("Sauvegarde la vue ACTUELLE (coloration + parametres ci-dessus) pour l'onglet \"7. Export & Rapport\", meme apres avoir change d'onglet ou d'echantillon.")),
+        textInput(ns("viz_save_label"), NULL, placeholder = .tr_plain("Nom de cette vue (ex: Cluster 3 vs stroma)")),
+        actionButton(ns("btn_add_to_report"), paste("\u2795", i18n$t("Ajouter cette vue au rapport")),
                      class = "btn-sm btn-outline-primary w-100"),
         uiOutput(ns("saved_viz_list_ui"))
       ),
@@ -189,23 +191,22 @@ mod_spatial_viz_ui <- function(id) {
       # never affected by it.
       tags$details(
         tags$summary(style = "cursor:pointer; font-size:0.72rem; color:#888;",
-                     "Outil de diagnostic (debug) : orientation Plotly"),
+                     i18n$t("Outil de diagnostic (debug) : orientation Plotly")),
         div(class = "mt-1",
             checkboxInput(
               ns("plotly_orient_fix"),
-              "Corriger l'orientation dans la vue interactive Plotly",
+              i18n$t("Corriger l'orientation dans la vue interactive Plotly"),
               value = FALSE
             ),
             div(class = "text-muted", style = "font-size:0.65rem;",
-                "A utiliser seulement si le fond hires choisi ci-dessus semble encore tourne. ",
-                "N'affecte JAMAIS l'export PNG ni le clustering/Moran.")
+                i18n$t("A utiliser seulement si le fond hires choisi ci-dessus semble encore tourne. N'affecte JAMAIS l'export PNG ni le clustering/Moran."))
         )
       ),
       
       hr(),
       bslib::input_task_button(
         ns("btn_compute_umap"),
-        "Calculer PCA + UMAP (sketch)",
+        i18n$t("Calculer PCA + UMAP (sketch)"),
         icon = icon("chart-line")
       ),
       verbatimTextOutput(ns("umap_progress_text"), placeholder = TRUE)
@@ -213,12 +214,12 @@ mod_spatial_viz_ui <- function(id) {
     
     navset_card_underline(
       nav_panel(
-        "Carte spatiale",
+        i18n$t("Carte spatiale"),
         uiOutput(ns("carte_spatiale_layout_ui"))
       ),
       
       nav_panel(
-        "UMAP (non-spatial, sketch)",
+        i18n$t("UMAP (non-spatial, sketch)"),
         card(
           full_screen = TRUE,
           style = "min-height: 78vh;",
@@ -230,7 +231,7 @@ mod_spatial_viz_ui <- function(id) {
       ),
       
       nav_panel(
-        "Vue combinee (mode expert)",
+        i18n$t("Vue combinee (mode expert)"),
         div(
           class = "alert alert-light mb-2",
           style = "font-size:0.82rem;",
@@ -244,11 +245,11 @@ mod_spatial_viz_ui <- function(id) {
             style = "min-width: 320px; flex: 1 1 320px;",
             selectizeInput(
               ns("highlight_clusters"),
-              "Isoler cluster(s)",
+              i18n$t("Isoler cluster(s)"),
               choices = NULL,
               multiple = TRUE,
               options = list(
-                placeholder = "Tous les clusters",
+                placeholder = .tr_plain("Tous les clusters"),
                 plugins = list("remove_button")
               )
             )
@@ -257,7 +258,7 @@ mod_spatial_viz_ui <- function(id) {
             style = "min-width: 220px;",
             actionButton(
               ns("btn_clear_selection"),
-              "Effacer la selection lasso",
+              i18n$t("Effacer la selection lasso"),
               class = "btn btn-outline-secondary"
             )
           ),
@@ -265,7 +266,7 @@ mod_spatial_viz_ui <- function(id) {
             style = "min-width: 220px;",
             actionButton(
               ns("btn_isolate_roi"),
-              "\U0001F50D Isoler cette selection (ROI)",
+              i18n$t("\U0001F50D Isoler cette selection (ROI)"),
               class = "btn btn-primary"
             )
           )
@@ -275,7 +276,7 @@ mod_spatial_viz_ui <- function(id) {
           card(
             full_screen = TRUE,
             style = "min-height: 78vh;",
-            card_header("Carte spatiale liee"),
+            card_header(i18n$t("Carte spatiale liee")),
             plotly::plotlyOutput(
               ns("combined_spatial_plot"),
               height = "72vh"
@@ -284,7 +285,7 @@ mod_spatial_viz_ui <- function(id) {
           card(
             full_screen = TRUE,
             style = "min-height: 78vh;",
-            card_header("UMAP lie"),
+            card_header(i18n$t("UMAP lie")),
             plotly::plotlyOutput(
               ns("combined_umap_plot"),
               height = "72vh"
@@ -294,7 +295,7 @@ mod_spatial_viz_ui <- function(id) {
       ),
       
       nav_panel(
-        "5. ROI isolee",
+        i18n$t("5. ROI isolee"),
         
         div(
           class = "mb-3",
@@ -313,7 +314,7 @@ mod_spatial_viz_ui <- function(id) {
                 full_screen = TRUE,
                 class = "w-100",
                 style = "height: min(68vh, 720px); min-height: 520px;",
-                card_header("Vue zoomee (ROI)"),
+                card_header(i18n$t("Vue zoomee (ROI)")),
                 card_body(
                   class = "p-0",
                   style = "height: calc(min(68vh, 720px) - 52px); min-height: 468px; overflow: hidden;",
@@ -331,7 +332,7 @@ mod_spatial_viz_ui <- function(id) {
                 full_screen = TRUE,
                 class = "w-100",
                 style = "height: min(68vh, 720px); min-height: 520px;",
-                card_header("Contexte (carte complete)"),
+                card_header(i18n$t("Contexte (carte complete)")),
                 card_body(
                   class = "p-0",
                   style = "height: calc(min(68vh, 720px) - 52px); min-height: 468px; overflow: hidden;",
@@ -349,30 +350,30 @@ mod_spatial_viz_ui <- function(id) {
             div(
               class = "col-12",
               card(
-                card_header("Marqueurs differentiels (ROI vs Reste)"),
+                card_header(i18n$t("Marqueurs differentiels (ROI vs Reste)")),
                 card_body(
                   div(
                     class = "alert alert-light small mb-3",
                     bsicons::bs_icon("info-circle"),
-                    " Selectionnez une ROI depuis la Vue combinee, puis lancez le test ",
-                    "Wilcoxon asynchrone contre le reste des spots."
+                    " ",
+                    i18n$t("Selectionnez une ROI depuis la Vue combinee, puis lancez le test Wilcoxon asynchrone contre le reste des spots.")
                   ),
                   
                   div(
                     class = "d-flex flex-wrap align-items-center gap-2 mb-3",
                     bslib::input_task_button(
                       ns("btn_roi_markers"),
-                      "Chercher les marqueurs",
+                      i18n$t("Chercher les marqueurs"),
                       icon = icon("magnifying-glass-chart")
                     ),
                     downloadButton(
                       ns("dl_roi_object"),
-                      "\U0001F4E5 Telecharger le sous-objet (.rds)",
+                      i18n$t("\U0001F4E5 Telecharger le sous-objet (.rds)"),
                       class = "btn-outline-secondary"
                     ),
                     actionButton(
                       ns("btn_clear_roi"),
-                      "Vider la ROI",
+                      i18n$t("Vider la ROI"),
                       class = "btn-outline-danger"
                     )
                   ),
@@ -400,6 +401,64 @@ mod_spatial_viz_ui <- function(id) {
 mod_spatial_viz_server <- function(id, global_data, shared_rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+    
+    # Session-scoped scalar translation (plain strings, never HTML spans).
+    .tr <- function(key) {
+      tr <- global_data$i18n
+      if (is.null(tr)) return(key)
+      tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+    }
+    
+    # i18n: push translated labels/choices for build-time-frozen inputs on
+    # every language change (values NEVER change; selection is preserved).
+    observeEvent(global_data$language, {
+      updateSelectInput(session, "color_by",
+        label = .tr("Colorer par"),
+        choices = stats::setNames(
+          c("qc", "cluster", "deconv", "niche", "gene"),
+          c(.tr("Metrique QC"), .tr("Cluster spatial"),
+            .tr("Type cellulaire (deconvolution)"), .tr("Niche spatiale"),
+            .tr("Gene"))))
+      updateSliderInput(session, "alpha_range",
+        label = .tr("Plage d'opacite (min-max)"))
+      updateCheckboxInput(session, "scale_alpha_by_expr",
+        label = .tr("Opacite proportionnelle a l'expression (SpatialFeaturePlot)"))
+      updateCheckboxInput(session, "show_cluster_labels",
+        label = .tr("Afficher les labels de cluster sur la carte (vignette: DimPlot label=TRUE)"))
+      updateSliderInput(session, "pt_radius", label = .tr("Taille des points"))
+      updateSliderInput(session, "pt_opacity",
+        label = .tr("Opacite des points (hors mode Gene)"))
+      updateSelectInput(session, "color_palette",
+        label = .tr("Jeu de couleurs"),
+        choices = stats::setNames(
+          c("default", "okabeito", "viridis", "set2", "manual"),
+          c(.tr("Defaut"), .tr("Okabe-Ito (daltonien)"),
+            "Viridis", "Set2", .tr("Manuel"))))
+      updateCheckboxInput(session, "fixed_scale",
+        label = .tr("Echelle de couleur fixe (point fixe min/max)"))
+      updateCheckboxInput(session, "show_histology",
+        label = .tr("Afficher l'image histologique (fond de coupe)"))
+      updateSelectInput(session, "histology_resolution",
+        label = .tr("Résolution du fond"))
+      updateSliderInput(session, "histology_opacity",
+        label = .tr("Opacité de l'image"))
+      updateCheckboxInput(session, "show_static_export_preview",
+        label = .tr("Afficher l'apercu PNG (a cote de la carte interactive)"))
+      updateTextInput(session, "viz_save_label",
+        placeholder = .tr("Nom de cette vue (ex: Cluster 3 vs stroma)"))
+      updateCheckboxInput(session, "plotly_orient_fix",
+        label = .tr("Corriger l'orientation dans la vue interactive Plotly"))
+      updateActionButton(session, "btn_add_to_report",
+        label = paste("\u2795", .tr("Ajouter cette vue au rapport")))
+      updateSelectizeInput(session, "highlight_clusters",
+        label = .tr("Isoler cluster(s)"),
+        options = list(placeholder = .tr("Tous les clusters")))
+      updateActionButton(session, "btn_clear_selection",
+        label = .tr("Effacer la selection lasso"))
+      updateActionButton(session, "btn_isolate_roi",
+        label = .tr("\U0001F50D Isoler cette selection (ROI)"))
+      updateActionButton(session, "btn_clear_roi", label = .tr("Vider la ROI"))
+    }, ignoreInit = TRUE)
     
     # --------------------------------------------------------------------------
     # Helper pour extraire les résolutions disponibles
@@ -471,11 +530,12 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     # elle-meme ne fait plus partie de cette carte -- voir la sidebar.
     # --------------------------------------------------------------------------
     output$carte_spatiale_layout_ui <- renderUI({
+      global_data$language  # i18n: re-render on language switch
       show_png <- isTRUE(input$show_static_export_preview)
       plotly_card <- card(
         full_screen = TRUE,
         style = "min-height: 72vh;",
-        card_header("Carte interactive (Plotly)"),
+        card_header(.tr("Carte interactive (Plotly)")),
         card_body(
           class = "p-0",
           plotly::plotlyOutput(ns("spatial_preview_plot"), height = if (show_png) "72vh" else "80vh")
@@ -489,13 +549,12 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         card(
           full_screen = TRUE,
           style = "min-height: 72vh;",
-          card_header("Aperçu dynamique — export PNG"),
+          card_header(.tr("Aperçu dynamique — export PNG")),
           card_body(
             div(
               class = "text-muted mb-2",
               style = "font-size: 0.72rem;",
-              "Même moteur que le bouton Export PNG. ",
-              "Le fond est temporairement masqué, sans crash, pendant un changement de résolution invalide."
+              .tr("Même moteur que le bouton Export PNG. Le fond est temporairement masqué, sans crash, pendant un changement de résolution invalide.")
             ),
             plotOutput(ns("static_export_preview"), height = "calc(72vh - 65px)")
           )
@@ -507,6 +566,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     # Statut de la normalisation du sketch
     # --------------------------------------------------------------------------
     output$sketch_norm_status_ui <- renderUI({
+      global_data$language  # i18n: re-render on language switch
       req(global_data$spatial_obj$sketch)
       norm_used <- tryCatch(
         Seurat::DefaultAssay(global_data$spatial_obj$sketch),
@@ -516,7 +576,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       div(
         class = "alert alert-light",
         style = "font-size:0.7rem;padding:2px 8px;",
-        sprintf("Normalisation du sketch : %s", label)
+        .t_fmt(.tr("Normalisation du sketch : {norm}"), norm = label)
       )
     })
     
@@ -609,6 +669,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     # Statut de l'histologie (UI)
     # --------------------------------------------------------------------------
     output$histology_status_ui <- renderUI({
+      global_data$language  # i18n: re-render on language switch
       req(global_data$spatial_obj)
       
       hist_data <- global_data$spatial_obj$histology
@@ -617,7 +678,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
           div(
             class = "alert alert-light",
             style = "font-size:0.7rem;padding:2px 6px;",
-            "Image histologique indisponible."
+            .tr("Image histologique indisponible.")
           )
         )
       }
@@ -629,7 +690,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
           div(
             class = "alert alert-warning",
             style = "font-size:0.7rem;padding:2px 6px;",
-            "Le fond histologique n'a pas pu etre prepare pour cette resolution."
+            .tr("Le fond histologique n'a pas pu etre prepare pour cette resolution.")
           )
         )
       }
@@ -639,7 +700,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
           div(
             class = "alert alert-warning",
             style = "font-size:0.7rem;padding:2px 6px;",
-            "Fond disponible pour l'export PNG, mais echec de l'encodage Plotly."
+            .tr("Fond disponible pour l'export PNG, mais echec de l'encodage Plotly.")
           )
         )
       }
@@ -648,7 +709,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         class = "text-muted",
         style = "font-size:0.65rem;padding:2px 6px;",
         sprintf(
-          "Fond histologique OK — %s — %d x %d px — %.0f Ko",
+          .tr("Fond histologique OK — %s — %d x %d px — %.0f Ko"),
           ov$resolution,
           dim(ov$raster_obj)[2L],
           dim(ov$raster_obj)[1L],
@@ -681,7 +742,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         validate(
           need(
             !is.null(hist_img) && !is.null(hist_img$rgba),
-            "Aucune image histologique disponible."
+            .tr("Aucune image histologique disponible.")
           )
         )
         
@@ -937,6 +998,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     # est deja reinitialise au changement d'echantillon par mod_spatial.R).
     # --------------------------------------------------------------------------
     output$moran_quickpick_ui <- renderUI({
+      global_data$language  # i18n: re-render on language switch
       req(shared_rv$moran_results, nrow(shared_rv$moran_results) > 0)
       top <- shared_rv$moran_results[order(-shared_rv$moran_results$moran_i), ]
       top <- top[!is.na(top$gene), , drop = FALSE]
@@ -947,12 +1009,12 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       tagList(
         selectInput(
           ns("moran_gene_pick"),
-          "Raccourci : gene spatialement variable (indice de Moran)",
-          choices = c("\u2014 choisir parmi le top Moran's I \u2014" = "",
+          .tr("Raccourci : gene spatialement variable (indice de Moran)"),
+          choices = c(stats::setNames("", .tr("\u2014 choisir parmi le top Moran's I \u2014")),
                      utils::head(choices, 100))
         ),
         div(class = "text-muted", style = "font-size:0.68rem; margin-top:-8px;",
-            "Classes par indice de Moran decroissant (calcule onglet 1).")
+            .tr("Classes par indice de Moran decroissant (calcule onglet 1)."))
       )
     })
 
@@ -961,7 +1023,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       g <- input$moran_gene_pick
       all_genes <- rownames(global_data$spatial_obj$sketch)
       if (!g %in% all_genes) {
-        showNotification(sprintf("Gene '%s' introuvable dans le sketch actuel.", g),
+        showNotification(.t_fmt(.tr("Gene '{g}' introuvable dans le sketch actuel."), g = g),
                          type = "warning", duration = 6)
         return()
       }
@@ -997,17 +1059,19 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       current <- shared_rv$saved_viz_list %||% list()
       current[[label]] <- cfg
       shared_rv$saved_viz_list <- current
-      showNotification(sprintf("Vue '%s' ajoutee au rapport.", label), type = "message", duration = 4)
+      showNotification(.t_fmt(.tr("Vue '{label}' ajoutee au rapport."), label = label),
+                       type = "message", duration = 4)
       updateTextInput(session, "viz_save_label", value = "")
     })
 
     .esc_js <- function(x) gsub("'", "\\'", x, fixed = TRUE)
 
     output$saved_viz_list_ui <- renderUI({
+      global_data$language  # i18n: re-render on language switch
       lst <- shared_rv$saved_viz_list %||% list()
       if (length(lst) == 0) {
         return(div(class = "text-muted", style = "font-size:0.7rem; margin-top:4px;",
-                   "Aucune vue sauvegardee pour cet echantillon."))
+                   .tr("Aucune vue sauvegardee pour cet echantillon.")))
       }
       tagList(
         tags$ul(
@@ -1015,7 +1079,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
           lapply(names(lst), function(nm) {
             tags$li(style = "display:flex; justify-content:space-between; align-items:center; gap:6px; padding:1px 0;",
                     tags$span(nm),
-                    tags$a(href = "#", class = "text-danger", title = "Supprimer cette vue",
+                    tags$a(href = "#", class = "text-danger", title = .tr("Supprimer cette vue"),
                            style = "text-decoration:none; font-weight:bold;",
                            onclick = sprintf(
                              "Shiny.setInputValue('%s', {name: '%s', ts: Date.now()}, {priority:'event'}); return false;",
@@ -1024,7 +1088,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
                            "\u2715"))
           })
         ),
-        actionLink(ns("btn_clear_saved_viz"), "Vider toutes les vues sauvegardees", style = "font-size:0.7rem;")
+        actionLink(ns("btn_clear_saved_viz"), .tr("Vider toutes les vues sauvegardees"), style = "font-size:0.7rem;")
       )
     })
 
@@ -1358,10 +1422,10 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     
     build_raster_plot <- function(df) {
       validate(
-        shiny::need(is.data.frame(df) && nrow(df) > 0L, "Aucune coordonnée spatiale exploitable."),
+        shiny::need(is.data.frame(df) && nrow(df) > 0L, .tr("Aucune coordonnée spatiale exploitable.")),
         shiny::need(
           all(c("x", "y", "value") %in% colnames(df)),
-          "Les colonnes x, y ou value sont absentes."
+          .tr("Les colonnes x, y ou value sont absentes.")
         )
       )
       
@@ -1372,7 +1436,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       ]
       
       validate(
-        shiny::need(nrow(df) > 0L, "Aucune coordonnée spatiale finie à afficher.")
+        shiny::need(nrow(df) > 0L, .tr("Aucune coordonnée spatiale finie à afficher."))
       )
       
       use_alpha_scale <- identical(input$color_by, "gene") &&
@@ -1404,7 +1468,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         # Deliberately do not stop the preview: spots remain visible while a
         # resolution is being recomputed or when a raster is too large for RAM.
         showNotification(
-          "Fond histologique temporairement indisponible pour l'aperçu PNG ; les spots restent affichés.",
+          .tr("Fond histologique temporairement indisponible pour l'aperçu PNG ; les spots restent affichés."),
           type = "warning",
           duration = 4
         )
@@ -1512,7 +1576,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
           if (!inherits(e, "shiny.silent.error")) {
             showNotification(
               paste(
-                "Aperçu PNG non généré :",
+                .tr("Aperçu PNG non généré :"),
                 conditionMessage(e)
               ),
               type = "warning",
@@ -1531,12 +1595,13 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     
     output$static_export_preview <- renderPlot(
       {
+        global_data$language  # i18n: re-render on language switch
         p <- static_export_plot()
         
         validate(
           shiny::need(
             !is.null(p),
-            "Préparation de l'aperçu PNG…"
+            .tr("Préparation de l'aperçu PNG…")
           )
         )
         
@@ -1567,7 +1632,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         df <- plot_df()
         
         validate(
-          shiny::need(nrow(df) > 0L, "Aucune donnée à exporter.")
+          shiny::need(nrow(df) > 0L, .tr("Aucune donnée à exporter."))
         )
         
         p <- build_raster_plot(df)
@@ -1590,7 +1655,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       filename = function() paste0("carte_spatiale_", input$color_by, "_", Sys.Date(), ".csv"),
       content = function(file) {
         df <- plot_df()
-        validate(need(nrow(df) > 0, "Aucune donnee a exporter."))
+        validate(need(nrow(df) > 0, .tr("Aucune donnee a exporter.")))
         write.csv(df, file, row.names = FALSE)
       }
     )
@@ -1648,15 +1713,16 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     observeEvent(umap_task$status(), {
       if (umap_task$status() == "success") {
         shared_rv$umap_df <- umap_task$result()
-        showNotification("UMAP calcule.", type = "message", duration = 3)
+        showNotification(.tr("UMAP calcule."), type = "message", duration = 3)
       } else if (umap_task$status() == "error") {
-        showNotification("Erreur pendant le calcul UMAP.", type = "error", duration = 10)
+        showNotification(.tr("Erreur pendant le calcul UMAP."), type = "error", duration = 10)
       }
     })
     
     output$umap_progress_text <- renderText({
+      global_data$language  # i18n: re-render on language switch
       lines <- tracker()
-      if (length(lines) == 0) return("En attente...")
+      if (length(lines) == 0) return(.tr("En attente..."))
       paste(lines, collapse = "\n")
     })
     
@@ -1816,6 +1882,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     })
     
     output$highlight_debug_ui <- renderUI({
+      global_data$language  # i18n: re-render on language switch
       hl <- highlighted_ids()
       if (length(hl) == 0) return(NULL)
       
@@ -1826,10 +1893,10 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         class = "text-info style-sm mt-1",
         style = "font-size:0.75rem;",
         sprintf(
-          "\u2139\ufe0f %d cellule(s) selectionnee(s) / isolee(s) (Spatial: %s, UMAP: %s)",
+          .tr("\u2139\ufe0f %d cellule(s) selectionnee(s) / isolee(s) (Spatial: %s, UMAP: %s)"),
           length(hl),
           paste0(n_spatial, " pts"),
-          if (is.na(n_umap)) "non calcule" else paste0(n_umap, " pts")
+          if (is.na(n_umap)) .tr("non calcule") else paste0(n_umap, " pts")
         )
       )
     })
@@ -2039,11 +2106,11 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     observeEvent(input$btn_isolate_roi, {
       hl <- highlighted_ids()
       if (length(hl) == 0) {
-        showNotification("Aucune selection a isoler. Utilisez le lasso.", type = "warning")
+        showNotification(.tr("Aucune selection a isoler. Utilisez le lasso."), type = "warning")
         return()
       }
       roi_ids(hl)
-      showNotification(sprintf("ROI isolee (%d cellules).", length(hl)), type = "message")
+      showNotification(.t_fmt(.tr("ROI isolee ({n} cellules)."), n = length(hl)), type = "message")
     })
     
     observeEvent(input$btn_clear_roi, {
@@ -2059,13 +2126,15 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     })
     
     output$roi_summary_ui <- renderUI({
+      global_data$language  # i18n: re-render on language switch
       ids <- roi_ids()
       if (is.null(ids) || length(ids) == 0) {
         return(
           div(
             class = "alert alert-warning mb-3",
             bsicons::bs_icon("exclamation-triangle"),
-            " Aucune ROI isolee."
+            " ",
+            .tr("Aucune ROI isolee.")
           )
         )
       }
@@ -2076,7 +2145,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       div(
         class = "alert alert-success mb-3 d-flex justify-content-between align-items-center",
         div(
-          strong(sprintf("ROI active : %d spots", length(ids))),
+          strong(.t_fmt(.tr("ROI active : {n} spots"), n = length(ids))),
           if (!is.na(pct)) sprintf(" — %.1f%%", pct) else ""
         )
       )
@@ -2139,6 +2208,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     })
     
     output$roi_context_plot <- plotly::renderPlotly({
+      global_data$language  # i18n: re-render on language switch
       df_all <- combined_spatial_df()
       req(nrow(df_all) > 0)
       ids_roi <- roi_ids()
@@ -2179,7 +2249,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
             y = ~y_display,
             type = trace_type,
             mode = "markers",
-            name = "Reste",
+            name = .tr("Reste"),
             marker = list(color = "rgba(180, 180, 180, 0.3)", size = max(1, input$pt_radius - 2)),
             hoverinfo = "none"
           )
@@ -2271,13 +2341,13 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         
         if (is.null(result) || nrow(result) == 0L) {
           showNotification(
-            "Calcul termine, mais aucun gene ne passe les seuils definis.",
+            .tr("Calcul termine, mais aucun gene ne passe les seuils definis."),
             type = "warning",
             duration = 8
           )
         } else {
           showNotification(
-            sprintf("%d marqueurs ROI calcules.", nrow(result)),
+            .t_fmt(.tr("{n} marqueurs ROI calcules."), n = nrow(result)),
             type = "message",
             duration = 4
           )
@@ -2286,7 +2356,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       
       if (identical(roi_markers_task$status(), "error")) {
         showNotification(
-          "Erreur lors du calcul des marqueurs ROI. Consultez le journal.",
+          .tr("Erreur lors du calcul des marqueurs ROI. Consultez le journal."),
           type = "error",
           duration = 10
         )
@@ -2294,18 +2364,20 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     })
     
     output$roi_markers_progress_text <- renderText({
+      global_data$language  # i18n: re-render on language switch
       lines <- roi_tracker()
-      if (length(lines) == 0) return("En attente...")
+      if (length(lines) == 0) return(.tr("En attente..."))
       paste(lines, collapse = "\n")
     })
     
     output$roi_markers_table <- DT::renderDT({
+      global_data$language  # i18n: re-render on language switch
       res <- roi_markers_res()
       
       validate(
         need(
           !is.null(res) && nrow(res) > 0L,
-          "Aucun marqueur a afficher. Lancez le calcul ou ajustez les seuils."
+          .tr("Aucun marqueur a afficher. Lancez le calcul ou ajustez les seuils.")
         )
       )
       
@@ -2343,7 +2415,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       filename = function() paste0("spatial_roi_subset_", Sys.Date(), ".rds"),
       content = function(file) {
         ids <- roi_ids()
-        validate(need(!is.null(ids) && length(ids) > 0, "Aucune ROI selectionnee."))
+        validate(need(!is.null(ids) && length(ids) > 0, .tr("Aucune ROI selectionnee.")))
         sub_obj <- materialize_seurat_subset(global_data$spatial_obj, cellids = ids)
         saveRDS(sub_obj, file)
       }

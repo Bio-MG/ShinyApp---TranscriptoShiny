@@ -71,95 +71,93 @@ mod_spatial_pipeline_ui <- function(id) {
   ns <- NS(id)
   layout_sidebar(
     sidebar = sidebar(
-      title = "Pipeline automatique (1 clic)", width = 400,
+      title = i18n$t("Pipeline automatique (1 clic)"), width = 400,
 
       div(class = "alert alert-light", style = "font-size:0.8rem;",
           bsicons::bs_icon("magic"),
-          " Enchaine automatiquement, avec des parametres par defaut identiques ",
-          "a ceux des onglets individuels. Chaque etape ecrit ses resultats au ",
-          "MEME endroit que si vous l'aviez lancee manuellement depuis son propre ",
-          "onglet numerote -- vous pouvez ensuite affiner n'importe quelle etape ",
-          "individuellement sans tout relancer."),
+          i18n$t(" Enchaine automatiquement, avec des parametres par defaut identiques a ceux des onglets individuels. Chaque etape ecrit ses resultats au MEME endroit que si vous l'aviez lancee manuellement depuis son propre onglet numerote -- vous pouvez ensuite affiner n'importe quelle etape individuellement sans tout relancer.")),
 
-      h6("1. QC", style = "font-weight:bold;"),
-      numericInput(ns("qc_min_count"), "nCount minimum", 100, min = 0, step = 10),
-      numericInput(ns("qc_min_features"), "nFeature minimum", 200, min = 0, step = 10),
-      sliderInput(ns("qc_max_pct_mt"), "% Mitochondrial max", 0, 100, 20, step = 1),
+      h6(i18n$t("1. QC"), style = "font-weight:bold;"),
+      numericInput(ns("qc_min_count"), i18n$t("nCount minimum"), 100, min = 0, step = 10),
+      numericInput(ns("qc_min_features"), i18n$t("nFeature minimum"), 200, min = 0, step = 10),
+      sliderInput(ns("qc_max_pct_mt"), i18n$t("% Mitochondrial max"), 0, 100, 20, step = 1),
 
       hr(),
-      h6("2. Clustering (BANKSY-lite)", style = "font-weight:bold;"),
-      sliderInput(ns("lambda"), "Lambda (poids spatial)", 0, 1, 0.8, step = 0.05),
-      numericInput(ns("resolution"), "Resolution (Leiden)", 0.8, min = 0.1, max = 3, step = 0.1),
+      h6(i18n$t("2. Clustering (BANKSY-lite)"), style = "font-weight:bold;"),
+      sliderInput(ns("lambda"), i18n$t("Lambda (poids spatial)"), 0, 1, 0.8, step = 0.05),
+      numericInput(ns("resolution"), i18n$t("Resolution (Leiden)"), 0.8, min = 0.1, max = 3, step = 0.1),
 
       hr(),
-      h6("3. Deconvolution", style = "font-weight:bold;"),
+      h6(i18n$t("3. Deconvolution"), style = "font-weight:bold;"),
       uiOutput(ns("deconv_status_ui")),
-      radioButtons(ns("deconv_mode"), "Methode",
-                   choices = c("RCTD (reference partagee)" = "rctd",
-                               "Transfert d'ancres (Label Transfer, reference partagee)" = "labeltransfer",
-                               "Sans reference (LDA, type STdeconvolve)" = "stdeconvolve",
-                               "Aucune (ignorer cette etape)" = "none"),
+      radioButtons(ns("deconv_mode"), i18n$t("Methode"),
+                   choices = stats::setNames(
+                     c("rctd", "labeltransfer", "stdeconvolve", "none"),
+                     c(.tr_plain("RCTD (reference partagee)"),
+                       .tr_plain("Transfert d'ancres (Label Transfer, reference partagee)"),
+                       .tr_plain("Sans reference (LDA, type STdeconvolve)"),
+                       .tr_plain("Aucune (ignorer cette etape)"))),
                    selected = "rctd"),
       conditionalPanel(
         condition = sprintf("input['%s'] == 'labeltransfer'", ns("deconv_mode")),
-        radioButtons(ns("lt_norm_method"), "Normalisation",
-                     choices = c("LogNormalize (rapide)" = "lognorm", "SCTransform (lent)" = "sct"),
+        radioButtons(ns("lt_norm_method"), i18n$t("Normalisation"),
+                     choices = stats::setNames(c("lognorm", "sct"),
+                                               c(.tr_plain("LogNormalize (rapide)"),
+                                                 .tr_plain("SCTransform (lent)"))),
                      selected = "lognorm"),
         conditionalPanel(
           condition = sprintf("input['%s'] == 'sct'", ns("lt_norm_method")),
-          numericInput(ns("lt_ncells"), "Cellules SCTransform (ncells)", 3000, min = 500, max = 10000, step = 500)
+          numericInput(ns("lt_ncells"), i18n$t("Cellules SCTransform (ncells)"), 3000, min = 500, max = 10000, step = 500)
         ),
-        numericInput(ns("lt_npcs"), "Composantes PCA", 30, min = 5, max = 50, step = 5)
+        numericInput(ns("lt_npcs"), i18n$t("Composantes PCA"), 30, min = 5, max = 50, step = 5)
       ),
       conditionalPanel(
         condition = sprintf("input['%s'] == 'stdeconvolve'", ns("deconv_mode")),
-        numericInput(ns("n_topics"), "Nombre de types cellulaires (K)", 6, min = 2, max = 30, step = 1),
-        numericInput(ns("n_top_od"), "Genes surdisperses maximum", 1000, min = 200, max = 3000, step = 100)
+        numericInput(ns("n_topics"), i18n$t("Nombre de types cellulaires (K)"), 6, min = 2, max = 30, step = 1),
+        numericInput(ns("n_top_od"), i18n$t("Genes surdisperses maximum"), 1000, min = 200, max = 3000, step = 100)
       ),
 
       hr(),
-      h6("4. Niches spatiales", style = "font-weight:bold;"),
-      numericInput(ns("n_niches"), "Nombre de niches", 5, min = 2, max = 20, step = 1),
+      h6(i18n$t("4. Niches spatiales"), style = "font-weight:bold;"),
+      numericInput(ns("n_niches"), i18n$t("Nombre de niches"), 5, min = 2, max = 20, step = 1),
 
       hr(),
-      h6("Analyses complementaires (optionnel)", style = "font-weight:bold;"),
-      checkboxInput(ns("compute_umap"), "PCA + UMAP (sketch, onglet 4)", value = TRUE),
-      checkboxInput(ns("compute_moran"), "Indice de Moran / genes spatialement variables (onglet 1)", value = FALSE),
+      h6(i18n$t("Analyses complementaires (optionnel)"), style = "font-weight:bold;"),
+      checkboxInput(ns("compute_umap"), i18n$t("PCA + UMAP (sketch, onglet 4)"), value = TRUE),
+      checkboxInput(ns("compute_moran"), i18n$t("Indice de Moran / genes spatialement variables (onglet 1)"), value = FALSE),
       conditionalPanel(
         condition = sprintf("input['%s']", ns("compute_moran")),
-        numericInput(ns("n_hvg_moran"), "Nombre de genes (HVG)", 1000, min = 100, max = 5000, step = 100)
+        numericInput(ns("n_hvg_moran"), i18n$t("Nombre de genes (HVG)"), 1000, min = 100, max = 5000, step = 100)
       ),
 
       hr(),
-      h6("Statistiques spatiales avancees (optionnel, onglets 1/6)", style = "font-weight:bold;"),
+      h6(i18n$t("Statistiques spatiales avancees (optionnel, onglets 1/6)"), style = "font-weight:bold;"),
       div(class = "text-muted", style = "font-size:0.7rem;",
-          "Ajoutent chacune un peu de temps de calcul -- decochees par defaut. Consultez les ",
-          "onglets \"1. QC\" et \"6. Niches spatiales\" pour l'explication de chaque test."),
-      checkboxInput(ns("compute_enrichment"), "Enrichissement de voisinage (co-occurrence, base = clusters)", value = FALSE),
+          i18n$t("Ajoutent chacune un peu de temps de calcul -- decochees par defaut. Consultez les onglets \"1. QC\" et \"6. Niches spatiales\" pour l'explication de chaque test.")),
+      checkboxInput(ns("compute_enrichment"), i18n$t("Enrichissement de voisinage (co-occurrence, base = clusters)"), value = FALSE),
       conditionalPanel(
         condition = sprintf("input['%s']", ns("compute_enrichment")),
-        numericInput(ns("k_neighbors_enrich"), "Voisins spatiaux (k)", 30, min = 5, max = 200, step = 5),
-        numericInput(ns("n_perm_enrich"), "Permutations", 200, min = 50, max = 1000, step = 50)
+        numericInput(ns("k_neighbors_enrich"), i18n$t("Voisins spatiaux (k)"), 30, min = 5, max = 200, step = 5),
+        numericInput(ns("n_perm_enrich"), i18n$t("Permutations"), 200, min = 50, max = 1000, step = 50)
       ),
-      checkboxInput(ns("compute_hotspots"), "Hotspots locaux (Getis-Ord Gi*, metrique QC)", value = FALSE),
+      checkboxInput(ns("compute_hotspots"), i18n$t("Hotspots locaux (Getis-Ord Gi*, metrique QC)"), value = FALSE),
       conditionalPanel(
         condition = sprintf("input['%s']", ns("compute_hotspots")),
-        selectInput(ns("hotspot_metric"), "Metrique",
+        selectInput(ns("hotspot_metric"), i18n$t("Metrique"),
                     choices = c("nCount", "nFeature", "pct_mt", "pct_ribo", "log_nCount"),
                     selected = "log_nCount"),
-        numericInput(ns("k_neighbors_hotspot"), "Voisins spatiaux (k)", 30, min = 5, max = 200, step = 5)
+        numericInput(ns("k_neighbors_hotspot"), i18n$t("Voisins spatiaux (k)"), 30, min = 5, max = 200, step = 5)
       ),
-      checkboxInput(ns("compute_ripley"), "Ripley's K (etiquetage aleatoire, cible = cluster majoritaire)", value = FALSE),
+      checkboxInput(ns("compute_ripley"), i18n$t("Ripley's K (etiquetage aleatoire, cible = cluster majoritaire)"), value = FALSE),
       conditionalPanel(
         condition = sprintf("input['%s']", ns("compute_ripley")),
-        numericInput(ns("n_perm_ripley"), "Permutations", 199, min = 49, max = 499, step = 10),
+        numericInput(ns("n_perm_ripley"), i18n$t("Permutations"), 199, min = 49, max = 499, step = 10),
         div(class = "text-muted", style = "font-size:0.68rem;",
-            "Cible choisie automatiquement = le cluster le plus peuple apres l'etape 2. Pour ",
-            "tester un autre cluster/niche/type cellulaire, utilisez l'onglet 6 directement.")
+            i18n$t("Cible choisie automatiquement = le cluster le plus peuple apres l'etape 2. Pour tester un autre cluster/niche/type cellulaire, utilisez l'onglet 6 directement."))
       ),
 
       hr(),
-      actionButton(ns("btn_run_all"), "\U0001F680 Lancer le pipeline complet",
+      actionButton(ns("btn_run_all"), i18n$t("\U0001F680 Lancer le pipeline complet"),
                    class = "btn-danger w-100", icon = icon("bolt")),
       div(class = "mt-2", uiOutput(ns("pipeline_status_ui"))),
       div(class = "bg-light border rounded p-2 mt-2",
@@ -169,19 +167,69 @@ mod_spatial_pipeline_ui <- function(id) {
 
     card(
       full_screen = TRUE,
-      card_header("Resultats du pipeline"),
+      card_header(i18n$t("Resultats du pipeline")),
       uiOutput(ns("pipeline_summary_ui")),
       div(class = "alert alert-light small mt-2",
           bsicons::bs_icon("compass"),
-          " Consultez les onglets numerotes (1 a 6) pour explorer/affiner chaque ",
-          "resultat en detail, ou les onglets \"7. Export\" / \"8. Rapport\" pour tout ",
-          "regrouper dans un paquet .zip / script R reproductible / rapport HTML-PDF.")
+          i18n$t(" Consultez les onglets numerotes (1 a 6) pour explorer/affiner chaque resultat en detail, ou les onglets \"7. Export\" / \"8. Rapport\" pour tout regrouper dans un paquet .zip / script R reproductible / rapport HTML-PDF."))
     )
   )
 }
 
 mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
   moduleServer(id, function(input, output, session) {
+
+    # Session-scoped scalar translation (plain strings, never HTML spans).
+    .tr <- function(key) {
+      tr <- global_data$i18n
+      if (is.null(tr)) return(key)
+      tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+    }
+
+    # i18n: push translated labels/choices for build-time-frozen inputs on
+    # every language change (values NEVER change; selection is preserved).
+    observeEvent(global_data$language, {
+      updateNumericInput(session, "qc_min_count", label = .tr("nCount minimum"))
+      updateNumericInput(session, "qc_min_features", label = .tr("nFeature minimum"))
+      updateSliderInput(session, "qc_max_pct_mt", label = .tr("% Mitochondrial max"))
+      updateSliderInput(session, "lambda", label = .tr("Lambda (poids spatial)"))
+      updateNumericInput(session, "resolution", label = .tr("Resolution (Leiden)"))
+      updateRadioButtons(session, "deconv_mode",
+        label = .tr("Methode"),
+        choices = stats::setNames(
+          c("rctd", "labeltransfer", "stdeconvolve", "none"),
+          c(.tr("RCTD (reference partagee)"),
+            .tr("Transfert d'ancres (Label Transfer, reference partagee)"),
+            .tr("Sans reference (LDA, type STdeconvolve)"),
+            .tr("Aucune (ignorer cette etape)"))))
+      updateRadioButtons(session, "lt_norm_method",
+        label = .tr("Normalisation"),
+        choices = stats::setNames(c("lognorm", "sct"),
+                                  c(.tr("LogNormalize (rapide)"), .tr("SCTransform (lent)"))))
+      updateNumericInput(session, "lt_ncells", label = .tr("Cellules SCTransform (ncells)"))
+      updateNumericInput(session, "lt_npcs", label = .tr("Composantes PCA"))
+      updateNumericInput(session, "n_topics", label = .tr("Nombre de types cellulaires (K)"))
+      updateNumericInput(session, "n_top_od", label = .tr("Genes surdisperses maximum"))
+      updateNumericInput(session, "n_niches", label = .tr("Nombre de niches"))
+      updateCheckboxInput(session, "compute_umap", label = .tr("PCA + UMAP (sketch, onglet 4)"))
+      updateCheckboxInput(session, "compute_moran",
+        label = .tr("Indice de Moran / genes spatialement variables (onglet 1)"))
+      updateNumericInput(session, "n_hvg_moran", label = .tr("Nombre de genes (HVG)"))
+      updateCheckboxInput(session, "compute_enrichment",
+        label = .tr("Enrichissement de voisinage (co-occurrence, base = clusters)"))
+      updateNumericInput(session, "k_neighbors_enrich", label = .tr("Voisins spatiaux (k)"))
+      updateNumericInput(session, "n_perm_enrich", label = .tr("Permutations"))
+      updateCheckboxInput(session, "compute_hotspots",
+        label = .tr("Hotspots locaux (Getis-Ord Gi*, metrique QC)"))
+      updateSelectInput(session, "hotspot_metric", label = .tr("Metrique"),
+                        choices = c("nCount", "nFeature", "pct_mt", "pct_ribo", "log_nCount"),
+                        selected = input$hotspot_metric %||% "log_nCount")
+      updateNumericInput(session, "k_neighbors_hotspot", label = .tr("Voisins spatiaux (k)"))
+      updateCheckboxInput(session, "compute_ripley",
+        label = .tr("Ripley's K (etiquetage aleatoire, cible = cluster majoritaire)"))
+      updateNumericInput(session, "n_perm_ripley", label = .tr("Permutations"))
+      updateActionButton(session, "btn_run_all", label = .tr("\U0001F680 Lancer le pipeline complet"))
+    }, ignoreInit = TRUE)
 
     log_file <- spatial_log_path(session, "auto_pipeline")
     tracker  <- create_reactive_tracker(session, log_file)
@@ -190,32 +238,34 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
     TOTAL_STEPS <- 9L
 
     output$deconv_status_ui <- renderUI({
+      global_data$language  # re-render on language switch
       if (!is.null(global_data$spatial_reference)) {
         div(class = "alert alert-success", style = "font-size:0.75rem;",
             bsicons::bs_icon("check-circle"),
-            sprintf(" Reference partagee disponible (%s cellules) \u2014 utilisable par RCTD/Label Transfer.",
+            sprintf(.tr(" Reference partagee disponible (%s cellules) \u2014 utilisable par RCTD/Label Transfer."),
                     format(global_data$spatial_reference$n_cells %||% 0, big.mark = ",")))
       } else {
         div(class = "alert alert-warning", style = "font-size:0.75rem;",
             bsicons::bs_icon("exclamation-triangle"),
-            " Aucune reference partagee (onglet Import > Spatial) \u2014 RCTD/Label Transfer seront ",
-            "ignores meme si selectionnes ; choisissez \"Sans reference (LDA)\" ou \"Aucune\".")
+            .tr(" Aucune reference partagee (onglet Import > Spatial) \u2014 RCTD/Label Transfer seront ignores meme si selectionnes ; choisissez \"Sans reference (LDA)\" ou \"Aucune\"."))
       }
     })
 
     output$pipeline_status_ui <- renderUI({
+      global_data$language  # re-render on language switch
       switch(pipeline_state(),
-        "idle"    = tags$span(class = "text-muted", "En attente."),
-        "running" = tags$span(class = "text-info", "\u23f3 Pipeline en cours... (voir le journal ci-dessous)"),
-        "done"    = tags$span(class = "text-success", "\u2705 Pipeline termine."),
-        "error"   = tags$span(class = "text-danger", "\u274c Erreur \u2014 voir le journal ci-dessous."),
-        tags$span("En attente.")
+        "idle"    = tags$span(class = "text-muted", .tr("En attente.")),
+        "running" = tags$span(class = "text-info", .tr("\u23f3 Pipeline en cours... (voir le journal ci-dessous)")),
+        "done"    = tags$span(class = "text-success", .tr("\u2705 Pipeline termine.")),
+        "error"   = tags$span(class = "text-danger", .tr("\u274c Erreur \u2014 voir le journal ci-dessous.")),
+        tags$span(.tr("En attente."))
       )
     })
 
     output$pipeline_log_text <- renderText({
+      global_data$language  # re-render on language switch
       lines <- tracker()
-      if (length(lines) == 0) return("En attente...")
+      if (length(lines) == 0) return(.tr("En attente..."))
       paste(lines, collapse = "\n")
     })
 
@@ -477,7 +527,7 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
         if (is.null(cl) || length(cl) == 0) {
           write_mirai_log(log_file, "Etape 9/9 : Ripley's K ignore (aucun cluster disponible).", 9, TOTAL_STEPS)
           pipeline_state("done")
-          showNotification("\u2705 Pipeline automatique termine.", type = "message", duration = 6)
+          showNotification(.tr("\u2705 Pipeline automatique termine."), type = "message", duration = 6)
           return()
         }
         target_level <- names(sort(table(cl), decreasing = TRUE))[1]
@@ -490,7 +540,7 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
       } else {
         write_mirai_log(log_file, "Etape 9/9 : Ripley's K ignore (non coche). Pipeline termine.", 9, TOTAL_STEPS)
         pipeline_state("done")
-        showNotification("\u2705 Pipeline automatique termine.", type = "message", duration = 6)
+        showNotification(.tr("\u2705 Pipeline automatique termine."), type = "message", duration = 6)
       }
     }
 
@@ -507,7 +557,7 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
       if (is.null(qc_metrics)) {
         write_mirai_log(log_file, "Erreur QC -- pipeline interrompu.", 1, TOTAL_STEPS)
         pipeline_state("error")
-        showNotification("Erreur lors du calcul QC (pipeline auto).", type = "error", duration = 8)
+        showNotification(.tr("Erreur lors du calcul QC (pipeline auto)."), type = "error", duration = 8)
         return()
       }
       shared_rv$qc_metrics <- qc_metrics
@@ -561,7 +611,7 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
       } else if (identical(st, "error")) {
         write_mirai_log(log_file, "Erreur pendant le clustering -- pipeline interrompu.", 2, TOTAL_STEPS)
         pipeline_state("error")
-        showNotification("Erreur pendant le clustering (pipeline auto) -- voir le journal.", type = "error", duration = 10)
+        showNotification(.tr("Erreur pendant le clustering (pipeline auto) -- voir le journal."), type = "error", duration = 10)
       }
     })
 
@@ -598,7 +648,7 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
       } else if (identical(st, "error")) {
         write_mirai_log(log_file, "Erreur pendant le calcul des niches.", 4, TOTAL_STEPS)
         pipeline_state("error")
-        showNotification("Erreur pendant le calcul des niches (pipeline auto) -- voir le journal.", type = "error", duration = 10)
+        showNotification(.tr("Erreur pendant le calcul des niches (pipeline auto) -- voir le journal."), type = "error", duration = 10)
       }
     })
 
@@ -654,21 +704,31 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
         write_mirai_log(log_file, "Ripley's K echoue.", 9, TOTAL_STEPS)
       }
       pipeline_state("done")
-      showNotification("\u2705 Pipeline automatique termine.", type = "message", duration = 6)
+      showNotification(.tr("\u2705 Pipeline automatique termine."), type = "message", duration = 6)
     })
 
     output$pipeline_summary_ui <- renderUI({
+      global_data$language  # re-render on language switch
       row <- function(label, value) tags$tr(tags$td(strong(label)), tags$td(value))
       tags$table(class = "table table-sm table-striped",
-        row("1. QC", if (!is.null(shared_rv$qc_pass_idx)) sprintf("%d elements retenus", length(shared_rv$qc_pass_idx)) else "-"),
-        row("2. Clustering", if (!is.null(shared_rv$cluster_labels)) sprintf("%d clusters", length(unique(shared_rv$cluster_labels))) else "Non calcule"),
-        row("3. Deconvolution", if (!is.null(shared_rv$deconv_props)) sprintf("%d types cellulaires (%s)", ncol(shared_rv$deconv_props) - 1, shared_rv$deconv_params$mode %||% "?") else "Non calculee / ignoree"),
-        row("4. Niches", if (!is.null(shared_rv$niche_labels)) sprintf("%d niches", length(unique(shared_rv$niche_labels))) else "Non calculees"),
-        row("5. UMAP", if (!is.null(shared_rv$umap_df)) sprintf("%d points (sketch)", nrow(shared_rv$umap_df)) else "Non calcule / ignore"),
-        row("6. Moran's I", if (!is.null(shared_rv$moran_results)) sprintf("%d genes testes", nrow(shared_rv$moran_results)) else "Non calcule / ignore"),
-        row("7. Enrichissement", if (!is.null(shared_rv$enrichment_result)) sprintf("%d niveaux (%d permutations)", length(shared_rv$enrichment_result$levels), shared_rv$enrichment_result$n_perm) else "Non calcule / ignore"),
-        row("8. Hotspots (Gi*)", if (!is.null(shared_rv$hotspot_result)) sprintf("%d elements testes", nrow(shared_rv$hotspot_result)) else "Non calcule / ignore"),
-        row("9. Ripley's K", if (!is.null(shared_rv$ripley_result)) sprintf("cible '%s' (%s)", shared_rv$ripley_result$target_level, if (isTRUE(shared_rv$ripley_result$subsampled)) "sous-echantillonne" else "complet") else "Non calcule / ignore")
+        row(.tr("1. QC"),
+            if (!is.null(shared_rv$qc_pass_idx)) .t_fmt(.tr("{n} elements retenus"), n = length(shared_rv$qc_pass_idx)) else "-"),
+        row(.tr("2. Clustering"),
+            if (!is.null(shared_rv$cluster_labels)) .t_fmt(.tr("{n} clusters"), n = length(unique(shared_rv$cluster_labels))) else .tr("Non calcule")),
+        row(.tr("3. Deconvolution"),
+            if (!is.null(shared_rv$deconv_props)) sprintf(.tr("%d types cellulaires (%s)"), ncol(shared_rv$deconv_props) - 1, shared_rv$deconv_params$mode %||% "?") else .tr("Non calculee / ignoree")),
+        row(.tr("4. Niches"),
+            if (!is.null(shared_rv$niche_labels)) .t_fmt(.tr("{n} niches"), n = length(unique(shared_rv$niche_labels))) else .tr("Non calculees")),
+        row(.tr("5. UMAP"),
+            if (!is.null(shared_rv$umap_df)) sprintf(.tr("%d points (sketch)"), nrow(shared_rv$umap_df)) else .tr("Non calcule / ignore")),
+        row(.tr("6. Moran's I"),
+            if (!is.null(shared_rv$moran_results)) .t_fmt(.tr("{n} genes testes"), n = nrow(shared_rv$moran_results)) else .tr("Non calcule / ignore")),
+        row(.tr("7. Enrichissement"),
+            if (!is.null(shared_rv$enrichment_result)) sprintf(.tr("%d niveaux (%d permutations)"), length(shared_rv$enrichment_result$levels), shared_rv$enrichment_result$n_perm) else .tr("Non calcule / ignore")),
+        row(.tr("8. Hotspots (Gi*)"),
+            if (!is.null(shared_rv$hotspot_result)) .t_fmt(.tr("{n} elements testes"), n = nrow(shared_rv$hotspot_result)) else .tr("Non calcule / ignore")),
+        row(.tr("9. Ripley's K"),
+            if (!is.null(shared_rv$ripley_result)) sprintf(.tr("cible '%s' (%s)"), shared_rv$ripley_result$target_level, if (isTRUE(shared_rv$ripley_result$subsampled)) .tr("sous-echantillonne") else .tr("complet")) else .tr("Non calcule / ignore"))
       )
     })
   })

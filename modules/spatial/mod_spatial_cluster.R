@@ -53,49 +53,45 @@ mod_spatial_cluster_ui <- function(id) {
   ns <- NS(id)
   layout_sidebar(
     sidebar = sidebar(
-      title = "Clustering spatial (BANKSY-lite)", width = 350,
+      title = i18n$t("Clustering spatial (BANKSY-lite)"), width = 350,
 
       div(class = "alert alert-light", style = "font-size:0.8rem;",
           bsicons::bs_icon("info-circle"),
-          " Augmente l'expression de chaque spot/cellule avec la moyenne de ",
-          "son voisinage spatial avant le clustering — utile pour detecter ",
-          "des domaines tissulaires, pas seulement des types cellulaires."),
+          " ",
+          i18n$t("Augmente l'expression de chaque spot/cellule avec la moyenne de son voisinage spatial avant le clustering — utile pour detecter des domaines tissulaires, pas seulement des types cellulaires.")),
 
-      sliderInput(ns("lambda"), "Lambda (poids spatial)", 0, 1, 0.8, step = 0.05),
-      numericInput(ns("k_geom"), "Voisins geometriques (k_geom)", 18, min = 4, max = 100, step = 1),
-      numericInput(ns("npcs"), "Composantes PCA", 30, min = 5, max = 100, step = 5),
-      numericInput(ns("resolution"), "Resolution (Leiden)", 0.8, min = 0.1, max = 3, step = 0.1),
+      sliderInput(ns("lambda"), i18n$t("Lambda (poids spatial)"), 0, 1, 0.8, step = 0.05),
+      numericInput(ns("k_geom"), i18n$t("Voisins geometriques (k_geom)"), 18, min = 4, max = 100, step = 1),
+      numericInput(ns("npcs"), i18n$t("Composantes PCA"), 30, min = 5, max = 100, step = 5),
+      numericInput(ns("resolution"), i18n$t("Resolution (Leiden)"), 0.8, min = 0.1, max = 3, step = 0.1),
 
       div(class = "alert alert-light", style = "font-size:0.75rem;",
-          "Le clustering s'applique aux elements passant les seuils QC ",
-          "(onglet 1) — reimportez ou ajustez les seuils si necessaire."),
+          i18n$t("Le clustering s'applique aux elements passant les seuils QC (onglet 1) — reimportez ou ajustez les seuils si necessaire.")),
 
-      bslib::input_task_button(ns("btn_cluster"), "Lancer Clustering Spatial",
+      bslib::input_task_button(ns("btn_cluster"), i18n$t("Lancer Clustering Spatial"),
                                 icon = icon("shapes")),
       verbatimTextOutput(ns("cluster_progress_text"), placeholder = TRUE),
 
       hr(),
-      h6("Marqueurs differentiels par cluster", style = "font-weight:bold;"),
+      h6(i18n$t("Marqueurs differentiels par cluster"), style = "font-weight:bold;"),
       div(class = "alert alert-light", style = "font-size:0.75rem;",
           bsicons::bs_icon("cpu"),
-          " Equivalent de FindMarkers() applique a chaque cluster contre tous les ",
-          "autres (test de Wilcoxon) — necessite un clustering deja calcule ci-dessus. ",
-          "Asynchrone (mirai), sur les memes elements (QC-filtres) que le clustering."),
-      numericInput(ns("logfc_threshold"), "Seuil log2FC minimum", 0.25, min = 0, max = 5, step = 0.05),
-      numericInput(ns("min_pct"), "% cellules exprimant le gene (min)", 0.1, min = 0, max = 1, step = 0.05),
-      bslib::input_task_button(ns("btn_find_markers"), "Rechercher les marqueurs",
+          " ",
+          i18n$t("Equivalent de FindMarkers() applique a chaque cluster contre tous les autres (test de Wilcoxon) — necessite un clustering deja calcule ci-dessus. Asynchrone (mirai), sur les memes elements (QC-filtres) que le clustering.")),
+      numericInput(ns("logfc_threshold"), i18n$t("Seuil log2FC minimum"), 0.25, min = 0, max = 5, step = 0.05),
+      numericInput(ns("min_pct"), i18n$t("% cellules exprimant le gene (min)"), 0.1, min = 0, max = 1, step = 0.05),
+      bslib::input_task_button(ns("btn_find_markers"), i18n$t("Rechercher les marqueurs"),
                                 icon = icon("magnifying-glass-chart")),
       verbatimTextOutput(ns("markers_progress_text"), placeholder = TRUE)
     ),
 
     navset_card_underline(
-      nav_panel("Resume clustering",
+      nav_panel(i18n$t("Resume clustering"),
                 uiOutput(ns("cluster_summary")),
                 DT::DTOutput(ns("cluster_sizes_table"))),
-      nav_panel("Marqueurs par cluster (FindMarkers)",
+      nav_panel(i18n$t("Marqueurs par cluster (FindMarkers)"),
                 div(class = "alert alert-light small mb-2",
-                    "Top marqueurs (triés par log2FC decroissant, p-adj < 0.05) par cluster — ",
-                    "utilisez ces genes pour interpreter biologiquement chaque domaine spatial."),
+                    i18n$t("Top marqueurs (triés par log2FC decroissant, p-adj < 0.05) par cluster — utilisez ces genes pour interpreter biologiquement chaque domaine spatial.")),
                 card(full_screen = TRUE, DT::DTOutput(ns("markers_table"))))
     )
   )
@@ -104,6 +100,29 @@ mod_spatial_cluster_ui <- function(id) {
 mod_spatial_cluster_server <- function(id, global_data, shared_rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    # Session-scoped scalar translation (plain strings, never HTML spans).
+    .tr <- function(key) {
+      tr <- global_data$i18n
+      if (is.null(tr)) return(key)
+      tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+    }
+
+    # i18n: push translated labels on every language change (values never
+    # change; task buttons & static HTML switch via the client-side JS shim,
+    # same convention as mod_spatial_qc.R).
+    observeEvent(global_data$language, {
+      updateSliderInput(session, "lambda",
+                        label = .tr("Lambda (poids spatial)"))
+      updateNumericInput(session, "k_geom",
+                         label = .tr("Voisins geometriques (k_geom)"))
+      updateNumericInput(session, "npcs", label = .tr("Composantes PCA"))
+      updateNumericInput(session, "resolution", label = .tr("Resolution (Leiden)"))
+      updateNumericInput(session, "logfc_threshold",
+                         label = .tr("Seuil log2FC minimum"))
+      updateNumericInput(session, "min_pct",
+                         label = .tr("% cellules exprimant le gene (min)"))
+    }, ignoreInit = TRUE)
 
     log_file <- spatial_log_path(session, "cluster")
     tracker  <- create_reactive_tracker(session, log_file)
@@ -196,7 +215,7 @@ mod_spatial_cluster_server <- function(id, global_data, shared_rv) {
       pass_idx <- safe_pass_idx(shared_rv$qc_pass_idx, global_data$active_spatial_dataset,
                                 global_data$spatial_obj$n_total)
       if (is.null(pass_idx) && !is.null(shared_rv$qc_pass_idx)) {
-        showNotification("Seuils QC obsoletes pour cet echantillon -- clustering lance sans filtre QC.",
+        showNotification(.tr("Seuils QC obsoletes pour cet echantillon -- clustering lance sans filtre QC."),
                          type = "warning", duration = 8)
       }
       reset_log(log_file)
@@ -216,12 +235,12 @@ mod_spatial_cluster_server <- function(id, global_data, shared_rv) {
     observeEvent(cluster_task$status(), {
       if (cluster_task$status() == "success") {
         shared_rv$cluster_labels <- cluster_task$result()
-        showNotification(sprintf("Clustering termine : %d clusters trouves.",
-                                  length(unique(shared_rv$cluster_labels))),
+        showNotification(.t_fmt(.tr("Clustering termine : {n} clusters trouves."),
+                                  n = length(unique(shared_rv$cluster_labels))),
                           type = "message", duration = 5)
       } else if (cluster_task$status() == "error") {
         showNotification(
-          "Erreur (ou depassement du delai de 20 min) pendant le clustering — voir le log. Essayez 'Reinitialiser les daemons' dans l'entete Spatial puis relancez.",
+          .tr("Erreur (ou depassement du delai de 20 min) pendant le clustering — voir le log. Essayez 'Reinitialiser les daemons' dans l'entete Spatial puis relancez."),
           type = "error", duration = 12)
       }
     })
@@ -230,22 +249,26 @@ mod_spatial_cluster_server <- function(id, global_data, shared_rv) {
     # datasets can otherwise complete between two 1000ms polls, hiding every
     # intermediate step.
     output$cluster_progress_text <- renderText({
+      global_data$language  # i18n: re-render on language switch
       lines <- tracker()
-      if (length(lines) == 0) return("En attente...")
+      if (length(lines) == 0) return(.tr("En attente..."))
       paste(lines, collapse = "\n")
     })
 
     output$cluster_summary <- renderUI({
+      global_data$language  # i18n: re-render on language switch
       req(shared_rv$cluster_labels)
       div(class = "alert alert-success",
-          sprintf("%d clusters sur %d elements.",
-                   length(unique(shared_rv$cluster_labels)), length(shared_rv$cluster_labels)))
+          .t_fmt(.tr("{n} clusters sur {total} elements."),
+                  n = length(unique(shared_rv$cluster_labels)),
+                  total = length(shared_rv$cluster_labels)))
     })
 
     output$cluster_sizes_table <- DT::renderDT({
+      global_data$language  # i18n: re-render on language switch
       req(shared_rv$cluster_labels)
       tab <- as.data.frame(table(cluster = shared_rv$cluster_labels), stringsAsFactors = FALSE)
-      colnames(tab) <- c("Cluster", "Effectif")
+      colnames(tab) <- c(.tr("Cluster"), .tr("Effectif"))
       DT::datatable(tab, options = list(pageLength = 15), rownames = FALSE)
     })
 
@@ -313,18 +336,19 @@ mod_spatial_cluster_server <- function(id, global_data, shared_rv) {
     observeEvent(markers_task$status(), {
       if (markers_task$status() == "success") {
         shared_rv$cluster_markers <- markers_task$result()
-        showNotification(sprintf("Marqueurs trouves : %d genes (tous clusters confondus).",
-                                  nrow(shared_rv$cluster_markers)), type = "message", duration = 5)
+        showNotification(.t_fmt(.tr("Marqueurs trouves : {n} genes (tous clusters confondus)."),
+                                  n = nrow(shared_rv$cluster_markers)), type = "message", duration = 5)
       } else if (markers_task$status() == "error") {
         showNotification(
-          "Erreur (ou depassement du delai) pendant la recherche de marqueurs — voir le log. Essayez 'Reinitialiser les daemons' puis relancez.",
+          .tr("Erreur (ou depassement du delai) pendant la recherche de marqueurs — voir le log. Essayez 'Reinitialiser les daemons' puis relancez."),
           type = "error", duration = 12)
       }
     })
 
     output$markers_progress_text <- renderText({
+      global_data$language  # i18n: re-render on language switch
       lines <- markers_tracker()
-      if (length(lines) == 0) return("En attente...")
+      if (length(lines) == 0) return(.tr("En attente..."))
       paste(lines, collapse = "\n")
     })
 

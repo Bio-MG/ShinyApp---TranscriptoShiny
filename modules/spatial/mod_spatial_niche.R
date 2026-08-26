@@ -56,100 +56,84 @@ mod_spatial_niche_ui <- function(id) {
   ns <- NS(id)
   layout_sidebar(
     sidebar = sidebar(
-      title = "Niches spatiales (BuildNicheAssay-lite)", width = 380,
+      title = i18n$t("Niches spatiales (BuildNicheAssay-lite)"), width = 380,
 
       div(class = "alert alert-light", style = "font-size:0.8rem;",
           bsicons::bs_icon("info-circle"),
-          " Regroupe les spots/cellules selon la COMPOSITION de leur voisinage spatial ",
-          "(quels clusters ou types cellulaires sont a proximite), pas selon leur propre ",
-          "expression — revele des regions definies par la coexistence de plusieurs ",
-          "populations (ex: interface tumeur/stroma, bordure d'un centre germinatif). ",
-          "Equivalent de Seurat::BuildNicheAssay()."),
+          " ",
+          i18n$t("Regroupe les spots/cellules selon la COMPOSITION de leur voisinage spatial (quels clusters ou types cellulaires sont a proximite), pas selon leur propre expression — revele des regions definies par la coexistence de plusieurs populations (ex: interface tumeur/stroma, bordure d'un centre germinatif). Equivalent de Seurat::BuildNicheAssay().")),
 
       uiOutput(ns("group_by_ui")),
 
-      numericInput(ns("k_neighbors"), "Voisins spatiaux (neighbors.k)", 30, min = 5, max = 200, step = 5),
-      numericInput(ns("n_niches"), "Nombre de niches (niches.k)", 5, min = 2, max = 20, step = 1),
+      numericInput(ns("k_neighbors"), i18n$t("Voisins spatiaux (neighbors.k)"), 30, min = 5, max = 200, step = 5),
+      numericInput(ns("n_niches"), i18n$t("Nombre de niches (niches.k)"), 5, min = 2, max = 20, step = 1),
 
-      bslib::input_task_button(ns("btn_niches"), "Calculer les niches",
+      bslib::input_task_button(ns("btn_niches"), i18n$t("Calculer les niches"),
                                 icon = icon("diagram-project")),
       verbatimTextOutput(ns("niche_progress_text"), placeholder = TRUE),
 
       hr(),
       div(class = "alert alert-light", style = "font-size:0.72rem;",
           bsicons::bs_icon("eye"),
-          " Une fois calculees, les niches sont disponibles comme option de coloration ",
-          "(\"Niche spatiale\") dans l'onglet \"4. Visualisation\" — fond histologique, ",
-          "export PNG/CSV et ROI fonctionnent avec, exactement comme pour un cluster."),
+          " ",
+          i18n$t("Une fois calculees, les niches sont disponibles comme option de coloration (\"Niche spatiale\") dans l'onglet \"4. Visualisation\" — fond histologique, export PNG/CSV et ROI fonctionnent avec, exactement comme pour un cluster.")),
 
       hr(),
-      h6("Enrichissement de voisinage (co-occurrence)", style = "font-weight:bold;"),
+      h6(i18n$t("Enrichissement de voisinage (co-occurrence)"), style = "font-weight:bold;"),
       div(class = "alert alert-light", style = "font-size:0.75rem;",
           bsicons::bs_icon("hash"),
-          " Pour chaque paire de labels (cluster, type cellulaire dominant ou niche), ",
-          "compare le nombre de voisinages observes a une enveloppe nulle obtenue en ",
-          "melangeant les labels au hasard -- un z-score positif signale une co-occurrence ",
-          "spatiale (ex: interface tumeur/stroma), negatif une exclusion mutuelle."),
+          " ",
+          i18n$t("Pour chaque paire de labels (cluster, type cellulaire dominant ou niche), compare le nombre de voisinages observes a une enveloppe nulle obtenue en melangeant les labels au hasard -- un z-score positif signale une co-occurrence spatiale (ex: interface tumeur/stroma), negatif une exclusion mutuelle.")),
       uiOutput(ns("group_by_enrich_ui")),
-      numericInput(ns("k_neighbors_enrich"), "Voisins spatiaux (k)", 30, min = 5, max = 200, step = 5),
-      numericInput(ns("n_perm_enrich"), "Permutations (enveloppe nulle)", 200, min = 50, max = 1000, step = 50),
-      bslib::input_task_button(ns("btn_enrichment"), "Calculer l'enrichissement",
+      numericInput(ns("k_neighbors_enrich"), i18n$t("Voisins spatiaux (k)"), 30, min = 5, max = 200, step = 5),
+      numericInput(ns("n_perm_enrich"), i18n$t("Permutations (enveloppe nulle)"), 200, min = 50, max = 1000, step = 50),
+      bslib::input_task_button(ns("btn_enrichment"), i18n$t("Calculer l'enrichissement"),
                                 icon = icon("hashtag")),
       verbatimTextOutput(ns("enrichment_progress_text"), placeholder = TRUE),
 
       hr(),
-      h6("Ripley's K (etiquetage aleatoire)", style = "font-weight:bold;"),
+      h6(i18n$t("Ripley's K (etiquetage aleatoire)"), style = "font-weight:bold;"),
       div(class = "alert alert-light", style = "font-size:0.75rem;",
           bsicons::bs_icon("bullseye"),
-          " Pour UN label cible, compare son agregation spatiale observee a une enveloppe ",
-          "nulle obtenue en reshufflant QUI porte ce label parmi les memes positions ",
-          "(etiquetage aleatoire) -- adaptation usuelle en transcriptomique spatiale (le ",
-          "tissu entier est la fenetre, pas un processus de Poisson) plutot qu'un vrai ",
-          "test CSR/spatstat."),
+          " ",
+          i18n$t("Pour UN label cible, compare son agregation spatiale observee a une enveloppe nulle obtenue en reshufflant QUI porte ce label parmi les memes positions (etiquetage aleatoire) -- adaptation usuelle en transcriptomique spatiale (le tissu entier est la fenetre, pas un processus de Poisson) plutot qu'un vrai test CSR/spatstat.")),
       uiOutput(ns("group_by_ripley_ui")),
       uiOutput(ns("ripley_target_ui")),
       tags$details(
         tags$summary(style = "cursor:pointer; font-size:0.72rem; color:#666;",
-                     "Options avancees (permutations / sous-echantillonnage RAM)"),
+                     i18n$t("Options avancees (permutations / sous-echantillonnage RAM)")),
         div(class = "mt-2",
-            numericInput(ns("n_perm_ripley"), "Permutations (enveloppe nulle)", 199, min = 49, max = 499, step = 10),
-            numericInput(ns("max_total_ripley"), "Max elements consideres (RAM)", 6000, min = 1000, max = 20000, step = 500),
-            numericInput(ns("max_target_ripley"), "Max points cible testes", 2000, min = 500, max = 10000, step = 500),
+            numericInput(ns("n_perm_ripley"), i18n$t("Permutations (enveloppe nulle)"), 199, min = 49, max = 499, step = 10),
+            numericInput(ns("max_total_ripley"), i18n$t("Max elements consideres (RAM)"), 6000, min = 1000, max = 20000, step = 500),
+            numericInput(ns("max_target_ripley"), i18n$t("Max points cible testes"), 2000, min = 500, max = 10000, step = 500),
             div(class = "text-muted", style = "font-size:0.68rem;",
-                "Le calcul des distances par paires est en O(n^2) -- ces plafonds evitent une ",
-                "explosion RAM/temps sur un cluster tres majoritaire ou un gros jeu de donnees. ",
-                "Le titre du graphe indique si un sous-echantillonnage a ete applique.")
+                i18n$t("Le calcul des distances par paires est en O(n^2) -- ces plafonds evitent une explosion RAM/temps sur un cluster tres majoritaire ou un gros jeu de donnees. Le titre du graphe indique si un sous-echantillonnage a ete applique."))
         )
       ),
-      bslib::input_task_button(ns("btn_ripley"), "Calculer Ripley's K",
+      bslib::input_task_button(ns("btn_ripley"), i18n$t("Calculer Ripley's K"),
                                 icon = icon("chart-line")),
       verbatimTextOutput(ns("ripley_progress_text"), placeholder = TRUE)
     ),
 
     navset_card_underline(
-      nav_panel("Composition par niche",
+      nav_panel(i18n$t("Composition par niche"),
                 div(class = "alert alert-light small mb-2",
-                    "Composition moyenne (proportion de chaque cluster/type cellulaire) au ",
-                    "sein du voisinage de chaque niche — utilisez ceci pour interpreter ",
-                    "biologiquement chaque niche (ex: \"Niche 2 = frontiere tumeur/immun\")."),
+                    i18n$t("Composition moyenne (proportion de chaque cluster/type cellulaire) au sein du voisinage de chaque niche — utilisez ceci pour interpreter biologiquement chaque niche (ex: \"Niche 2 = frontiere tumeur/immun\").")),
                 card(full_screen = TRUE, plotOutput(ns("niche_composition_plot"), height = "420px")),
                 DT::DTOutput(ns("niche_composition_table"))),
 
-      nav_panel("Effectifs par niche",
+      nav_panel(i18n$t("Effectifs par niche"),
                 DT::DTOutput(ns("niche_sizes_table"))),
 
-      nav_panel("Enrichissement (co-occurrence)",
+      nav_panel(i18n$t("Enrichissement (co-occurrence)"),
                 div(class = "alert alert-light small mb-2",
-                    "z-score de co-occurrence spatiale par paire de labels -- positif = ",
-                    "co-occurrence (voisinage frequent), negatif = exclusion mutuelle."),
+                    i18n$t("z-score de co-occurrence spatiale par paire de labels -- positif = co-occurrence (voisinage frequent), negatif = exclusion mutuelle.")),
                 card(full_screen = TRUE, plotOutput(ns("enrichment_heatmap"), height = "500px")),
                 DT::DTOutput(ns("enrichment_table"))),
 
-      nav_panel("Ripley's K (agregation spatiale)",
+      nav_panel(i18n$t("Ripley's K (agregation spatiale)"),
                 div(class = "alert alert-light small mb-2",
-                    "Ligne + points = K(r) observe pour le label cible (couleur = ",
-                    "significativite). Bande grise = enveloppe a 95% sous etiquetage ",
-                    "aleatoire. Au-dessus = agregation spatiale ; en-dessous = dispersion."),
+                    i18n$t("Ligne + points = K(r) observe pour le label cible (couleur = significativite). Bande grise = enveloppe a 95% sous etiquetage aleatoire. Au-dessus = agregation spatiale ; en-dessous = dispersion.")),
                 card(full_screen = TRUE, plotOutput(ns("ripley_plot"), height = "500px")))
     )
   )
@@ -159,21 +143,48 @@ mod_spatial_niche_server <- function(id, global_data, shared_rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+    # Session-scoped scalar translation (plain strings, never HTML spans).
+    .tr <- function(key) {
+      tr <- global_data$i18n
+      if (is.null(tr)) return(key)
+      tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+    }
+
+    # i18n: push translated labels on every language change (values never
+    # change; task buttons & static HTML switch via the client-side JS shim;
+    # the group-by dropdowns below are renderUI-built and rebuild themselves).
+    observeEvent(global_data$language, {
+      updateNumericInput(session, "k_neighbors",
+                         label = .tr("Voisins spatiaux (neighbors.k)"))
+      updateNumericInput(session, "n_niches",
+                         label = .tr("Nombre de niches (niches.k)"))
+      updateNumericInput(session, "k_neighbors_enrich",
+                         label = .tr("Voisins spatiaux (k)"))
+      updateNumericInput(session, "n_perm_enrich",
+                         label = .tr("Permutations (enveloppe nulle)"))
+      updateNumericInput(session, "n_perm_ripley",
+                         label = .tr("Permutations (enveloppe nulle)"))
+      updateNumericInput(session, "max_total_ripley",
+                         label = .tr("Max elements consideres (RAM)"))
+      updateNumericInput(session, "max_target_ripley",
+                         label = .tr("Max points cible testes"))
+    }, ignoreInit = TRUE)
+
     log_file <- spatial_log_path(session, "niche")
     tracker  <- create_reactive_tracker(session, log_file)
 
     # ── Which categorical grouping can we build niches from? (unchanged --
     # niches themselves are never grouped by an existing niche) ───────────
     output$group_by_ui <- renderUI({
+      global_data$language  # i18n: re-render on language switch
       choices <- c()
-      if (!is.null(shared_rv$cluster_labels)) choices["Cluster spatial (BANKSY-lite, onglet 2)"] <- "cluster"
-      if (!is.null(shared_rv$deconv_props))    choices["Type cellulaire dominant (deconvolution, onglet 3)"] <- "deconv"
+      if (!is.null(shared_rv$cluster_labels)) choices[.tr("Cluster spatial (BANKSY-lite, onglet 2)")] <- "cluster"
+      if (!is.null(shared_rv$deconv_props))    choices[.tr("Type cellulaire dominant (deconvolution, onglet 3)")] <- "deconv"
       if (length(choices) == 0) {
         return(div(class = "alert alert-warning", style = "font-size:0.8rem;",
-                    "Calculez d'abord un clustering (onglet 2) ou une deconvolution (onglet 3) ",
-                    "pour disposer d'un regroupement categoriel utilisable comme base des niches."))
+                    .tr("Calculez d'abord un clustering (onglet 2) ou une deconvolution (onglet 3) pour disposer d'un regroupement categoriel utilisable comme base des niches.")))
       }
-      selectInput(ns("group_by"), "Regroupement de base", choices = choices)
+      selectInput(ns("group_by"), .tr("Regroupement de base"), choices = choices)
     })
 
     niche_task <- ExtendedTask$new(function(coords, group_labels, k_neighbors, n_niches, log_file) {
@@ -219,24 +230,27 @@ mod_spatial_niche_server <- function(id, global_data, shared_rv) {
         res <- niche_task$result()
         shared_rv$niche_labels      <- stats::setNames(res$assignments$niche, res$assignments$id)
         shared_rv$niche_composition <- res$niche_composition
-        showNotification(sprintf("Niches calculees : %d niches sur %d elements.",
-                                  length(unique(shared_rv$niche_labels)), length(shared_rv$niche_labels)),
+        showNotification(.t_fmt(.tr("Niches calculees : {n} niches sur {total} elements."),
+                                  n = length(unique(shared_rv$niche_labels)),
+                                  total = length(shared_rv$niche_labels)),
                           type = "message", duration = 5)
       } else if (niche_task$status() == "error") {
         showNotification(
-          "Erreur pendant le calcul des niches — voir le log. Essayez 'Reinitialiser les daemons' dans l'entete Spatial puis relancez.",
+          .tr("Erreur pendant le calcul des niches — voir le log. Essayez 'Reinitialiser les daemons' dans l'entete Spatial puis relancez."),
           type = "error", duration = 10)
       }
     })
 
     output$niche_progress_text <- renderText({
+      global_data$language  # i18n: re-render on language switch
       lines <- tracker()
-      if (length(lines) == 0) return("En attente...")
+      if (length(lines) == 0) return(.tr("En attente..."))
       paste(lines, collapse = "\n")
     })
 
     # ── Composition heatmap (niche x groupe, proportion moyenne) ──────────
     output$niche_composition_plot <- renderPlot({
+      global_data$language  # i18n: re-render on language switch
       req(shared_rv$niche_composition)
       df <- shared_rv$niche_composition
       long <- reshape2::melt(df, id.vars = "niche", variable.name = "groupe", value.name = "proportion")
@@ -245,7 +259,7 @@ mod_spatial_niche_server <- function(id, global_data, shared_rv) {
         spatial_continuous_scale(shared_rv, aesthetic = "fill", limits = c(0, 1)) +
         ggplot2::theme_minimal(base_size = 12) +
         ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
-        ggplot2::labs(x = NULL, y = NULL, fill = "Proportion\nmoyenne")
+        ggplot2::labs(x = NULL, y = NULL, fill = .tr("Proportion\nmoyenne"))
     })
 
     output$niche_composition_table <- DT::renderDT({
@@ -256,9 +270,10 @@ mod_spatial_niche_server <- function(id, global_data, shared_rv) {
     })
 
     output$niche_sizes_table <- DT::renderDT({
+      global_data$language  # i18n: re-render on language switch
       req(shared_rv$niche_labels)
       tab <- as.data.frame(table(niche = shared_rv$niche_labels), stringsAsFactors = FALSE)
-      colnames(tab) <- c("Niche", "Effectif")
+      colnames(tab) <- c(.tr("Niche"), .tr("Effectif"))
       DT::datatable(tab, options = list(pageLength = 15), rownames = FALSE)
     })
 
@@ -270,9 +285,9 @@ mod_spatial_niche_server <- function(id, global_data, shared_rv) {
     # =========================================================================
     .group_choices <- function() {
       choices <- c()
-      if (!is.null(shared_rv$cluster_labels)) choices["Cluster spatial (BANKSY-lite, onglet 2)"] <- "cluster"
-      if (!is.null(shared_rv$deconv_props))    choices["Type cellulaire dominant (deconvolution, onglet 3)"] <- "deconv"
-      if (!is.null(shared_rv$niche_labels))    choices["Niche spatiale (ci-dessus)"] <- "niche"
+      if (!is.null(shared_rv$cluster_labels)) choices[.tr("Cluster spatial (BANKSY-lite, onglet 2)")] <- "cluster"
+      if (!is.null(shared_rv$deconv_props))    choices[.tr("Type cellulaire dominant (deconvolution, onglet 3)")] <- "deconv"
+      if (!is.null(shared_rv$niche_labels))    choices[.tr("Niche spatiale (ci-dessus)")] <- "niche"
       choices
     }
     .resolve_group_labels <- function(key) {
@@ -290,13 +305,13 @@ mod_spatial_niche_server <- function(id, global_data, shared_rv) {
     # matrix =, levels =, k_neighbors =, n_perm =)
     # -------------------------------------------------------------------------
     output$group_by_enrich_ui <- renderUI({
+      global_data$language  # i18n: re-render on language switch
       choices <- .group_choices()
       if (length(choices) == 0) {
         return(div(class = "alert alert-warning", style = "font-size:0.75rem;",
-                    "Calculez d'abord un clustering, une deconvolution ou des niches pour ",
-                    "disposer d'un regroupement categoriel."))
+                    .tr("Calculez d'abord un clustering, une deconvolution ou des niches pour disposer d'un regroupement categoriel.")))
       }
-      selectInput(ns("group_by_enrich"), "Regroupement", choices = choices)
+      selectInput(ns("group_by_enrich"), .tr("Regroupement"), choices = choices)
     })
 
     enrich_log_file <- spatial_log_path(session, "enrichment")
@@ -334,21 +349,23 @@ mod_spatial_niche_server <- function(id, global_data, shared_rv) {
     observeEvent(enrichment_task$status(), {
       if (enrichment_task$status() == "success") {
         shared_rv$enrichment_result <- enrichment_task$result()
-        showNotification("Enrichissement de voisinage calcule.", type = "message", duration = 4)
+        showNotification(.tr("Enrichissement de voisinage calcule."), type = "message", duration = 4)
       } else if (enrichment_task$status() == "error") {
         showNotification(
-          "Erreur pendant le calcul de l'enrichissement — voir le log. Essayez 'Reinitialiser les daemons' puis relancez.",
+          .tr("Erreur pendant le calcul de l'enrichissement — voir le log. Essayez 'Reinitialiser les daemons' puis relancez."),
           type = "error", duration = 10)
       }
     })
 
     output$enrichment_progress_text <- renderText({
+      global_data$language  # i18n: re-render on language switch
       lines <- enrich_tracker()
-      if (length(lines) == 0) return("En attente...")
+      if (length(lines) == 0) return(.tr("En attente..."))
       paste(lines, collapse = "\n")
     })
 
     output$enrichment_heatmap <- renderPlot({
+      global_data$language  # i18n: re-render on language switch
       req(shared_rv$enrichment_result)
       df <- shared_rv$enrichment_result$enrichment
       ggplot2::ggplot(df, ggplot2::aes(x = to, y = from, fill = z_score)) +
@@ -357,8 +374,8 @@ mod_spatial_niche_server <- function(id, global_data, shared_rv) {
         spatial_diverging_scale(shared_rv, aesthetic = "fill", na.value = "grey85") +
         ggplot2::theme_minimal(base_size = 12) +
         ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
-        ggplot2::labs(x = "Voisin", y = "Origine", fill = "z-score",
-                      title = sprintf("Enrichissement de voisinage (k=%d, %d permutations)",
+        ggplot2::labs(x = .tr("Voisin"), y = .tr("Origine"), fill = "z-score",
+                      title = sprintf(.tr("Enrichissement de voisinage (k=%d, %d permutations)"),
                                        shared_rv$enrichment_result$k_neighbors,
                                        shared_rv$enrichment_result$n_perm))
     })
@@ -379,22 +396,23 @@ mod_spatial_niche_server <- function(id, global_data, shared_rv) {
     # n_target =, n_total =, n_perm =, subsampled =)
     # -------------------------------------------------------------------------
     output$group_by_ripley_ui <- renderUI({
+      global_data$language  # i18n: re-render on language switch
       choices <- .group_choices()
       if (length(choices) == 0) {
         return(div(class = "alert alert-warning", style = "font-size:0.75rem;",
-                    "Calculez d'abord un clustering, une deconvolution ou des niches pour ",
-                    "disposer d'un regroupement categoriel."))
+                    .tr("Calculez d'abord un clustering, une deconvolution ou des niches pour disposer d'un regroupement categoriel.")))
       }
-      selectInput(ns("group_by_ripley"), "Regroupement", choices = choices)
+      selectInput(ns("group_by_ripley"), .tr("Regroupement"), choices = choices)
     })
 
     output$ripley_target_ui <- renderUI({
+      global_data$language  # i18n: re-render on language switch
       req(input$group_by_ripley)
       labs <- .resolve_group_labels(input$group_by_ripley)
       req(labs)
       lv <- sort(unique(as.character(labs)))
-      validate(need(length(lv) > 0, "Aucun niveau disponible pour ce regroupement."))
-      selectInput(ns("ripley_target"), "Cluster / type cible", choices = lv)
+      validate(need(length(lv) > 0, .tr("Aucun niveau disponible pour ce regroupement.")))
+      selectInput(ns("ripley_target"), .tr("Cluster / type cible"), choices = lv)
     })
 
     ripley_log_file <- spatial_log_path(session, "ripley")
@@ -436,28 +454,30 @@ mod_spatial_niche_server <- function(id, global_data, shared_rv) {
     observeEvent(ripley_task$status(), {
       if (ripley_task$status() == "success") {
         shared_rv$ripley_result <- ripley_task$result()
-        showNotification("Ripley's K calcule.", type = "message", duration = 4)
+        showNotification(.tr("Ripley's K calcule."), type = "message", duration = 4)
       } else if (ripley_task$status() == "error") {
         showNotification(
-          "Erreur pendant le calcul de Ripley's K — voir le log. Essayez 'Reinitialiser les daemons' puis relancez.",
+          .tr("Erreur pendant le calcul de Ripley's K — voir le log. Essayez 'Reinitialiser les daemons' puis relancez."),
           type = "error", duration = 10)
       }
     })
 
     output$ripley_progress_text <- renderText({
+      global_data$language  # i18n: re-render on language switch
       lines <- ripley_tracker()
-      if (length(lines) == 0) return("En attente...")
+      if (length(lines) == 0) return(.tr("En attente..."))
       paste(lines, collapse = "\n")
     })
 
     output$ripley_plot <- renderPlot({
+      global_data$language  # i18n: re-render on language switch
       req(shared_rv$ripley_result)
       res <- shared_rv$ripley_result
       df  <- res$curve
-      title_txt <- sprintf("Ripley's K -- '%s' (%s/%s elements)%s",
+      title_txt <- sprintf(.tr("Ripley's K -- '%s' (%s/%s elements)%s"),
                            res$target_level, format(res$n_target, big.mark = ","),
                            format(res$n_total, big.mark = ","),
-                           if (isTRUE(res$subsampled)) " -- SOUS-ECHANTILLONNE" else "")
+                           if (isTRUE(res$subsampled)) .tr("-- SOUS-ECHANTILLONNE") else "")
       ggplot2::ggplot(df, ggplot2::aes(x = r)) +
         ggplot2::geom_ribbon(ggplot2::aes(ymin = k_perm_lo, ymax = k_perm_hi), fill = "grey80", alpha = 0.6) +
         ggplot2::geom_line(ggplot2::aes(y = k_perm_mean), color = "grey40", linetype = "dashed") +
@@ -465,8 +485,8 @@ mod_spatial_niche_server <- function(id, global_data, shared_rv) {
         ggplot2::geom_point(ggplot2::aes(y = k_observed, color = signif), size = 2.8) +
         ggplot2::scale_color_manual(values = spatial_ripley_colors(shared_rv)) +
         ggplot2::theme_minimal(base_size = 12) +
-        ggplot2::labs(x = "Rayon r", y = "K(r)", color = "Significativite", title = title_txt,
-                      subtitle = "Bande grise = enveloppe 95% (etiquetage aleatoire)")
+        ggplot2::labs(x = .tr("Rayon r"), y = "K(r)", color = .tr("Significativite"), title = title_txt,
+                      subtitle = .tr("Bande grise = enveloppe 95% (etiquetage aleatoire)"))
     })
   })
 }

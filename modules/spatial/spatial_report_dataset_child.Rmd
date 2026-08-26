@@ -5,7 +5,11 @@ which binds `ds` (this dataset's snapshot, see build_spatial_report_dataset()
 in R/utils_spatial_report.R) and `ds_name` (its name) into the calling
 environment before invoking knit_child(envir = environment()) -- both are
 therefore in scope here, along with everything from the PARENT's setup
-chunk (params, %||%, render_plot(), render_plot_spatial()).
+chunk (params, %||%, render_plot(), render_plot_spatial(), tr(), tr_fmt()).
+
+i18n Phase 5 : toutes les chaines visibles passent par tr() / tr_fmt()
+(resolues cote serveur au moment du clic via params$i18n_strings, fallback
+= cle FR).
 
 IMPORTANT (caught by rendering this template for real, see integration
 notes) -- two fixes baked in:
@@ -45,21 +49,28 @@ any_ready     <- qc_ready || cluster_ready || deconv_ready || moran_ready || nic
 
 ```{r, results='asis'}
 cat(sprintf("\n\n## %s\n\n", ds_name))
-cat(sprintf("*%s -- %s elements (total) -- %s en sketch RAM*\n\n",
-            ds$technology, format(ds$n_total, big.mark = ","), format(length(ds$sketch_ids), big.mark = ",")))
+cat(sprintf("%s\n\n",
+            tr_fmt(tr("*{tech} -- {n} elements (total) -- {sk} en sketch RAM*"),
+                   tech = ds$technology,
+                   n = format(ds$n_total, big.mark = ","),
+                   sk = format(length(ds$sketch_ids), big.mark = ","))))
 ```
 
 ```{r, eval=!any_ready, results='asis'}
-cat("*Aucune section calculee pour cet echantillon au moment de l'export.*\n\n---\n\n")
+cat(sprintf("*%s*\n\n---\n\n", tr("Aucune section calculee pour cet echantillon au moment de l'export.")))
 ```
 
 ```{r, eval=qc_ready, results='asis'}
-cat("### QC\n\n")
-cat("Seuils appliques : ", if (!is.null(res$qc_params))
-  sprintf("nCount >= %s, nFeature >= %s, %%MT <= %s", res$qc_params$min_count,
-          res$qc_params$min_features, res$qc_params$max_pct_mt) else "non enregistres", "\n\n")
+cat(sprintf("### %s\n\n", tr("QC")))
+if (!is.null(res$qc_params)) {
+  cat(paste0(tr("Seuils appliques : "),
+             sprintf("nCount >= %s, nFeature >= %s, %%MT <= %s", res$qc_params$min_count,
+                     res$qc_params$min_features, res$qc_params$max_pct_mt), "\n\n"))
+} else {
+  cat(paste0(tr("Seuils appliques : "), tr("non enregistres"), "\n\n"))
+}
 if (!is.null(res$qc_pass_idx)) {
-  cat(sprintf("**%d / %d** elements retenus.\n\n", length(res$qc_pass_idx), nrow(res$qc_metrics)))
+  cat(sprintf("**%d / %d** %s\n\n", length(res$qc_pass_idx), nrow(res$qc_metrics), tr("elements retenus")))
 }
 ```
 ```{r, eval=qc_ready, fig.height=4}
@@ -79,29 +90,30 @@ render_plot_spatial(df_map, title = "nCount (carte)", histology = ds$histology_o
 ```
 
 ```{r, eval=cluster_ready, results='asis'}
-cat("### Clustering (BANKSY-lite)\n\n")
-cat(sprintf("**%d clusters** sur %d elements.%s\n\n", length(unique(res$cluster_labels)),
-            length(res$cluster_labels),
-            if (!is.null(res$cluster_params)) sprintf(" (lambda=%s, resolution=%s)",
-              res$cluster_params$lambda, res$cluster_params$resolution) else ""))
+cat(sprintf("### %s\n\n", tr("Clustering (BANKSY-lite)")))
+extra <- if (!is.null(res$cluster_params)) sprintf(" (lambda=%s, resolution=%s)",
+          res$cluster_params$lambda, res$cluster_params$resolution) else ""
+cat(sprintf("%s\n\n", tr_fmt(tr("**{n} clusters** sur {total} elements.{extra}"),
+                             n = length(unique(res$cluster_labels)),
+                             total = length(res$cluster_labels), extra = extra)))
 ```
 ```{r, eval=cluster_ready && !is.null(.ds_base_df)}
 df_map <- data.frame(x = .ds_base_df$x, y = .ds_base_df$y,
                      value = as.character(res$cluster_labels[.ds_base_df$id]))
-render_plot_spatial(df_map, title = "Clusters spatiaux", histology = ds$histology_overlay)
+render_plot_spatial(df_map, title = tr("Clusters spatiaux"), histology = ds$histology_overlay)
 ```
 ```{r, eval=cluster_ready && knitr::is_html_output()}
 tab <- as.data.frame(table(Cluster = res$cluster_labels))
-colnames(tab) <- c("Cluster", "Effectif")
+colnames(tab) <- tr(c("Cluster", "Effectif"))
 DT::datatable(tab, options = list(pageLength = 8, dom = "tp"), rownames = FALSE)
 ```
 ```{r, eval=cluster_ready && !knitr::is_html_output()}
 tab <- as.data.frame(table(Cluster = res$cluster_labels))
-colnames(tab) <- c("Cluster", "Effectif")
+colnames(tab) <- tr(c("Cluster", "Effectif"))
 knitr::kable(tab)
 ```
 ```{r, eval=cluster_ready && !is.null(res$cluster_markers) && nrow(res$cluster_markers) > 0, results='asis'}
-cat("\n\n**Marqueurs differentiels (top 30, |log2FC| decroissant) :**\n\n")
+cat(sprintf("\n\n**%s**\n\n", tr("Marqueurs differentiels (top 30, |log2FC| decroissant) :")))
 ```
 ```{r, eval=cluster_ready && !is.null(res$cluster_markers) && nrow(res$cluster_markers) > 0 && knitr::is_html_output()}
 top_m <- res$cluster_markers[order(-abs(res$cluster_markers$avg_log2FC)), ]
@@ -113,9 +125,10 @@ knitr::kable(utils::head(top_m[, c("cluster","gene","avg_log2FC","p_val_adj")], 
 ```
 
 ```{r, eval=deconv_ready, results='asis'}
-cat("### Deconvolution\n\n")
-cat(sprintf("Methode : **%s**.%s\n\n", res$deconv_params$mode %||% "?",
-            if (!is.null(res$deconv_params$ref_source_label)) sprintf(" (%s)", res$deconv_params$ref_source_label) else ""))
+cat(sprintf("### %s\n\n", tr("Deconvolution")))
+meth_lbl <- res$deconv_params$mode %||% "?"
+src_lbl <- if (!is.null(res$deconv_params$ref_source_label)) sprintf(" (%s)", res$deconv_params$ref_source_label) else ""
+cat(sprintf("%s **%s**%s\n\n", tr("Methode :"), meth_lbl, src_lbl))
 ```
 ```{r, eval=deconv_ready, fig.height=5}
 long <- reshape2::melt(res$deconv_props, id.vars = "id", variable.name = "cell_type", value.name = "proportion")
@@ -123,7 +136,7 @@ ids_show <- utils::head(unique(long$id), 60)
 ggplot2::ggplot(long[long$id %in% ids_show, ], ggplot2::aes(x = id, y = proportion, fill = cell_type)) +
   ggplot2::geom_col() + ggplot2::theme_minimal() +
   ggplot2::theme(axis.text.x = ggplot2::element_blank(), legend.text = ggplot2::element_text(size = 8)) +
-  ggplot2::labs(x = "Spots/cellules (echantillon)", y = "Proportion", fill = "Type")
+  ggplot2::labs(x = tr("Spots/cellules (echantillon)"), y = tr("Proportion"), fill = tr("Type"))
 ```
 ```{r, eval=deconv_ready && knitr::is_html_output()}
 DT::datatable(res$deconv_props, options = list(pageLength = 8, scrollX = TRUE), rownames = FALSE) |>
@@ -134,10 +147,11 @@ knitr::kable(utils::head(res$deconv_props, 20), digits = 3)
 ```
 
 ```{r, eval=moran_ready, results='asis'}
-cat("### Moran's I / Genes spatialement variables\n\n")
+cat(sprintf("### %s\n\n", tr("Moran's I / Genes spatialement variables")))
 meth <- res$moran_params$method %||% "moransi"
-cat(sprintf("Methode : **%s** -- %d genes testes.\n\n",
-            if (identical(meth, "markvariogram")) "mark variogram" else "indice de Moran", nrow(res$moran_results)))
+cat(sprintf("%s **%s** -- %d %s\n\n", tr("Methode :"),
+            tr(if (identical(meth, "markvariogram")) "mark variogram" else "indice de Moran"),
+            nrow(res$moran_results), tr("genes testes")))
 ```
 ```{r, eval=moran_ready && knitr::is_html_output()}
 top_svg <- res$moran_results[order(-res$moran_results$moran_i), ]
@@ -150,13 +164,14 @@ knitr::kable(utils::head(top_svg, 25), digits = 4)
 ```
 
 ```{r, eval=niche_ready, results='asis'}
-cat("### Niches spatiales\n\n")
-cat(sprintf("**%d niches** sur %d elements.\n\n", length(unique(res$niche_labels)), length(res$niche_labels)))
+cat(sprintf("### %s\n\n", tr("Niches spatiales")))
+cat(sprintf("%s\n\n", tr_fmt(tr("**{n} niches** sur {total} elements."),
+                             n = length(unique(res$niche_labels)), total = length(res$niche_labels))))
 ```
 ```{r, eval=niche_ready && !is.null(.ds_base_df)}
 df_map <- data.frame(x = .ds_base_df$x, y = .ds_base_df$y,
                      value = as.character(res$niche_labels[.ds_base_df$id]))
-render_plot_spatial(df_map, title = "Niches spatiales", histology = ds$histology_overlay)
+render_plot_spatial(df_map, title = tr("Niches spatiales"), histology = ds$histology_overlay)
 ```
 ```{r, eval=niche_ready && !is.null(res$niche_composition), fig.height=4}
 long <- reshape2::melt(res$niche_composition, id.vars = "niche", variable.name = "groupe", value.name = "proportion")
@@ -164,25 +179,24 @@ ggplot2::ggplot(long, ggplot2::aes(x = groupe, y = niche, fill = proportion)) +
   ggplot2::geom_tile() + ggplot2::scale_fill_viridis_c(option = "magma", limits = c(0, 1)) +
   ggplot2::theme_minimal(base_size = 11) +
   ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
-  ggplot2::labs(x = NULL, y = NULL, fill = "Proportion\nmoyenne", title = "Composition par niche")
+  ggplot2::labs(x = NULL, y = NULL, fill = tr("Proportion\nmoyenne"), title = tr("Composition par niche"))
 ```
 
 ```{r, eval=umap_ready, results='asis'}
-cat("### UMAP (sketch, non-spatial)\n\n")
+cat(sprintf("### %s\n\n", tr("UMAP (sketch, non-spatial)")))
 ```
 ```{r, eval=umap_ready}
 emb <- res$umap_df
 emb$cluster <- if (!is.null(res$cluster_labels)) as.character(res$cluster_labels[emb$id]) else "sketch"
 p <- ggplot2::ggplot(emb, ggplot2::aes(x = dim1, y = dim2, color = cluster)) +
   ggplot2::geom_point(size = 0.8, alpha = 0.75) + ggplot2::theme_minimal() +
-  ggplot2::labs(x = "UMAP_1", y = "UMAP_2", color = "Cluster")
+  ggplot2::labs(x = "UMAP_1", y = "UMAP_2", color = tr("Cluster"))
 render_plot(p)
 ```
 
 ```{r, eval=viz_ready, results='asis'}
-cat("### Visualisations sauvegardees\n\n")
-cat("*Vues ajoutees depuis l'onglet \"4. Visualisation\" (bouton \"Ajouter cette vue au rapport\") --",
-    "reconstruites a partir des DERNIERS resultats disponibles au moment du rendu de ce rapport.*\n\n")
+cat(sprintf("### %s\n\n", tr("Visualisations sauvegardees")))
+cat(sprintf("*%s*\n\n", tr("Vues ajoutees depuis l'onglet \"4. Visualisation\" (bouton \"Ajouter cette vue au rapport\") -- reconstruites a partir des DERNIERS resultats disponibles au moment du rendu de ce rapport.")))
 # Loop-safe pattern (mirrors sc_report_template.Rmd's own custom_viz_loop):
 # an unknown number of iterations inside ONE results='asis' chunk needs
 # EXPLICIT handling per item -- print(htmltools::tagList(...)) for an
@@ -193,10 +207,11 @@ cat("*Vues ajoutees depuis l'onglet \"4. Visualisation\" (bouton \"Ajouter cette
 viz_list <- res$saved_viz_list %||% list()
 for (nm in names(viz_list)) {
   cfg <- viz_list[[nm]]
-  cat(sprintf("\n\n**%s** (colore par : %s)\n\n", nm, cfg$color_by %||% "?"))
+  cat(sprintf("\n\n**%s** (%s)\n\n", nm,
+              tr_fmt(tr("colore par : {x}"), x = cfg$color_by %||% "?")))
   df_v <- tryCatch(build_saved_viz_df(ds$sketch, ds$coords, cfg, res), error = function(e) NULL)
   if (is.null(df_v)) {
-    cat("*(donnees indisponibles pour reconstruire cette vue -- relancez le calcul correspondant puis re-sauvegardez la vue depuis l'onglet 4)*\n\n")
+    cat(sprintf("%s\n\n", tr("*(donnees indisponibles pour reconstruire cette vue -- relancez le calcul correspondant puis re-sauvegardez la vue depuis l'onglet 4)*")))
     next
   }
   interactive_ok <- isTRUE(params$interactive) && knitr::is_html_output() && requireNamespace("plotly", quietly = TRUE)

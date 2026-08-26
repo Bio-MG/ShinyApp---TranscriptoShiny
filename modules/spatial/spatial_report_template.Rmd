@@ -22,6 +22,8 @@ params:
   report_subtitle: ""
   report_notes: ""
   interactive: TRUE
+  i18n_strings: NULL
+  report_language: "fr"
 ---
 
 ```{r setup, include=FALSE}
@@ -30,6 +32,23 @@ knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE,
                       fig.width = params$fig_width %||% 9, fig.height = params$fig_height %||% 7,
                       out.width = "100%")
 sections <- params$sections %||% character(0)
+
+# i18n Phase 5 : traduction des chaines du rapport. Les cles (chaines FR)
+# sont resolues COTE SERVEUR au moment du clic (mod_spatial_report.R) et
+# injectees via params$i18n_strings ; a defaut, la cle FR s'affiche telle
+# quelle (fallback gracieux). tr_fmt() interpolate les placeholders {name}.
+tr <- function(key) {
+  s <- params$i18n_strings
+  if (is.null(s)) return(key)
+  vapply(key, function(k) if (k %in% names(s)) s[[k]] else k, character(1), USE.NAMES = FALSE)
+}
+tr_fmt <- function(template, ...) {
+  vals <- list(...)
+  for (nm in names(vals)) {
+    template <- gsub(paste0("{", nm, "}"), format(vals[[nm]]), template, fixed = TRUE)
+  }
+  template
+}
 
 # Step-3.7-style helper (sc_report_template.Rmd) reused verbatim: wrapping a
 # raw htmlwidget (plotly) inside a results='asis'-adjacent flow needs
@@ -99,18 +118,19 @@ render_plot_spatial <- function(df, title = NULL, histology = NULL) {
 cat("> ", gsub("\n", "\n> ", params$report_notes), "\n\n", sep = "")
 ```
 
-# Apercu
+# `r tr("Apercu")`
 
 ```{r overview_table_build, eval="overview" %in% sections}
 ov <- do.call(rbind, lapply(names(params$datasets), function(nm) {
   d <- params$datasets[[nm]]
   data.frame(
-    Echantillon = nm, Technologie = d$technology %||% "?",
+    `Echantillon` = nm, `Technologie` = d$technology %||% "?",
     `Elements (total)` = format(d$n_total %||% NA, big.mark = ","),
     `Sketch (RAM)` = format(length(d$sketch_ids), big.mark = ","),
     check.names = FALSE, stringsAsFactors = FALSE
   )
 }))
+colnames(ov) <- tr(c("Echantillon", "Technologie", "Elements (total)", "Sketch (RAM)"))
 ```
 ```{r overview_table_html, eval="overview" %in% sections && knitr::is_html_output()}
 DT::datatable(ov, options = list(pageLength = 10, dom = "t"), rownames = FALSE)
@@ -122,16 +142,16 @@ knitr::kable(ov)
 ---
 
 ```{r multi_missing_notice, eval="multi" %in% sections && is.null(params$multi_integration), results='asis'}
-cat("# Multi-echantillons\n\n")
-cat("*Aucune integration conjointe calculee pour cette session (onglet \"5. Multi-echantillons\").*\n\n")
+cat(sprintf("# %s\n\n", tr("Multi-echantillons")))
+cat(sprintf("*%s*\n\n", tr("Aucune integration conjointe calculee pour cette session (onglet \"5. Multi-echantillons\").")))
 cat("---\n\n")
 ```
 
 ```{r multi_title, eval="multi" %in% sections && !is.null(params$multi_integration), results='asis'}
-cat("# Multi-echantillons - Integration conjointe\n\n")
+cat(sprintf("# %s\n\n", tr("Multi-echantillons - Integration conjointe")))
 mi <- params$multi_integration
 cat(sprintf(
-  "Reduction utilisee : **%s** - %s elements sur %d echantillon(s) : %s.\n\n",
+  paste0(tr("Reduction utilisee : **%s** - %s elements sur %d echantillon(s) : %s."), "\n\n"),
   mi$reduction_used %||% "?", format(nrow(mi$embeddings), big.mark = ","),
   length(unique(mi$embeddings$dataset)), paste(mi$datasets %||% character(0), collapse = ", ")
 ))
@@ -140,26 +160,26 @@ cat(sprintf(
 emb <- params$multi_integration$embeddings
 p <- ggplot2::ggplot(emb, ggplot2::aes(x = dim1, y = dim2, color = dataset)) +
   ggplot2::geom_point(size = 0.7, alpha = 0.7) + ggplot2::theme_minimal() +
-  ggplot2::labs(title = "Colore par echantillon (effet de lot)", x = "UMAP_1", y = "UMAP_2")
+  ggplot2::labs(title = tr("Colore par echantillon (effet de lot)"), x = "UMAP_1", y = "UMAP_2")
 render_plot(p)
 ```
 ```{r multi_umap_by_cluster, eval="multi" %in% sections && !is.null(params$multi_integration)}
 emb <- params$multi_integration$embeddings
 p <- ggplot2::ggplot(emb, ggplot2::aes(x = dim1, y = dim2, color = cluster)) +
   ggplot2::geom_point(size = 0.7, alpha = 0.7) + ggplot2::theme_minimal() +
-  ggplot2::labs(title = "Colore par cluster integre", x = "UMAP_1", y = "UMAP_2")
+  ggplot2::labs(title = tr("Colore par cluster integre"), x = "UMAP_1", y = "UMAP_2")
 render_plot(p)
 ```
 ```{r multi_sizes_table, eval="multi" %in% sections && !is.null(params$multi_integration) && knitr::is_html_output()}
 tab <- as.data.frame(table(Echantillon = params$multi_integration$embeddings$dataset))
-colnames(tab) <- c("Echantillon", "Elements (sketch)")
+colnames(tab) <- tr(c("Echantillon", "Elements (sketch)"))
 DT::datatable(tab, options = list(pageLength = 10, dom = "t"), rownames = FALSE)
 ```
 ```{r multi_sep, eval="multi" %in% sections, results='asis'}
 cat("\n\n---\n\n")
 ```
 
-# Par echantillon
+# `r tr("Par echantillon")`
 
 ```{r dataset_loop, results='asis'}
 # Canonical R Markdown "child-per-item" loop (knitr::knit_child): each
@@ -167,7 +187,8 @@ cat("\n\n---\n\n")
 # then renders spatial_report_dataset_child.Rmd with envir = that
 # environment -- the child inherits ds/ds_name via normal lexical lookup,
 # plus everything from THIS document's setup chunk (params, render_plot(),
-# render_plot_spatial(), %||%) via the parent-environment chain.
+# render_plot_spatial(), %||%, tr(), tr_fmt()) via the parent-environment
+# chain.
 child_path <- "spatial_report_dataset_child.Rmd"
 res <- lapply(names(params$datasets), function(nm) {
   ds <- params$datasets[[nm]]
@@ -177,4 +198,4 @@ res <- lapply(names(params$datasets), function(nm) {
 cat(unlist(res), sep = "\n")
 ```
 
-<small>Rapport genere automatiquement par TranscriptoShiny - module Spatial.</small>
+<small>`r tr("Rapport genere automatiquement par TranscriptoShiny - module Spatial.")`</small>

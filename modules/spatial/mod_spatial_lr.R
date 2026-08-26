@@ -19,52 +19,49 @@ mod_spatial_lr_ui <- function(id) {
   ns <- NS(id)
   layout_sidebar(
     sidebar = sidebar(
-      title = "Ligand-Recepteur (CellTalkDB-lite)", width = 380,
+      title = i18n$t("Ligand-Recepteur (CellTalkDB-lite)"), width = 380,
 
       div(class = "alert alert-light", style = "font-size:0.8rem;",
            bsicons::bs_icon("info-circle"),
-           " Evalue la co-occurrence spatiale de paires ligand-récepteur ",
-           "basée sur l'expression gène dans les voisinages (BANKSY-lite). "),
+           i18n$t(" Evalue la co-occurrence spatiale de paires ligand-récepteur basée sur l'expression gène dans les voisinages (BANKSY-lite). ")),
 
       div(class = "alert alert-warning", style = "font-size:0.7rem;",
            bsicons::bs_icon("exclamation-triangle"),
-           " Les paires LR doivent etre fournies via lr_pairs_db (fichier CSV ). ",
-           "Le telechargement auto de CellTalkDB/CellPhoneDB n'est pas supporte dans ce module."),
+           i18n$t(" Les paires LR doivent etre fournies via lr_pairs_db (fichier CSV ). Le telechargement auto de CellTalkDB/CellPhoneDB n'est pas supporte dans ce module.")),
 
-      numericInput(ns("k_neighbors"), "Voisins spatiaux (neighbors.k)", 30, min = 5, max = 200, step = 5),
-      numericInput(ns("n_perm"), "Permutations (enveloppe nulle)", 100, min = 10, max = 500, step = 10),
+      numericInput(ns("k_neighbors"), i18n$t("Voisins spatiaux (neighbors.k)"), 30, min = 5, max = 200, step = 5),
+      numericInput(ns("n_perm"), i18n$t("Permutations (enveloppe nulle)"), 100, min = 10, max = 500, step = 10),
 
-      bslib::input_task_button(ns("btn_lr"), "Calculer les scores LR",
+      bslib::input_task_button(ns("btn_lr"), i18n$t("Calculer les scores LR"),
                                 icon = icon("dna")),
       verbatimTextOutput(ns("lr_progress_text"), placeholder = TRUE),
 
       hr(),
-      h6("Top paires par spot", style = "font-weight:bold;"),
+      h6(i18n$t("Top paires par spot"), style = "font-weight:bold;"),
       div(class = "alert alert-light", style = "font-size:0.75rem;",
            bsicons::bs_icon("list-ul"),
-           "Tableau des top-20 paires ligand-récepteur par spot, trie par |z_score|."),
+           i18n$t("Tableau des top-20 paires ligand-récepteur par spot, trie par |z_score|.")),
 
       hr(),
-      h6("Carte spatiale de signification", style = "font-weight:bold;"),
+      h6(i18n$t("Carte spatiale de signification"), style = "font-weight:bold;"),
       div(class = "alert alert-light", style = "font-size:0.75rem;",
            bsicons::bs_icon("map-marker-alt"),
-           "Visualisez la distribution des paires selectionnees (Hotspot/Coldspot/NS) sur ",
-           "le fond histologique."),
+           i18n$t("Visualisez la distribution des paires selectionnees (Hotspot/Coldspot/NS) sur le fond histologique.")),
 
       uiOutput(ns("slot_spot_selector")),
       uiOutput(ns("slot_pair_selector"))
     ),
 
     navset_card_underline(
-      nav_panel("Top paires par spot",
+      nav_panel(i18n$t("Top paires par spot"),
                 div(class = "alert alert-light small mb-2", style = "font-size:0.65rem;",
-                     "Les paires sont triees par |z_score|. Les lignes avec NS ne sont pas considerees "),
+                     i18n$t("Les paires sont triees par |z_score|. Les lignes avec NS ne sont pas considerees ")),
                 card(full_screen = TRUE, plotOutput(ns("lr_spot_map"), height = "500px")),
                 DT::DTOutput(ns("lr_pairs_table"))),
 
-      nav_panel("Repartition des paires par spot",
+      nav_panel(i18n$t("Repartition des paires par spot"),
                 div(class = "alert alert-light small mb-2", style = "font-size:0.68rem;",
-                     "Distribution des Hotspot/Coldspot/NS par spot."),
+                     i18n$t("Distribution des Hotspot/Coldspot/NS par spot.")),
                 card(full_screen = TRUE, plotOutput(ns("lr_signif_hist"), height = "450px")))
     )
   )
@@ -74,24 +71,40 @@ mod_spatial_lr_server <- function(id, global_data, shared_rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+    # Session-scoped scalar translation (plain strings, never HTML spans).
+    .tr <- function(key) {
+      tr <- global_data$i18n
+      if (is.null(tr)) return(key)
+      tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+    }
+
+    # i18n: push translated labels for build-time-frozen inputs on every
+    # language change (values NEVER change; selection is preserved).
+    observeEvent(global_data$language, {
+      updateNumericInput(session, "k_neighbors", label = .tr("Voisins spatiaux (neighbors.k)"))
+      updateNumericInput(session, "n_perm", label = .tr("Permutations (enveloppe nulle)"))
+    }, ignoreInit = TRUE)
+
     log_file <- spatial_log_path(session, "lr")
     tracker  <- create_reactive_tracker(session, log_file)
 
     # ── UI slots for spot/pair selection (post-calculation) ────────────────
     output$slot_spot_selector <- renderUI({
+      global_data$language  # re-render on language switch
       req(shared_rv$lr_result)
       spots <- unique(shared_rv$lr_result$spot_scores$from_spot)
       if (!length(spots)) return(NULL)
-      tags$span("Selectionnez un spot (pour la carte en dessous, si disponible):")
+      tags$span(.tr("Selectionnez un spot (pour la carte en dessous, si disponible):"))
     })
 
     output$slot_pair_selector <- renderUI({
+      global_data$language  # re-render on language switch
       req(shared_rv$lr_result)
       # Unique LR pairs sorted by |z_score| globally
       if (!is.null(shared_rv$lr_result$pair_scores) && nrow(shared_rv$lr_result$pair_scores) > 0) {
         top_pairs <- shared_rv$lr_result$pair_scores[order(-abs(shared_rv$lr_result$pair_scores$z_score)), ]
         top_pairs <- head(top_pairs, 100L)
-        selectInput(ns("slot_lr_pair"), "Selecter une paire ligand-récepteur",
+        selectInput(ns("slot_lr_pair"), .tr("Selecter une paire ligand-récepteur"),
                     choices = paste0(shared_rv$lr_result$pair_scores$ligand, "-",
                                      shared_rv$lr_result$pair_scores$receptor),
                     selected = NULL)
@@ -133,7 +146,7 @@ mod_spatial_lr_server <- function(id, global_data, shared_rv) {
         shared_rv$lr_result <- NULL
         shared_rv$lr_params <- list(expr_source = "none_found", genes_used = keep,
                                      k_neighbors = input$k_neighbors, n_perm = input$n_perm)
-        showNotification("Aucun des gènes ligand/récepteur trouvés dans l'échantillon.",
+        showNotification(.tr("Aucun des gènes ligand/récepteur trouvés dans l'échantillon."),
                           type = "warning", duration = 6)
         return()
       }
@@ -157,18 +170,20 @@ mod_spatial_lr_server <- function(id, global_data, shared_rv) {
       if (lr_task$status() == "success") {
         res <- lr_task$result()
         shared_rv$lr_result <- res
-        showNotification(sprintf("Scores LR calcules : %d lignes de scores pairs; %d spots avec voisins.",
-                                  nrow(res$pair_scores), nrow(res$spot_scores) - ifelse(is.null(res$skipped), 0L, as.integer(res$skipped))))
+        showNotification(.t_fmt(.tr("Scores LR calcules : {pairs} lignes de scores pairs; {spots} spots avec voisins."),
+                                pairs = nrow(res$pair_scores),
+                                spots = nrow(res$spot_scores) - ifelse(is.null(res$skipped), 0L, as.integer(res$skipped))))
       } else if (lr_task$status() == "error") {
         showNotification(
-          "Erreur pendant le calcul des scores LR — voir le log. Essayez 'Reinitialiser les daemons' puis relancez.",
+          .tr("Erreur pendant le calcul des scores LR — voir le log. Essayez 'Reinitialiser les daemons' puis relancez."),
           type = "error", duration = 10)
       }
     })
 
     output$lr_progress_text <- renderText({
+      global_data$language  # re-render on language switch
       lines <- tracker()
-      if (length(lines) == 0) return("En attente...")
+      if (length(lines) == 0) return(.tr("En attente..."))
       paste(lines, collapse = "\n")
     })
 
@@ -197,6 +212,7 @@ mod_spatial_lr_server <- function(id, global_data, shared_rv) {
     })
 
     output$lr_spot_map <- renderPlot({
+      global_data$language  # re-render on language switch
       req(shared_rv$lr_result)
       # Only if spot_scores has valid data from a selected pair
       req(input$slot_lr_pair %in% shared_rv$lr_result$pair_scores[, "pair_name"])
@@ -213,36 +229,37 @@ mod_spatial_lr_server <- function(id, global_data, shared_rv) {
           ggplot2::geom_histogram(bins = 30, fill = shared_rv$color_palette %||% "default", color = "white") +
           spatial_continuous_scale(shared_rv, fill) +
           ggplot2::theme_minimal(base_size = 12) +
-          ggplot2::labs(title = "Repartition des scores LR moyens par spot", x = "Moyenne score LR", y = "Count") +
-          ggplot2::labs(subtitle = sprintf("k=%d, %d permutations: shared_rv$lr_result$spot_scores",
+          ggplot2::labs(title = .tr("Repartition des scores LR moyens par spot"), x = .tr("Moyenne score LR"), y = .tr("Count")) +
+          ggplot2::labs(subtitle = sprintf(.tr("k=%d, %d permutations: shared_rv$lr_result$spot_scores"),
                                           input$k_neighbors, input$n_perm))
       } else {
         ggplot2::ggplot() +
-          ggplot2::labs(title = "Aucune donnée de scores LR disponible", subtitle = "Calculez d'abord les scores (onglet gauche)") +
+          ggplot2::labs(title = .tr("Aucune donnée de scores LR disponible"), subtitle = .tr("Calculez d'abord les scores (onglet gauche)")) +
           ggplot2::theme_minimal()
       }
     })
 
     output$lr_signif_hist <- renderPlot({
+      global_data$language  # re-render on language switch
       req(shared_rv$lr_result)
       req(!is.null(shared_rv$lr_result$pair_scores) && nrow(shared_rv$lr_result$pair_scores) > 0)
 
       df <- shared_rv$lr_result$pair_scores
       signif_counts <- table(df$signif)
       if (!length(signif_counts)) {
-        return(ggplot2::ggplot() + ggplot2::labs(title = "Aucune donnée") + ggplot2::theme_minimal())
+        return(ggplot2::ggplot() + ggplot2::labs(title = .tr("Aucune donnée")) + ggplot2::theme_minimal())
       }
 
       ggplot2::ggplot(as.data.frame(signif_counts), ggplot2::aes(x = reorder(name, count), y = count, fill = name)) +
         ggplot2::geom_bar(stat = "identity", width = 0.7) +
         ggplot2::scale_fill_identity(
-          labels = c("NS" = "NS", "Hotspot" = "Hotspot (chaud)", "Coldspot" = "Coldspot (froid)"),
+          labels = c("NS" = .tr("NS"), "Hotspot" = .tr("Hotspot (chaud)"), "Coldspot" = .tr("Coldspot (froid)")),
           names = c("#999999", setNames(shared_rv$manual_gradient[["high"]], ifelse("Hotspot" %in% names(signif_counts), 1L, NA)),
                             setNames(shared_rv$manual_gradient[["low"]], ifelse("Coldspot" %in% names(signif_counts), 1L, NA)))) +
         spatial_continuous_scale(shared_rv, fill) +
         ggplot2::theme_minimal(base_size = 12) +
         ggplot2::coord_flip() +
-        ggplot2::labs(title = "Repartition Hotspot/Coldspot/NS des paires LR", x = "Signification", y = "Nombre")
+        ggplot2::labs(title = .tr("Repartition Hotspot/Coldspot/NS des paires LR"), x = .tr("Signification"), y = .tr("Nombre"))
     })
   })
 }
