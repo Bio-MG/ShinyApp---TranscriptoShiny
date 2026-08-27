@@ -113,68 +113,68 @@ mod_import_sc_ui <- function(id) {
   tagList(
     layout_sidebar(
       sidebar = sidebar(
-        width = 400, title = "Import Single-Cell",
+        width = 400, title = i18n$t("Import Single-Cell"),
         accordion(
           accordion_panel(
-            "Option A: Dossiers Multiples (10X)",
-            div(class="alert alert-info", style="font-size:0.85rem;",
+            i18n$t("Option A: Dossiers Multiples (10X)"),
+            value = "opt_a",
+            div(class = "alert alert-info", style = "font-size:0.85rem;",
                 bsicons::bs_icon("info-circle"),
-                " Importez plusieurs échantillons pour Harmony."),
-            div(class="alert alert-light", style="font-size:0.8rem;",
+                " ", i18n$t("Importez plusieurs échantillons pour Harmony.")),
+            div(class = "alert alert-light", style = "font-size:0.8rem;",
                 bsicons::bs_icon("lightbulb"),
-                " Formats acceptés : barcodes.tsv(.gz), features.tsv(.gz) ou genes.tsv(.gz), matrix.mtx(.gz)."),
-            shinyDirButton(ns("dir_select"), "📁 Ajouter un Dossier",
-                           "Sélectionner dossier contenant matrix.mtx",
-                           class="btn-secondary w-100", icon=icon("folder-open")),
-            textInput(ns("sample_name"), "Nom de l'échantillon", placeholder="Ex: Patient1"),
-            actionButton(ns("btn_add_sample"), "➕ Ajouter à la liste", class="btn-info w-100 mt-2"),
+                " ", i18n$t("Formats acceptés : barcodes.tsv(.gz), features.tsv(.gz) ou genes.tsv(.gz), matrix.mtx(.gz).")),
+            uiOutput(ns("dir_select_ui")),
+            textInput(ns("sample_name"), i18n$t("Nom de l'échantillon"), placeholder = "Ex: Patient1"),
+            actionButton(ns("btn_add_sample"), i18n$t("➕ Ajouter à la liste"), class = "btn-info w-100 mt-2"),
             hr(),
-            h6("Échantillons ajoutés:", style="font-weight:bold;"),
-            div(style="max-height:200px;overflow-y:auto;border:1px solid #ddd;padding:10px;border-radius:5px;",
+            h6(i18n$t("Échantillons ajoutés:"), style = "font-weight:bold;"),
+            div(style = "max-height:200px;overflow-y:auto;border:1px solid #ddd;padding:10px;border-radius:5px;",
                 uiOutput(ns("sample_list_display"))),
-            actionButton(ns("btn_clear_samples"), "🗑️ Tout Effacer",
-                         class="btn-outline-danger btn-sm w-100 mt-2"),
+            actionButton(ns("btn_clear_samples"), i18n$t("🗑️ Tout Effacer"),
+                         class = "btn-outline-danger btn-sm w-100 mt-2"),
             hr(),
-            verbatimTextOutput(ns("path_display"), placeholder=TRUE),
-            actionButton(ns("btn_load_dir"), "🚀 Charger Tous les Échantillons",
-                         class="btn-success w-100 mt-2", icon=icon("play"))
+            verbatimTextOutput(ns("path_display"), placeholder = TRUE),
+            actionButton(ns("btn_load_dir"), i18n$t("🚀 Charger Tous les Échantillons"),
+                         class = "btn-success w-100 mt-2", icon = icon("play"))
           ),
           accordion_panel(
-            "Option B: Fichiers Multiples (.rds, .h5, .h5ad)",
-            div(class="alert alert-info", style="font-size:0.85rem;",
-                bsicons::bs_icon("info-circle"), " Importez plusieurs fichiers pour les fusionner."),
-            div(class="alert alert-light", style="font-size:0.78rem;",
+            i18n$t("Option B: Fichiers Multiples (.rds, .h5, .h5ad)"),
+            value = "opt_b",
+            div(class = "alert alert-info", style = "font-size:0.85rem;",
+                bsicons::bs_icon("info-circle"), " ", i18n$t("Importez plusieurs fichiers pour les fusionner.")),
+            div(class = "alert alert-light", style = "font-size:0.78rem;",
                 bsicons::bs_icon("hdd"),
-                " Fichiers volumineux (> quelques Go) : vérifiez l'espace disque disponible sur le",
-                " disque où pointe le dossier temporaire de R (TMPDIR), pas seulement celui de l'app."),
-            fileInput(ns("file_upload"), "Ajouter Fichier(s)",
-                      accept=c(".rds",".h5",".h5ad",".loom"), multiple=TRUE),
+                " ", i18n$t("Fichiers volumineux (> quelques Go) : vérifiez l'espace disque disponible sur le disque où pointe le dossier temporaire de R (TMPDIR), pas seulement celui de l'app.")),
+            fileInput(ns("file_upload"), i18n$t("Ajouter Fichier(s)"),
+                      accept = c(".rds", ".h5", ".h5ad", ".loom"), multiple = TRUE),
             uiOutput(ns("file_list_display")),
-            actionButton(ns("btn_load_file"), "🚀 Charger", class="btn-primary w-100", icon=icon("play"))
+            actionButton(ns("btn_load_file"), i18n$t("🚀 Charger"), class = "btn-primary w-100", icon = icon("play"))
           ),
           accordion_panel(
-            "Option C: Fichier Unique (Classique)",
-            fileInput(ns("single_file_upload"), "Charger un seul fichier",
-                      accept=c(".rds",".h5",".h5ad",".loom")),
-            helpText("Pour un seul échantillon."),
-            actionButton(ns("btn_load_single"), "Charger", class="btn-warning w-100")
+            i18n$t("Option C: Fichier Unique (Classique)"),
+            value = "opt_c",
+            fileInput(ns("single_file_upload"), i18n$t("Charger un seul fichier"),
+                      accept = c(".rds", ".h5", ".h5ad", ".loom")),
+            helpText(i18n$t("Pour un seul échantillon.")),
+            actionButton(ns("btn_load_single"), i18n$t("Charger"), class = "btn-warning w-100")
           )
         )
       ),
       card(
-        card_header("Résumé de l'objet chargé"),
+        card_header(i18n$t("Résumé de l'objet chargé")),
         layout_columns(
-          value_box(title="Cellules",    value=textOutput(ns("nb_cells")),
-                    showcase=bsicons::bs_icon("people"),     theme="primary"),
-          value_box(title="Gènes",       value=textOutput(ns("nb_genes")),
-                    showcase=bsicons::bs_icon("diagram-3"),  theme="secondary"),
-          value_box(title="Échantillons",value=textOutput(ns("nb_samples")),
-                    showcase=bsicons::bs_icon("collection"), theme="info"),
-          value_box(title="Statut",      value=textOutput(ns("status_obj")),
-                    showcase=bsicons::bs_icon("check-circle"),theme="light")
+          value_box(title = i18n$t("Cellules"), value = textOutput(ns("nb_cells")),
+                    showcase = bsicons::bs_icon("people"), theme = "primary"),
+          value_box(title = i18n$t("Gènes"), value = textOutput(ns("nb_genes")),
+                    showcase = bsicons::bs_icon("diagram-3"), theme = "secondary"),
+          value_box(title = i18n$t("Échantillons"), value = textOutput(ns("nb_samples")),
+                    showcase = bsicons::bs_icon("collection"), theme = "info"),
+          value_box(title = i18n$t("Statut"), value = textOutput(ns("status_obj")),
+                    showcase = bsicons::bs_icon("check-circle"), theme = "light")
         ),
-        card_body(h5("Console de Log", class="text-muted"),
-                  verbatimTextOutput(ns("console_log"), placeholder=TRUE))
+        card_body(h5(i18n$t("Console de Log"), class = "text-muted"),
+                  verbatimTextOutput(ns("console_log"), placeholder = TRUE))
       )
     )
   )
@@ -184,72 +184,97 @@ mod_import_sc_ui <- function(id) {
 mod_import_sc_server <- function(id, global_data) {
   moduleServer(id, function(input, output, session) {
 
+    ns <- session$ns
+    # ── i18n proxy ──────────────────────────────────────────────────────────
+    .tr <- function(key) {
+      tr <- global_data$i18n
+      if (is.null(tr)) return(key)
+      tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+    }
+
     logs <- reactiveVal("En attente d'import...")
     add_log <- function(msg) {
       logs(paste0("[", format(Sys.time(),"%H:%M:%S"), "] ", msg, "\n", logs()))
     }
 
+    # Re-push translated labels on language switch
+    observeEvent(global_data$language, {
+      updateTextInput(session, "sample_name", label = .tr("Nom de l'échantillon"))
+    }, ignoreInit = TRUE)
+
     sample_list <- reactiveVal(list())
     volumes     <- c(Home = fs::path_home(), getVolumes()())
     shinyDirChoose(input, "dir_select", roots = volumes, session = session)
 
+    output$dir_select_ui <- renderUI({
+      global_data$language
+      shinyDirButton(
+        ns("dir_select"),
+        label = .tr("📁 Ajouter un Dossier"),
+        title = .tr("Sélectionner dossier contenant matrix.mtx"),
+        class = "btn-secondary w-100",
+        icon  = icon("folder-open")
+      )
+    })
+
     dir_path <- reactiveVal(NULL)
     observeEvent(input$dir_select, {
       path <- parseDirPath(volumes, input$dir_select)
-      if (length(path) > 0) { dir_path(path); add_log(paste("Dossier:", path)) }
+      if (length(path) > 0) { dir_path(path); add_log(paste(.tr("Dossier:"), path)) }
     })
     output$path_display <- renderText({
-      if (is.null(dir_path())) "Aucun dossier sélectionné" else dir_path()
+      global_data$language
+      if (is.null(dir_path())) .tr("Aucun dossier sélectionné") else dir_path()
     })
 
     observeEvent(input$btn_add_sample, {
       req(dir_path(), input$sample_name)
       if (!nchar(trimws(input$sample_name))) {
-        showNotification("⚠️ Nom vide.", type="warning"); return()
+        showNotification(.tr("⚠️ Nom vide."), type = "warning"); return()
       }
       cs <- sample_list()
       if (input$sample_name %in% names(cs)) {
-        showNotification("⚠️ Ce nom existe déjà.", type="warning"); return()
+        showNotification(.tr("⚠️ Ce nom existe déjà."), type = "warning"); return()
       }
       cs[[input$sample_name]] <- dir_path(); sample_list(cs)
-      add_log(paste("Échantillon ajouté:", input$sample_name))
+      add_log(paste(.tr("Échantillon ajouté:"), input$sample_name))
     })
 
     output$sample_list_display <- renderUI({
       s <- names(sample_list())
-      if (!length(s)) return(tags$em("Aucun échantillon", style="color:#999;"))
+      if (!length(s)) return(tags$em(.tr("Aucun échantillon"), style = "color:#999;"))
       tags$ul(lapply(s, tags$li))
     })
 
-    observeEvent(input$btn_clear_samples, { sample_list(list()); add_log("Liste effacée") })
+    observeEvent(input$btn_clear_samples, { sample_list(list()); add_log(.tr("Liste effacée")) })
 
     # ── Option A ────────────────────────────────────────────────────────────
     observeEvent(input$btn_load_dir, {
       req(sample_list())
       samples <- sample_list()
-      add_log(paste("🔄 Import de", length(samples), "dossiers 10X..."))
+      add_log(paste(.tr("🔄 Import de"), length(samples), .tr("dossiers 10X...")))
       p <- shiny::Progress$new(); on.exit(p$close())
-      p$set(message="Chargement...", value=0)
+      p$set(message = .tr("Chargement..."), value = 0)
       tryCatch({
         obj_list <- list()
         for (i in seq_along(samples)) {
           sn <- names(samples)[i]; path <- samples[[i]]
           p$set(i/length(samples), detail=sn)
-          add_log(paste("  📂 Lecture:", path))
+          add_log(paste("  📂", .tr("Lecture:"), path))
           raw <- load_single_cell_data(path, add_log)
           obj <- prepare_seurat_object(raw, sn)
           obj$orig.ident <- sn; obj_list[[sn]] <- obj
-          add_log(paste("    ✓", ncol(obj), "cellules"))
+          add_log(paste("    ✓", ncol(obj), .tr("cellules")))
         }
-        p$set(0.9, "Fusion...")
+        p$set(0.9, .tr("Fusion..."))
         merged <- if (length(obj_list)==1) obj_list[[1]] else
           merge(obj_list[[1]], y=obj_list[-1], add.cell.ids=names(obj_list), project="MultiSample")
         global_data$sc_obj <- merged
-        add_log(paste("✅", ncol(merged), "cellules,", length(unique(merged$orig.ident)), "échantillon(s)"))
-        showNotification(paste("✅ Import réussi:", ncol(merged), "cellules"), type="message", duration=5)
-      }, error=function(e) {
-        msg <- paste("❌ Erreur:", conditionMessage(e))
-        add_log(msg); showNotification(msg, type="error", duration=10)
+        add_log(paste("✅", ncol(merged), .tr("cellules,"), length(unique(merged$orig.ident)), .tr("échantillon(s)")))
+        showNotification(paste(.tr("✅ Import réussi:"), ncol(merged), .tr("cellules")), type = "message", duration = 5)
+      }, error = function(e) {
+        msg <- paste(.tr("❌ Erreur:"), conditionMessage(e))
+        add_log(msg); showNotification(msg, type = "error", duration = 10)
       })
     })
 
@@ -268,9 +293,9 @@ mod_import_sc_server <- function(id, global_data) {
     observeEvent(input$btn_load_file, {
       req(input$file_upload)
       files <- input$file_upload
-      add_log(paste("🔄 Import de", nrow(files), "fichier(s)..."))
+      add_log(paste(.tr("🔄 Import de"), nrow(files), "fichier(s)..."))
       p <- shiny::Progress$new(); on.exit(p$close())
-      p$set(message="Chargement...", value=0)
+      p$set(message = .tr("Chargement..."), value = 0)
       tryCatch({
         obj_list <- list()
         for (i in 1:nrow(files)) {
@@ -289,25 +314,25 @@ mod_import_sc_server <- function(id, global_data) {
           raw <- load_single_cell_data(files$datapath[i], add_log)
           obj <- prepare_seurat_object(raw, fn)
           obj$orig.ident <- fn; obj_list[[fn]] <- obj
-          add_log(paste("    ✓", ncol(obj), "cellules"))
+          add_log(paste("    ✓", ncol(obj), .tr("cellules")))
         }
-        p$set(0.9, "Fusion...")
+        p$set(0.9, .tr("Fusion..."))
         merged <- if (length(obj_list)==1) obj_list[[1]] else
           merge(obj_list[[1]], y=obj_list[-1], add.cell.ids=names(obj_list), project="MultiFile")
         global_data$sc_obj <- merged
-        add_log(paste("✅", ncol(merged), "cellules"))
-        showNotification("✅ Import réussi!", type="message", duration=5)
-      }, error=function(e) {
-        msg <- paste("❌ Erreur:", conditionMessage(e))
-        add_log(msg); showNotification(msg, type="error", duration=12)
+        add_log(paste("✅", ncol(merged), .tr("cellules")))
+        showNotification(.tr("✅ Import réussi:"), type = "message", duration = 5)
+      }, error = function(e) {
+        msg <- paste(.tr("❌ Erreur:"), conditionMessage(e))
+        add_log(msg); showNotification(msg, type = "error", duration = 12)
       })
     })
 
     # ── Option C ────────────────────────────────────────────────────────────
     observeEvent(input$btn_load_single, {
       req(input$single_file_upload)
-      add_log("🔄 Import fichier unique...")
-      withProgress(message="Chargement...", {
+      add_log(paste(.tr("Import fichier unique...")))
+      withProgress(message = .tr("Chargement..."), {
         tryCatch({
           # Step-3.8: same upload-integrity check as Option B — this is the
           # path the user's 1M-neurons .h5 import went through when it hit
@@ -323,11 +348,11 @@ mod_import_sc_server <- function(id, global_data) {
           raw <- load_single_cell_data(input$single_file_upload$datapath, add_log)
           obj <- prepare_seurat_object(raw, "SingleSample")
           global_data$sc_obj <- obj
-          add_log(paste("✅ Import réussi:", ncol(obj), "cellules"))
-          showNotification("✅ Import réussi!", type="message")
-        }, error=function(e) {
-          msg <- paste("❌ Erreur:", conditionMessage(e))
-          add_log(msg); showNotification(msg, type="error", duration=12)
+          add_log(paste(.tr("✅ Import réussi:"), ncol(obj), .tr("cellules")))
+          showNotification(.tr("✅ Import réussi:"), type = "message")
+        }, error = function(e) {
+          msg <- paste(.tr("❌ Erreur:"), conditionMessage(e))
+          add_log(msg); showNotification(msg, type = "error", duration = 12)
         })
       })
     })
@@ -337,11 +362,16 @@ mod_import_sc_server <- function(id, global_data) {
     output$nb_genes   <- renderText({ if(is.null(global_data$sc_obj)) "-" else format(nrow(global_data$sc_obj), big.mark=",") })
     output$nb_samples <- renderText({ if(is.null(global_data$sc_obj)) "-" else length(unique(global_data$sc_obj$orig.ident)) })
     output$status_obj <- renderText({
-      if(is.null(global_data$sc_obj)) "⚪ Inactif"
+      global_data$language
+      if(is.null(global_data$sc_obj)) .tr("⚪ Inactif")
       else { n <- length(unique(global_data$sc_obj$orig.ident))
              if(n>1) paste("🟢 Multi (",n,")") else "🟡 Mono" }
     })
-    output$console_log <- renderText({ logs() })
+    output$console_log <- renderText({
+      global_data$language
+      txt <- logs()
+      if (identical(txt, "En attente d'import...")) .tr("En attente d'import...") else txt
+    })
 
     # ── load_single_cell_data ─────────────────────────────────────────────
     load_single_cell_data <- function(path, log_fn = NULL) {

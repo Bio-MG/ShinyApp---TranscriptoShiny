@@ -11,32 +11,32 @@ mod_sc_velocity_ui <- function(id) {
   tagList(
     div(class = "alert alert-light", style = "font-size:0.9em;border-left:3px solid #2980B9;",
         "RNA Velocity — import strict des matrices spliced/unspliced alignees sur l'objet Seurat. ",
-        "Aucune inference n'est effectuee dans l'application."),
+        i18n$t("Aucune inference n'est effectuee dans l'application.")),
 
-    radioButtons(ns("velocity_import_mode"), "Source d'import",
+    radioButtons(ns("velocity_import_mode"), i18n$t("Source d'import"),
                  choices = c("RDS combine (spliced + unspliced)" = "rds",
                              "Matrix Market (MTX + barcodes + features)" = "mtx"),
                  selected = "rds"),
 
     conditionalPanel(
       condition = "input.velocity_import_mode == 'rds'", ns = ns,
-      fileInput(ns("velocity_rds_file"), "Fichier RDS velocity (liste spliced/unspliced)",
+      fileInput(ns("velocity_rds_file"), i18n$t("Fichier RDS velocity (liste spliced/unspliced)"),
                 accept = c(".rds", ".RDS"), width = "100%"),
       div(class = "small text-muted mb-2",
-          "Le RDS doit etre une liste nommee avec spliced et unspliced. Noms inattendus bloques.")
+          "Le RDS doit être une liste nommée avec spliced et unspliced. Noms inattendus bloqués.")
     ),
 
     conditionalPanel(
       condition = "input.velocity_import_mode == 'mtx'", ns = ns,
-      h6("Matrice spliced (MTX)", style = "font-weight:bold;"),
+      h6(i18n$t("Matrice spliced (MTX)"), style = "font-weight:bold;"),
       fileInput(ns("velocity_mtx_spliced"), "Fichier .mtx (spliced)", accept = c(".mtx", ".gz"), width = "100%"),
-      fileInput(ns("velocity_mtx_spliced_barcodes"), "Barcodes spliced", accept = c(".tsv", ".txt", ".gz"), width = "100%"),
-      fileInput(ns("velocity_mtx_spliced_features"), "Features/genes spliced", accept = c(".tsv", ".txt", ".gz"), width = "100%"),
-      h6("Matrice unspliced (MTX)", style = "font-weight:bold;"),
+      fileInput(ns("velocity_mtx_spliced_barcodes"), i18n$t("Barcodes spliced"), accept = c(".tsv", ".txt", ".gz"), width = "100%"),
+      fileInput(ns("velocity_mtx_spliced_features"), i18n$t("Features/genes spliced"), accept = c(".tsv", ".txt", ".gz"), width = "100%"),
+      h6(i18n$t("Matrice unspliced (MTX)"), style = "font-weight:bold;"),
       fileInput(ns("velocity_mtx_unspliced"), "Fichier .mtx (unspliced)", accept = c(".mtx", ".gz"), width = "100%"),
-      fileInput(ns("velocity_mtx_unspliced_barcodes"), "Barcodes unspliced", accept = c(".tsv", ".txt", ".gz"), width = "100%"),
-      fileInput(ns("velocity_mtx_unspliced_features"), "Features/genes unspliced", accept = c(".tsv", ".txt", ".gz"), width = "100%"),
-      h6("Matrice ambiguous (optionnel)", style = "font-weight:bold;"),
+      fileInput(ns("velocity_mtx_unspliced_barcodes"), i18n$t("Barcodes unspliced"), accept = c(".tsv", ".txt", ".gz"), width = "100%"),
+      fileInput(ns("velocity_mtx_unspliced_features"), i18n$t("Features/genes unspliced"), accept = c(".tsv", ".txt", ".gz"), width = "100%"),
+      h6(i18n$t("Matrice ambiguous (optionnel)"), style = "font-weight:bold;"),
       fileInput(ns("velocity_mtx_ambiguous"), "Fichier .mtx (ambiguous)", accept = c(".mtx", ".gz"), width = "100%"),
       fileInput(ns("velocity_mtx_ambiguous_barcodes"), "Barcodes ambiguous", accept = c(".tsv", ".txt", ".gz"), width = "100%"),
       fileInput(ns("velocity_mtx_ambiguous_features"), "Features/genes ambiguous", accept = c(".tsv", ".txt", ".gz"), width = "100%"),
@@ -52,9 +52,9 @@ mod_sc_velocity_ui <- function(id) {
     hr(),
     selectInput(
       ns("velocity_orientation"),
-      "Orientation des matrices",
+      i18n$t("Orientation des matrices"),
       choices = c(
-        "Detection automatique stricte" = "auto_strict",
+        "Détection automatique stricte" = "auto_strict",
         "Genes x cellules" = "genes_x_cells",
         "Cellules x genes" = "cells_x_genes"
       ),
@@ -62,17 +62,17 @@ mod_sc_velocity_ui <- function(id) {
     ),
     checkboxInput(
       ns("velocity_strip_cell_suffix"),
-      "Retirer les suffixes de barcodes (ex. -1, -2)",
+      i18n$t("Retirer les suffixes de barcodes (ex. -1, -2)"),
       value = FALSE
     ),
     checkboxInput(
       ns("velocity_strip_gene_version"),
-      "Retirer les suffixes de version Ensembl (ex. .1, .2)",
+      i18n$t("Retirer les suffixes de version Ensembl (ex. .1, .2)"),
       value = FALSE
     ),
     checkboxInput(
       ns("velocity_allow_low_overlap"),
-      "Forcer l'alignement malgre un recouvrement < 80%",
+      i18n$t("Forcer l'alignement malgre un recouvrement < 80%"),
       value = FALSE
     ),
     div(
@@ -81,13 +81,13 @@ mod_sc_velocity_ui <- function(id) {
       "Une collision bloque la validation."
     ),
     hr(),
-    actionButton(ns("velocity_validate"), "Valider les matrices velocity",
+    actionButton(ns("velocity_validate"), i18n$t("Valider les matrices velocity"),
                  class = "btn-primary w-100", icon = icon("check")),
     div(class = "small text-muted mt-1", textOutput(ns("velocity_status"))),
     hr(),
-    selectInput(ns("velocity_gene"), "Gene pour phase portrait", choices = character(0)),
-    selectInput(ns("velocity_reduction"), "Reduction pour vecteurs", choices = c("umap", "pca")),
-    downloadButton(ns("dl_velocity_provenance"), "Exporter provenance (CSV)", class = "btn-sm btn-info w-100 mt-1")
+    selectInput(ns("velocity_gene"), i18n$t("Gene pour phase portrait"), choices = character(0)),
+    selectInput(ns("velocity_reduction"), i18n$t("Reduction pour vecteurs"), choices = c("umap", "pca")),
+    downloadButton(ns("dl_velocity_provenance"), i18n$t("Exporter provenance (CSV)"), class = "btn-sm btn-info w-100 mt-1")
   )
 }
 
@@ -97,9 +97,9 @@ mod_sc_velocity_output_ui <- function(id) {
     full_screen = TRUE,
     card_header("RNA Velocity — Phase portrait & vecteurs pre-calcules"),
     navset_tab(
-      nav_panel("Phase portrait",
+      nav_panel(i18n$t("Phase portrait"),
                 plotOutput(ns("velocity_phase_plot"), height = "500px")),
-      nav_panel("Vecteurs UMAP",
+      nav_panel(i18n$t("Vecteurs UMAP"),
                 plotOutput(ns("velocity_embedding_plot"), height = "550px"),
                 div(class = "small text-muted", textOutput(ns("velocity_vector_status"))))
     )
@@ -108,6 +108,14 @@ mod_sc_velocity_output_ui <- function(id) {
 
 mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
   moduleServer(id, function(input, output, session) {
+    # ── i18n proxy ──────────────────────────────────────────────────────────
+    .tr <- function(key) {
+      tr <- isolate(global_data$i18n)
+      if (is.null(tr)) return(key)
+      tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+    }
+
+
 
     velocity_state <- reactiveValues(
       inputs = NULL,
@@ -123,7 +131,10 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       object_fingerprint = NULL
     )
 
-    velocity_status_rv <- reactiveVal("En attente d'import velocity...")
+    observeEvent(global_data$language, {
+      # Re-translate dynamic labels on language switch
+    }, ignoreInit = TRUE)
+    velocity_status_rv <- reactiveVal(.tr("En attente d'import velocity..."))
 
     output$velocity_status <- renderText({ velocity_status_rv() })
     output$velocity_vector_status <- renderText({
@@ -429,14 +440,14 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
           )
         }
         velocity_status_rv(msg)
-        showNotification("Validation velocity reussie.", type = "message", duration = 4)
+        showNotification(.tr("Validation velocity reussie."), type = "message", duration = 4)
 
       }, error = function(e) {
         velocity_status_rv(
-          paste("Erreur validation velocity :", conditionMessage(e))
+          paste(.tr("Erreur validation velocity :"), conditionMessage(e))
         )
         showNotification(
-          paste("Erreur validation velocity :", conditionMessage(e)),
+          paste(.tr("Erreur validation velocity :"), conditionMessage(e)),
           type = "error",
           duration = 8
         )

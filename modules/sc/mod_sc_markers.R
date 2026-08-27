@@ -11,19 +11,19 @@
 #
 # Step-3.7 changes:
 #   - BUG1 fix: markers_rv was ONLY ever written by this module's own
-#     "Trouver Marqueurs" button. The auto-pipeline (mod_sc.R) writes
+#     i18n$t("Trouver Marqueurs") button. The auto-pipeline (mod_sc.R) writes
 #     shared_rv$markers_data directly, which this module never read back —
-#     so after an auto-pipeline run, the "Table Marqueurs" tab stayed empty
-#     until the user manually clicked "Trouver Marqueurs" again. Fixed with
+#     so after an auto-pipeline run, the i18n$t("Table Marqueurs") tab stayed empty
+#     until the user manually clicked i18n$t("Trouver Marqueurs") again. Fixed with
 #     an observeEvent(shared_rv$markers_data, ...) sync, mirrored in
 #     mod_sc_corr.R and mod_sc_pathways.R for the same class of bug.
 #   - RAM-safety: FindAllMarkers now runs on a per-cluster-capped subsample
-#     (shared_rv$max_cells_heavy, set in "1. Pipeline") instead of always the
+#     (shared_rv$max_cells_heavy, set in i18n$t("1. Pipeline")) instead of always the
 #     full object — global_data$sc_obj itself is untouched.
 #
 # UI split:
 #   mod_sc_markers_ui(id)         -> sidebar accordion body
-#   mod_sc_markers_output_ui(id)  -> main panel "Table Marqueurs" tab
+#   mod_sc_markers_output_ui(id)  -> main panel i18n$t("Table Marqueurs") tab
 # =============================================================================
 
 
@@ -69,30 +69,30 @@ mod_sc_markers_ui <- function(id) {
 
     fluidRow(
       column(6,
-        selectInput(ns("marker_test"), "Test",
+        selectInput(ns("marker_test"), i18n$t("Test"),
                     choices  = c("Wilcoxon" = "wilcox", "t-test" = "t", "LRT" = "LR"),
                     selected = "wilcox")
       ),
       column(6,
-        numericInput(ns("marker_min_pct"), "Min %",
+        numericInput(ns("marker_min_pct"), i18n$t("Min %"),
                      value = 0.10, min = 0, max = 1, step = 0.05)
       )
     ),
 
     layout_columns(
-      numericInput(ns("marker_logfc"), "Min Log2FC", value = 0.25, step = 0.05),
-      selectInput(ns("sort_by"), "Trier Table",
+      numericInput(ns("marker_logfc"), i18n$t("Min Log2FC"), value = 0.25, step = 0.05),
+      selectInput(ns("sort_by"), i18n$t("Trier Table"),
                   choices = c("Log2FC" = "logfc", "P-value" = "pval"))
     ),
 
-    actionButton(ns("run_markers"), "Trouver Marqueurs",
+    actionButton(ns("run_markers"), i18n$t("Trouver Marqueurs"),
                  icon = icon("search"), class = "btn-success w-100"),
 
     div(
       class = "border-top pt-2 mt-2",
-      actionButton(ns("add_to_viz"), "-> Ajouter selection a Viz",
+      actionButton(ns("add_to_viz"), i18n$t("-> Ajouter selection a Viz"),
                    class = "btn-success btn-sm w-100"),
-      actionButton(ns("clear_all"), "Effacer selection",
+      actionButton(ns("clear_all"), i18n$t("Effacer selection"),
                    class = "btn-outline-secondary btn-sm w-100 mt-1")
     ),
 
@@ -104,14 +104,14 @@ mod_sc_markers_ui <- function(id) {
         div(
           class = "border rounded p-3 mb-3",
           style = "background-color:#f8f9fa;",
-          h6("Hybrid Gene Selector", class = "mb-2 fw-bold"),
+          h6(i18n$t("Hybrid Gene Selector"), class = "mb-2 fw-bold"),
           textAreaInput(
             ns("bulk_gene_input"),
-            label       = "Paste genes (comma, space or newline separated):",
+            label       = i18n$t("Paste genes (comma, space or newline separated):"),
             rows        = 3,
             placeholder = "Example: CD3D, MS4A1, CD8A, NKG7"
           ),
-          actionButton(ns("add_bulk_genes"), "Add to Visualization",
+          actionButton(ns("add_bulk_genes"), i18n$t("Add to Visualization"),
                        class = "btn-primary btn-sm w-100 mb-3"),
           div(
             class = "small text-muted",
@@ -138,11 +138,11 @@ mod_sc_markers_output_ui <- function(id) {
       class = "card-header bg-light",
       div(
         style = "display:flex;justify-content:space-between;",
-        h5("Marqueurs Differentiels", class = "card-title mb-0"),
+        h5(i18n$t("Marqueurs Differentiels"), class = "card-title mb-0"),
         div(
-          actionButton(ns("quick_add_markers"), "Ajouter selection",
+          actionButton(ns("quick_add_markers"), i18n$t("Ajouter selection"),
                        class = "btn-sm btn-primary me-1", icon = icon("shopping-basket")),
-          downloadButton(ns("dl_markers_excel"), "Excel", class = "btn-sm btn-success me-1"),
+          downloadButton(ns("dl_markers_excel"), i18n$t("Excel"), class = "btn-sm btn-success me-1"),
           downloadButton(ns("dl_markers_csv"),   "CSV",   class = "btn-sm btn-primary")
         )
       )
@@ -157,12 +157,23 @@ mod_sc_markers_output_ui <- function(id) {
 
 mod_sc_markers_server <- function(id, global_data, shared_rv) {
   moduleServer(id, function(input, output, session) {
+    # ── i18n proxy ──────────────────────────────────────────────────────────
+    .tr <- function(key) {
+      tr <- isolate(global_data$i18n)
+      if (is.null(tr)) return(key)
+      tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+    }
+
+
 
     # ── Module-local reactive values ──────────────────────────────────────────
     markers_rv       <- reactiveVal(NULL)   # data.frame of markers
     selected_genes_rv <- reactiveVal(character(0))
     marker_log_rv    <- reactiveVal("En attente du calcul...")
 
+    observeEvent(global_data$language, {
+      # Re-translate dynamic labels on language switch
+    }, ignoreInit = TRUE)
     # ── Step-3.7 BUG1 fix: keep the local table in sync with shared_rv,
     #    whichever module wrote it (this one's button, OR the auto-pipeline
     #    in mod_sc.R, OR a restored session). ignoreNULL=FALSE so an explicit
@@ -170,7 +181,7 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
     observeEvent(shared_rv$markers_data, {
       markers_rv(shared_rv$markers_data)
       if (!is.null(shared_rv$markers_data))
-        marker_log_rv(paste("Trouve", nrow(shared_rv$markers_data), "marqueurs"))
+        marker_log_rv(paste("Trouve", nrow(shared_rv$markers_data), .tr("marqueurs")))
     }, ignoreNULL = FALSE)
 
     # ── Helper: push genes to the shared viz basket ───────────────────────────
@@ -195,11 +206,11 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
       marker_log_rv("Recherche en cours...")
       p <- shiny::Progress$new()
       on.exit(p$close())
-      p$set(message = "Recherche Marqueurs...", value = 0.3)
+      p$set(message = .tr("Recherche Marqueurs..."), value = 0.3)
 
       tryCatch({
         groups <- obj@meta.data[[grp_col]]
-        if (length(unique(groups)) < 2) stop("Au moins 2 groupes necessaires")
+        if (length(unique(groups)) < 2) stop(.tr("Au moins 2 groupes necessaires"))
         Idents(obj) <- as.factor(groups)
 
         # ── RAM-safety (Step-3.7): cap cells/cluster before FindAllMarkers.
@@ -208,7 +219,7 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
         cap     <- shared_rv$max_cells_heavy %||% Inf
         sub_res <- subsample_seurat_for_analysis(obj, max_per_group = cap, group_col = grp_col)
         if (sub_res$was_subsampled) {
-          p$set(0.4, "Sous-échantillonnage...")
+          p$set(0.4, .tr("Sous-échantillonnage..."))
           showNotification(
             sprintf("ℹ️ Sous-échantillonnage : %s → %s cellules (max %s/cluster) pour accélérer FindAllMarkers.",
                     format(sub_res$n_before, big.mark=","), format(sub_res$n_after, big.mark=","),
@@ -230,7 +241,7 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
           session$onSessionEnded(function() unlink(bpc$dir, recursive = TRUE))
         }
 
-        p$set(0.6, "FindAllMarkers...")
+        p$set(0.6, .tr("FindAllMarkers..."))
         markers <- FindAllMarkers(
           obj_use,
           test.use      = input$marker_test,
@@ -241,7 +252,7 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
         )
 
         if (nrow(markers) == 0) {
-          marker_log_rv("Aucun marqueur trouve")
+          marker_log_rv(.tr("Aucun marqueur trouve"))
           markers_rv(NULL)
           shared_rv$markers_data <- NULL
           return()
@@ -254,15 +265,15 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
 
         markers_rv(markers)
         shared_rv$markers_data <- markers   # expose to mod_sc_pathways
-        marker_log_rv(paste("Trouve", nrow(markers), "marqueurs"))
-        showNotification(paste("✓", nrow(markers), "marqueurs"), type = "message")
+        marker_log_rv(paste("Trouve", nrow(markers), .tr("marqueurs")))
+        showNotification(paste("✓", nrow(markers), .tr("marqueurs")), type = "message")
         shared_rv$active_tab <- "tab_table"
 
       }, error = function(e) {
-        marker_log_rv(paste("Erreur:", e$message))
+        marker_log_rv(paste(.tr("Erreur:"), e$message))
         markers_rv(NULL)
         shared_rv$markers_data <- NULL
-        showNotification(paste("Erreur:", e$message), type = "error")
+        showNotification(paste(.tr("Erreur:"), e$message), type = "error")
       })
     })
 
@@ -272,7 +283,7 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
     output$table_markers <- renderDT({
       req(markers_rv())
       df <- markers_rv()
-      if (!"gene" %in% colnames(df)) return(datatable(data.frame(Message = "Aucun marqueur")))
+      if (!"gene" %in% colnames(df)) return(datatable(data.frame(Message = .tr("Aucun marqueur"))))
 
       df_sorted <- if (input$sort_by == "logfc") {
         df[order(-df$avg_log2FC), ]
@@ -308,7 +319,7 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
         });")
       ) %>%
         formatStyle(
-          "Log2FC",
+          .tr("Log2FC"),
           backgroundColor = styleColorBar(range(df_display$Log2FC), "lightblue"),
           backgroundSize  = "98% 88%", backgroundRepeat = "no-repeat",
           backgroundPosition = "center"
@@ -344,11 +355,11 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
       if (length(valid) > 0) {
         .push_to_viz(unique(df$gene[valid]))
       } else {
-        showNotification("Selectionnez des lignes dans le tableau d'abord", type = "warning")
+        showNotification(.tr("Selectionnez des lignes dans le tableau d'abord"), type = "warning")
       }
     })
 
-    # ── 5. Sidebar "Ajouter selection a Viz" ─────────────────────────────────
+    # ── 5. Sidebar .tr("Ajouter selection a Viz") ─────────────────────────────────
     observeEvent(input$add_to_viz, {
       req(selected_genes_rv())
       genes <- selected_genes_rv()
@@ -364,7 +375,7 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
       if (length(valid) > 0) {
         .push_to_viz(valid)
       } else {
-        showNotification("Aucun gene valide trouve.", type = "error", duration = 4)
+        showNotification(.tr("Aucun gene valide trouve."), type = "error", duration = 4)
       }
     })
 
@@ -378,7 +389,7 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
 
     # ── 8. Gene count label ───────────────────────────────────────────────────
     output$viz_gene_count <- renderText({
-      paste("Currently selected:", length(shared_rv$selected_genes %||% character(0)), "gene(s)")
+      paste(.tr("Currently selected:"), length(shared_rv$selected_genes %||% character(0)), .tr("gene(s)"))
     })
 
     # ── 9. Downloads ──────────────────────────────────────────────────────────

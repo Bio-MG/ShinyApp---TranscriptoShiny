@@ -15,28 +15,28 @@ mod_sc_corr_ui <- function(id) {
   ns <- NS(id)
   tagList(
     div(class="alert alert-light",style="font-size:0.9em;border-left:3px solid #E74C3C;",
-        "Trouve les genes correles avec un gene cible."),
+        i18n$t("Trouve les genes correles avec un gene cible.")),
     div(style="background:#f8f9fa;padding:10px;border-radius:5px;margin-bottom:10px;",
-        h6("Gene Cible",style="font-weight:bold;color:#E74C3C;"),
+        h6(i18n$t("Gene Cible"),style="font-weight:bold;color:#E74C3C;"),
         selectizeInput(ns("target_gene"),NULL,choices=NULL,multiple=FALSE,
                        options=list(placeholder="Ex: CD3D, CD8A")),
-        helpText("Gene de reference pour calculer les correlations")),
-    h6("Parametres de Recherche",style="font-weight:bold;"),
+        helpText(i18n$t("Gene de reference pour calculer les correlations"))),
+    h6(i18n$t("Parametres de Recherche"),style="font-weight:bold;"),
     fluidRow(
       column(6,radioButtons(ns("cor_method"),"Methode",
                             choices=c("Pearson"="pearson","Spearman"="spearman"),selected="pearson")),
-      column(6,numericInput(ns("cor_threshold"),"Seuil |r|",value=0.3,min=0,max=1,step=0.05))),
-    numericInput(ns("cor_top_n"),"Nombre max de genes",value=50,min=10,max=200,step=10),
-    actionButton(ns("find_correlated"),"Rechercher Genes Correles",
+      column(6,numericInput(ns("cor_threshold"),i18n$t("Seuil |r|"),value=0.3,min=0,max=1,step=0.05))),
+    numericInput(ns("cor_top_n"),i18n$t("Nombre max de genes"),value=50,min=10,max=200,step=10),
+    actionButton(ns("find_correlated"),i18n$t("Rechercher Genes Correles"),
                  class="btn-primary w-100 mb-2",icon=icon("search")),
     hr(),
-    h6("Actions Rapides",style="font-weight:bold;"),
+    h6(i18n$t("Actions Rapides"),style="font-weight:bold;"),
     div(class="d-grid gap-2",
-        actionButton(ns("add_correlated_to_viz"),"-> Ajouter a Visualisation",
+        actionButton(ns("add_correlated_to_viz"),i18n$t("-> Ajouter a Visualisation"),
                      class="btn-sm btn-success w-100",icon=icon("chart-line")),
         downloadButton(ns("dl_correlated"),"Export CSV",class="btn-sm btn-info w-100")),
-    downloadButton(ns("dl_network_plot"),"Export Network (PNG)",class="btn-sm btn-secondary w-100 mt-1"),
-    downloadButton(ns("dl_network_edges"),"Export Edge List (CSV)",class="btn-sm btn-secondary w-100 mt-1"),
+    downloadButton(ns("dl_network_plot"),i18n$t("Export Network (PNG)"),class="btn-sm btn-secondary w-100 mt-1"),
+    downloadButton(ns("dl_network_edges"),i18n$t("Export Edge List (CSV)"),class="btn-sm btn-secondary w-100 mt-1"),
     hr(),
     div(class="small text-muted",textOutput(ns("correlation_status")))
   )
@@ -48,20 +48,28 @@ mod_sc_corr_output_ui <- function(id) {
     full_screen=TRUE,
     div(class="card-header bg-light",
         div(style="display:flex;justify-content:space-between;align-items:center;",
-            h5("Analyse de Correlation",class="card-title mb-0"),
-            actionButton(ns("quick_add_corr"),"Ajouter selection a Viz",
+            h5(i18n$t("Analyse de Correlation"),class="card-title mb-0"),
+            actionButton(ns("quick_add_corr"),i18n$t("Ajouter selection a Viz"),
                          class="btn-sm btn-primary",icon=icon("chart-line")))),
     layout_columns(
       col_widths=c(12),
-      card(card_header("Network Plot"),max_height="400px",
+      card(card_header(i18n$t("Network Plot")),max_height="400px",
            plotOutput(ns("correlation_network"),height="350px")),
-      card(card_header("Table des Correlations"),max_height="400px",
+      card(card_header(i18n$t("Table des Correlations")),max_height="400px",
            DTOutput(ns("correlation_table"))))
   )
 }
 
 mod_sc_corr_server <- function(id, global_data, shared_rv) {
   moduleServer(id, function(input, output, session) {
+    # ── i18n proxy ──────────────────────────────────────────────────────────
+    .tr <- function(key) {
+      tr <- isolate(global_data$i18n)
+      if (is.null(tr)) return(key)
+      tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+    }
+
+
 
     corr_rv <- reactiveVal(NULL)
 
@@ -73,6 +81,9 @@ mod_sc_corr_server <- function(id, global_data, shared_rv) {
       updateSelectizeInput(session, "target_gene", choices = gene_choices, server = TRUE)
     })
 
+    observeEvent(global_data$language, {
+      # Re-translate dynamic labels on language switch
+    }, ignoreInit = TRUE)
     # ── Step-3.7 BUG1 fix: sync local table from shared_rv (auto-pipeline / restored
     #    session visibility) — mirrors mod_sc_markers.R / mod_sc_pathways.R. ────────
     observeEvent(shared_rv$correlated_genes, {
@@ -94,10 +105,10 @@ mod_sc_corr_server <- function(id, global_data, shared_rv) {
       req(global_data$sc_obj, input$target_gene)
       obj_full <- global_data$sc_obj
       p <- shiny::Progress$new(); on.exit(p$close())
-      p$set(message = "Calcul des corrélations...", value = 0)
+      p$set(message = .tr("Calcul des corrélations..."), value = 0)
 
       tryCatch({
-        p$set(0.15, "Sous-échantillonnage éventuel")
+        p$set(0.15, .tr("Sous-échantillonnage éventuel"))
         # ── RAM-safety (Step-3.7): cap total cells (stratified by sample) before
         #    the per-gene cor.test() loop — the main cost driver on large datasets.
         cap     <- shared_rv$max_cells_heavy %||% Inf
@@ -112,7 +123,7 @@ mod_sc_corr_server <- function(id, global_data, shared_rv) {
         }
         obj <- sub_res$object
 
-        p$set(0.30, "Extraction données")
+        p$set(0.30, .tr("Extraction données"))
         cor_df <- find_correlated_genes(
           seurat_obj  = obj,
           target_gene = input$target_gene,
@@ -126,9 +137,9 @@ mod_sc_corr_server <- function(id, global_data, shared_rv) {
         cor_df$p_adj           <- as.numeric(cor_df$p_adj)
         cor_df$gene            <- as.character(cor_df$gene)
 
-        p$set(0.80, "Formatage résultats")
+        p$set(0.80, .tr("Formatage résultats"))
         if (nrow(cor_df) == 0) {
-          showNotification("Aucun gène corrélé trouvé. Réduisez le seuil.", type="warning", duration=5)
+          showNotification(.tr("Aucun gène corrélé trouvé. Réduisez le seuil."), type="warning", duration=5)
           corr_rv(NULL)
           shared_rv$correlated_genes <- NULL
           shared_rv$corr_target_gene <- NULL          # ← always reset together
@@ -169,8 +180,8 @@ mod_sc_corr_server <- function(id, global_data, shared_rv) {
       plot(g, layout=layout, vertex.size=node_sizes, vertex.color=node_colors,
            vertex.label.cex=0.7, vertex.label.color="black", vertex.label.family="sans",
            edge.color=edge_colors, edge.width=edge_widths,
-           main=paste("Reseau de Correlation -", input$target_gene), edge.curved=0.2)
-      legend("bottomleft", legend=c("Correlation positive","Correlation negative","Gene cible"),
+           main=paste(.tr("Reseau de Correlation -"), input$target_gene), edge.curved=0.2)
+      legend("bottomleft", legend=c(.tr("Correlation positive"),.tr("Correlation negative"),.tr("Gene cible")),
              col=c("#27AE60","#E74C3C","#3498DB"), pch=c(15,15,19), pt.cex=c(2,2,2.5), bty="n", cex=0.9)
     })
 
@@ -236,7 +247,7 @@ mod_sc_corr_server <- function(id, global_data, shared_rv) {
     })
 
     output$correlation_status <- renderText({
-      if (is.null(corr_rv())) "Aucune analyse en cours"
+      if (is.null(corr_rv())) .tr("Aucune analyse en cours")
       else paste("✓", nrow(corr_rv()), "genes correles avec", input$target_gene)
     })
 

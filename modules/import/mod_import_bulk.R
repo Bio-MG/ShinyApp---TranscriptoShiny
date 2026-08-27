@@ -484,13 +484,16 @@ mod_import_bulk_server <- function(id, global_data) {
           df <- as.data.frame(t(df))
           add_log(" ↻ Matrice transposée (genes étaient en colonnes)")
         }
-        if (nrow(df) == 0 || ncol(df) == 0)
+        if (nrow(df) == 0 || ncol(df) == 0) {
           stop("Matrice vide après lecture. Vérifie les options d'en-tête/rownames.")
-        add_log(paste("✓ Matrice de counts chargée:", nrow(df), "gènes ×", ncol(df), "échantillons"))
+        } else {
+          add_log(paste("✓ Matrice de counts chargée:", nrow(df), "gènes ×", ncol(df), "échantillons"))
+        }
         df
       }, error = function(e) {
-        add_log(paste("⚠️ Erreur lecture counts:", e$message))
-        showNotification(paste("Erreur lecture counts:", e$message), type = "error", duration = 10)
+        err_msg <- e$message
+        add_log(paste("⚠️ Erreur lecture counts:", err_msg))
+        showNotification(paste("⚠️ Erreur lecture counts:", err_msg), type = "error", duration = 10)
         NULL
       })
     })

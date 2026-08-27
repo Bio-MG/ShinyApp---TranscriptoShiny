@@ -3,7 +3,7 @@
 # =============================================================================
 # Mirrors mod_bulk_mapping.R for Single-Cell. Operates directly on
 # global_data$sc_obj (rebuilds it from raw counts via remap_seurat_ids_to_symbol()
-# in helpers_sc.R) — must run BEFORE "1. Pipeline" since normalisation/PCA/
+# in helpers_sc.R) — must run BEFORE i18n$t("1. Pipeline") since normalisation/PCA/
 # clusters are invalidated when rownames change.
 # =============================================================================
 
@@ -12,9 +12,11 @@ mod_sc_mapping_ui <- function(id) {
   tagList(
     div(class="alert alert-light", style="font-size:0.82em;",
         bsicons::bs_icon("info-circle"),
-        " Étape facultative — uniquement si vos identifiants ne sont PAS déjà des symboles ",
-        "(ex: ENSG00000141510, 7157). À lancer ", tags$strong("AVANT l'étape '1. Pipeline'"),
-        " : toute normalisation/clustering déjà calculé sera réinitialisé."),
+        span(i18n$t("Étape facultative — uniquement si vos identifiants ne sont PAS déjà des symboles (ex: ENSG00000141510, 7157).")),
+        " ",
+        tags$strong(i18n$t("À lancer AVANT l'étape '1. Pipeline' :")),
+        " ",
+        span(i18n$t("toute normalisation ou clustering déjà calculé sera réinitialisé."))),
 
     uiOutput(ns("detected_id_type_ui")),
 
@@ -27,11 +29,11 @@ mod_sc_mapping_ui <- function(id) {
     ),
 
     checkboxInput(ns("strip_ensembl_version"),
-                  "Retirer le suffixe de version Ensembl (ENSG...5 → ENSG...)",
+                  i18n$t("Retirer le suffixe de version Ensembl (ENSG...5 → ENSG...)"),
                   value = TRUE),
 
     radioButtons(ns("collapse_method"),
-                 "Fusion des doublons (plusieurs ID → même symbole)",
+                 i18n$t("Fusion des doublons (plusieurs ID → même symbole)"),
                  choices = c("Somme des counts (recommandé)"="sum",
                              "Garder l'ID le plus exprimé"  ="max_mean")),
 
@@ -45,9 +47,20 @@ mod_sc_mapping_ui <- function(id) {
 
 mod_sc_mapping_server <- function(id, global_data) {
   moduleServer(id, function(input, output, session) {
+    # ── i18n proxy ──────────────────────────────────────────────────────────
+    .tr <- function(key) {
+      tr <- isolate(global_data$i18n)
+      if (is.null(tr)) return(key)
+      tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+    }
+
+
 
     mapping_status_rv <- reactiveVal(NULL)
 
+    observeEvent(global_data$language, {
+      # Re-translate dynamic labels on language switch
+    }, ignoreInit = TRUE)
     # ── Auto-detect gene ID type when sc_obj changes ──────────────────────
     output$detected_id_type_ui <- renderUI({
       req(global_data$sc_obj)
@@ -103,7 +116,7 @@ mod_sc_mapping_server <- function(id, global_data) {
                         length(obj@reductions) > 0
 
       p <- shiny::Progress$new(); on.exit(p$close())
-      p$set(message="Mapping des identifiants...", value=0.2)
+      p$set(message=.tr("Mapping des identifiants..."), value=0.2)
 
       tryCatch({
         result <- withCallingHandlers(
@@ -139,7 +152,7 @@ mod_sc_mapping_server <- function(id, global_data) {
         showNotification("\u2713 Mapping appliqué.", type="message", duration=5)
 
       }, error=function(e) {
-        showNotification(paste("Erreur de mapping:", conditionMessage(e)),
+        showNotification(paste(.tr("Erreur de mapping:"), conditionMessage(e)),
                          type="error", duration=15)
       })
     })
@@ -147,7 +160,7 @@ mod_sc_mapping_server <- function(id, global_data) {
     # ── Status display ────────────────────────────────────────────────────
     output$mapping_status <- renderUI({
       if (is.null(mapping_status_rv()))
-        return(tags$em("Aucun mapping appliqué.", style="color:#999;font-size:0.82em;"))
+        return(tags$em(.tr("Aucun mapping appliqué."), style="color:#999;font-size:0.82em;"))
       div(class="alert alert-success", style="font-size:0.8em;", mapping_status_rv())
     })
 

@@ -23,89 +23,95 @@ mod_sc_ui <- function(id) {
   ns <- NS(id)
   layout_sidebar(
     sidebar = sidebar(
-      width = 420, title = "Single-Cell Workflow",
-      div(class="alert alert-info", style="font-size:0.8rem;padding:5px;",
-          bsicons::bs_icon("info-circle"), " Étapes séquentielles recommandées."),
-      actionButton(ns("btn_auto_pipeline_sc"), "\u25b6 Lancer Pipeline Complet (SC)",
-                   icon=icon("play-circle"), class="btn-outline-success w-100 mb-1"),
+      width = 420, title = i18n$t("Single-Cell Workflow"),
+      div(class = "alert alert-info", style = "font-size:0.8rem;padding:5px;",
+          bsicons::bs_icon("info-circle"), " ", i18n$t("Étapes séquentielles recommandées.")),
+      actionButton(ns("btn_auto_pipeline_sc"), i18n$t("▶ Lancer Pipeline Complet (SC)"),
+                   icon = icon("play-circle"), class = "btn-outline-success w-100 mb-1"),
       verbatimTextOutput(ns("sc_auto_log")),
       uiOutput(ns("sc_pipeline_status_bar")),
       accordion(
-        id=ns("acc_workflow"), open="1. Pipeline",
-        accordion_panel("0. Mapping IDs (Optionnel)", icon=icon("arrows-rotate"),
+        id = ns("acc_workflow"), open = "1_pipeline",
+        accordion_panel(i18n$t("0. Mapping IDs (Optionnel)"), icon = icon("arrows-rotate"),
+                        value = "0_mapping",
                         mod_sc_mapping_ui(ns("mapping"))),
-        accordion_panel("1. Pipeline",           icon=icon("cogs"),
+        accordion_panel(i18n$t("1. Pipeline"), icon = icon("cogs"),
+                        value = "1_pipeline",
                         mod_sc_pipeline_ui(ns("pipeline"))),
-        accordion_panel("2. Annotation",         icon=icon("user-tag"),
+        accordion_panel(i18n$t("2. Annotation"), icon = icon("user-tag"),
+                        value = "2_annotation",
                         mod_sc_annotation_ui(ns("annotation"))),
-        accordion_panel("3. Visualisation",      icon=icon("chart-area"),
+        accordion_panel(i18n$t("3. Visualisation"), icon = icon("chart-area"),
+                        value = "3_viz",
                         mod_sc_viz_ui(ns("viz"))),
-        accordion_panel("4. Marqueurs",          icon=icon("magnifying-glass-chart"),
+        accordion_panel(i18n$t("4. Marqueurs"), icon = icon("magnifying-glass-chart"),
+                        value = "4_markers",
                         mod_sc_markers_ui(ns("markers"))),
-        accordion_panel("5. Gene Correlation",   icon=icon("project-diagram"),
+        accordion_panel(i18n$t("5. Gene Correlation"), icon = icon("project-diagram"),
+                        value = "5_corr",
                         mod_sc_corr_ui(ns("corr"))),
-        accordion_panel("6. Pathway Enrichment", icon=icon("sitemap"),
+        accordion_panel(i18n$t("6. Pathway Enrichment"), icon = icon("sitemap"),
+                        value = "6_pathway",
                         mod_sc_pathways_ui(ns("pathways"))),
-        accordion_panel("7. Trajectory Analysis",icon=icon("route"),
+        accordion_panel(i18n$t("7. Trajectory Analysis"), icon = icon("route"),
+                        value = "7_trajectory",
                         mod_sc_trajectory_ui(ns("trajectory"))),
-        accordion_panel("8. RNA Velocity", icon=icon("wind"),
+        accordion_panel(i18n$t("8. RNA Velocity"), icon = icon("wind"),
+                        value = "8_velocity",
                         mod_sc_velocity_ui(ns("velocity"))),
         accordion_panel(
-          "9. Rapport Complet", icon=icon("file-export"),
-          div(class="alert alert-light",style="font-size:0.85em;border-left:3px solid #2C3E50;",
-              "Rapport autonome (QC, Réduction, Annotation, Marqueurs, Pathways, Trajectoire)."),
-          textInput(ns("report_title"),    "Titre",    value="Analyse Single-Cell"),
-          textInput(ns("report_subtitle"), "Sous-titre (optionnel)"),
-          textAreaInput(ns("report_notes"), "Notes", rows=3),
-          checkboxGroupInput(ns("report_sections"), "Sections",
-            choices=c("QC"="qc",
-                      "Réduction Dimensionnelle"="dim",
-                      "Annotation"="annotation",
-                      "Marqueurs"="markers",
-                      "Réseau Corrélation"="correlation",
-                      "Pathway Enrichment"="pathway",
-                      "Trajectoire"="trajectory",
-                      "Visualisations Sauvegardées"="custom_viz"),
-            selected=c("qc","dim","annotation","markers","pathway")),
-          # Saved viz basket manager
-          div(class="border rounded p-2 mb-2", style="background:#f8f9fa;",
-              h6("📌 Visualisations sauvegardées", style="font-size:0.85em;font-weight:bold;"),
+          i18n$t("9. Rapport Complet"), icon = icon("file-export"),
+          value = "9_report",
+          div(class = "alert alert-light", style = "font-size:0.85em;border-left:3px solid #2C3E50;",
+              i18n$t("Rapport autonome (QC, Réduction, Annotation, Marqueurs, Pathways, Trajectoire).")),
+          textInput(ns("report_title"), i18n$t("Titre"), value = "Analyse Single-Cell"),
+          textInput(ns("report_subtitle"), i18n$t("Sous-titre (optionnel)")),
+          textAreaInput(ns("report_notes"), i18n$t("Notes"), rows = 3),
+          checkboxGroupInput(ns("report_sections"), i18n$t("Sections"),
+            choices = setNames(
+              c("qc", "dim", "annotation", "markers", "correlation", "pathway", "trajectory", "custom_viz"),
+              c(.tr_plain("QC"), .tr_plain("Réduction Dimensionnelle"), .tr_plain("Annotation"),
+                .tr_plain("Marqueurs"), .tr_plain("Réseau Corrélation"), .tr_plain("Pathway Enrichment"),
+                .tr_plain("Trajectoire"), .tr_plain("Visualisations Sauvegardées"))),
+            selected = c("qc", "dim", "annotation", "markers", "pathway")),
+          div(class = "border rounded p-2 mb-2", style = "background:#f8f9fa;",
+              h6(i18n$t("📌 Visualisations sauvegardées"), style = "font-size:0.85em;font-weight:bold;"),
               uiOutput(ns("saved_viz_list_ui")),
-              actionButton(ns("clear_saved_viz"), "🗑️ Vider la liste",
-                          class="btn-outline-danger btn-sm w-100 mt-1")),
-          radioButtons(ns("report_format"), "Format",
-            choices=c("HTML interactif"="html","PDF statique"="pdf","Les deux (.zip)"="both"),
-            selected="html"),
-          conditionalPanel(condition="input.report_format != 'pdf'", ns=ns,
-            checkboxInput(ns("report_interactive"), "Graphiques interactifs (HTML)", value=TRUE)),
-          div(class="small text-muted", "PDF requiert tinytex::install_tinytex()."),
-          downloadButton(ns("dl_report"), "\U0001f4c4 Générer le Rapport",
-                         class="btn-dark w-100 mt-2"),
+              actionButton(ns("clear_saved_viz"), i18n$t("🗑️ Vider la liste"),
+                           class = "btn-outline-danger btn-sm w-100 mt-1")),
+          radioButtons(ns("report_format"), i18n$t("Format"),
+            choices = setNames(c("html", "pdf", "both"),
+                               c(.tr_plain("HTML interactif"), .tr_plain("PDF statique"), .tr_plain("Les deux (.zip)"))),
+            selected = "html"),
+          conditionalPanel(condition = "input.report_format != 'pdf'", ns = ns,
+            checkboxInput(ns("report_interactive"), i18n$t("Graphiques interactifs (HTML)"), value = TRUE)),
+          div(class = "small text-muted", i18n$t("PDF requiert tinytex::install_tinytex().")),
+          downloadButton(ns("dl_report"), i18n$t("📄 Générer le Rapport"), class = "btn-dark w-100 mt-2"),
           hr(),
-          div(class="alert alert-light",style="font-size:0.82em;border-left:3px solid #18BC9C;",
+          div(class = "alert alert-light", style = "font-size:0.82em;border-left:3px solid #18BC9C;",
               bsicons::bs_icon("code-slash"),
-              " Script R reproductible (.zip) + objet Seurat traité."),
-          downloadButton(ns("dl_sc_r_script"), "\U0001f9fe Export Script R (.zip)",
-                         class="btn-outline-secondary w-100"),
-          div(class="small text-muted mt-1", textOutput(ns("report_status")))
+              i18n$t(" Script R reproductible (.zip) + objet Seurat traité.")),
+          downloadButton(ns("dl_sc_r_script"), i18n$t("🧾 Export Script R (.zip)"),
+                         class = "btn-outline-secondary w-100"),
+          div(class = "small text-muted mt-1", textOutput(ns("report_status")))
         )
       )
     ),
     navset_card_underline(
-      id=ns("main_tabs"), title="Résultats",
-      nav_panel("Graphiques",       value="tab_viz",         mod_sc_viz_output_ui(ns("viz"))),
-      nav_panel("Table Marqueurs",  value="tab_table",       mod_sc_markers_output_ui(ns("markers"))),
-      nav_panel("Annotation",       value="tab_annotation",  mod_sc_annotation_output_ui(ns("annotation"))),
-      nav_panel("Gènes Corrélés",   value="tab_correlation", mod_sc_corr_output_ui(ns("corr"))),
-      nav_panel("Pathways",         value="tab_pathway",     mod_sc_pathways_output_ui(ns("pathways"))),
-      nav_panel("Trajectory",       value="tab_trajectory",  mod_sc_trajectory_output_ui(ns("trajectory"))),
-      nav_panel("Velocity",         value="tab_velocity",    mod_sc_velocity_output_ui(ns("velocity"))),
-      nav_panel("QC", value="tab_qc",
-        card(max_height=750,
-          div(class="card-header bg-light", h5("Contrôle Qualité", class="card-title mb-0")),
-          plotOutput(ns("plot_qc"), height="650px"))),
-      nav_panel("Résumé Pipeline", value="tab_summary",
-        card(card_header("Résumé du Pipeline Single-Cell"),
+      id = ns("main_tabs"), title = i18n$t("Résultats"),
+      nav_panel(i18n$t("Graphiques"), value = "tab_viz", mod_sc_viz_output_ui(ns("viz"))),
+      nav_panel(i18n$t("Table Marqueurs"), value = "tab_table", mod_sc_markers_output_ui(ns("markers"))),
+      nav_panel(i18n$t("Annotation"), value = "tab_annotation", mod_sc_annotation_output_ui(ns("annotation"))),
+      nav_panel(i18n$t("Gènes Corrélés"), value = "tab_correlation", mod_sc_corr_output_ui(ns("corr"))),
+      nav_panel(i18n$t("Pathways"), value = "tab_pathway", mod_sc_pathways_output_ui(ns("pathways"))),
+      nav_panel(i18n$t("Trajectory"), value = "tab_trajectory", mod_sc_trajectory_output_ui(ns("trajectory"))),
+      nav_panel(i18n$t("Velocity"), value = "tab_velocity", mod_sc_velocity_output_ui(ns("velocity"))),
+      nav_panel(i18n$t("QC"), value = "tab_qc",
+        card(max_height = 750,
+          div(class = "card-header bg-light", h5(i18n$t("Contrôle Qualité"), class = "card-title mb-0")),
+          plotOutput(ns("plot_qc"), height = "650px"))),
+      nav_panel(i18n$t("Résumé Pipeline"), value = "tab_summary",
+        card(card_header(i18n$t("Résumé du Pipeline Single-Cell")),
              uiOutput(ns("pipeline_summary_panel"))))
     )
   )
@@ -114,6 +120,7 @@ mod_sc_ui <- function(id) {
 
 mod_sc_server <- function(id, global_data) {
   moduleServer(id, function(input, output, session) {
+    .tr <- function(key) { tr <- global_data$i18n; if (is.null(tr)) return(key); tryCatch(.strip_i18n_html(tr$t(key)), error=function(e) key) }
 
     shared_rv <- reactiveValues(
       markers_data     = NULL,
@@ -171,32 +178,33 @@ mod_sc_server <- function(id, global_data) {
 
     # ── Pipeline summary panel ────────────────────────────────────────────────
     output$pipeline_summary_panel <- renderUI({
+      global_data$language
       obj <- global_data$sc_obj
       if (is.null(obj))
-        return(div(class="alert alert-info m-3", "Aucun objet Single-Cell chargé."))
+        return(div(class="alert alert-info m-3", .tr("Aucun objet Single-Cell chargé.")))
       meta         <- obj@meta.data
       singler_cols <- grep("^SingleR_", colnames(meta), value=TRUE)
       reductions   <- names(obj@reductions)
       n_clusters   <- if ("seurat_clusters" %in% colnames(meta))
                         length(levels(factor(meta$seurat_clusters))) else NA
       rows <- list(
-        c("Cellules",              format(ncol(obj), big.mark=",")),
-        c("Gènes",                 format(nrow(obj), big.mark=",")),
-        c("Réductions",            if (length(reductions)) paste(reductions,collapse=", ") else "\u2014"),
-        c("Clusters",              if (!is.na(n_clusters)) as.character(n_clusters) else "Non calculé"),
-        c("Annotation SingleR",    if (length(singler_cols)) paste(singler_cols,collapse=", ") else "Non effectuée"),
-        c("Gènes variables",       if (length(tryCatch(VariableFeatures(obj),error=function(e) character(0))))
+        c(.tr("Cellules"),              format(ncol(obj), big.mark=",")),
+        c(.tr("Gènes"),                 format(nrow(obj), big.mark=",")),
+        c(.tr("Réductions"),            if (length(reductions)) paste(reductions,collapse=", ") else "\u2014"),
+        c(.tr("Clusters"),              if (!is.na(n_clusters)) as.character(n_clusters) else .tr("Non calculé")),
+        c(.tr("Annotation SingleR"),    if (length(singler_cols)) paste(singler_cols,collapse=", ") else .tr("Non effectuée")),
+        c(.tr("Gènes variables"),       if (length(tryCatch(VariableFeatures(obj),error=function(e) character(0))))
                                      format(length(VariableFeatures(obj)),big.mark=",") else "\u2014"),
-        c("Marqueurs calculés",    if (!is.null(shared_rv$markers_data))
-                                     paste(nrow(shared_rv$markers_data),"marqueurs") else "Non calculés"),
-        c("Pathways",              if (!is.null(shared_rv$pathway_results))
-                                     paste(nrow(shared_rv$pathway_results),"pathways") else "Non calculés"),
-        c("Pseudotemps",           if ("pseudotime" %in% colnames(meta)) "Calculé" else "Non calculé"),
-        c("Backend stockage",      if (sc_backend_status(obj) == "disk") "\U0001f4bd Disque (BPCells)" else "\U0001f9e0 RAM (standard)"),
-        c("Sous-échant. (marqueurs/corr)", if (is.finite(shared_rv$max_cells_heavy %||% Inf))
+        c(.tr("Marqueurs calculés"),    if (!is.null(shared_rv$markers_data))
+                                     paste(nrow(shared_rv$markers_data),"marqueurs") else .tr("Non calculés")),
+        c(.tr("Pathways"),              if (!is.null(shared_rv$pathway_results))
+                                     paste(nrow(shared_rv$pathway_results),"pathways") else .tr("Non calculés")),
+        c(.tr("Pseudotemps"),           if ("pseudotime" %in% colnames(meta)) .tr("Calculé") else .tr("Non calculé")),
+        c(.tr("Backend stockage"),      if (sc_backend_status(obj) == "disk") "\U0001f4bd Disque (BPCells)" else "\U0001f9e0 RAM (standard)"),
+        c(.tr("Sous-échant. (marqueurs/corr)"), if (is.finite(shared_rv$max_cells_heavy %||% Inf))
                                      paste0("max ", format(shared_rv$max_cells_heavy, big.mark=","), " cellules/groupe")
-                                   else "désactivé"),
-        c("Viz. sauvegardées",     paste(length(shared_rv$report_viz_list), "plot(s) dans le panier"))
+                                   else .tr("désactivé")),
+        c(.tr("Viz. sauvegardées"),     paste(length(shared_rv$report_viz_list), "plot(s) dans le panier"))
       )
       tagList(
         div(class="m-3",
@@ -204,7 +212,7 @@ mod_sc_server <- function(id, global_data) {
             tags$tbody(lapply(rows, function(r) {
               tags$tr(tags$th(style="width:40%;",r[1]), tags$td(r[2]))
             }))),
-          div(class="small text-muted", paste("Mis à jour :", format(Sys.time(),"%H:%M:%S")))
+          div(class="small text-muted", paste(.tr("Mis à jour :"), format(Sys.time(),"%H:%M:%S")))
         )
       )
     })
@@ -296,18 +304,18 @@ mod_sc_server <- function(id, global_data) {
         # ── Step 1: QC ──────────────────────────────────────────────────────
         fluidRow(
           column(6,
-            h6("QC", style="font-weight:bold;"),
-            numericInput(ns_m("sc_ap_min_gene"), "Min gènes/cellule",   100, min=0),
-            numericInput(ns_m("sc_ap_max_gene"), "Max gènes/cellule", 8000, min=0),
-            sliderInput(ns_m("sc_ap_mt"), "% Mito max", 0, 50, 20, step=1)
+            h6(.tr("QC"), style="font-weight:bold;"),
+            numericInput(ns_m("sc_ap_min_gene"), .tr("Min gènes/cellule"),   100, min=0),
+            numericInput(ns_m("sc_ap_max_gene"), .tr("Max gènes/cellule"), 8000, min=0),
+            sliderInput(ns_m("sc_ap_mt"), .tr("% Mito max"), 0, 50, 20, step=1)
           ),
           column(6,
-            h6("Normalisation & Réduction", style="font-weight:bold;"),
-            radioButtons(ns_m("sc_ap_norm"), "Normalisation",
+            h6(.tr("Normalisation & Réduction"), style="font-weight:bold;"),
+            radioButtons(ns_m("sc_ap_norm"), .tr("Normalisation"),
                          c("LogNormalize"="log","SCTransform"="sct")),
-            sliderInput(ns_m("sc_ap_pca_dim"), "Dims PCA", 5, 50, 20),
-            numericInput(ns_m("sc_ap_res"), "Résolution clustering", 0.5, min=0.1, step=0.1),
-            selectInput(ns_m("sc_ap_cluster_algo"), "Algorithme de clustering",
+            sliderInput(ns_m("sc_ap_pca_dim"), .tr("Dims PCA"), 5, 50, 20),
+            numericInput(ns_m("sc_ap_res"), .tr("Résolution clustering"), 0.5, min=0.1, step=0.1),
+            selectInput(ns_m("sc_ap_cluster_algo"), .tr("Algorithme de clustering"),
                        choices = c("Louvain"="1","Louvain (multilevel)"="2",
                                   "SLM"="3","Leiden (reticulate)"="4"), selected="1")
           )
@@ -776,12 +784,12 @@ mod_sc_server <- function(id, global_data) {
         global_data$sc_obj   <- obj
         shared_rv$active_tab <- "tab_viz"
         showNotification(
-          sprintf("\u2713 Pipeline SC : %d cellules, %d clusters", ncol(obj), n_cl),
+          sprintf(.tr("✓ Pipeline SC : %d cellules, %d clusters"), ncol(obj), n_cl),
           type="message", duration=6)
 
       }, error=function(e) {
         log_sc(paste("\u274c Erreur:", e$message))
-        showNotification(paste("Erreur pipeline SC:", e$message), type="error", duration=10)
+        showNotification(paste(.tr("Erreur pipeline SC:"), e$message), type="error", duration=10)
       })
     })
 
@@ -817,6 +825,23 @@ mod_sc_server <- function(id, global_data) {
         corr_target <- if (!is.null(shared_rv$corr_target_gene) &&
                            nchar(shared_rv$corr_target_gene %||% "") > 0) shared_rv$corr_target_gene else NULL
 
+        # i18n Phase 6 : build translation map for report (French keys -> current language)
+        lang <- isolate(global_data$language) %||% "fr"
+        i18n_strings <- tryCatch({
+          json_path <- file.path("i18n", "translation.json")
+          if (file.exists(json_path)) {
+            j <- jsonlite::fromJSON(json_path, simplifyVector = FALSE)
+            trans <- j$translation
+            if (!is.null(trans)) {
+              s <- setNames(
+                vapply(trans, function(x) if (lang == "en") x$en %||% x$fr else x$fr, character(1)),
+                vapply(trans, function(x) x$fr, character(1))
+              )
+              as.list(s)
+            } else NULL
+          } else NULL
+        }, error = function(e) NULL)
+
         render_params <- list(
           sc_obj           = global_data$sc_obj,
           markers_data     = shared_rv$markers_data,
@@ -837,7 +862,9 @@ mod_sc_server <- function(id, global_data) {
           report_title     = input$report_title    %||% "Analyse Single-Cell",
           report_subtitle  = input$report_subtitle %||% "",
           report_notes     = input$report_notes    %||% "",
-          interactive      = isTRUE(input$report_interactive) && input$report_format != "pdf"
+          interactive      = isTRUE(input$report_interactive) && input$report_format != "pdf",
+          i18n_strings     = i18n_strings,
+          report_language  = lang
         )
 
         withProgress(message="Génération du rapport...", value=0.2, {

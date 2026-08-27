@@ -167,21 +167,21 @@ mod_sc_annotation_ui <- function(id) {
   ns <- NS(id)
   tagList(
     div(class="alert alert-light",style="font-size:0.9em;border-left:3px solid #18BC9C;",
-        "Utilise SingleR pour annoter automatiquement les clusters.",
+        i18n$t("Utilise SingleR pour annoter automatiquement les clusters."),
         tags$br(),
-        tags$small("IDs Ensembl (ENSG…) convertis automatiquement si org.Hs.eg.db disponible.")),
-    selectInput(ns("ref_singler"),"Reference Cellulaire",
+        tags$small(i18n$t("IDs Ensembl (ENSG…) convertis automatiquement si org.Hs.eg.db disponible."))),
+    selectInput(ns("ref_singler"),i18n$t("Reference Cellulaire"),
       choices=c("Human Primary Cell Atlas"="hpca","Blueprint Encode"="blueprint",
                 "ImmGen (Mouse)"="immgen","DICE Immune"="dice")),
-    radioButtons(ns("label_level"),"Niveau de Detail",
+    radioButtons(ns("label_level"),i18n$t("Niveau de Detail"),
       choices=c("Main (General)"="main","Fine (Specifique)"="fine"), inline=TRUE),
-    actionButton(ns("run_annot"),"Annoter avec SingleR",
+    actionButton(ns("run_annot"),i18n$t("Annoter avec SingleR"),
                  class="btn-warning w-100",icon=icon("user-tag")),
     hr(),
     # Step-3.7: readability toggle for the UMAP plot (label + repel), independent
     # of re-running SingleR — purely a display setting for output$annot_umap_plot.
     checkboxInput(ns("annot_show_labels"),
-                  "Afficher les étiquettes de types cellulaires sur l'UMAP",
+                  i18n$t("Afficher les étiquettes de types cellulaires sur l'UMAP"),
                   value = TRUE),
     hr(),
     div(class="small text-muted",textOutput(ns("annot_status")))
@@ -193,12 +193,12 @@ mod_sc_annotation_output_ui <- function(id) {
   card(
     full_screen=TRUE,
     card_header(div(style="display:flex;justify-content:space-between;align-items:center;",
-                    h5("Annotation Automatique (SingleR)",class="mb-0"),
+                    h5(i18n$t("Annotation Automatique (SingleR)"),class="mb-0"),
                     downloadButton(ns("dl_annotation"),"Export CSV",class="btn-sm btn-info"))),
     layout_columns(col_widths=c(12),
-      card(card_header("UMAP — types cellulaires predits"),
+      card(card_header(i18n$t("UMAP — types cellulaires predits")),
            plotOutput(ns("annot_umap_plot"),height="380px")),
-      card(card_header("Table — distribution par cluster"),
+      card(card_header(i18n$t("Table — distribution par cluster")),
            DTOutput(ns("annot_table"))))
   )
 }
@@ -207,6 +207,20 @@ mod_sc_annotation_output_ui <- function(id) {
 
 mod_sc_annotation_server <- function(id, global_data, shared_rv) {
   moduleServer(id, function(input, output, session) {
+    # ── i18n proxy ──────────────────────────────────────────────────────────
+    .tr <- function(key) {
+      tr <- isolate(global_data$i18n)
+      if (is.null(tr)) return(key)
+      tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+    }
+
+    observeEvent(global_data$language, {
+      updateSelectInput(session, "ref_singler", label = .tr("Reference Cellulaire"))
+      updateRadioButtons(session, "label_level", label = .tr("Niveau de Detail"))
+      updateActionButton(session, "run_annot", label = .tr("Annoter avec SingleR"))
+      updateCheckboxInput(session, "annot_show_labels", label = .tr("Afficher les étiquettes de types cellulaires sur l'UMAP"))
+    }, ignoreInit = TRUE)
+
 
     annot_status_rv <- reactiveVal("En attente de l'annotation...")
 
@@ -217,10 +231,10 @@ mod_sc_annotation_server <- function(id, global_data, shared_rv) {
       lv      <- isolate(input$label_level)
 
       p <- shiny::Progress$new(); on.exit(p$close())
-      p$set(message="Annotation SingleR...", value=0.1)
+      p$set(message=.tr("Annotation SingleR..."), value=0.1)
 
       tryCatch({
-        p$set(0.35, "Chargement référence + vérification IDs...")
+        p$set(0.35, .tr("Chargement référence + vérification IDs..."))
         result <- withCallingHandlers(
           .run_singler_safe(obj, refcode, lv),
           warning = function(w) {
@@ -233,7 +247,7 @@ mod_sc_annotation_server <- function(id, global_data, shared_rv) {
           }
         )
 
-        p$set(0.90, "Mise à jour de l'objet...")
+        p$set(0.90, .tr("Mise à jour de l'objet..."))
         col_name        <- paste0("SingleR_", refcode, "_", lv)
         obj[[col_name]] <- result$labels
         Idents(obj)     <- result$labels
@@ -247,7 +261,7 @@ mod_sc_annotation_server <- function(id, global_data, shared_rv) {
                                length(unique(result$labels)), "types"), type="message", duration=5)
 
       }, error=function(e) {
-        annot_status_rv(paste("Erreur:", e$message))
+        annot_status_rv(paste(.tr("Erreur:"), e$message))
         showNotification(paste("Erreur annotation:", e$message), type="error", duration=10)
       })
     })
@@ -259,9 +273,9 @@ mod_sc_annotation_server <- function(id, global_data, shared_rv) {
       obj  <- global_data$sc_obj
       meta <- obj@meta.data
       singler_cols <- grep("^SingleR_", colnames(meta), value=TRUE)
-      validate(need(length(singler_cols)>0, "Aucune annotation. Lancez 'Annoter avec SingleR'."))
+      validate(need(length(singler_cols)>0, .tr("Aucune annotation. Lancez 'Annoter avec SingleR'.")))
       col_use <- tail(singler_cols, 1)
-      validate(need("umap" %in% names(obj@reductions), "UMAP non calculé."))
+      validate(need("umap" %in% names(obj@reductions), .tr("UMAP non calculé.")))
       show_lbl <- isTRUE(input$annot_show_labels)
       pal_scale <- sc_discrete_scale(shared_rv$sc_palette %||% "default", shared_rv$sc_manual_colors)
       p_annot <- DimPlot(obj, reduction="umap", group.by=col_use, label=show_lbl, repel=show_lbl, pt.size=0.5) +

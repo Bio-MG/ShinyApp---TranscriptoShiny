@@ -45,90 +45,95 @@ mod_sc_pipeline_ui <- function(id) {
   tagList(
     # QC filters — relaxed defaults for broader compatibility
     layout_columns(
-      numericInput(ns("qc_min_gene"), "Min Gènes",  100,  step=50),   # was 200
-      numericInput(ns("qc_max_gene"), "Max Gènes",  8000, step=500)   # was 6000
+      numericInput(ns("qc_min_gene"), i18n$t("Min Gènes"),  100,  step=50),   # was 200
+      numericInput(ns("qc_max_gene"), i18n$t("Max Gènes"),  8000, step=500)   # was 6000
     ),
-    sliderInput(ns("qc_mt"), "% Mito Max", 0, 50, 20, step=1),        # was 5
+    sliderInput(ns("qc_mt"), i18n$t("% Mito Max"), 0, 50, 20, step=1),        # was 5
     div(class="alert alert-light", style="font-size:0.82em;padding:6px;",
         bsicons::bs_icon("info-circle"),
-        " Valeurs conseillées pour jeux de test réduits :\n",
-        "Min gènes = 50, Max gènes = 10 000, % Mito = 40."),
+        span(i18n$t("Valeurs conseillées pour jeux de test réduits :")),
+        " ",
+        span(i18n$t("Min gènes = 50, Max gènes = 10 000, % Mito = 40."))),
     # --- UI: sketch size preset selector ---
     selectInput(
       ns("sketch_preset"),
-      "Taille du sketch (vitesse vs precision)",
-      choices = list(
-        "Rapide (test, 5 000 cellules)"   = "fast",
-        "Leger (10 000 cellules)"         = "light",
-        "Moyen (25 000 cellules)"         = "medium",
-        "Standard (50 000 cellules)"      = "standard",
-        "Eleve (100 000 cellules)"        = "high",
-        "Max (dataset complet)"           = "max",
-        "Personnalise"                    = "custom"
+      i18n$t("Taille du sketch (vitesse vs precision)"),
+      choices = setNames(
+        c("fast", "light", "medium", "standard", "high", "max", "custom"),
+        c(.tr_plain("Rapide (test, 5 000 cellules)"),
+          .tr_plain("Léger (10 000 cellules)"),
+          .tr_plain("Moyen (25 000 cellules)"),
+          .tr_plain("Standard (50 000 cellules)"),
+          .tr_plain("Élevé (100 000 cellules)"),
+          .tr_plain("Max (dataset complet)"),
+          .tr_plain("Personnalisé"))
       ),
       selected = "standard"
     ),
     
     conditionalPanel(
       condition = sprintf("input['%s'] == 'custom'", ns("sketch_preset")),
-      numericInput(ns("sketch_ncells_custom"), "Nombre de cellules (sketch)",
+      numericInput(ns("sketch_ncells_custom"), i18n$t("Nombre de cellules (sketch)"),
                    value = 20000, min = 1000, max = 500000, step = 1000)
     ),
     hr(),
-    h6("Normalisation"),
+    h6(i18n$t("Normalisation")),
     radioButtons(ns("norm_method"), NULL,
-      choices=c("LogNormalize (Standard)"="log","SCTransform (Avancé)"="sct")),
+      choices=setNames(c("log", "sct"),
+                       c(.tr_plain("LogNormalize (Standard)"), .tr_plain("SCTransform (Avancé)")))),
     hr(),
-    h6("Réduction Dimensionnelle"),
-    selectInput(ns("reduction_method"), "Méthode de Réduction (principale)",
-      choices=c("UMAP"="umap","PCA"="pca","t-SNE"="tsne",
-                "Diffusion Maps"="dm","Harmony"="harmony"), selected="umap"),
+    h6(i18n$t("Réduction Dimensionnelle")),
+    selectInput(ns("reduction_method"), i18n$t("Méthode de Réduction (principale)"),
+      choices=setNames(c("umap", "pca", "tsne", "dm", "harmony"),
+                       c("UMAP", .tr_plain("PCA"), "t-SNE", .tr_plain("Diffusion Maps"), "Harmony")), selected="umap"),
     div(class="small text-muted mb-2",
-        "t-SNE est en plus toujours calculé automatiquement en secondaire (si < ",
+        i18n$t("t-SNE est en plus toujours calculé automatiquement en secondaire (si < "),
         format(.AUTO_TSNE_MAX_CELLS, big.mark=" "),
-        " cellules) pour être disponible dans l'onglet Visualisation."),
+        i18n$t(" cellules) pour être disponible dans l'onglet Visualisation.")),
     layout_columns(
-      sliderInput(ns("pca_dim"),    "Dims PCA",   5, 50, 20),
-      numericInput(ns("clust_res"), "Résolution", 0.5, step=0.1)
+      sliderInput(ns("pca_dim"),    i18n$t("Dims PCA"),   5, 50, 20),
+      numericInput(ns("clust_res"), i18n$t("Résolution"), 0.5, step=0.1)
     ),
-    selectInput(ns("cluster_algo"), "Algorithme de clustering",
-                choices = c("Louvain (standard)"               = "1",
-                           "Louvain (multilevel refinement)"   = "2",
-                           "SLM (Smart Local Moving)"          = "3",
-                           "Leiden (nécessite reticulate + leidenalg)" = "4"),
+    selectInput(ns("cluster_algo"), i18n$t("Algorithme de clustering"),
+                choices = setNames(c("1", "2", "3", "4"),
+                                   c(.tr_plain("Louvain (standard)"),
+                                     .tr_plain("Louvain (multilevel refinement)"),
+                                     .tr_plain("SLM (Smart Local Moving)"),
+                                     .tr_plain("Leiden (nécessite reticulate + leidenalg)"))),
                 selected = "1"),
     div(class="small text-muted mb-2",
-        "Leiden est souvent plus rapide/qualitatif sur les gros datasets, mais",
-        " nécessite un environnement Python (reticulate + leidenalg/igraph)",
-        " installé séparément — repli automatique sur Louvain si indisponible."),
-    actionButton(ns("run_pipeline"), "Lancer Pipeline",
+        i18n$t("Leiden est souvent plus rapide/qualitatif sur les gros datasets, mais"),
+        i18n$t(" nécessite un environnement Python (reticulate + leidenalg/igraph)"),
+        i18n$t(" installé séparément — repli automatique sur Louvain si indisponible.")),
+    actionButton(ns("run_pipeline"), i18n$t("Lancer Pipeline"),
                  class="btn-danger w-100", icon=icon("play")),
     hr(),
-    h6("Gros Dataset — Backend Disque (BPCells)", style="font-weight:bold;"),
-    selectInput(ns("bpcells_mode"), "Mode",
-                choices = c("Auto (recommandé)" = "auto",
-                           "Toujours (forcer disque)" = "always",
-                           "Jamais (toujours RAM)" = "never"),
+    h6(i18n$t("Gros Dataset — Backend Disque (BPCells)"), style="font-weight:bold;"),
+    selectInput(ns("bpcells_mode"), i18n$t("Mode"),
+                choices = setNames(c("auto", "always", "never"),
+                                   c(.tr_plain("Auto (recommandé)"),
+                                     .tr_plain("Toujours (forcer disque)"),
+                                     .tr_plain("Jamais (toujours RAM)"))),
                 selected = "auto"),
     conditionalPanel(
       condition = "input.bpcells_mode == 'auto'", ns = ns,
-      numericInput(ns("bpcells_threshold"), "Seuil auto (cellules)",
+      numericInput(ns("bpcells_threshold"), i18n$t("Seuil auto (cellules)"),
                    value = .BPCELLS_AUTO_THRESHOLD, min = 10000, step = 10000)
     ),
     div(class="small text-muted mb-2",
-        "Au-delà du seuil, les counts bruts sont écrits sur disque (BPCells) avant",
-        " Normalisation — la RAM n'est plus le facteur limitant. Nécessite le",
-        " package 'BPCells' (optionnel) ; sans lui, le pipeline continue en RAM",
-        " normalement avec un avertissement."),
+        i18n$t("Au-delà du seuil, les counts bruts sont écrits sur disque (BPCells) avant"),
+        i18n$t(" Normalisation — la RAM n'est plus le facteur limitant. Nécessite le"),
+        i18n$t(" package 'BPCells' (optionnel) ; sans lui, le pipeline continue en RAM"),
+        i18n$t(" normalement avec un avertissement.")),
     hr(),
-    h6("Performance / RAM", style="font-weight:bold;"),
+    h6(i18n$t("Performance / RAM"), style="font-weight:bold;"),
     numericInput(ns("max_cells_heavy"),
-                 "Max cellules/cluster pour analyses lourdes (Marqueurs, Corrélation)",
+                 i18n$t("Max cellules/cluster pour analyses lourdes (Marqueurs, Corrélation)"),
                  value = 5000, min = 0, step = 500),
     div(class="small text-muted",
-        "0 = pas de sous-échantillonnage (toutes les cellules). Réduit uniquement",
-        " les calculs de FindAllMarkers/Corrélation — l'objet complet reste intact",
-        " pour la visualisation et l'export.")
+        i18n$t("0 = pas de sous-échantillonnage (toutes les cellules). Réduit uniquement"),
+        i18n$t(" les calculs de FindAllMarkers/Corrélation — l'objet complet reste intact"),
+        i18n$t(" pour la visualisation et l'export."))
   )
 }
 
@@ -136,6 +141,27 @@ mod_sc_pipeline_ui <- function(id) {
 
 mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
   moduleServer(id, function(input, output, session) {
+    # ── i18n proxy ──────────────────────────────────────────────────────────
+    .tr <- function(key) {
+      tr <- isolate(global_data$i18n)
+      if (is.null(tr)) return(key)
+      tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+    }
+
+    observeEvent(global_data$language, {
+      updateNumericInput(session, "qc_min_gene", label = .tr("Min Gènes"))
+      updateNumericInput(session, "qc_max_gene", label = .tr("Max Gènes"))
+      updateSliderInput(session, "qc_mt", label = .tr("% Mito Max"))
+      updateSelectInput(session, "sketch_preset", label = .tr("Taille du sketch (vitesse vs precision)"))
+      updateSelectInput(session, "reduction_method", label = .tr("Méthode de Réduction (principale)"))
+      updateSliderInput(session, "pca_dim", label = .tr("Dims PCA"))
+      updateNumericInput(session, "clust_res", label = .tr("Résolution"))
+      updateSelectInput(session, "cluster_algo", label = .tr("Algorithme de clustering"))
+      updateActionButton(session, "run_pipeline", label = .tr("Lancer Pipeline"))
+      updateSelectInput(session, "bpcells_mode", label = .tr("Mode"))
+      updateNumericInput(session, "max_cells_heavy", label = .tr("Max cellules/cluster pour analyses lourdes (Marqueurs, Corrélation)"))
+    }, ignoreInit = TRUE)
+
 
     if (is.null(getOption("future.rng.onMisuse")))
       options(future.rng.onMisuse = "ignore")
@@ -156,17 +182,17 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
       obj <- global_data$sc_obj
 
       p <- shiny::Progress$new(); on.exit(p$close())
-      p$set(message="Pipeline...", value=0)
+      p$set(message=.tr("Pipeline..."), value=0)
 
       tryCatch({
         # ── Step 1 : QC ───────────────────────────────────────────────────
-        p$set(0.10, "QC — détection mitochondriale")
+        p$set(0.10, .tr("QC — détection mitochondriale"))
         mt_pattern <- .get_mt_pattern(obj)
         if (!is.null(mt_pattern)) {
           obj[["percent.mt"]] <- PercentageFeatureSet(obj, pattern=mt_pattern)
         } else {
           obj[["percent.mt"]] <- 0
-          showNotification("Aucun gène mitochondrial détecté. Filtre MT ignoré.",
+          showNotification(.tr("Aucun gène mitochondrial détecté. Filtre MT ignoré."),
                            type="warning", duration=3)
         }
 
@@ -227,7 +253,7 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
         shared_rv$qc_snapshot <- qc_snap
 
         # ── Step 1b : Backend disque (BPCells) — Step-3.7A ─────────────────
-        p$set(0.22, "Backend stockage...")
+        p$set(0.22, .tr("Backend stockage..."))
         bpcells_mode <- input$bpcells_mode %||% "auto"
         threshold    <- input$bpcells_threshold %||% .BPCELLS_AUTO_THRESHOLD
         should_convert <- switch(bpcells_mode,
@@ -238,11 +264,11 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
         if (should_convert && sc_backend_status(obj) == "memory") {
           if (!.bpcells_available()) {
             showNotification(
-              "Package 'BPCells' non installé — pipeline exécuté en RAM comme d'habitude. Installez-le pour les très gros datasets (remotes::install_github('bnprks/BPCells/r')).",
+              .tr("Package 'BPCells' non installé — pipeline exécuté en RAM comme d'habitude. Installez-le pour les très gros datasets (remotes::install_github('bnprks/BPCells/r'))."),
               type = "warning", duration = 8)
           } else {
             conv <- tryCatch(convert_seurat_to_bpcells(obj), error = function(e) {
-              showNotification(paste("BPCells: conversion échouée, poursuite en RAM —", e$message),
+              showNotification(paste(.tr("BPCells: conversion échouée, poursuite en RAM —"), e$message),
                                type = "warning", duration = 8)
               NULL
             })
@@ -253,7 +279,7 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
                 # session's lifetime — clean it up when the session closes.
                 session$onSessionEnded(function() unlink(conv$dir, recursive = TRUE))
                 showNotification(
-                  sprintf("💽 Backend disque activé (BPCells) — %s cellules, RAM préservée pour la suite.",
+                  sprintf(.tr("💽 Backend disque activé (BPCells) — %s cellules, RAM préservée pour la suite."),
                           format(conv$n_cells, big.mark=" ")),
                   type = "message", duration = 6)
               }
@@ -276,7 +302,7 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
         }
 
         # ── Step 2 : Normalisation ────────────────────────────────────────
-        p$set(0.30, "Normalisation")
+        p$set(0.30, .tr("Normalisation"))
         if (input$norm_method == "sct") {
           obj <- SCTransform(obj, verbose=FALSE, variable.features.n=3000, vst.flavor="v2")
         } else {
@@ -287,7 +313,7 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
         }
 
         # ── Step 3 : PCA ──────────────────────────────────────────────────
-        p$set(0.50, "PCA")
+        p$set(0.50, .tr("PCA"))
         obj <- RunPCA(obj, verbose=FALSE, npcs=input$pca_dim)
 
         # Step-3.7A.2: scale.data (dense, VariableFeatures x cells -- e.g.
@@ -305,7 +331,7 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
         clean_mem()
 
         # ── Step 4 : Clustering ───────────────────────────────────────────
-        p$set(0.60, "Clustering")
+        p$set(0.60, .tr("Clustering"))
         obj <- FindNeighbors(obj, dims=1:input$pca_dim)
         algo <- suppressWarnings(as.integer(input$cluster_algo %||% "1"))
         obj <- tryCatch(
@@ -328,7 +354,7 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
         )
 
         # ── Step 5 : Réduction dimensionnelle (méthode principale) ────────
-        p$set(0.70, paste("Réduction:", input$reduction_method))
+        p$set(0.70, paste(.tr("Réduction:"), input$reduction_method))
 
         if (input$reduction_method == "harmony") {
           if (requireNamespace("harmony", quietly=TRUE)) {
@@ -338,7 +364,7 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
               if (n_batches >= 2) {
                 .with_sequential_future({
                   if (.is_big_dataset(obj)) {
-                    showNotification("Large dataset: paramètres Harmony réduits.", type="info", duration=3)
+                    showNotification(.tr("Large dataset: paramètres Harmony réduits."), type="info", duration=3)
                     obj <- RunHarmony(obj, group.by.vars="orig.ident",
                                       dims.use=1:min(30,input$pca_dim), max.iter.harmony=10, verbose=FALSE)
                   } else {
@@ -365,7 +391,7 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
             obj[["dm"]] <- CreateDimReducObject(embeddings=dm@eigenvectors[,1:2],
                                                 key="DM_", assay=DefaultAssay(obj))
           } else {
-            showNotification("Package 'destiny' introuvable. UMAP utilisé.", type="warning", duration=4)
+            showNotification(.tr("Package 'destiny' introuvable. UMAP utilisé."), type="warning", duration=4)
             obj <- RunUMAP(obj, dims=1:input$pca_dim, verbose=FALSE)
           }
         }
@@ -379,11 +405,11 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
         if (!"tsne" %in% names(obj@reductions) && input$reduction_method != "tsne") {
           if (ncol(obj) > .AUTO_TSNE_MAX_CELLS) {
             showNotification(
-              sprintf("t-SNE secondaire ignoré (%s cellules > %s max). Choisissez 't-SNE' comme méthode principale si nécessaire.",
+              sprintf(.tr("t-SNE secondaire ignoré (%s cellules > %s max). Choisissez 't-SNE' comme méthode principale si nécessaire."),
                       format(ncol(obj), big.mark=" "), format(.AUTO_TSNE_MAX_CELLS, big.mark=" ")),
               type = "info", duration = 5)
           } else {
-            p$set(0.85, "t-SNE (secondaire)...")
+            p$set(0.85, .tr("t-SNE (secondaire)..."))
             obj <- tryCatch(RunTSNE(obj, dims = 1:input$pca_dim, verbose = FALSE),
                             error = function(e) {
                               showNotification(paste("t-SNE secondaire ignoré:", e$message),
@@ -394,10 +420,10 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
         }
 
         global_data$sc_obj <- obj
-        showNotification("✓ Pipeline terminé", type = "message")
+        showNotification(.tr("✓ Pipeline terminé"), type = "message")
 
       }, error = function(e) {
-        showNotification(paste("Erreur pipeline:", e$message), type="error", duration=10)
+        showNotification(paste(.tr("Erreur pipeline:"), e$message), type="error", duration=10)
       })
     })
   })

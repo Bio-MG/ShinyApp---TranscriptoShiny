@@ -73,7 +73,7 @@
 #
 # UI split:
 #   mod_sc_trajectory_ui(id)         -> sidebar accordion body
-#   mod_sc_trajectory_output_ui(id)  -> main panel "Trajectory" tab
+#   mod_sc_trajectory_output_ui(id)  -> main panel i18n$t("Trajectory") tab
 # =============================================================================
 
 .MAX_TRAJECTORY_CELLS <- 100000L   # mirrors the guard in global.R
@@ -85,26 +85,20 @@ mod_sc_trajectory_ui <- function(id) {
   ns <- NS(id)
   tagList(
 
-    bslib::card(
-      bslib::card_header("Portee scientifique"),
-      bslib::card_body(
-        shiny::HTML(paste0(
-          "<p class='mb-2'><strong>Deux méthodes distinctes.</strong> ",
-          "Le <em>pseudotemps exploratoire</em> ordonne les cellules le long ",
-          "d'un graphe kNN pondéré (ce n'est ni Slingshot ni Monocle et cela ",
-          "n'infère pas de lignage valide). <em>Slingshot</em> infère quant à lui ",
-          "des courbes de lignées à partir de l'espace réduit et des clusters.</p>",
-          "<p class='mb-0 text-muted'>A interpreter avec la biologie connue, ",
-          "l'expression de marqueurs, la structure des conditions/echantillons ",
-          "et des preuves de lignage independantes.</p>"
-        ))
-      )
+    div(class="d-flex align-items-center mb-2",
+        span(i18n$t("Two distinct methods available: Exploratory Pseudotime (kNN graph) and Slingshot (lineage curves)."),
+             style="font-size:0.9em;"),
+        bslib::tooltip(
+          bsicons::bs_icon("info-circle", class="ms-2 text-primary", style="cursor:help;"),
+          i18n$t("Exploratory pseudotime orders cells along a weighted kNN graph (it does not infer valid lineages). Slingshot infers lineage curves from reduced space and clusters. Always interpret alongside known biology, marker expression, sample conditions, and independent lineage evidence."),
+          placement="right"
+        )
     ),
 
     div(
       class = "alert alert-light",
       style = "font-size:0.9em;border-left:3px solid #3498DB;",
-      "Analyse de trajectoire et pseudotemps."
+      i18n$t("Analyse de trajectoire et pseudotemps.")
     ),
 
     uiOutput(ns("cell_count_badge")),   # live warning for large datasets
@@ -113,7 +107,7 @@ mod_sc_trajectory_ui <- function(id) {
     # never interchangeable and never silently substituted.
     selectInput(
       ns("traj_method"),
-      "Méthode de trajectoire",
+      i18n$t("Méthode de trajectoire"),
       choices = c(
         "Pseudotemps exploratoire — graphe kNN pondéré" = "exploratory_knn",
         "Slingshot — inférence de lignées" = "slingshot"
@@ -123,7 +117,7 @@ mod_sc_trajectory_ui <- function(id) {
 
     uiOutput(ns("traj_method_help")),
 
-    selectInput(ns("traj_reduction"), "Reduction a utiliser (calcul + affichage)",
+    selectInput(ns("traj_reduction"), i18n$t("Reduction a utiliser (calcul + affichage)"),
                 choices  = c("PCA" = "pca", "UMAP" = "umap"),
                 selected = "pca"),
 
@@ -135,20 +129,20 @@ mod_sc_trajectory_ui <- function(id) {
     conditionalPanel(
       condition = "input.traj_method == 'exploratory_knn'",
       ns = ns,
-      checkboxInput(ns("traj_auto_root"), "Detection auto racine", value = TRUE),
+      checkboxInput(ns("traj_auto_root"), i18n$t("Detection auto racine"), value = TRUE),
 
       conditionalPanel(
         condition = "!input.traj_auto_root",
         ns = ns,
-        numericInput(ns("traj_root_cell"), "Index cellule racine",
+        numericInput(ns("traj_root_cell"), i18n$t("Index cellule racine"),
                      value = 1, min = 1, max = 1, step = 1)
       ),
 
-      checkboxInput(ns("traj_show_edges"), "Afficher le graphe (aretes echantillonnees)",
+      checkboxInput(ns("traj_show_edges"), i18n$t("Afficher le graphe (aretes echantillonnees)"),
                     value = FALSE)
     ),
 
-    actionButton(ns("calc_trajectory"), "Calculer Trajectoire",
+    actionButton(ns("calc_trajectory"), i18n$t("Calculer Trajectoire"),
                  class = "btn-info w-100", icon = icon("project-diagram")),
 
     hr(),
@@ -157,15 +151,15 @@ mod_sc_trajectory_ui <- function(id) {
 
     selectInput(
       ns("traj_color"),
-      "Colorer par",
+      i18n$t("Colorer par"),
       choices = c("Pseudotime" = "pseudotime", "Clusters" = "seurat_clusters")
     ),
 
-    actionButton(ns("plot_trajectory_btn"), "Actualiser Plot",
+    actionButton(ns("plot_trajectory_btn"), i18n$t("Actualiser Plot"),
                  class = "btn-outline-primary btn-sm w-100 mt-1"),
 
     hr(),
-    downloadButton(ns("dl_pseudotime"), "Export pseudotemps CSV",
+    downloadButton(ns("dl_pseudotime"), i18n$t("Export pseudotemps CSV"),
                    class = "btn-sm btn-info w-100"),
 
     hr(),
@@ -183,7 +177,7 @@ mod_sc_trajectory_output_ui <- function(id) {
     card_header("Trajectory Analysis"),
     navset_tab(
       nav_panel(
-        "Plot Trajectoire",
+        i18n$t("Plot Trajectoire"),
         plotOutput(ns("trajectory_plot"), height = "550px"),
 
         downloadButton(ns("dl_trajectory_png"), "Export Plot", class = "btn-sm btn-secondary w-100 mt-2"),
@@ -199,36 +193,36 @@ mod_sc_trajectory_output_ui <- function(id) {
                                    "Export Distribution (CSV)", class = "btn-sm btn-info w-100")),
           column(4, downloadButton(ns("dl_genes_pseudotime"),
                                    "Export Gènes/Pseudo (CSV)", class = "btn-sm btn-info w-100")),
-          column(4, selectInput(ns("traj_export_fmt"), "Format export plots (PNG/PDF)",
+          column(4, selectInput(ns("traj_export_fmt"), i18n$t("Format export plots (PNG/PDF)"),
                                 choices = c("PNG" = "png", "PDF" = "pdf"), selected = "png", width = "100%"))
         )
       ),
       nav_panel(
-        "Distribution Pseudotemps",
+        i18n$t("Distribution Pseudotemps"),
         plotOutput(ns("pseudotime_distribution"), height = "400px"),
-        downloadButton(ns("dl_dist_png"), "Export Distribution", class = "btn-sm btn-secondary w-100 mt-2")
+        downloadButton(ns("dl_dist_png"), i18n$t("Export Distribution"), class = "btn-sm btn-secondary w-100 mt-2")
       ),
       nav_panel(
-        "Genes vs Pseudotemps",
+        i18n$t("Genes vs Pseudotemps"),
         fluidRow(
           column(6,
-            selectizeInput(ns("traj_genes"), "Genes a tracer",
+            selectizeInput(ns("traj_genes"), i18n$t("Genes a tracer"),
                            choices = NULL, multiple = TRUE,
                            options = list(maxItems = 8,
                                          placeholder = "Ex: CD3D, MS4A1"))
           ),
           column(6,
-            radioButtons(ns("traj_smooth"), "Lissage",
+            radioButtons(ns("traj_smooth"), i18n$t("Lissage"),
                          choices = c("LOESS" = "loess", "GAM" = "gam",
                                      "Lineaire" = "lm"),
                          inline = TRUE, selected = "loess")
           )
         ),
         div(class = "small text-muted mb-2",
-            "Le plot se met à jour automatiquement dès qu'un gène est sélectionné."),
+            i18n$t("Le plot se met à jour automatiquement dès qu'un gène est sélectionné.")),
         plotOutput(ns("gene_pseudotime_plot"), height = "450px"),
 
-        downloadButton(ns("dl_genes_png"), "Export Gènes/Pseudo", class = "btn-sm btn-secondary w-100 mt-2")
+        downloadButton(ns("dl_genes_png"), i18n$t("Export Gènes/Pseudo"), class = "btn-sm btn-secondary w-100 mt-2")
       )
     )
   )
@@ -239,6 +233,14 @@ mod_sc_trajectory_output_ui <- function(id) {
 
 mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
   moduleServer(id, function(input, output, session) {
+    # ── i18n proxy ──────────────────────────────────────────────────────────
+    .tr <- function(key) {
+      tr <- global_data$i18n
+      if (is.null(tr)) return(key)
+      tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+    }
+
+
     ns <- session$ns
     traj_status_rv <- reactiveVal("En attente du calcul...")
     # Raw result of the LAST trajectory run — either method:
@@ -249,6 +251,9 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
     # Feeds plot overlay/branching (method_type) and exports.
     traj_result    <- reactiveVal(NULL)
 
+    observeEvent(global_data$language, {
+      # Re-translate dynamic labels on language switch
+    }, ignoreInit = TRUE)
     # ── Live cell-count badge ──────────────────────────────────────────────
     output$cell_count_badge <- renderUI({
       obj <- global_data$sc_obj
@@ -273,7 +278,8 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
       meta <- obj@meta.data
       valid_cols <- c("seurat_clusters", "orig.ident",
                       names(meta)[sapply(meta, function(x) is.factor(x) || is.character(x))])
-      traj_choices <- c("Pseudotime" = "pseudotime", "Clusters" = "seurat_clusters")
+      traj_choices <- setNames(c("pseudotime", "seurat_clusters"),
+                                 c(.tr("Pseudotime"), .tr("Clusters")))
       if ("pseudotime" %in% colnames(meta)) {
         traj_choices <- c(traj_choices, setNames(valid_cols, valid_cols))
       }
@@ -402,7 +408,7 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
       obj <- global_data$sc_obj
 
       if (ncol(obj) > .MAX_TRAJECTORY_CELLS) {
-        showNotification("Dataset trop grand pour la trajectoire.", type = "error", duration = 6)
+        showNotification(.tr("Dataset trop grand pour la trajectoire."), type = "error", duration = 6)
         traj_status_rv("BLOQUE: dataset trop grand.")
         return()
       }
@@ -506,7 +512,7 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
                                 n_finite, result$n_cells)
         } else {
           # ══════════ Exploratory weighted kNN graph branch ════════════════
-          p$set(message = "Calcul trajectoire...", value = 0.4)
+          p$set(message = .tr("Calcul trajectoire..."), value = 0.4)
 
           # Manual root validated INSIDE tryCatch so shiny::validate()'s
           # condition lands in the status text + notification instead of
@@ -553,20 +559,21 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
 
         traj_status_rv(status_msg)
         showNotification(
-          if (identical(method_key, "slingshot")) "Trajectoire Slingshot calculée"
-          else "Trajectoire calculee",
+          if (identical(method_key, "slingshot")) .tr("Trajectoire Slingshot calculée")
+          else .tr("Trajectoire calculee"),
           type = "message", duration = 4)
 
         meta <- obj@meta.data
         valid_cols <- names(meta)[sapply(meta, function(x) is.factor(x) || is.character(x))]
         # traj_* provenance columns are constants — never useful color groups.
         valid_cols <- setdiff(valid_cols, grep("^traj_", valid_cols, value = TRUE))
-        traj_choices <- c("Pseudotime" = "pseudotime", "Clusters" = "seurat_clusters",
+        traj_choices <- c(setNames(c("pseudotime", "seurat_clusters"),
+                                   c(.tr("Pseudotime"), .tr("Clusters"))),
                           setNames(valid_cols, valid_cols))
         updateSelectInput(session, "traj_color", choices = unique(traj_choices), selected = "pseudotime")
       }, error = function(e) {
-        traj_status_rv(paste("Erreur:", e$message))
-        showNotification(paste("Erreur trajectoire:", e$message), type = "error", duration = 8)
+        traj_status_rv(paste(.tr("Erreur:"), e$message))
+        showNotification(paste(.tr("Erreur trajectoire:"), e$message), type = "error", duration = 8)
       })
     })
 
@@ -586,7 +593,7 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
 
       if (colorby == "pseudotime" && !"pseudotime" %in% colnames(obj@meta.data)) {
         return(ggplot() + annotate("text", x = 0.5, y = 0.5,
-                                   label = "Pseudotemps non calculé.", size = 6, hjust = 0.5) +
+                                   label = .tr("Pseudotemps non calculé."), size = 6, hjust = 0.5) +
                  theme_void())
       }
 
@@ -636,7 +643,7 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
     # ── 3. Pseudotime distribution (Step-3.7: shared helper) ───────────────
     output$pseudotime_distribution <- renderPlot({
       req(global_data$sc_obj)
-      validate(need("pseudotime" %in% colnames(global_data$sc_obj@meta.data), "Pseudotemps non calculé."))
+      validate(need("pseudotime" %in% colnames(global_data$sc_obj@meta.data), .tr("Pseudotemps non calculé.")))
       tryCatch(plot_pseudotime_distribution(global_data$sc_obj,
                                             palette = shared_rv$sc_palette %||% "default",
                                             manual_colors = shared_rv$sc_manual_colors),
@@ -645,7 +652,7 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
 
     output$plot_pseudotime_dist <- renderPlot({
       req(global_data$sc_obj)
-      validate(need("pseudotime" %in% colnames(global_data$sc_obj@meta.data), "Pseudotemps non calculé."))
+      validate(need("pseudotime" %in% colnames(global_data$sc_obj@meta.data), .tr("Pseudotemps non calculé.")))
       tryCatch(plot_pseudotime_distribution(global_data$sc_obj,
                                             palette = shared_rv$sc_palette %||% "default",
                                             manual_colors = shared_rv$sc_manual_colors),
@@ -656,7 +663,7 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
     #    dynamically as soon as genes/lissage change (shared helper). ──────
     output$gene_pseudotime_plot <- renderPlot({
       req(global_data$sc_obj, input$traj_genes)
-      validate(need("pseudotime" %in% colnames(global_data$sc_obj@meta.data), "Pseudotemps non calculé."))
+      validate(need("pseudotime" %in% colnames(global_data$sc_obj@meta.data), .tr("Pseudotemps non calculé.")))
       tryCatch(plot_genes_vs_pseudotime(global_data$sc_obj, input$traj_genes, input$traj_smooth %||% "loess",
                                         palette = shared_rv$sc_palette %||% "default",
                                         manual_colors = shared_rv$sc_manual_colors),

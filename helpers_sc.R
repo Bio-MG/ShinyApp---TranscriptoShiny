@@ -37,11 +37,12 @@
 
 
 
-plot_enhanced_scatter <- function(seurat_obj, feature1, feature2, 
+plot_enhanced_scatter <- function(seurat_obj, feature1, feature2,
 
-                                  group.by = NULL, method = "pearson",
+                                   group.by = NULL, method = "pearson",
 
-                                  add_smooth = TRUE, pt.size = 1) {
+                                   add_smooth = TRUE, pt.size = 1, tr = NULL) {
+  tr <- tr %||% function(x) x
 
   
 
@@ -117,9 +118,9 @@ plot_enhanced_scatter <- function(seurat_obj, feature1, feature2,
 
   stat_label <- paste0(
 
-    toupper(method), " r = ", cor_value, 
+    toupper(method), " r = ", cor_value,
 
-    "\np-value = ", p_value
+    "\n", tr("p-value = "), p_value
 
   )
 
@@ -135,7 +136,7 @@ plot_enhanced_scatter <- function(seurat_obj, feature1, feature2,
 
       y = feature2,
 
-      title = paste("Corrélation:", feature1, "vs", feature2),
+      title = paste(paste0(tr("Corrélation:"), " "), feature1, tr("vs"), feature2),
 
       color = if(!is.null(group.by)) group.by else NULL
 
@@ -191,7 +192,8 @@ plot_enhanced_scatter <- function(seurat_obj, feature1, feature2,
 
 plot_violin_enhanced <- function(seurat_obj, features, group.by = "seurat_clusters",
 
-                                 add_boxplot = TRUE, split.by = NULL) {
+                                 add_boxplot = TRUE, split.by = NULL, tr = NULL) {
+  tr <- tr %||% function(x) x
 
   
 
@@ -243,9 +245,9 @@ plot_violin_enhanced <- function(seurat_obj, features, group.by = "seurat_cluste
 
                    alpha = 0.8, coef = 0) +
 
-      labs(title = paste("Expression de", features_use[1]),
+      labs(title = paste(tr("Expression de"), features_use[1]),
 
-           x = group.by, y = "Expression Normalisée") +
+           x = group.by, y = tr("Expression Normalisée")) +
 
       theme_minimal() +
 
@@ -269,7 +271,8 @@ plot_violin_enhanced <- function(seurat_obj, features, group.by = "seurat_cluste
 
 
 
-plot_multi_sample <- function(seurat_obj, gene, plot_type = "violin") {
+plot_multi_sample <- function(seurat_obj, gene, plot_type = "violin", tr = NULL) {
+  tr <- tr %||% function(x) x
 
   
 
@@ -305,9 +308,9 @@ plot_multi_sample <- function(seurat_obj, gene, plot_type = "violin") {
 
   p <- ggplot(plot_data, aes(x = sample, y = expression, fill = sample)) +
 
-    labs(title = paste("Expression de", gene, "par Échantillon"),
+    labs(title = paste(tr("Expression de"), gene, tr("par Échantillon")),
 
-         x = "Échantillon", y = "Expression Normalisée") +
+         x = tr("Échantillon"), y = tr("Expression Normalisée")) +
 
     theme_minimal() +
 
@@ -566,9 +569,10 @@ find_correlated_genes <- function(seurat_obj, target_gene,
 
 plot_correlation_matrix <- function(seurat_obj, features, method = "pearson",
 
-                                    low_color = "#2166AC", mid_color = "white",
+                                     low_color = "#2166AC", mid_color = "white",
 
-                                    high_color = "#B2182B") {
+                                     high_color = "#B2182B", tr = NULL) {
+  tr <- tr %||% function(x) x
 
   
 
@@ -638,7 +642,7 @@ plot_correlation_matrix <- function(seurat_obj, features, method = "pearson",
 
       midpoint = 0, limits = c(-1, 1),
 
-      name = "Corrélation"
+      name = tr("Corrélation")
 
     ) +
 
@@ -980,8 +984,10 @@ plot_trajectory <- function(
     show_edges = FALSE,
     edge_subsample = 5000L,
     palette = "default",
-    manual_gradient = NULL
+    manual_gradient = NULL,
+    tr = NULL
 ) {
+  tr <- tr %||% function(x) x
   embeddings <- as.data.frame(embeddings)
   if (ncol(embeddings) < 2L) {
     stop("At least two display dimensions are required.")
@@ -998,10 +1004,10 @@ plot_trajectory <- function(
   p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = dim1, y = dim2, colour = pseudotime)) +
     ggplot2::geom_point(size = 0.7, alpha = 0.75, na.rm = FALSE) +
     expression_continuous_scale(palette, "color", manual_gradient, base_option = "plasma", na.value = "grey80") +
-    ggplot2::labs(colour = "Pseudotemps\n(sans unite)") +
+    ggplot2::labs(colour = tr("Pseudotemps\n(sans unite)")) +
     ggplot2::theme_classic() +
     ggplot2::labs(x = colnames(embeddings)[1], y = colnames(embeddings)[2],
-                  subtitle = "Pseudotemps exploratoire (graphe kNN pondere)")
+                  subtitle = tr("Pseudotemps exploratoire (graphe kNN pondere)"))
 
   if (isTRUE(show_edges) && !is.null(graph) && igraph::ecount(graph) > 0L) {
     edge_tbl <- igraph::as_data_frame(graph, what = "edges")
@@ -1060,8 +1066,10 @@ plot_slingshot_trajectory <- function(
     pseudotime,
     curves = NULL,
     palette = "default",
-    manual_gradient = NULL
+    manual_gradient = NULL,
+    tr = NULL
 ) {
+  tr <- tr %||% function(x) x
   embeddings <- as.data.frame(embeddings)
 
   if (ncol(embeddings) < 2L) {
@@ -1150,7 +1158,8 @@ plot_slingshot_trajectory <- function(
 
 #' @param top_n Number of top-correlated genes to display as nodes.
 
-plot_gene_correlation_network <- function(corr_df, target_gene, top_n = 20) {
+plot_gene_correlation_network <- function(corr_df, target_gene, top_n = 20, tr = NULL) {
+  tr <- tr %||% function(x) x
 
   top <- head(corr_df, top_n)
 
@@ -1204,7 +1213,7 @@ plot_gene_correlation_network <- function(corr_df, target_gene, top_n = 20) {
 
     edge.width          = edge_widths,
 
-    main                = paste("Reseau de Correlation -", target_gene),
+    main                = paste(paste0(tr("Reseau de Correlation -"), " "), target_gene),
 
     edge.curved         = 0.2
 
@@ -1212,7 +1221,7 @@ plot_gene_correlation_network <- function(corr_df, target_gene, top_n = 20) {
 
   legend("bottomleft",
 
-         legend = c("Correlation positive", "Correlation negative", "Gene cible"),
+         legend = c(tr("Correlation positive"), tr("Correlation negative"), tr("Gene cible")),
 
          col    = c("#27AE60", "#E74C3C", "#3498DB"),
 
@@ -1347,11 +1356,12 @@ build_corr_dt <- function(df) {
 
 #' @return ggplot object.
 
-plot_pseudotime_distribution <- function(seurat_obj, palette = "default", manual_colors = NULL) {
+plot_pseudotime_distribution <- function(seurat_obj, palette = "default", manual_colors = NULL, tr = NULL) {
+  tr <- tr %||% function(x) x
 
   if (!"pseudotime" %in% colnames(seurat_obj@meta.data))
 
-    stop("Pseudotemps non calculé — lancez d'abord 'Calculer Trajectoire'.")
+    stop(tr("Pseudotemps non calculé — lancez d'abord 'Calculer Trajectoire'."))
 
 
 
@@ -1381,9 +1391,9 @@ plot_pseudotime_distribution <- function(seurat_obj, palette = "default", manual
 
   p +
 
-    labs(title = "Distribution du Pseudotemps par Cluster",
+    labs(title = tr("Distribution du Pseudotemps par Cluster"),
 
-         x = "Pseudotemps", y = "Densité", fill = "Cluster") +
+         x = tr("Pseudotemps"), y = tr("Densité"), fill = tr("Cluster")) +
 
     theme_minimal() +
 
@@ -1412,11 +1422,12 @@ plot_pseudotime_distribution <- function(seurat_obj, palette = "default", manual
 #' @return ggplot object (faceted, one panel per gene).
 
 plot_genes_vs_pseudotime <- function(seurat_obj, genes, smooth_method = "loess",
-                                     palette = "default", manual_colors = NULL) {
+                                     palette = "default", manual_colors = NULL, tr = NULL) {
+  tr <- tr %||% function(x) x
 
   if (!"pseudotime" %in% colnames(seurat_obj@meta.data))
 
-    stop("Pseudotemps non calculé — lancez d'abord 'Calculer Trajectoire'.")
+    stop(tr("Pseudotemps non calculé — lancez d'abord 'Calculer Trajectoire'."))
 
 
 
@@ -1450,9 +1461,9 @@ plot_genes_vs_pseudotime <- function(seurat_obj, genes, smooth_method = "loess",
 
   p <- if (is.null(pal_scale)) p + scale_color_viridis_d(option = "turbo") else suppressWarnings(p + pal_scale)
 
-  p + labs(title = "Expression génique le long du Pseudotemps",
+  p + labs(title = tr("Expression génique le long du Pseudotemps"),
 
-         x = "Pseudotemps", y = "Expression Normalisée") +
+         x = tr("Pseudotemps"), y = tr("Expression Normalisée")) +
 
     theme_minimal() +
 

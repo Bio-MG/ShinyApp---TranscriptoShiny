@@ -169,11 +169,11 @@ ui <- page_navbar(
     
     
     
-    h6("Mémoire Utilisée", style = "font-weight: bold;"),
+    h6(i18n$t("Mémoire Utilisée"), style = "font-weight: bold;"),
     
     textOutput("mem_usage"),
     
-    actionButton("gc_btn", "🧹 Nettoyer RAM", 
+    actionButton("gc_btn", i18n$t("🧹 Nettoyer RAM"), 
                  
                  class = "btn-xs btn-outline-secondary w-100 mt-2"),
     
@@ -183,25 +183,25 @@ ui <- page_navbar(
     
     
     
-    h6("Paramètres RAM", style = "font-weight: bold;"),
+    h6(i18n$t("Paramètres RAM"), style = "font-weight: bold;"),
     
     div(class = "small text-muted", style = "font-size:0.75rem;",
         
-        "Bulk n'est presque jamais limité par la RAM (matrices de quelques Mo). ",
-        
-        "La pression vient surtout du Single-Cell/Spatial (objets Seurat volumineux) — ",
-        
-        "ajustez ici si vous travaillez avec de très gros jeux de données."),
+        i18n$t("Bulk n'est presque jamais limité par la RAM (matrices de quelques Mo)."),
+        " ",
+        i18n$t("La pression vient surtout du Single-Cell/Spatial (objets Seurat volumineux) —"),
+        " ",
+        i18n$t("ajustez ici si vous travaillez avec de très gros jeux de données.")),
     
-    numericInput("ram_future_gb", "Limite mémoire par tâche parallèle (Go)",
+    numericInput("ram_future_gb", i18n$t("Limite mémoire par tâche parallèle (Go)"),
                  
                  value = 10, min = 1, max = 64, step = 1),
     
-    numericInput("ram_upload_gb", "Taille maximale d'upload (Go)",
+    numericInput("ram_upload_gb", i18n$t("Taille maximale d'upload (Go)"),
                  
                  value = 5, min = 1, max = 50, step = 1),
     
-    actionButton("apply_ram_settings", "Appliquer",
+    actionButton("apply_ram_settings", i18n$t("Appliquer"),
                  
                  class = "btn-sm btn-outline-primary w-100"),
     
@@ -211,7 +211,7 @@ ui <- page_navbar(
     
     
     
-    h6("Objets Chargés", style = "font-weight: bold;"),
+    h6(i18n$t("Objets Chargés"), style = "font-weight: bold;"),
     
     uiOutput("global_status_panel"),
     
@@ -221,25 +221,25 @@ ui <- page_navbar(
     
     
     
-    h6("Session", style = "font-weight: bold;"),
+    h6(i18n$t("Session"), style = "font-weight: bold;"),
     
-    downloadButton("save_session_btn", "💾 Sauvegarder Session",
+    downloadButton("save_session_btn", i18n$t("💾 Sauvegarder Session"),
                    
                    class = "btn-sm btn-outline-primary w-100"),
     
-    fileInput("load_session_file", "📂 Charger Session (.rds)",
+    fileInput("load_session_file", i18n$t("📂 Charger Session (.rds)"),
               
               accept = ".rds", width = "100%"),
     
     div(class = "small text-muted", style = "font-size:0.75rem;",
         
-        "La sauvegarde capture l'ensemble des données chargées (Single-Cell, Bulk, Spatial) — ",
-        
-        "elle est déclenchée uniquement par ce bouton, jamais automatiquement. Pour le Spatial, ",
-        
-        "seul le \"sketch\" (echantillon RAM) est garanti portable : les donnees BPCells sur ",
-        
-        "disque doivent rester disponibles au meme chemin pour relancer clustering/deconvolution."),
+        i18n$t("La sauvegarde capture l'ensemble des données chargées (Single-Cell, Bulk, Spatial) —"),
+        " ",
+        i18n$t("elle est déclenchée uniquement par ce bouton, jamais automatiquement. Pour le Spatial,"),
+        " ",
+        i18n$t("seul le \"sketch\" (echantillon RAM) est garanti portable : les donnees BPCells sur"),
+        " ",
+        i18n$t("disque doivent rester disponibles au meme chemin pour relancer clustering/deconvolution.")),
     
     
     
@@ -247,7 +247,7 @@ ui <- page_navbar(
     
     
     
-    actionButton("help_btn", "📖 Guide / Aide", 
+    actionButton("help_btn", i18n$t("📖 Guide / Aide"), 
                  
                  icon = icon("question-circle"), 
                  
@@ -399,6 +399,17 @@ server <- function(input, output, session) {
     global_data$i18n$set_translation_language(lang)
     if (I18N_AVAILABLE) shiny.i18n::update_lang(language = lang, session = session)
   }, ignoreInit = TRUE)
+
+  # ── i18n sidebar dynamic labels (fileInput has no update*; JS shim handles static h6/div text) ──
+  observeEvent(global_data$language, {
+    .tr_s <- function(k) { tr <- global_data$i18n; if (is.null(tr)) return(k); tryCatch(.strip_i18n_html(tr$t(k)), error=function(e) k) }
+    updateActionButton(session, "gc_btn", label = .tr_s("🧹 Nettoyer RAM"))
+    updateNumericInput(session, "ram_future_gb", label = .tr_s("Limite mémoire par tâche parallèle (Go)"))
+    updateNumericInput(session, "ram_upload_gb", label = .tr_s("Taille maximale d'upload (Go)"))
+    updateActionButton(session, "apply_ram_settings", label = .tr_s("Appliquer"))
+    # downloadButton has no update*; label flips via JS shim (i18n$t at UI build)
+    updateActionButton(session, "help_btn", label = .tr_s("📖 Guide / Aide"))
+  }, ignoreInit = TRUE)
   
   
   
@@ -437,14 +448,18 @@ server <- function(input, output, session) {
   # === STATUT DES OBJETS — INDICATEUR DE PROGRESSION GLOBAL (point 8) ===
   
   output$global_status_panel <- renderUI({
-    
-    
+    global_data$language
+    .tr <- function(key) {
+      tr <- global_data$i18n
+      if (is.null(tr)) return(key)
+      tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+    }
     
     # ── Single-Cell state ────────────────────────────────────────────────
     
     sc_state <- if (is.null(global_data$sc_obj)) {
       
-      list(icon = "⚪", label = "Single-Cell", detail = "Aucune donnée")
+      list(icon = "⚪", label = .tr("Single-Cell"), detail = .tr("Aucune donnée"))
       
     } else {
       
@@ -458,13 +473,9 @@ server <- function(input, output, session) {
         
         icon   = if (has_clusters) "🟢" else "🟡",
         
-        label  = "Single-Cell",
+        label  = .tr("Single-Cell"),
         
-        detail = sprintf("%s cellules, %d échantillon(s)%s",
-                         
-                         format(n_cells, big.mark = ","), n_samples,
-                         
-                         if (has_clusters) " — pipeline exécuté" else " — pipeline non lancé")
+        detail = paste0(format(n_cells, big.mark = ","), " ", .tr("cellules,"), " ", n_samples, " ", .tr("échantillon(s)"), if (has_clusters) paste0(" ", .tr("— pipeline exécuté")) else paste0(" ", .tr("— pipeline non lancé")))
         
       )
       
@@ -476,7 +487,7 @@ server <- function(input, output, session) {
     
     bulk_state <- if (is.null(global_data$bulk_obj)) {
       
-      list(icon = "⚪", label = "Bulk RNA", detail = "Aucune donnée")
+      list(icon = "⚪", label = .tr("Bulk RNA"), detail = .tr("Aucune donnée"))
       
     } else {
       
@@ -486,9 +497,9 @@ server <- function(input, output, session) {
         
         icon   = "🟢",
         
-        label  = "Bulk RNA",
+        label  = .tr("Bulk RNA"),
         
-        detail = sprintf("%d échantillon(s) importé(s)", n_samples)
+        detail = .t_fmt(.tr("{n} échantillon(s) importé(s)"), n = n_samples)
         
       )
       
@@ -500,7 +511,7 @@ server <- function(input, output, session) {
     
     spatial_state <- if (is.null(global_data$spatial_obj)) {
       
-      list(icon = "⚪", label = "Spatial", detail = "Aucune donnée")
+      list(icon = "⚪", label = .tr("Spatial"), detail = .tr("Aucune donnée"))
       
     } else {
       
@@ -518,21 +529,17 @@ server <- function(input, output, session) {
         
         icon   = if (disk_ok) "🟢" else "🟠",
         
-        label  = "Spatial",
+        label  = .tr("Spatial"),
         
-        detail = sprintf("%s elements (%s en RAM, sketch)%s%s%s",
+        detail = paste0(format(n_total, big.mark = ","), " ", .tr("elements"), " (", format(n_sketch, big.mark = ","), " ", .tr("en RAM, sketch"), ")",
                          
-                         format(n_total, big.mark = ","), format(n_sketch, big.mark = ","),
+                         if (!disk_ok) paste0(" ", .tr("— disque introuvable")) else "",
                          
-                         if (!disk_ok) " — disque introuvable" else "",
-                         
-                         if (n_ds > 1) sprintf(" — %d echantillons charges", n_ds) else "",
+                         if (n_ds > 1) paste0(" ", .t_fmt(.tr("— {n} echantillons charges"), n = n_ds)) else "",
                          
                          if (!is.null(global_data$spatial_reference)) {
                            
-                           sprintf(" — reference partagee : %s cellules",
-                                   
-                                   format(global_data$spatial_reference$n_cells %||% 0, big.mark = ","))
+                           paste0(" ", .t_fmt(.tr("— reference partagee : {c} cellules"), c = format(global_data$spatial_reference$n_cells %||% 0, big.mark = ",")))
                            
                          } else "")
         
@@ -759,10 +766,10 @@ server <- function(input, output, session) {
   # === AIDE DIDACTIQUE ===
   
   observeEvent(input$help_btn, {
-    
+    .tr_h <- function(k) { tr <- global_data$i18n; if (is.null(tr)) return(k); tryCatch(.strip_i18n_html(tr$t(k)), error=function(e) k) }
     showModal(modalDialog(
       
-      title = "📖 Guide d'Utilisation - TranscriptoShiny v2",
+      title = .tr_h("📖 Guide d'Utilisation - TranscriptoShiny v2"),
       
       size = "l",
       
@@ -772,27 +779,21 @@ server <- function(input, output, session) {
       
       tags$div(
         
-        h4("🎯 Workflow Recommandé", style = "color: #2C3E50;"),
+        h4(.tr_h("🎯 Workflow Recommandé"), style = "color: #2C3E50;"),
         
         
         
-        h5("1️⃣ Importation des Données"),
+        h5(.tr_h("1️⃣ Importation des Données")),
         
-        p("Utilisez le menu ", tags$strong("'Import Données'"), " pour charger vos fichiers :"),
+        p(.tr_h("Utilisez le menu 'Import Données' pour charger vos fichiers :")),
         
         tags$ul(
           
-          tags$li(tags$strong("Single-Cell:"), " Dossiers 10X CellRanger, fichiers .rds, .h5, .h5ad"),
+          tags$li(.tr_h("Single-Cell: Dossiers 10X CellRanger, fichiers .rds, .h5, .h5ad")),
           
-          tags$li(tags$strong("RNA Bulk:"), " Matrices de counts (CSV/TSV) + Métadonnées optionnelles"),
+          tags$li(.tr_h("RNA Bulk: Matrices de counts (CSV/TSV) + Métadonnées optionnelles")),
           
-          tags$li(tags$strong("Spatial:"), " Visium / Xenium / CosMx — converti automatiquement en ",
-                  
-                  "matrice BPCells sur disque + echantillon RAM (\"sketch\"). Importez plusieurs ",
-                  
-                  "echantillons pour activer l'onglet \"5. Multi-echantillons\" (comparaison/",
-                  
-                  "integration Harmony conjointe).")
+          tags$li(.tr_h("Spatial: Visium / Xenium / CosMx — converti automatiquement en matrice BPCells sur disque + echantillon RAM (\"sketch\"). Importez plusieurs echantillons pour activer l'onglet \"5. Multi-echantillons\" (comparaison/ integration Harmony conjointe)."))
           
         ),
         
@@ -802,13 +803,7 @@ server <- function(input, output, session) {
                  
                  bsicons::bs_icon("lightbulb"), 
                  
-                 tags$strong(" Astuce:"), 
-                 
-                 " Pour Harmony (correction de batch), importez ", 
-                 
-                 tags$strong("2 échantillons ou plus"), 
-                 
-                 " dans l'onglet Single-Cell (ou Spatial, voir \"Multi-echantillons\")."
+                 .tr_h("Astuce: Pour Harmony (correction de batch), importez 2 échantillons ou plus dans l'onglet Single-Cell (ou Spatial, voir \"Multi-echantillons\").")
                  
         ),
         
@@ -818,19 +813,19 @@ server <- function(input, output, session) {
         
         
         
-        h5("2️⃣ Analyse Single-Cell"),
+        h5(.tr_h("2️⃣ Analyse Single-Cell")),
         
-        p("Suivez le workflow numéroté dans la barre latérale :"),
+        p(.tr_h("Suivez le workflow numéroté dans la barre latérale :")),
         
         tags$ol(
           
-          tags$li(tags$strong("Pipeline:"), " QC → Normalisation → Réduction dimensionnelle (UMAP/PCA/t-SNE/Harmony)"),
+          tags$li(.tr_h("Pipeline: QC → Normalisation → Réduction dimensionnelle (UMAP/PCA/t-SNE/Harmony)")),
           
-          tags$li(tags$strong("Annotation:"), " Identification automatique des types cellulaires (SingleR)"),
+          tags$li(.tr_h("Annotation: Identification automatique des types cellulaires (SingleR)")),
           
-          tags$li(tags$strong("Visualisation:"), " Choix de plots interactifs (DimPlot, Violin, Heatmap, etc.)"),
+          tags$li(.tr_h("Visualisation: Choix de plots interactifs (DimPlot, Violin, Heatmap, etc.)")),
           
-          tags$li(tags$strong("Marqueurs:"), " Recherche de gènes différentiels par cluster")
+          tags$li(.tr_h("Marqueurs: Recherche de gènes différentiels par cluster"))
           
         ),
         
@@ -840,9 +835,7 @@ server <- function(input, output, session) {
                  
                  bsicons::bs_icon("star"), 
                  
-                 tags$strong(" Nouvelle fonctionnalité:"), 
-                 
-                 " Cliquez directement sur un gène dans le tableau des marqueurs pour l'ajouter automatiquement à la visualisation !"
+                 .tr_h("Nouvelle fonctionnalité: Cliquez directement sur un gène dans le tableau des marqueurs pour l'ajouter automatiquement à la visualisation !")
                  
         ),
         
@@ -852,19 +845,13 @@ server <- function(input, output, session) {
         
         
         
-        h5("3️⃣ Analyses Bulk et Spatial"),
+        h5(.tr_h("3️⃣ Analyses Bulk et Spatial")),
         
         tags$ul(
           
-          tags$li(tags$strong("Bulk RNA:"), " Analyse différentielle avec DESeq2/edgeR"),
+          tags$li(.tr_h("Bulk RNA: Analyse différentielle avec DESeq2/edgeR")),
           
-          tags$li(tags$strong("Spatial:"), " Pipeline auto (1 clic) OU QC → Clustering (BANKSY, asynchrone) → ",
-                  
-                  "Deconvolution (RCTD/Label Transfer/STdeconvolve, asynchrone) → Visualisation WebGL → ",
-                  
-                  "Multi-echantillons (integration Harmony conjointe, asynchrone) → Export (paquet .zip / ",
-                  
-                  "script R reproductible)")
+          tags$li(.tr_h("Spatial: Pipeline auto (1 clic) OU QC → Clustering (BANKSY, asynchrone) → Deconvolution (RCTD/Label Transfer/STdeconvolve, asynchrone) → Visualisation WebGL → Multi-echantillons (integration Harmony conjointe, asynchrone) → Export (paquet .zip / script R reproductible)"))
           
         ),
         
@@ -874,15 +861,9 @@ server <- function(input, output, session) {
         
         
         
-        h5("💾 Gestion de la Mémoire"),
+        h5(.tr_h("💾 Gestion de la Mémoire")),
         
-        p("Le bouton ", tags$code("Nettoyer RAM"), 
-          
-          " permet de libérer la mémoire entre les analyses. Pour le Spatial, les calculs ",
-          
-          "lourds (clustering, déconvolution, intégration multi-échantillons) s'exécutent dans ",
-          
-          "des processus séparés (mirai) qui ne bloquent jamais votre session."),
+        p(.tr_h("Le bouton Nettoyer RAM permet de libérer la mémoire entre les analyses. Pour le Spatial, les calculs lourds (clustering, déconvolution, intégration multi-échantillons) s'exécutent dans des processus séparés (mirai) qui ne bloquent jamais votre session.")),
         
         
         
@@ -890,17 +871,17 @@ server <- function(input, output, session) {
         
         
         
-        h5("📚 Ressources"),
+        h5(.tr_h("📚 Ressources")),
         
         tags$ul(
           
-          tags$li(tags$a("Documentation Seurat", 
+          tags$li(tags$a(.tr_h("Documentation Seurat"), 
                          
                          href = "https://satijalab.org/seurat/", 
                          
                          target = "_blank")),
           
-          tags$li(tags$a("SingleR Guide", 
+          tags$li(tags$a(.tr_h("SingleR Guide"), 
                          
                          href = "https://bioconductor.org/packages/release/bioc/vignettes/SingleR/inst/doc/SingleR.html", 
                          
@@ -914,9 +895,9 @@ server <- function(input, output, session) {
       
       footer = tagList(
         
-        modalButton("Fermer"),
+        modalButton(.tr_h("Fermer")),
         
-        actionButton("reset_app", "🔄 Réinitialiser l'App", class = "btn-warning")
+        actionButton("reset_app", .tr_h("🔄 Réinitialiser l'App"), class = "btn-warning")
         
       )
       
@@ -997,8 +978,8 @@ server <- function(input, output, session) {
   observeEvent(input$gc_btn, { 
     
     clean_mem() 
-    
-    showNotification("🧹 Mémoire nettoyée", type = "message", duration = 2)
+    .tr_gc <- function(k) { tr <- global_data$i18n; if (is.null(tr)) return(k); tryCatch(.strip_i18n_html(tr$t(k)), error=function(e) k) }
+    showNotification(.tr_gc("🧹 Mémoire nettoyée"), type = "message", duration = 2)
     
   })
   
@@ -1011,12 +992,12 @@ server <- function(input, output, session) {
     options(future.globals.maxSize = input$ram_future_gb * 1024^3)
     
     options(shiny.maxRequestSize    = input$ram_upload_gb * 1024^3)
-    
+    .tr_ram <- function(k) { tr <- global_data$i18n; if (is.null(tr)) return(k); tryCatch(.strip_i18n_html(tr$t(k)), error=function(e) k) }
     showNotification(
       
-      sprintf("✓ Limites mises à jour : %d Go (tâches parallèles), %d Go (upload max).",
+      .t_fmt(.tr_ram("✓ Limites mises à jour : {a} Go (tâches parallèles), {b} Go (upload max)."),
               
-              input$ram_future_gb, input$ram_upload_gb),
+              a = input$ram_future_gb, b = input$ram_upload_gb),
       
       type = "message", duration = 5
       

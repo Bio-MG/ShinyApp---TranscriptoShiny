@@ -35,6 +35,8 @@ params:
   report_subtitle: ""
   report_notes: ""
   interactive: TRUE
+  i18n_strings: NULL
+  report_language: "fr"
 ---
 
 ```{r setup, include=FALSE}
@@ -44,6 +46,21 @@ knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE,
                       out.width="100%")
 sections <- params$sections
 obj      <- params$sc_obj
+
+# i18n Phase 6 : traduction des chaines du rapport. Les cles (chaines FR)
+# sont resolues cote serveur et injectees via params$i18n_strings.
+tr <- function(key) {
+  s <- params$i18n_strings
+  if (is.null(s)) return(key)
+  vapply(key, function(k) if (k %in% names(s)) s[[k]] else k, character(1), USE.NAMES = FALSE)
+}
+tr_fmt <- function(template, ...) {
+  vals <- list(...)
+  for (nm in names(vals)) {
+    template <- gsub(paste0("{", nm, "}"), format(vals[[nm]]), template, fixed = TRUE)
+  }
+  template
+}
 
 # Step-3.7 fix (BUG6): printing a raw htmlwidget (plotly) inside a
 # results='asis' loop mixed with cat() breaks JS/CSS dependency injection.

@@ -14,14 +14,13 @@
 mod_geo_ui <- function(id) {
   ns <- NS(id)
   tagList(
-    h4("Importer depuis GEO", class = "mt-0 mb-3"),
+    h4(i18n$t("Importer depuis GEO"), class = "mt-0 mb-3"),
 
     radioButtons(
-      ns("mode"), label = "Mode d'import",
-      choices = c(
-        "Accession GEO (téléchargement automatique)" = "online",
-        "Fichiers locaux (hors-ligne)"                = "offline"
-      ),
+      ns("mode"), label = i18n$t("Mode d'import"),
+      choices = stats::setNames(c("online", "offline"),
+                                c(.tr_plain("Accession GEO (téléchargement automatique)"),
+                                  .tr_plain("Fichiers locaux (hors-ligne)"))),
       selected = "online", inline = TRUE
     ),
 
@@ -31,11 +30,11 @@ mod_geo_ui <- function(id) {
 
       fluidRow(
         column(6,
-          textInput(ns("accession"), "Accession GEO (GSExxx)",
+          textInput(ns("accession"), i18n$t("Accession GEO (GSExxx)"),
                     placeholder = "ex: GSE52778")
         ),
         column(3, br(),
-          actionButton(ns("btn_fetch"), "Télécharger",
+          actionButton(ns("btn_fetch"), i18n$t("Télécharger"),
                        icon = icon("download"), class = "btn-primary mt-1")
         )
       ),
@@ -49,11 +48,11 @@ mod_geo_ui <- function(id) {
       condition = sprintf("input['%s'] == 'offline'", ns("mode")),
 
       fileInput(ns("file_counts"),
-                "Fichier de counts (tsv/csv/txt/xlsx)",
+                i18n$t("Fichier de counts (tsv/csv/txt/xlsx)"),
                 accept = c(".tsv", ".csv", ".txt", ".xlsx")),
 
       fileInput(ns("file_meta"),
-                "Fichier de métadonnées (optionnel) — series_matrix.txt ou csv/tsv",
+                i18n$t("Fichier de métadonnées (optionnel) — series_matrix.txt ou csv/tsv"),
                 accept = c(".txt", ".csv", ".tsv", ".gz"))
     ),
 
@@ -67,6 +66,21 @@ mod_geo_ui <- function(id) {
 mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    .tr <- function(key) {
+      tr <- global_data$i18n
+      if (is.null(tr)) return(key)
+      tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+    }
+
+    observeEvent(global_data$language, {
+      updateRadioButtons(session, "mode", label = .tr("Mode d'import"),
+        choices = stats::setNames(c("online", "offline"),
+                                  c(.tr("Accession GEO (téléchargement automatique)"),
+                                    .tr("Fichiers locaux (hors-ligne)"))))
+      updateTextInput(session, "accession", label = .tr("Accession GEO (GSExxx)"))
+      updateActionButton(session, "btn_fetch", label = .tr("Télécharger"))
+    }, ignoreInit = TRUE)
 
     # Internal GEO state — nothing leaves this rv except via global_data$bulk_obj
     rv <- reactiveValues(
@@ -87,7 +101,7 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
       rv$accession <- accession             # store locally (was shared_rv$geo_accession)
       rv$fetch_ok  <- FALSE
       rv$fetch_msg <- tags$span(icon("spinner", class = "fa-spin"),
-                                " Téléchargement en cours…", class = "text-muted")
+                                .tr(" Téléchargement en cours…"), class = "text-muted")
 
       result <- tryCatch(.geo_fetch(accession), error = function(e) list(ok = FALSE, msg = conditionMessage(e)))
 
@@ -124,8 +138,8 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
     output$ui_suppl_selector <- renderUI({
       req(length(rv$suppl_choices) > 1)
       tagList(
-        selectInput(ns("suppl_file"), "Choisir le fichier de counts :", choices = rv$suppl_choices),
-        actionButton(ns("btn_load_suppl"), "Charger ce fichier",
+        selectInput(ns("suppl_file"), .tr("Choisir le fichier de counts :"), choices = rv$suppl_choices),
+        actionButton(ns("btn_load_suppl"), .tr("Charger ce fichier"),
                      icon = icon("file-import"), class = "btn-outline-primary btn-sm")
       )
     })
@@ -181,7 +195,7 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
           } else NULL
         }
       }, error = function(e) {
-        showNotification(paste("Erreur métadonnées :", conditionMessage(e)), type = "warning", duration = 8)
+        showNotification(paste(.tr("Erreur métadonnées :"), conditionMessage(e)), type = "warning", duration = 8)
         NULL
       })
       rv$metadata <- meta
@@ -198,26 +212,26 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
         n_match <- sum(colnames(counts) %in% rownames(meta))
         if (n_match == ncol(counts)) {
           tags$span(icon("circle-check"),
-                    sprintf(" Métadonnées alignées (%d/%d)", n_match, ncol(counts)),
+                    .t_fmt(.tr(" Métadonnées alignées ({a}/{b})"), a = n_match, b = ncol(counts)),
                     class = "text-success small")
         } else {
           tags$span(icon("triangle-exclamation"),
-                    sprintf(" %d/%d échantillons alignés", n_match, ncol(counts)),
+                    .t_fmt(.tr(" {a}/{b} échantillons alignés"), a = n_match, b = ncol(counts)),
                     class = "text-warning small")
         }
       } else {
         tags$span(icon("circle-info"),
-                  " Pas de métadonnées — inférées depuis les noms de colonnes.",
+                  .tr(" Pas de métadonnées — inférées depuis les noms de colonnes."),
                   class = "text-muted small")
       }
 
       tagList(
         hr(),
-        h5("Aperçu"),
-        tags$p(tags$b("Dimensions : "), sprintf("%d gènes × %d échantillons", nrow(counts), ncol(counts))),
-        tags$p(tags$b("Type d'identifiants : "), id_type),
+        h5(.tr("Aperçu")),
+        tags$p(tags$b(.tr("Dimensions : ")), sprintf("%d gènes × %d échantillons", nrow(counts), ncol(counts))),
+        tags$p(tags$b(.tr("Type d'identifiants : ")), id_type),
         align_msg,
-        tags$b("Counts (5×5) :"),
+        tags$b(.tr("Counts (5×5) :")),
         tableOutput(ns("tbl_counts_preview"))
       )
     })
@@ -232,7 +246,7 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
     # ── Confirm import → write global_data$bulk_obj ───────────────────────────
     output$ui_confirm <- renderUI({
       req(rv$fetch_ok || (!is.null(rv$counts) && input$mode == "offline"))
-      tagList(hr(), actionButton(ns("btn_confirm"), "Confirmer l'import",
+      tagList(hr(), actionButton(ns("btn_confirm"), .tr("Confirmer l'import"),
                                  icon = icon("check"), class = "btn-success"))
     })
 
@@ -246,7 +260,7 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
         meta <- data.frame(sample = colnames(counts), row.names = colnames(counts),
                            stringsAsFactors = FALSE)
         showNotification(
-          "Métadonnées auto-générées depuis les noms de colonnes. Complétez-les dans l'onglet QC.",
+          .tr("Métadonnées auto-générées depuis les noms de colonnes. Complétez-les dans l'onglet QC."),
           type = "message", duration = 6
         )
       } else {

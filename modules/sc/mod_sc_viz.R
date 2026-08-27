@@ -8,7 +8,7 @@
 #       previous session's separate helpers_sc.R version)
 #   [3] Palette UI: selectInput "Défaut / Okabe-Ito / Viridis / Set2 / Manuel"
 #       + dynamic manual colour pickers per group_by level (mirrors Bulk pattern)
-#   [4] "📌 Ajouter au Rapport" → shared_rv$report_viz_list (consumed by mod_sc.R)
+#   [4] i18n$t("📌 Ajouter au Rapport") → shared_rv$report_viz_list (consumed by mod_sc.R)
 #   [5] Volcano pickers: fixed stale isolate bug (new reactive on list(sc_obj, group_by))
 #
 # Step-3.7 changes:
@@ -20,7 +20,7 @@
 #       color bar while the expression gradient (fill) was fine.
 #   [7] .current_cfg() now also captures sc_palette/sc_manual_colors, and the SC
 #       report (sc_report_template.Rmd) reads them back instead of hardcoding
-#       "default" — so "📌 Ajouter au Rapport" plots match the live palette both
+#       "default" — so i18n$t("📌 Ajouter au Rapport") plots match the live palette both
 #       on screen AND in the exported HTML/PDF.
 # =============================================================================
 
@@ -158,7 +158,7 @@ build_sc_viz_plot <- function(obj, cfg, sc_palette = "default", manual_colors = 
     p <- DotPlot(obj, features = head(valid, 20), group.by = grp) + theme_fn +
          theme(axis.text.x = element_text(angle = 45, hjust = 1))
     # DotPlot: color encodes avg expression (continuous), size encodes pct expressed.
-    # Route through sc_continuous_scale() so "Manuel" (sequential gradient) is
+    # Route through sc_continuous_scale() so i18n$t("Manuel") (sequential gradient) is
     # respected here too, same as FeaturePlot; size scale untouched.
     return(suppressWarnings(p + sc_continuous_scale(sc_palette, "color", manual_gradient)))
   }
@@ -256,7 +256,7 @@ build_sc_viz_plot <- function(obj, cfg, sc_palette = "default", manual_colors = 
          geom_vline(xintercept = c(-lfc, lfc), linetype = "dotted", color = "grey40") +
          geom_hline(yintercept = -log10(pval),  linetype = "dotted", color = "grey40") +
          labs(title = vtitle, x = "Log2 Fold Change",
-              y = "-log10(P.adj)", color = "Statut") + theme_fn
+              y = "-log10(P.adj)", color = i18n$t("Statut")) + theme_fn
     if (show_lbl)
       p <- p + geom_text(aes(label = label), size = 2.8, na.rm = TRUE,
                          vjust = -0.6, show.legend = FALSE)
@@ -303,14 +303,14 @@ mod_sc_viz_ui <- function(id) {
 
     div(class = "alert alert-light", style = "font-size:0.78em;border-left:3px solid #2C3E50;",
         bsicons::bs_icon("diagram-3"), tags$strong(" Bloc 1 — Exploration Core"),
-        " : réductions, expression, profils, heatmaps, densité 2D, 3D."),
+        i18n$t(" : réductions, expression, profils, heatmaps, densité 2D, 3D.")),
 
     # Step 5 (UI reorg, Phase 1): grouped <optgroup> choices instead of a flat
     # list -- purely presentational (native <select> optgroup rendering),
     # input$viz_type keeps its EXACT contract (same values, same server-side
     # switches downstream) -- zero reactivity change.
     selectInput(
-      ns("viz_type"), "Style de Visualisation",
+      ns("viz_type"), i18n$t("Style de Visualisation"),
       choices = list(
         "Réductions" = c(
           "Réduction Dimensionnelle (UMAP/PCA/t-SNE)" = "dim"
@@ -344,7 +344,7 @@ mod_sc_viz_ui <- function(id) {
     # Conditional: DimPlot reduction picker
     conditionalPanel(
       condition = "input.viz_type == 'dim'", ns = ns,
-      selectInput(ns("viz_reduction"), "Reduction a Visualiser",
+      selectInput(ns("viz_reduction"), i18n$t("Reduction a Visualiser"),
                   choices  = c("UMAP"="umap","PCA"="pca","t-SNE"="tsne","Diffusion Map"="dm"),
                   selected = "umap")
     ),
@@ -353,32 +353,32 @@ mod_sc_viz_ui <- function(id) {
     conditionalPanel(
       condition = "input.viz_type == 'scatter'", ns = ns,
       div(style="border-bottom:1px solid #ddd;padding-bottom:10px;margin-bottom:10px;",
-          h6("Gene / Feature X", style="font-weight:bold;color:#2C3E50;"),
+          h6(i18n$t("Gene / Feature X"), style="font-weight:bold;color:#2C3E50;"),
           selectizeInput(ns("scatter_gene1"), NULL, choices = NULL, multiple = FALSE,
                          options = list(placeholder = "Ex: CD4"))),
       div(style="border-bottom:1px solid #ddd;padding-bottom:10px;margin-bottom:10px;",
-          h6("Gene / Feature Y", style="font-weight:bold;color:#2C3E50;"),
+          h6(i18n$t("Gene / Feature Y"), style="font-weight:bold;color:#2C3E50;"),
           selectizeInput(ns("scatter_gene2"), NULL, choices = NULL, multiple = FALSE,
                          options = list(placeholder = "Ex: CD8A"))),
       div(style="background:#f8f9fa;padding:10px;border-radius:5px;",
-          radioButtons(ns("scatter_cor_method"), "Methode",
+          radioButtons(ns("scatter_cor_method"), i18n$t("Méthode"),
                        choices = c("Pearson"="pearson","Spearman"="spearman"),
                        selected = "pearson", inline = TRUE),
-          checkboxInput(ns("scatter_smooth"), "Ligne de tendance", value = TRUE))
+          checkboxInput(ns("scatter_smooth"), i18n$t("Ligne de tendance"), value = TRUE))
     ),
 
     # Conditional: Multi-sample
     conditionalPanel(
       condition = "input.viz_type == 'multi_sample'", ns = ns,
-      selectizeInput(ns("multi_gene"), "Gene a Comparer", choices = NULL, multiple = FALSE),
-      radioButtons(ns("multi_plot_type"), "Type",
+      selectizeInput(ns("multi_gene"), i18n$t("Gene a Comparer"), choices = NULL, multiple = FALSE),
+      radioButtons(ns("multi_plot_type"), i18n$t("Type"),
                    choices = c("Violin"="violin","Box"="box","Jitter"="jitter"),
                    inline = TRUE)
     ),
 
     # Group-by
     div(style="display:flex;align-items:center;justify-content:space-between;",
-        tags$label("Grouper/Colorer par:", class="control-label"),
+        tags$label(i18n$t("Grouper/Colorer par:"), class="control-label"),
         tooltip(bsicons::bs_icon("info-circle"), "Variable de métadonnées pour groupement")),
     selectInput(ns("group_by"), NULL, choices = NULL),
 
@@ -388,78 +388,78 @@ mod_sc_viz_ui <- function(id) {
       ns = ns,
       div(
         class = "border-bottom pb-2 mb-2",
-        selectizeInput(ns("feat_sel"), "Genes a Visualiser",
+        selectizeInput(ns("feat_sel"), i18n$t("Genes a Visualiser"),
                        choices = NULL, multiple = TRUE,
                        options = list(maxOptions=5000, placeholder="Ex: CD4, PTPRC", maxItems=10)),
         div(class="small text-muted mb-2", textOutput(ns("gene_selection_status"))),
-        actionButton(ns("clear_viz_genes"), "Vider", class="btn-outline-danger btn-sm w-100")
+        actionButton(ns("clear_viz_genes"), i18n$t("Vider"), class="btn-outline-danger btn-sm w-100")
       )
     ),
 
     # Violin: boxplot overlay
     conditionalPanel(
       condition = "input.viz_type == 'violin'", ns = ns,
-      checkboxInput(ns("violin_boxplot"), "Superposer Boxplot", value = FALSE)
+      checkboxInput(ns("violin_boxplot"), i18n$t("Superposer Boxplot"), value = FALSE)
     ),
 
     # Volcano settings
     conditionalPanel(
       condition = "input.viz_type == 'volcano'", ns = ns,
       div(style="background:#f8f9fa;padding:10px;border-radius:5px;margin-bottom:10px;",
-          h6("Groupes de Comparaison", style="font-weight:bold;"),
-          selectInput(ns("volcano_group1"), "Group 1 (Test)",      choices = NULL),
-          selectInput(ns("volcano_group2"), "Group 2 (Reference)", choices = c("All other cells"="rest")),
+          h6(i18n$t("Groupes de Comparaison"), style="font-weight:bold;"),
+          selectInput(ns("volcano_group1"), i18n$t("Group 1 (Test)"),      choices = NULL),
+          selectInput(ns("volcano_group2"), i18n$t("Group 2 (Reference)"), choices = c("All other cells"="rest")),
           helpText("Compare Group 1 vs Group 2 (ou 'rest' pour vs tous les autres)")),
       fluidRow(
-        column(6, numericInput(ns("volcano_logfc"), "Log2FC Threshold", value=0.25, step=0.05)),
-        column(6, numericInput(ns("volcano_pval"),  "P-adj Threshold",  value=0.05, step=0.001))
+        column(6, numericInput(ns("volcano_logfc"), i18n$t("Log2FC Threshold"), value=0.25, step=0.05)),
+        column(6, numericInput(ns("volcano_pval"),  i18n$t("P-adj Threshold"),  value=0.05, step=0.001))
       ),
-      checkboxInput(ns("volcano_show_labels"), "Afficher labels gènes sig.", value=TRUE),
-      actionButton(ns("volcano_add_sig"), "-> Add Sig. Genes to Viz",
+      checkboxInput(ns("volcano_show_labels"), i18n$t("Afficher labels gènes sig."), value=TRUE),
+      actionButton(ns("volcano_add_sig"), i18n$t("-> Add Sig. Genes to Viz"),
                    class="btn-sm btn-success w-100")
     ),
 
     conditionalPanel(
       condition = "input.viz_type == 'heatmap_hier'", ns = ns,
       div(style="background:#f8f9fa;padding:10px;border-radius:5px;margin-bottom:10px;",
-          h6("Heatmap Hierarchique", style="font-weight:bold;"),
+          h6(i18n$t("Heatmap Hierarchique"), style="font-weight:bold;"),
           helpText("Genes du panier ci-dessus (max 50). Clustering hierarchique lignes/colonnes."),
-          numericInput(ns("hier_max_cells"), "Max cellules avant agregation par groupe",
+          numericInput(ns("hier_max_cells"), i18n$t("Max cellules avant agregation par groupe"),
                        value = 5000, min = 200, max = 20000, step = 500))
     ),
 
     conditionalPanel(
       condition = "input.viz_type == 'density_2d'", ns = ns,
       div(style="background:#f8f9fa;padding:10px;border-radius:5px;margin-bottom:10px;",
-          h6("Densite d'Expression 2D", style="font-weight:bold;"),
-          selectizeInput(ns("density_gene"), "Gene", choices = NULL, multiple = FALSE,
+          h6(i18n$t("Densite d'Expression 2D"), style="font-weight:bold;"),
+          selectizeInput(ns("density_gene"), i18n$t("Gene"), choices = NULL, multiple = FALSE,
                          options = list(placeholder = "Ex: CD3D")),
-          selectInput(ns("density_reduction"), "Reduction (2D)",
+          selectInput(ns("density_reduction"), i18n$t("Reduction (2D)"),
                       choices = c("UMAP"="umap","PCA"="pca","t-SNE"="tsne"), selected = "umap"),
-          numericInput(ns("density_max_cells"), "Max cellules (estimation densite)",
+          numericInput(ns("density_max_cells"), i18n$t("Max cellules (estimation densite)"),
                        value = 50000, min = 1000, max = 200000, step = 1000),
           div(class="text-muted", style="font-size:0.72em;",
-              "Visualisation descriptive -- ne constitue pas une inference de lignage."))
+              i18n$t("Visualisation descriptive -- ne constitue pas une inference de lignage.")))
     ),
 
     conditionalPanel(
       condition = "input.viz_type == 'reduction_3d'", ns = ns,
       div(style="background:#f8f9fa;padding:10px;border-radius:5px;margin-bottom:10px;",
-          h6("Reduction 3D", style="font-weight:bold;"),
-          selectInput(ns("reduction_3d_pick"), "Reduction (>= 3 dimensions)", choices = NULL),
-          numericInput(ns("reduction_3d_max_cells"), "Max cellules affichees",
+          h6(i18n$t("Reduction 3D"), style="font-weight:bold;"),
+          selectInput(ns("reduction_3d_pick"), i18n$t("Reduction (>= 3 dimensions)"), choices = NULL),
+          numericInput(ns("reduction_3d_max_cells"), i18n$t("Max cellules affichees"),
                        value = 50000, min = 1000, max = 200000, step = 1000),
           div(class="text-muted", style="font-size:0.72em;",
               "Utilise 'Grouper/Colorer par' ci-dessous. Si vide, choisissez PCA (UMAP/t-SNE sont 2D par defaut)."))
     ),
 
-    sliderInput(ns("pt_size"), "Taille points", 0.1, 3, 0.5, 0.1),
+    sliderInput(ns("pt_size"), i18n$t("Taille points"), 0.1, 3, 0.5, 0.1),
 
     hr(),
 
     # ── Palette ─────────────────────────────────────────────────────────────
     div(style="display:flex;align-items:center;gap:6px;",
-        tags$label("🎨 Palette couleur", class="control-label", style="margin-bottom:0;"),
+        tags$label(i18n$t("🎨 Palette couleur"), class="control-label", style="margin-bottom:0;"),
         tooltip(bsicons::bs_icon("info-circle"),
                 "Appliqué aux groupes/clusters colorés. Okabe-Ito = sûre pour daltoniens.")),
     selectInput(ns("sc_palette"), NULL,
@@ -475,10 +475,10 @@ mod_sc_viz_ui <- function(id) {
     hr(),
     div(class = "alert alert-light", style = "font-size:0.72em;opacity:0.55;",
         bsicons::bs_icon("hourglass-split"), tags$strong(" Bloc 2 — Régulation & Fonction"),
-        " (à venir — régulons, cartes d'enrichissement)."),
+        i18n$t(" (à venir — régulons, cartes d'enrichissement).")),
     div(class = "alert alert-light", style = "font-size:0.72em;opacity:0.55;margin-bottom:0;",
         bsicons::bs_icon("hourglass-split"), tags$strong(" Bloc 3 — Dynamique & Écosystème"),
-        " (à venir — vélocité ARN, communication cellulaire, Milo, scCODA).")
+        i18n$t(" (à venir — vélocité ARN, communication cellulaire, Milo, scCODA)."))
   )
 }
 
@@ -494,25 +494,25 @@ mod_sc_viz_output_ui <- function(id) {
       class = "card-header bg-light",
       div(
         style = "display:flex;justify-content:space-between;align-items:center;",
-        h5("Visualisation Interactive", class="card-title mb-0"),
+        h5(i18n$t("Visualisation Interactive"), class="card-title mb-0"),
         div(
           # "Add to report" basket button
-          actionButton(ns("add_to_report"), "📌 Ajouter au Rapport",
+          actionButton(ns("add_to_report"), i18n$t("📌 Ajouter au Rapport"),
                        class="btn-sm btn-outline-dark me-1"),
           # Export popover
           popover(
-            trigger = actionButton(ns("plot_settings"), "Personnaliser",
+            trigger = actionButton(ns("plot_settings"), i18n$t("Personnaliser"),
                                    class="btn-sm btn-outline-primary"),
             title = "Export",
-            selectInput(ns("plot_theme"), "Thème",
+            selectInput(ns("plot_theme"), i18n$t("Thème"),
                         choices = c("Minimal"="minimal","Classique"="classic",
                                     "BW"="bw","Vide"="void")),
-            numericInput(ns("plot_width"),  "Largeur", 800, min=400, max=2000),
-            numericInput(ns("plot_height"), "Hauteur", 600, min=300, max=1500),
-            selectInput(ns("export_format"), "Format",
+            numericInput(ns("plot_width"),  i18n$t("Largeur"), 800, min=400, max=2000),
+            numericInput(ns("plot_height"), i18n$t("Hauteur"), 600, min=300, max=1500),
+            selectInput(ns("export_format"), i18n$t("Format"),
                         choices = c("PNG"="png","PDF"="pdf")),
             uiOutput(ns("export_fidelity_note")),
-            downloadButton(ns("export_plot"), "Exporter")
+            downloadButton(ns("export_plot"), i18n$t("Exporter"))
           )
         )
       )
@@ -529,6 +529,18 @@ mod_sc_viz_output_ui <- function(id) {
 
 mod_sc_viz_server <- function(id, global_data, shared_rv) {
   moduleServer(id, function(input, output, session) {
+    # ── i18n proxy ──────────────────────────────────────────────────────────
+    .tr <- function(key) {
+      tr <- isolate(global_data$i18n)
+      if (is.null(tr)) return(key)
+      tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+    }
+
+    observeEvent(global_data$language, {
+      updateSelectInput(session, "viz_type", label = .tr("Style de Visualisation"))
+      updateSliderInput(session, "pt_size", label = .tr("Taille points"))
+    }, ignoreInit = TRUE)
+
     ns <- session$ns
 
     # ── Reactive: ggplot for export ──────────────────────────────────────────
@@ -573,17 +585,19 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
 
     # Step 5 (UI reorg): maps the flat viz_type value back to its conceptual
     # group for display -- purely informational, no new reactive contract.
-    .viz_category_map <- c(
-      dim = "Réductions", reduction_3d = "Visualisation 3D",
-      feature = "Expression", dot = "Expression",
-      violin = "Profils", stacked_violin = "Profils", ridge = "Profils",
-      scatter = "Profils", correlation_matrix = "Profils",
-      multi_sample = "Profils", volcano = "Profils",
-      heatmap = "Heatmap", heatmap_hier = "Heatmap",
-      density_2d = "Densité 2D"
-    )
     output$viz_category_badge <- renderUI({
       req(input$viz_type)
+      # Make badge reactive to language switch
+      global_data$language
+      .viz_category_map <- c(
+        dim = .tr("Réductions"), reduction_3d = .tr("Visualisation 3D"),
+        feature = .tr("Expression"), dot = .tr("Expression"),
+        violin = .tr("Profils"), stacked_violin = .tr("Profils"), ridge = .tr("Profils"),
+        scatter = .tr("Profils"), correlation_matrix = .tr("Profils"),
+        multi_sample = .tr("Profils"), volcano = .tr("Profils"),
+        heatmap = .tr("Heatmap"), heatmap_hier = .tr("Heatmap"),
+        density_2d = .tr("Densité 2D")
+      )
       cat_label <- .viz_category_map[[input$viz_type]] %||% "Exploration"
       div(class = "text-muted", style = "font-size:0.75em;margin-bottom:4px;",
           bsicons::bs_icon("diagram-3"),
@@ -835,7 +849,7 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
                         selected = if (!is.null(cur_g1) && cur_g1 %in% idents_levels) cur_g1
                                    else idents_levels[1])
 
-      v2_choices <- c("All other cells"="rest",
+      v2_choices <- c(setNames("rest", .tr("All other cells")),
                       .safe_setnames(idents_levels, paste("Group:", idents_levels)))
       cur_g2 <- isolate(input$volcano_group2)
       updateSelectInput(session, "volcano_group2", choices = v2_choices,
@@ -869,7 +883,7 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
       p <- tryCatch(
         build_sc_viz_plot(obj, cfg, input$sc_palette, sc_manual_colors_vec(), sc_gradient_vec()),
         error = function(e)
-          ggplot() + annotate("text",x=1,y=1,label=paste("Erreur:", e$message)) + theme_void()
+          ggplot() + annotate("text",x=1,y=1,label=paste(.tr("Erreur:"), e$message)) + theme_void()
       )
       # ComplexHeatmap n'est pas un ggplot -- jamais dans current_plot() (ggsave sinon)
       if (!identical(type, "heatmap_hier")) current_plot(p)
@@ -914,7 +928,7 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
                           sc_gradient_vec(), sc_volcano_colors_vec()),
         error = function(e)
           ggplot() + annotate("text",x=1,y=1,
-                              label=paste("Erreur:", e$message), color="red") + theme_void()
+                              label=paste(.tr("Erreur:"), e$message), color="red") + theme_void()
       )
       current_plot(p_gg)   # always set ggplot for export, regardless of display mode
 
@@ -1054,7 +1068,7 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
       }
     )
 
-    # ── "📌 Ajouter au Rapport" ──────────────────────────────────────────────
+    # ── .tr("📌 Ajouter au Rapport") ──────────────────────────────────────────────
     observeEvent(input$add_to_report, {
       req(global_data$sc_obj)
       cfg <- .current_cfg()
@@ -1077,7 +1091,7 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
       req(current_plot())
       markers <- attr(current_plot(), "volcano_markers")
       if (is.null(markers)) {
-        showNotification("Générez d'abord le Volcano Plot.", type="warning"); return()
+        showNotification(.tr("Générez d'abord le Volcano Plot."), type="warning"); return()
       }
       lfc  <- as.numeric(input$volcano_logfc %||% 0.25)
       pval <- as.numeric(input$volcano_pval  %||% 0.05)
@@ -1088,13 +1102,13 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
       current <- shared_rv$selected_genes %||% character(0)
       shared_rv$selected_genes <- unique(c(current, sig))
       shared_rv$active_tab     <- "tab_viz"
-      showNotification(paste(length(sig), "gènes significatifs ajoutés."), type="message")
+      showNotification(paste(length(sig), .tr("gènes significatifs ajoutés.")), type="message")
     })
 
     # ── Gene count status ────────────────────────────────────────────────────
     output$gene_selection_status <- renderText({
       n <- length(input$feat_sel %||% character(0))
-      if (n == 0) "Aucun gène sélectionné" else paste(n, "gène(s) sélectionné(s)")
+      if (n == 0) .tr("Aucun gène sélectionné") else paste(n, .tr("gène(s) sélectionné(s)"))
     })
 
     # ── Clear gene selection ─────────────────────────────────────────────────
