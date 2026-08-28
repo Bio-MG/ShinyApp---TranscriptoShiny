@@ -21,11 +21,10 @@ mod_sc_mapping_ui <- function(id) {
     uiOutput(ns("detected_id_type_ui")),
 
     fluidRow(
-      column(6, selectInput(ns("map_organism"), "Organisme",
-                            choices = c("Humain"="human","Souris"="mouse"))),
-      column(6, selectInput(ns("map_from_type"), "Type source",
-                            choices = c("Ensembl Gene ID"="ensembl",
-                                        "Entrez ID"       ="entrez")))
+      column(6, selectInput(ns("map_organism"), i18n$t("Organisme"),
+                            choices = setNames(c("human","mouse"), c(.tr_plain("Humain"), .tr_plain("Souris"))))),
+      column(6, selectInput(ns("map_from_type"), i18n$t("Type source"),
+                            choices = setNames(c("ensembl","entrez"), c(.tr_plain("Ensembl Gene ID"), .tr_plain("Entrez ID")))))
     ),
 
     checkboxInput(ns("strip_ensembl_version"),
@@ -34,11 +33,10 @@ mod_sc_mapping_ui <- function(id) {
 
     radioButtons(ns("collapse_method"),
                  i18n$t("Fusion des doublons (plusieurs ID → même symbole)"),
-                 choices = c("Somme des counts (recommandé)"="sum",
-                             "Garder l'ID le plus exprimé"  ="max_mean")),
+                 choices = setNames(c("sum","max_mean"), c(.tr_plain("Somme des counts (recommandé)"), .tr_plain("Garder l'ID le plus exprimé")))),
 
-    actionButton(ns("run_mapping"), "\U0001f504 Appliquer le Mapping",
-                 class="btn-info w-100"),
+    actionButton(ns("run_mapping"), i18n$t("Appliquer le Mapping"),
+                 icon = icon("arrows-rotate"), class="btn-info w-100"),
 
     div(class="mt-2", uiOutput(ns("mapping_status")))
   )
@@ -71,25 +69,20 @@ mod_sc_mapping_server <- function(id, global_data) {
       if (detected == "unknown") {
         return(div(class="alert alert-warning", style="font-size:0.8em;",
           icon("circle-exclamation"),
-          sprintf(" Type non reconnu (ex: '%s'). Si ce ne sont pas des IDs de gènes standards, ignorez cette étape.",
-                  example_id)))
+          .t_fmt(.tr("Type d'identifiant NON reconnu (ex. trouvé dans vos données : {example}). Si ce ne sont PAS des identifiants de gènes (ex: comptages personnalisés, autre type de feature), ignorez cette étape facultative et passez directement à l'étape 1."), example = example_id)))
       }
       label <- switch(detected,
-        ensembl    = "Ensembl Gene ID",
-        entrez     = "Entrez ID",
-        affy_probe = "Probe Affymetrix (non supporté pour SC)",
-        symbol     = "Symbole — déjà mappé \u2713")
+        ensembl    = .tr("Ensembl Gene ID"),
+        entrez     = .tr("Entrez ID"),
+        affy_probe = .tr("Probe Affymetrix (non supporté pour SC)"),
+        symbol     = .tr("Symbole — déjà mappé, cette étape est probablement inutile"))
       cls <- if (detected == "symbol") "alert-success" else "alert-info"
-      # Step-3.8B: also surface the auto-detected organism (ENSMUSG vs ENSG
-      # prefix) next to the ID type, so the user can visually confirm the
-      # "Organisme" selector below matches before clicking "Appliquer".
       detected_org <- tryCatch(detect_organism_from_ids(ids), error=function(e) NA_character_)
       org_line <- if (!is.na(detected_org))
-        tags$div(class="mt-1", sprintf("Organisme détecté : %s.",
-                                       if (detected_org=="mouse") "Souris" else "Humain"))
+        tags$div(class="mt-1", .t_fmt(.tr("Organisme détecté : {org}."), org = if (detected_org=="mouse") .tr("Souris") else .tr("Humain")))
       else NULL
       div(class=paste("alert", cls), style="font-size:0.8em;",
-          sprintf("Type détecté : %s (ex: '%s').", label, example_id), org_line)
+          .t_fmt(.tr("Type détecté automatiquement : {label} (ex: '{example}')."), label = label, example = example_id), org_line)
     })
 
     observeEvent(global_data$sc_obj, {
@@ -109,7 +102,7 @@ mod_sc_mapping_server <- function(id, global_data) {
     # ── Run mapping ───────────────────────────────────────────────────────
     observeEvent(input$run_mapping, {
       req(global_data$sc_obj)
-      showNotification("\U0001f504 Mapping en cours...", type="message", duration=4)
+      showNotification(.tr("Mapping des identifiants..."), type="message", duration=4)
 
       obj            <- global_data$sc_obj
       has_downstream <- "seurat_clusters" %in% colnames(obj@meta.data) ||
@@ -138,18 +131,16 @@ mod_sc_mapping_server <- function(id, global_data) {
 
         if (pct_unmapped > 20)
           showNotification(
-            sprintf("\u26a0\ufe0f %.0f%% des identifiants n'ont pas pu être mappés. Vérifiez organisme/type.", pct_unmapped),
+            .t_fmt(.tr("⚠️ {pct}% des identifiants n'ont pas pu être mappés. Vérifiez l'organisme et le type source."), pct = round(pct_unmapped)),
             type="warning", duration=10)
 
         global_data$sc_obj <- result$object
 
-        mapping_status_rv(sprintf(
-          "\u2713 %d mappés, %d non-mappés (%.1f%%), %d fusion(s) \u2192 %d gènes finaux.%s",
-          result$n_mapped, result$n_unmapped, pct_unmapped,
-          result$n_collapsed, nrow(result$object),
-          if (has_downstream) " Pipeline réinitialisé — relancez l'étape 1." else ""
+        mapping_status_rv(paste0(
+          .t_fmt(.tr("✓ {mapped} mappés, {unmapped} non-mappés ({pct}%), {collapsed} fusion(s) de doublon → {final} gènes finaux."), mapped = result$n_mapped, unmapped = result$n_unmapped, pct = sprintf("%.1f", pct_unmapped), collapsed = result$n_collapsed, final = nrow(result$object)),
+          if (has_downstream) paste0(" ", .tr("Pipeline réinitialisé — relancez l'étape 1.")) else ""
         ))
-        showNotification("\u2713 Mapping appliqué.", type="message", duration=5)
+        showNotification(.tr("✓ Mapping appliqué — relancez l'étape 1 (Filtrage & VST) pour l'utiliser."), type="message", duration=5)
 
       }, error=function(e) {
         showNotification(paste(.tr("Erreur de mapping:"), conditionMessage(e)),

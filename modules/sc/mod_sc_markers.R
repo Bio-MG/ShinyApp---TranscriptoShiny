@@ -105,19 +105,19 @@ mod_sc_markers_ui <- function(id) {
           class = "border rounded p-3 mb-3",
           style = "background-color:#f8f9fa;",
           h6(i18n$t("Hybrid Gene Selector"), class = "mb-2 fw-bold"),
-          textAreaInput(
-            ns("bulk_gene_input"),
-            label       = i18n$t("Paste genes (comma, space or newline separated):"),
-            rows        = 3,
-            placeholder = "Example: CD3D, MS4A1, CD8A, NKG7"
-          ),
+           textAreaInput(
+             ns("bulk_gene_input"),
+             label       = i18n$t("Paste genes (comma, space or newline separated):"),
+             rows        = 3,
+             placeholder = i18n$t("Example: CD3D, MS4A1, CD8A, NKG7")
+           ),
           actionButton(ns("add_bulk_genes"), i18n$t("Add to Visualization"),
                        class = "btn-primary btn-sm w-100 mb-3"),
           div(
             class = "small text-muted",
             textOutput(ns("viz_gene_count")),
             hr(class = "my-2"),
-            span("Current selection in selectize box above", class = "text-info")
+            span(i18n$t("Current selection in selectize box above"), class = "text-info")
           )
         )
       )
@@ -143,7 +143,7 @@ mod_sc_markers_output_ui <- function(id) {
           actionButton(ns("quick_add_markers"), i18n$t("Ajouter selection"),
                        class = "btn-sm btn-primary me-1", icon = icon("shopping-basket")),
           downloadButton(ns("dl_markers_excel"), i18n$t("Excel"), class = "btn-sm btn-success me-1"),
-          downloadButton(ns("dl_markers_csv"),   "CSV",   class = "btn-sm btn-primary")
+          downloadButton(ns("dl_markers_csv"),   i18n$t("Export CSV"),   class = "btn-sm btn-primary")
         )
       )
     ),
@@ -181,7 +181,7 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
     observeEvent(shared_rv$markers_data, {
       markers_rv(shared_rv$markers_data)
       if (!is.null(shared_rv$markers_data))
-        marker_log_rv(paste("Trouve", nrow(shared_rv$markers_data), .tr("marqueurs")))
+        marker_log_rv(.t_fmt(.tr("Trouvé {n} marqueurs"), n = nrow(shared_rv$markers_data)))
     }, ignoreNULL = FALSE)
 
     # ── Helper: push genes to the shared viz basket ───────────────────────────
@@ -203,14 +203,14 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
       grp_col <- "seurat_clusters"
       if ("seurat_clusters" %in% colnames(obj@meta.data)) grp_col <- "seurat_clusters"
 
-      marker_log_rv("Recherche en cours...")
+      marker_log_rv(.tr("Recherche en cours..."))
       p <- shiny::Progress$new()
       on.exit(p$close())
       p$set(message = .tr("Recherche Marqueurs..."), value = 0.3)
 
       tryCatch({
         groups <- obj@meta.data[[grp_col]]
-        if (length(unique(groups)) < 2) stop(.tr("Au moins 2 groupes necessaires"))
+        if (length(unique(groups)) < 2) stop(.tr("Au moins 2 groupes nécessaires"))
         Idents(obj) <- as.factor(groups)
 
         # ── RAM-safety (Step-3.7): cap cells/cluster before FindAllMarkers.
@@ -221,9 +221,7 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
         if (sub_res$was_subsampled) {
           p$set(0.4, .tr("Sous-échantillonnage..."))
           showNotification(
-            sprintf("ℹ️ Sous-échantillonnage : %s → %s cellules (max %s/cluster) pour accélérer FindAllMarkers.",
-                    format(sub_res$n_before, big.mark=","), format(sub_res$n_after, big.mark=","),
-                    format(cap, big.mark=",")),
+            .t_fmt(.tr("Sous-échantillonnage : {before} → {after} cellules (max {cap}/cluster) pour accélérer FindAllMarkers."), before = format(sub_res$n_before, big.mark=","), after = format(sub_res$n_after, big.mark=","), cap = format(cap, big.mark=",")),
             type = "message", duration = 6)
         }
         obj_use <- sub_res$object
@@ -265,8 +263,8 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
 
         markers_rv(markers)
         shared_rv$markers_data <- markers   # expose to mod_sc_pathways
-        marker_log_rv(paste("Trouve", nrow(markers), .tr("marqueurs")))
-        showNotification(paste("✓", nrow(markers), .tr("marqueurs")), type = "message")
+        marker_log_rv(.t_fmt(.tr("Trouvé {n} marqueurs"), n = nrow(markers)))
+        showNotification(.t_fmt(.tr("✓ {n} marqueurs"), n = nrow(markers)), type = "message")
         shared_rv$active_tab <- "tab_table"
 
       }, error = function(e) {
@@ -310,8 +308,8 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
           pageLength = 10,
           scrollX    = TRUE,
           language   = list(
-            search = "Filtrer:",
-            info   = "Lignes _START_ a _END_ sur _TOTAL_ | Selectionnez des lignes"
+            search = .tr("Filtrer :"),
+            info   = .tr("Lignes _START_ à _END_ sur _TOTAL_ (Sélectionnez des lignes)")
           )
         ),
         callback = JS("table.on('select.dt', function() {
@@ -347,7 +345,7 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
     })
 
     # ── 4. Quick-add from table header button ─────────────────────────────────
-    observeEvent(input$quick_add_markers, {
+     observeEvent(input$quick_add_markers, {
       req(markers_rv(), input$table_markers_rows_selected)
       df  <- markers_rv()
       idx <- input$table_markers_rows_selected
@@ -355,7 +353,7 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
       if (length(valid) > 0) {
         .push_to_viz(unique(df$gene[valid]))
       } else {
-        showNotification(.tr("Selectionnez des lignes dans le tableau d'abord"), type = "warning")
+        showNotification(.tr("Sélectionnez des lignes dans le tableau d'abord"), type = "warning")
       }
     })
 
@@ -375,7 +373,7 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
       if (length(valid) > 0) {
         .push_to_viz(valid)
       } else {
-        showNotification(.tr("Aucun gene valide trouve."), type = "error", duration = 4)
+        showNotification(.tr("Aucun gène valide trouvé."), type = "error", duration = 4)
       }
     })
 
@@ -389,7 +387,7 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
 
     # ── 8. Gene count label ───────────────────────────────────────────────────
     output$viz_gene_count <- renderText({
-      paste(.tr("Currently selected:"), length(shared_rv$selected_genes %||% character(0)), .tr("gene(s)"))
+      .t_fmt(.tr("Actuellement sélectionnés : {n} gène(s)"), n = length(shared_rv$selected_genes %||% character(0)))
     })
 
     # ── 9. Downloads ──────────────────────────────────────────────────────────

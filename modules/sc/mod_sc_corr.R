@@ -19,12 +19,12 @@ mod_sc_corr_ui <- function(id) {
     div(style="background:#f8f9fa;padding:10px;border-radius:5px;margin-bottom:10px;",
         h6(i18n$t("Gene Cible"),style="font-weight:bold;color:#E74C3C;"),
         selectizeInput(ns("target_gene"),NULL,choices=NULL,multiple=FALSE,
-                       options=list(placeholder="Ex: CD3D, CD8A")),
+                       options=list(placeholder=i18n$t("Ex: CD3D, CD8A"))),
         helpText(i18n$t("Gene de reference pour calculer les correlations"))),
     h6(i18n$t("Parametres de Recherche"),style="font-weight:bold;"),
     fluidRow(
-      column(6,radioButtons(ns("cor_method"),"Methode",
-                            choices=c("Pearson"="pearson","Spearman"="spearman"),selected="pearson")),
+       column(6,radioButtons(ns("cor_method"),i18n$t("Methode"),
+                             choices=c("Pearson"="pearson","Spearman"="spearman"),selected="pearson")),
       column(6,numericInput(ns("cor_threshold"),i18n$t("Seuil |r|"),value=0.3,min=0,max=1,step=0.05))),
     numericInput(ns("cor_top_n"),i18n$t("Nombre max de genes"),value=50,min=10,max=200,step=10),
     actionButton(ns("find_correlated"),i18n$t("Rechercher Genes Correles"),
@@ -34,7 +34,7 @@ mod_sc_corr_ui <- function(id) {
     div(class="d-grid gap-2",
         actionButton(ns("add_correlated_to_viz"),i18n$t("-> Ajouter a Visualisation"),
                      class="btn-sm btn-success w-100",icon=icon("chart-line")),
-        downloadButton(ns("dl_correlated"),"Export CSV",class="btn-sm btn-info w-100")),
+        downloadButton(ns("dl_correlated"),i18n$t("Export CSV"),class="btn-sm btn-info w-100")),
     downloadButton(ns("dl_network_plot"),i18n$t("Export Network (PNG)"),class="btn-sm btn-secondary w-100 mt-1"),
     downloadButton(ns("dl_network_edges"),i18n$t("Export Edge List (CSV)"),class="btn-sm btn-secondary w-100 mt-1"),
     hr(),
@@ -116,9 +116,7 @@ mod_sc_corr_server <- function(id, global_data, shared_rv) {
                                                  group_col = "orig.ident")
         if (sub_res$was_subsampled) {
           showNotification(
-            sprintf("ℹ️ Sous-échantillonnage : %s → %s cellules (max %s/échantillon) pour accélérer la corrélation.",
-                    format(sub_res$n_before, big.mark=","), format(sub_res$n_after, big.mark=","),
-                    format(cap, big.mark=",")),
+            .t_fmt(.tr("Sous-échantillonnage : {before} → {after} cellules (max {cap}/échantillon) pour accélérer la corrélation."), before = format(sub_res$n_before, big.mark=","), after = format(sub_res$n_after, big.mark=","), cap = format(cap, big.mark=",")),
             type = "message", duration = 6)
         }
         obj <- sub_res$object
@@ -151,11 +149,11 @@ mod_sc_corr_server <- function(id, global_data, shared_rv) {
         shared_rv$corr_target_gene <- as.character(input$target_gene)[1]  # ← FIX: was missing
         shared_rv$active_tab       <- "tab_correlation"
 
-        msg <- paste0("✓ Trouvé ", nrow(cor_df), " gènes corrélés avec ", as.character(input$target_gene)[1])
+        msg <- .t_fmt(.tr("✓ {n} gènes corrélés avec {gene}"), n = nrow(cor_df), gene = as.character(input$target_gene)[1])
         showNotification(msg, type="message", duration=4)
 
       }, error = function(e) {
-        err_msg <- paste0("Erreur corrélation: ", as.character(e$message)[1])
+        err_msg <- paste(.tr("Erreur corrélation:"), as.character(e$message)[1])
         showNotification(err_msg, type="error", duration=5)
         corr_rv(NULL)
         shared_rv$correlated_genes <- NULL
@@ -180,8 +178,8 @@ mod_sc_corr_server <- function(id, global_data, shared_rv) {
       plot(g, layout=layout, vertex.size=node_sizes, vertex.color=node_colors,
            vertex.label.cex=0.7, vertex.label.color="black", vertex.label.family="sans",
            edge.color=edge_colors, edge.width=edge_widths,
-           main=paste(.tr("Reseau de Correlation -"), input$target_gene), edge.curved=0.2)
-      legend("bottomleft", legend=c(.tr("Correlation positive"),.tr("Correlation negative"),.tr("Gene cible")),
+           main=paste(.tr("Réseau de Corrélation -"), input$target_gene), edge.curved=0.2)
+      legend("bottomleft", legend=c(.tr("Corrélation positive"),.tr("Corrélation négative"),.tr("Gène cible")),
              col=c("#27AE60","#E74C3C","#3498DB"), pch=c(15,15,19), pt.cex=c(2,2,2.5), bty="n", cex=0.9)
     })
 
@@ -219,7 +217,7 @@ mod_sc_corr_server <- function(id, global_data, shared_rv) {
       }
     })
 
-    observeEvent(input$quick_add_corr, {
+     observeEvent(input$quick_add_corr, {
       req(corr_rv(), input$correlation_table_rows_selected)
       df    <- corr_rv()
       idx   <- input$correlation_table_rows_selected
@@ -229,9 +227,9 @@ mod_sc_corr_server <- function(id, global_data, shared_rv) {
         current <- shared_rv$selected_genes %||% character(0)
         shared_rv$selected_genes <- unique(c(current, genes))
         shared_rv$active_tab     <- "tab_viz"
-        showNotification(paste("Added", length(genes), "gene(s) to viz"), type="message", duration=3)
+        showNotification(.t_fmt(.tr("Ajouté {n} gène(s) à Viz"), n = length(genes)), type="message", duration=3)
       } else {
-        showNotification("Selectionnez des lignes dans la table d'abord", type="warning")
+        showNotification(.tr("Sélectionnez des lignes dans la table d'abord"), type="warning")
       }
     })
 
@@ -242,13 +240,13 @@ mod_sc_corr_server <- function(id, global_data, shared_rv) {
       current <- shared_rv$selected_genes %||% character(0)
       shared_rv$selected_genes <- unique(c(current, to_push))
       shared_rv$active_tab     <- "tab_viz"
-      showNotification(paste("Added target +", length(top10), "top correlated genes"),
+      showNotification(.t_fmt(.tr("Ajouté cible + {n} gènes corrélés"), n = length(top10)),
                        type="message", duration=4)
     })
 
     output$correlation_status <- renderText({
       if (is.null(corr_rv())) .tr("Aucune analyse en cours")
-      else paste("✓", nrow(corr_rv()), "genes correles avec", input$target_gene)
+      else .t_fmt(.tr("✓ {n} gènes corrélés avec {gene}"), n = nrow(corr_rv()), gene = input$target_gene)
     })
 
     output$dl_correlated <- downloadHandler(
@@ -272,7 +270,7 @@ mod_sc_corr_server <- function(id, global_data, shared_rv) {
              vertex.label.cex=0.7,
              edge.color=ifelse(edges$correlation>0,"#27AE60","#E74C3C"),
              edge.width=scales::rescale(edges$weight,to=c(1,5)),
-             main=paste("Network -",input$target_gene), edge.curved=0.2)
+             main=paste(.tr("Réseau de Corrélation -"),input$target_gene), edge.curved=0.2)
         dev.off()
       }
     )

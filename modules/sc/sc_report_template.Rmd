@@ -124,13 +124,13 @@ render_plot <- function(p, allow_interactive=TRUE) {
 # Computation reduction: persisted metadata first, then transient param.
 .traj_comp_red <- .traj_comp_red_md %||% params$traj_reduction %||% "umap"
 
-# French labels for provenance display.
+# French labels for provenance display (i18n).
 .traj_method_label <- if (.is_slingshot_traj) {
-  "Slingshot — inférence de lignées"
+  tr("Slingshot — inférence de lignées")
 } else if (.is_explor_traj) {
-  "Pseudotemps exploratoire — graphe kNN pondéré"
+  tr("Pseudotemps exploratoire — graphe kNN pondéré")
 } else {
-  paste0("Inconnue (provenance absente ; traité comme exploratoire : ", .traj_method_key, ")")
+  paste0(tr("Inconnue (provenance absente ; traité comme exploratoire : "), .traj_method_key, ")")
 }
 .traj_root_meth_label <- switch(.traj_root_meth_md,
   "diameter"          = "automatique (extrémité du diamètre du graphe)",
@@ -145,7 +145,7 @@ render_plot <- function(p, allow_interactive=TRUE) {
 cat("> ", gsub("\n", "\n> ", params$report_notes), "\n\n", sep="")
 ```
 
-# Résumé
+# `r tr("Résumé")`
 
 ```{r resume}
 if (!is.null(obj)) {
@@ -158,7 +158,7 @@ if (!is.null(obj)) {
 ---
 
 ```{r qc_section, eval="qc" %in% sections && !is.null(obj), results='asis'}
-cat("# QC — Contrôle Qualité\n\n")
+cat(paste0("# ", tr("QC — Contrôle Qualité"), "\n\n"))
 ```
 ```{r qc_plot, eval="qc" %in% sections && !is.null(obj)}
 qc_ft <- intersect(c("nFeature_RNA","nCount_RNA","percent.mt"), colnames(obj@meta.data))
@@ -166,7 +166,7 @@ if (length(qc_ft) > 0) VlnPlot(obj, features=qc_ft, ncol=length(qc_ft), pt.size=
 ```
 
 ```{r qc_table_title, eval="qc" %in% sections && !is.null(obj) && !is.null(params$qc_snapshot), results='asis'}
-cat("\n\n## Récapitulatif par échantillon\n\n")
+cat(paste0("\n\n## ", tr("Récapitulatif par échantillon"), "\n\n"))
 ```
 ```{r qc_table_html, eval="qc" %in% sections && !is.null(obj) && !is.null(params$qc_snapshot) && knitr::is_html_output()}
 DT::datatable(build_qc_summary_table(params$qc_snapshot, obj), rownames = FALSE,
@@ -179,7 +179,7 @@ knitr::kable(build_qc_summary_table(params$qc_snapshot, obj))
 ---
 
 ```{r dim_section, eval="dim" %in% sections && !is.null(obj), results='asis'}
-cat("# Réduction Dimensionnelle —", toupper(params$reduction), "\n\n")
+cat(paste0("# ", tr("Réduction Dimensionnelle"), " — ", toupper(params$reduction), "\n\n"))
 ```
 ```{r dim_plot, eval="dim" %in% sections && !is.null(obj)}
 red <- .pick_red(params$reduction)
@@ -196,7 +196,7 @@ if (!is.null(red)) {
 ---
 
 ```{r annot_section, eval="annotation" %in% sections && .has_singler, results='asis'}
-cat("# Annotation Automatique (SingleR)\n\n")
+cat(paste0("# ", tr("Annotation Automatique (SingleR)"), "\n\n"))
 ```
 ```{r annot_plot, eval="annotation" %in% sections && .has_singler}
 col_use <- tail(grep("^SingleR_", colnames(obj@meta.data), value=TRUE), 1)
@@ -214,7 +214,7 @@ if (!is.null(red_a)) {
 ---
 
 ```{r markers_section, eval="markers" %in% sections && .has_markers, results='asis'}
-cat("# Marqueurs Différentiels\n\n")
+cat(paste0("# ", tr("Marqueurs Différentiels"), "\n\n"))
 ```
 ```{r markers_table_html, eval="markers" %in% sections && .has_markers && knitr::is_html_output()}
 build_markers_dt(params$markers_data)
@@ -233,14 +233,14 @@ knitr::kable(
 ---
 
 ```{r corr_section, eval="correlation" %in% sections && .has_corr, results='asis'}
-cat("# Réseau de Corrélation —", params$corr_target_gene %||% "", "\n\n")
+cat(paste0("# ", tr("Réseau de Corrélation"), " — ", params$corr_target_gene %||% "", "\n\n"))
 ```
 ```{r corr_plot, eval="correlation" %in% sections && .has_corr}
 plot_gene_correlation_network(params$correlated_genes, params$corr_target_gene, top_n=20)
 ```
 
 ```{r corr_table_title, eval="correlation" %in% sections && .has_corr, results='asis'}
-cat("\n\n## Table des Corrélations\n\n")
+cat(paste0("\n\n## ", tr("Table des Corrélations"), "\n\n"))
 ```
 ```{r corr_table_html, eval="correlation" %in% sections && .has_corr && knitr::is_html_output()}
 # Step-3.7: was missing entirely from the report (network plot only).
@@ -259,7 +259,7 @@ knitr::kable(
 ---
 
 ```{r pathway_section, eval="pathway" %in% sections && .has_pathway, results='asis'}
-cat("# Pathway Enrichment —", params$pathway_db %||% "", "\n\n")
+cat(paste0("# ", tr("Pathway Enrichment"), " — ", params$pathway_db %||% "", "\n\n"))
 ```
 ```{r pathway_barplot, eval="pathway" %in% sections && .has_pathway}
 plot_pathway_barplot(params$pathway_results, db_label=params$pathway_db %||% "", top_n=15,
@@ -278,7 +278,8 @@ knitr::kable(head(params$pathway_results[, cols, drop=FALSE], 20))
 ---
 
 ```{r traj_section, eval="trajectory" %in% sections && .has_traj, results='asis'}
-cat("# Trajectory Analysis — ", .traj_method_label, "\n\n", sep="")
+cat(paste0("# ", tr("Trajectory Analysis"), " — ", .traj_method_label, "\n\n"))
+```
 if (.is_slingshot_traj) {
   cat(sprintf("*(Slingshot — inférence de lignées : courbes ajustées dans l'espace **%s** à partir des clusters. ",
               toupper(.traj_comp_red)))
@@ -381,7 +382,8 @@ tryCatch(
 .show_viz <- "custom_viz" %in% sections && .has_viz
 ```
 ```{r custom_viz_section, eval=.show_viz, results='asis'}
-cat("# Visualisations Sauvegardées\n\n")
+cat(paste0("# ", tr("Visualisations Sauvegardées"), "\n\n"))
+```
 cat(sprintf("*%d visualisation(s) exportée(s) depuis l'onglet Graphiques.*\n\n",
             length(params$saved_viz_list)))
 ```

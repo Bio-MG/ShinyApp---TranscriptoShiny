@@ -108,9 +108,10 @@ mod_sc_trajectory_ui <- function(id) {
     selectInput(
       ns("traj_method"),
       i18n$t("Méthode de trajectoire"),
-      choices = c(
-        "Pseudotemps exploratoire — graphe kNN pondéré" = "exploratory_knn",
-        "Slingshot — inférence de lignées" = "slingshot"
+      choices = setNames(
+        c("exploratory_knn", "slingshot"),
+        c(.tr_plain("Pseudotemps exploratoire — graphe kNN pondéré"),
+          .tr_plain("Slingshot — inférence de lignées"))
       ),
       selected = "exploratory_knn"
     ),
@@ -147,12 +148,13 @@ mod_sc_trajectory_ui <- function(id) {
 
     hr(),
 
-    h6("Visualisation", style = "font-weight:bold;"),
+    h6(i18n$t("Visualisation"), style = "font-weight:bold;"),
 
     selectInput(
       ns("traj_color"),
       i18n$t("Colorer par"),
-      choices = c("Pseudotime" = "pseudotime", "Clusters" = "seurat_clusters")
+      choices = setNames(c("pseudotime", "seurat_clusters"),
+                         c(.tr_plain("Pseudotime"), .tr_plain("Clusters")))
     ),
 
     actionButton(ns("plot_trajectory_btn"), i18n$t("Actualiser Plot"),
@@ -172,27 +174,26 @@ mod_sc_trajectory_ui <- function(id) {
 
 mod_sc_trajectory_output_ui <- function(id) {
   ns <- NS(id)
-  card(
+    card(
     full_screen = TRUE,
-    card_header("Trajectory Analysis"),
+    card_header(i18n$t("Trajectory Analysis")),
     navset_tab(
       nav_panel(
         i18n$t("Plot Trajectoire"),
         plotOutput(ns("trajectory_plot"), height = "550px"),
 
-        downloadButton(ns("dl_trajectory_png"), "Export Plot", class = "btn-sm btn-secondary w-100 mt-2"),
+        downloadButton(ns("dl_trajectory_png"), i18n$t("Export Plot"), class = "btn-sm btn-secondary w-100 mt-2"),
 
         hr(),
-        h6("Analyses complémentaires", style = "font-weight:bold; color:#3498DB"),
+        h6(i18n$t("Analyses complémentaires"), style = "font-weight:bold; color:#3498DB"),
         div(class = "small text-muted mb-2",
-            "La sélection des gènes (Gènes vs Pseudotemps) se fait uniquement",
-            "dans l'onglet \"Genes vs Pseudotemps\" ci-dessous — sélecteur unique."),
+            i18n$t("La sélection des gènes (Gènes vs Pseudotemps) se fait uniquement dans l'onglet Genes vs Pseudotemps ci-dessous — sélecteur unique.")),
         plotOutput(ns("plot_pseudotime_dist"), height = "280px"),
         fluidRow(
           column(4, downloadButton(ns("dl_pseudotime_dist"),
-                                   "Export Distribution (CSV)", class = "btn-sm btn-info w-100")),
+                                   i18n$t("Export Distribution CSV"), class = "btn-sm btn-info w-100")),
           column(4, downloadButton(ns("dl_genes_pseudotime"),
-                                   "Export Gènes/Pseudo (CSV)", class = "btn-sm btn-info w-100")),
+                                   i18n$t("Export Gènes/Pseudo CSV"), class = "btn-sm btn-info w-100")),
           column(4, selectInput(ns("traj_export_fmt"), i18n$t("Format export plots (PNG/PDF)"),
                                 choices = c("PNG" = "png", "PDF" = "pdf"), selected = "png", width = "100%"))
         )
@@ -235,7 +236,7 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
   moduleServer(id, function(input, output, session) {
     # ── i18n proxy ──────────────────────────────────────────────────────────
     .tr <- function(key) {
-      tr <- global_data$i18n
+      tr <- isolate(global_data$i18n)
       if (is.null(tr)) return(key)
       tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
     }
@@ -294,15 +295,11 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
 
     # French explanation below the method selector — makes the scientific
     # distinction between the two methods explicit in the UI.
-    output$traj_method_help <- renderUI({
+      output$traj_method_help <- renderUI({
       if (identical(input$traj_method, "slingshot")) {
-        tags$p(class = "small text-muted",
-               "Slingshot infère des courbes de lignées à partir d'un espace réduit et de clusters. ",
-               "Les résultats doivent être interprétés avec la biologie connue.")
+        tags$p(class = "small text-muted", .tr("Slingshot infère des courbes de lignées à partir d'un espace réduit et de clusters. Les résultats doivent être interprétés avec la biologie connue."))
       } else {
-        tags$p(class = "small text-muted",
-               "Ordonnancement exploratoire fondé sur un graphe kNN pondéré. ",
-               "Cette méthode n'infère pas de lignées.")
+        tags$p(class = "small text-muted", .tr("Ordonnancement exploratoire fondé sur un graphe kNN pondéré. Cette méthode n'infère pas de lignées."))
       }
     })
 
@@ -332,17 +329,17 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
       cols <- cluster_cols_rv()
       has_default <- "seurat_clusters" %in% colnames(if (!is.null(obj)) obj@meta.data else data.frame())
       tagList(
-        selectInput(ns("traj_cluster_col"), "Colonne de clusters",
+        selectInput(ns("traj_cluster_col"), .tr("Colonne de clusters"),
                     choices = cols,
                     selected = isolate(input$traj_cluster_col) %||% "seurat_clusters"),
         selectizeInput(ns("traj_start_cluster"),
-                       "Cluster de départ (optionnel)",
+                       .tr("Cluster de départ (optionnel)"),
                        choices = NULL,
                        selected = isolate(input$traj_start_cluster),
                        multiple = FALSE,
                        options = list(placeholder = "Laisser vide pour le défaut Slingshot")),
         selectizeInput(ns("traj_end_clusters"),
-                       "Clusters terminaux (optionnel)",
+                       .tr("Clusters terminaux (optionnel)"),
                        choices = NULL,
                        selected = isolate(input$traj_end_clusters),
                        multiple = TRUE,
@@ -350,8 +347,7 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
         if (!has_default) {
           div(class = "alert alert-warning alert-sm", style = "font-size:0.85em;padding:6px;",
               icon("exclamation-triangle"),
-              "'seurat_clusters' est absent des métadonnées. Lancez le pipeline de clustering, ",
-              "ou choisissez explicitement une colonne de clusters valide ci-dessus.")
+               .tr("'seurat_clusters' est absent des métadonnées. Lancez le pipeline de clustering, ou choisissez explicitement une colonne de clusters valide ci-dessus."))
         }
       )
     })
@@ -380,9 +376,7 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
     validate_manual_root <- function(root_cell, n_cells) {
       root_cell <- suppressWarnings(as.integer(root_cell))
       if (length(root_cell) != 1L || is.na(root_cell) || root_cell < 1L || root_cell > n_cells) {
-        shiny::validate(shiny::need(FALSE, paste0(
-          "Index de cellule racine invalide. Choisissez une valeur entre 1 et ", n_cells, "."
-        )))
+        shiny::validate(shiny::need(FALSE, sprintf(.tr("Index de cellule racine invalide. Choisissez une valeur entre 1 et %d."), n_cells)))
       }
       root_cell
     }
@@ -409,13 +403,13 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
 
       if (ncol(obj) > .MAX_TRAJECTORY_CELLS) {
         showNotification(.tr("Dataset trop grand pour la trajectoire."), type = "error", duration = 6)
-        traj_status_rv("BLOQUE: dataset trop grand.")
+        traj_status_rv(.tr("BLOQUE: dataset trop grand."))
         return()
       }
 
       reduction_used <- input$traj_reduction
       if (!reduction_used %in% names(obj@reductions)) {
-        showNotification("Reduction non trouvee. Lancez le pipeline d'abord.", type = "error", duration = 6)
+        showNotification(.tr("Réduction non trouvée. Lancez le pipeline d'abord."), type = "error", duration = 6)
         return()
       }
 
@@ -436,19 +430,14 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
           # Explicit French error when Slingshot is unavailable — NEVER a
           # silent fallback to the exploratory graph method.
           if (!requireNamespace("slingshot", quietly = TRUE)) {
-            stop(paste("Le package Bioconductor 'slingshot' est requis pour l'option",
-                       "\"Slingshot — inférence de lignées\". Installez-le via",
-                       "BiocManager::install('slingshot') puis relancez le calcul.",
-                       "(Aucune bascule automatique vers la méthode exploratoire.)"),
+            stop(.tr("Le package Bioconductor slingshot est requis pour l'option Slingshot : inférence de lignées. Installez-le via BiocManager::install('slingshot') puis relancez le calcul. (Aucune bascule automatique vers la méthode exploratoire.)"),
                  call. = FALSE)
           }
           p$set(message = "Calcul Slingshot...", value = 0.4)
 
           cluster_col <- input$traj_cluster_col %||% "seurat_clusters"
           if (!cluster_col %in% colnames(obj@meta.data)) {
-            stop(sprintf(paste("Colonne de clusters '%s' introuvable dans les métadonnées.",
-                               "Choisissez une colonne de clusters existante",
-                               "(aucune substitution silencieuse)."), cluster_col),
+            stop(sprintf(.tr("Colonne de clusters '%s' introuvable dans les métadonnées. Choisissez une colonne de clusters existante (aucune substitution silencieuse)."), cluster_col),
                  call. = FALSE)
           }
           cluster_labels <- as.character(obj@meta.data[[cluster_col]])
@@ -456,12 +445,12 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
           if (!identical(rownames(embedding), rownames(obj@meta.data))) {
             idx <- match(rownames(embedding), rownames(obj@meta.data))
             if (anyNA(idx)) {
-              stop("Alignement cellules/clusters impossible.", call. = FALSE)
+              stop(.tr("Alignement cellules/clusters impossible."), call. = FALSE)
             }
             cluster_labels <- cluster_labels[idx]
           }
           if (anyNA(cluster_labels) || any(!nzchar(cluster_labels))) {
-            stop("La colonne de clusters sélectionnée contient des valeurs manquantes ou vides.",
+            stop(.tr("La colonne de clusters sélectionnée contient des valeurs manquantes ou vides."),
                  call. = FALSE)
           }
           # Empty optional selectize values -> NULL (Slingshot defaults).

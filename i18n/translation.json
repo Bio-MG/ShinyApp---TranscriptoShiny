@@ -6337,89 +6337,569 @@
       "fr": "✓ Pipeline SC : %d cellules, %d clusters",
       "en": "✓ SC Pipeline: %d cells, %d clusters"
     },
-  {
-    "fr": "Erreur pipeline SC:",
-    "en": "SC pipeline error:"
-  },
-  {
-    "fr": "Pipeline SC — Paramètres",
-    "en": "SC Pipeline — Parameters"
-  },
-  {
-    "fr": "🔄 Mapping IDs → Symbol (auto-détecté, avant QC)",
-    "en": "🔄 Mapping IDs → Symbol (auto-detected, before QC)"
-  },
-  {
-    "fr": "💽 Backend disque (BPCells) si > {n} cellules",
-    "en": "💽 Disk Backend (BPCells) if > {n} cells"
-  },
-  {
-    "fr": "✓ Calculer UMAP (décochez pour PCA seul — bien plus rapide, mode debug)",
-    "en": "✓ Compute UMAP (uncheck for PCA only — much faster, debug mode)"
-  },
-  {
-    "fr": "Si coché : UMAP + t-SNE secondaire (si dataset raisonnable) sont calculés (le plus lent du pipeline). Si décoché : PCA seul — previews/trajectoire se rabattent automatiquement sur PCA, rien ne plante.",
-    "en": "If checked: UMAP + secondary t-SNE (if reasonable dataset) are computed (slowest part of the pipeline). If unchecked: PCA only — previews/trajectory automatically fall back to PCA, nothing breaks."
-  },
-  {
-    "fr": "Sketch — gros datasets",
-    "en": "Sketch — large datasets"
-  },
-  {
-    "fr": "PCA/Clustering/UMAP tournent sur un sous-ensemble représentatif (LeverageScore), puis sont projetés sur toutes les cellules. Accélère fortement les gros datasets (ex: 1,3M cellules) sans perdre les clusters rares. Ignoré si SCTransform est choisi.",
-    "en": "PCA/Clustering/UMAP run on a representative subset (LeverageScore), then are projected onto all cells. Greatly speeds up large datasets (e.g. 1.3M cells) without losing rare clusters. Ignored if SCTransform is chosen."
-  },
-  {
-    "fr": "{n} / {total} cellules — npcs suggéré : {npcs} ({sketch})",
-    "en": "{n} / {total} cells — suggested npcs: {npcs} ({sketch})"
-  },
-  {
-    "fr": "pas de sketch",
-    "en": "no sketch"
-  },
-  {
-    "fr": "sketch actif",
-    "en": "sketch active"
-  },
-  {
-    "fr": "🧬 Annotation SingleR",
-    "en": "🧬 SingleR Annotation"
-  },
-  {
-    "fr": "🧬 FindAllMarkers après clustering",
-    "en": "🧬 FindAllMarkers after clustering"
-  },
-  {
-    "fr": "🧬 Pathway ORA sur top marqueurs",
-    "en": "🧬 Pathway ORA on top markers"
-  },
-  {
-    "fr": "🧬 Gene Correlation (auto: gène le plus significatif)",
-    "en": "🧬 Gene Correlation (auto: most significant gene)"
-  },
-  {
-    "fr": "Requiert 'Marqueurs' coché. Corrèle le gène à p-adj minimal avec tous les autres.",
-    "en": "Requires 'Markers' checked. Correlates the gene with minimal p-adj against all others."
-  },
-  {
-    "fr": "🧬 Trajectory / Pseudotemps (UMAP, racine auto)",
-    "en": "🧬 Trajectory / Pseudotime (UMAP, auto root)"
-  },
-  {
-    "fr": "ℹ️ Sketch ignoré : preset ≥ taille du dataset — pipeline sur dataset complet.",
-    "en": "ℹ️ Sketch ignored: preset ≥ dataset size — pipeline on full dataset."
-  },
-  {
-    "fr": "✓ Normalisation OK",
-    "en": "✓ Normalization OK"
-  },
-  {
-    "fr": "✓ t-SNE secondaire OK",
-    "en": "✓ Secondary t-SNE OK"
-  },
-  {
-    "fr": "✓ Annoté [{method}] — {n} types ({time}s)",
-    "en": "✓ Annotated [{method}] — {n} types ({time}s)"
-  }
+    {
+      "fr": "Erreur pipeline SC:",
+      "en": "SC pipeline error:"
+    },
+    {
+      "fr": "Pipeline SC — Paramètres",
+      "en": "SC Pipeline — Parameters"
+    },
+    {
+      "fr": "🔄 Mapping IDs → Symbol (auto-détecté, avant QC)",
+      "en": "🔄 Mapping IDs → Symbol (auto-detected, before QC)"
+    },
+    {
+      "fr": "💽 Backend disque (BPCells) si > {n} cellules",
+      "en": "💽 Disk Backend (BPCells) if > {n} cells"
+    },
+    {
+      "fr": "✓ Calculer UMAP (décochez pour PCA seul — bien plus rapide, mode debug)",
+      "en": "✓ Compute UMAP (uncheck for PCA only — much faster, debug mode)"
+    },
+    {
+      "fr": "Si coché : UMAP + t-SNE secondaire (si dataset raisonnable) sont calculés (le plus lent du pipeline). Si décoché : PCA seul — previews/trajectoire se rabattent automatiquement sur PCA, rien ne plante.",
+      "en": "If checked: UMAP + secondary t-SNE (if reasonable dataset) are computed (slowest part of the pipeline). If unchecked: PCA only — previews/trajectory automatically fall back to PCA, nothing breaks."
+    },
+    {
+      "fr": "Sketch — gros datasets",
+      "en": "Sketch — large datasets"
+    },
+    {
+      "fr": "PCA/Clustering/UMAP tournent sur un sous-ensemble représentatif (LeverageScore), puis sont projetés sur toutes les cellules. Accélère fortement les gros datasets (ex: 1,3M cellules) sans perdre les clusters rares. Ignoré si SCTransform est choisi.",
+      "en": "PCA/Clustering/UMAP run on a representative subset (LeverageScore), then are projected onto all cells. Greatly speeds up large datasets (e.g. 1.3M cells) without losing rare clusters. Ignored if SCTransform is chosen."
+    },
+    {
+      "fr": "{n} / {total} cellules — npcs suggéré : {npcs} ({sketch})",
+      "en": "{n} / {total} cells — suggested npcs: {npcs} ({sketch})"
+    },
+    {
+      "fr": "pas de sketch",
+      "en": "no sketch"
+    },
+    {
+      "fr": "sketch actif",
+      "en": "sketch active"
+    },
+    {
+      "fr": "🧬 Annotation SingleR",
+      "en": "🧬 SingleR Annotation"
+    },
+    {
+      "fr": "🧬 FindAllMarkers après clustering",
+      "en": "🧬 FindAllMarkers after clustering"
+    },
+    {
+      "fr": "🧬 Pathway ORA sur top marqueurs",
+      "en": "🧬 Pathway ORA on top markers"
+    },
+    {
+      "fr": "🧬 Gene Correlation (auto: gène le plus significatif)",
+      "en": "🧬 Gene Correlation (auto: most significant gene)"
+    },
+    {
+      "fr": "Requiert 'Marqueurs' coché. Corrèle le gène à p-adj minimal avec tous les autres.",
+      "en": "Requires 'Markers' checked. Correlates the gene with minimal p-adj against all others."
+    },
+    {
+      "fr": "🧬 Trajectory / Pseudotemps (UMAP, racine auto)",
+      "en": "🧬 Trajectory / Pseudotime (UMAP, auto root)"
+    },
+    {
+      "fr": "ℹ️ Sketch ignoré : preset ≥ taille du dataset — pipeline sur dataset complet.",
+      "en": "ℹ️ Sketch ignored: preset ≥ dataset size — pipeline on full dataset."
+    },
+    {
+      "fr": "✓ Normalisation OK",
+      "en": "✓ Normalization OK"
+    },
+    {
+      "fr": "✓ t-SNE secondaire OK",
+      "en": "✓ Secondary t-SNE OK"
+    },
+    {
+      "fr": "✓ Annoté [{method}] — {n} types ({time}s)",
+      "en": "✓ Annotated [{method}] — {n} types ({time}s)"
+    },
+    {
+      "fr": "Mapping IDs (%s)...",
+      "en": "Mapping IDs (%s)..."
+    },
+    {
+      "fr": "⚠️ Mapping ignoré:",
+      "en": "⚠️ Mapping skipped:"
+    },
+    {
+      "fr": "✓ Mapping : %d gènes finaux (%d mappés, %d non-mappés)",
+      "en": "✓ Mapping: %d final genes (%d mapped, %d unmapped)"
+    },
+    {
+      "fr": "Mapping IDs : symboles déjà détectés (ou type inconnu) — ignoré.",
+      "en": "Mapping IDs: symbols already detected (or unknown type) — skipped."
+    },
+    {
+      "fr": "QC...",
+      "en": "QC..."
+    },
+    {
+      "fr": "Seulement %d cellule(s) après QC (départ: %d). Réduisez les seuils.",
+      "en": "Only %d cell(s) after QC (starting: %d). Lower thresholds."
+    },
+    {
+      "fr": "✓ QC : %d cellules (retirées: %d)",
+      "en": "✓ QC: %d cells (removed: %d)"
+    },
+    {
+      "fr": "⚠️ BPCells non installé — pipeline exécuté en RAM.",
+      "en": "⚠️ BPCells not installed — pipeline runs in RAM."
+    },
+    {
+      "fr": "⚠️ BPCells:",
+      "en": "⚠️ BPCells:"
+    },
+    {
+      "fr": "✓ Backend disque (BPCells) activé — %s cellules",
+      "en": "✓ Disk backend (BPCells) enabled — %s cells"
+    },
+    {
+      "fr": "ℹ️ Backend disque : future séquentiel forcé (Normalisation → Clustering) pour éviter un crash 'globals size'.",
+      "en": "ℹ️ Disk backend: sequential future forced (Normalization → Clustering) to avoid 'globals size' crash."
+    },
+    {
+      "fr": "Sketch...",
+      "en": "Sketch..."
+    },
+    {
+      "fr": "Sketch : %s / %s cellules (preset '%s')...",
+      "en": "Sketch: %s / %s cells (preset '%s')..."
+    },
+    {
+      "fr": "✓ Sketch OK (%.0fs)",
+      "en": "✓ Sketch OK (%.0fs)"
+    },
+    {
+      "fr": "Normalisation (sketch)...",
+      "en": "Normalization (sketch)..."
+    },
+    {
+      "fr": "✓ PCA (%d dims, sketch)",
+      "en": "✓ PCA (%d dims, sketch)"
+    },
+    {
+      "fr": "Clustering (sketch)...",
+      "en": "Clustering (sketch)..."
+    },
+    {
+      "fr": "✓ Clustering sketch OK (res %.1f)",
+      "en": "✓ Clustering sketch OK (res %.1f)"
+    },
+    {
+      "fr": "UMAP (sketch)...",
+      "en": "UMAP (sketch)..."
+    },
+    {
+      "fr": "✓ UMAP sketch OK",
+      "en": "✓ UMAP sketch OK"
+    },
+    {
+      "fr": "ℹ️ UMAP désactivé (mode PCA seul, debug rapide) — previews/trajectoire utiliseront PCA.",
+      "en": "ℹ️ UMAP disabled (PCA-only, fast debug) — previews/trajectory will use PCA."
+    },
+    {
+      "fr": "Projection sur le dataset complet...",
+      "en": "Projection onto full dataset..."
+    },
+    {
+      "fr": "Projection (ProjectData) sur le dataset complet...",
+      "en": "Projection (ProjectData) onto full dataset..."
+    },
+    {
+      "fr": "✓ Projection OK — %s cellules (%.0fs)",
+      "en": "✓ Projection OK — %s cells (%.0fs)"
+    },
+    {
+      "fr": "ℹ️ Sketch non supporté avec SCTransform — pipeline sur dataset complet.",
+      "en": "ℹ️ Sketch not supported with SCTransform — pipeline on full dataset."
+    },
+    {
+      "fr": "Normalisation...",
+      "en": "Normalization..."
+    },
+    {
+      "fr": "PCA...",
+      "en": "PCA..."
+    },
+    {
+      "fr": "✓ PCA (%d dims)",
+      "en": "✓ PCA (%d dims)"
+    },
+    {
+      "fr": "Clustering...",
+      "en": "Clustering..."
+    },
+    {
+      "fr": "✓ %d clusters (res %.1f)",
+      "en": "✓ %d clusters (res %.1f)"
+    },
+    {
+      "fr": "✓ UMAP OK",
+      "en": "✓ UMAP OK"
+    },
+    {
+      "fr": "ℹ️ UMAP désactivé (mode PCA seul, debug rapide).",
+      "en": "ℹ️ UMAP disabled (PCA-only, fast debug)."
+    },
+    {
+      "fr": "✓ %d clusters (projetés sur dataset complet)",
+      "en": "✓ %d clusters (projected onto full dataset)"
+    },
+    {
+      "fr": "ℹ️ t-SNE secondaire ignoré (UMAP désactivé, mode PCA seul).",
+      "en": "ℹ️ Secondary t-SNE skipped (UMAP disabled, PCA-only mode)."
+    },
+    {
+      "fr": "⚠️ t-SNE secondaire ignoré (%s cellules > %s max).",
+      "en": "⚠️ Secondary t-SNE skipped (%s cells > %s max)."
+    },
+    {
+      "fr": "⚠️ t-SNE secondaire ignoré:",
+      "en": "⚠️ Secondary t-SNE skipped:"
+    },
+    {
+      "fr": "⚠️ SingleR/celldex non installés — annotation ignorée.",
+      "en": "⚠️ SingleR/celldex not installed — annotation skipped."
+    },
+    {
+      "fr": "⚠️ SingleR:",
+      "en": "⚠️ SingleR:"
+    },
+    {
+      "fr": "✓ Annoté [%s] — %d types (%.0fs)",
+      "en": "✓ Annotated [%s] — %d types (%.0fs)"
+    },
+    {
+      "fr": "ℹ️ Sous-échantillonnage marqueurs : %d → %d cellules (max %d/cluster)",
+      "en": "ℹ️ Subsampling markers: %d → %d cells (max %d/cluster)"
+    },
+    {
+      "fr": "⚠️ Markers:",
+      "en": "⚠️ Markers:"
+    },
+    {
+      "fr": "✓ %d marqueurs",
+      "en": "✓ %d markers"
+    },
+    {
+      "fr": "⚠️ Pathway ignoré : 0/%d gènes convertibles (organisme '%s'). Exemples : %s.",
+      "en": "⚠️ Pathway skipped: 0/%d convertible genes (organism '%s'). Examples: %s."
+    },
+    {
+      "fr": "⚠️ Pathway:",
+      "en": "⚠️ Pathway:"
+    },
+    {
+      "fr": "— exemples testés :",
+      "en": "— examples tested:"
+    },
+    {
+      "fr": "✓ %d pathways (%d/%d gènes convertis, %.0fs)",
+      "en": "✓ %d pathways (%d/%d genes converted, %.0fs)"
+    },
+    {
+      "fr": "⚠️ Aucun marqueur trouvé.",
+      "en": "⚠️ No markers found."
+    },
+    {
+      "fr": "Corrélation...",
+      "en": "Correlation..."
+    },
+    {
+      "fr": "Gene Correlation...",
+      "en": "Gene Correlation..."
+    },
+    {
+      "fr": "⚠️ Corrélation ignorée : aucun marqueur disponible (cochez 'Marqueurs').",
+      "en": "⚠️ Correlation skipped: no markers available (check 'Markers')."
+    },
+    {
+      "fr": "ℹ️ Sous-échantillonnage corrélation : %d → %d cellules (max %d/échantillon)",
+      "en": "ℹ️ Subsampling correlation: %d → %d cells (max %d/sample)"
+    },
+    {
+      "fr": "⚠️ Corrélation:",
+      "en": "⚠️ Correlation:"
+    },
+    {
+      "fr": "✓ %d gènes corrélés avec %s (top marqueur)",
+      "en": "✓ %d genes correlated with %s (top marker)"
+    },
+    {
+      "fr": "⚠️ Aucun gène corrélé pour %s (seuil |r|≥0.3).",
+      "en": "⚠️ No correlated gene for %s (threshold |r|≥0.3)."
+    },
+    {
+      "fr": "Trajectoire...",
+      "en": "Trajectory..."
+    },
+    {
+      "fr": "Trajectory / Pseudotime...",
+      "en": "Trajectory / Pseudotime..."
+    },
+    {
+      "fr": "⚠️ Trajectoire ignorée : dataset trop grand (%d > %d).",
+      "en": "⚠️ Trajectory skipped: dataset too large (%d > %d)."
+    },
+    {
+      "fr": "⚠️ Trajectoire:",
+      "en": "⚠️ Trajectory:"
+    },
+    {
+      "fr": "✓ Pseudotemps calculé (exploratoire kNN, racine auto/diamètre, réduction: %s)",
+      "en": "✓ Pseudotime computed (exploratory kNN, auto/diameter root, reduction: %s)"
+    },
+    {
+      "fr": "Aucune visualisation sauvegardée. ",
+      "en": "No visualization saved. "
+    },
+    {
+      "fr": "Seulement %d cellule(s) après QC (départ : %d). Diagnostic par filtre :\n",
+      "en": "Only %d cell(s) after QC (starting: %d). Filter diagnostics:\n"
+    },
+    {
+      "fr": "  • Min gènes > %d  : %d cellules passent (%d%%)\n",
+      "en": "  • Min genes > %d: %d cells pass (%d%%)\n"
+    },
+    {
+      "fr": "  • Max gènes < %d  : %d cellules passent (%d%%)\n",
+      "en": "  • Max genes < %d: %d cells pass (%d%%)\n"
+    },
+    {
+      "fr": "  • % Mito < %d%%  : %d cellules passent (%d%%)\n",
+      "en": "  • % Mito < %d%%: %d cells pass (%d%%)\n"
+    },
+    {
+      "fr": "  • Les 3 combinés  : %d cellules passent\n\n",
+      "en": "  • All 3 combined: %d cells pass\n\n"
+    },
+    {
+      "fr": "Suggestions : réduire Min gènes (essayez %d), augmenter Max gènes (%d) ou % Mito (%d%%).",
+      "en": "Suggestions: reduce Min genes (try %d), increase Max genes (%d) or % Mito (%d%%)."
+    },
+    {
+      "fr": "Analyses complémentaires",
+      "en": "Additional analyses"
+    },
+    {
+      "fr": "La sélection des gènes (Gènes vs Pseudotemps) se fait uniquement dans l'onglet Genes vs Pseudotemps ci-dessous — sélecteur unique.",
+      "en": "Gene selection (Genes vs Pseudotime) is only in the Genes vs Pseudotime tab below — single selector."
+    },
+    {
+      "fr": "Export Distribution CSV",
+      "en": "Export Distribution CSV"
+    },
+    {
+      "fr": "Export Gènes/Pseudo CSV",
+      "en": "Export Genes/Pseudo CSV"
+    },
+    {
+      "fr": "Export Plot",
+      "en": "Export Plot"
+    },
+    {
+      "fr": "En attente du calcul...",
+      "en": "Waiting for computation..."
+    },
+    {
+      "fr": "Index de cellule racine invalide. Choisissez une valeur entre 1 et %d.",
+      "en": "Invalid root cell index. Choose a value between 1 and %d."
+    },
+    {
+      "fr": "BLOQUE: dataset trop grand.",
+      "en": "BLOCKED: dataset too large."
+    },
+    {
+      "fr": "Réduction non trouvée. Lancez le pipeline d'abord.",
+      "en": "Reduction not found. Run the pipeline first."
+    },
+    {
+      "fr": "Le package Bioconductor slingshot est requis pour l'option Slingshot : inférence de lignées. Installez-le via BiocManager::install('slingshot') puis relancez le calcul. (Aucune bascule automatique vers la méthode exploratoire.)",
+      "en": "The Bioconductor package slingshot is required for the Slingshot: lineage inference option. Install via BiocManager::install('slingshot') then retry. (No automatic fallback to exploratory method.)"
+    },
+    {
+      "fr": "Colonne de clusters '%s' introuvable dans les métadonnées. Choisissez une colonne de clusters existante (aucune substitution silencieuse).",
+      "en": "Cluster column '%s' not found in metadata. Choose an existing cluster column (no silent substitution)."
+    },
+    {
+      "fr": "La colonne de clusters sélectionnée contient des valeurs manquantes ou vides.",
+      "en": "The selected cluster column contains missing or empty values."
+    },
+    {
+      "fr": "Alignement cellules/clusters impossible.",
+      "en": "Cell/cluster alignment impossible."
+    },
+    {
+      "fr": "Colonne de clusters",
+      "en": "Cluster column"
+    },
+    {
+      "fr": "Cluster de départ (optionnel)",
+      "en": "Start cluster (optional)"
+    },
+    {
+      "fr": "Clusters terminaux (optionnel)",
+      "en": "Terminal clusters (optional)"
+    },
+    {
+      "fr": "'seurat_clusters' est absent des métadonnées. Lancez le pipeline de clustering, ou choisissez explicitement une colonne de clusters valide ci-dessus.",
+      "en": "'seurat_clusters' missing from metadata. Run the clustering pipeline, or explicitly choose a valid cluster column above."
+    },
+    {
+      "fr": "Slingshot infère des courbes de lignées à partir d'un espace réduit et de clusters. Les résultats doivent être interprétés avec la biologie connue.",
+      "en": "Slingshot infers lineage curves from reduced space and clusters. Results must be interpreted with known biology."
+    },
+    {
+      "fr": "Ordonnancement exploratoire fondé sur un graphe kNN pondéré. Cette méthode n'infère pas de lignées.",
+      "en": "Exploratory ordering based on weighted kNN graph. This method does not infer lineages."
+    },
+    {
+      "fr": "Filtrer :",
+      "en": "Filter:"
+    },
+    {
+      "fr": "Lignes _START_ à _END_ sur _TOTAL_ (Sélectionnez des lignes)",
+      "en": "Rows _START_ to _END_ of _TOTAL_ (Select rows)"
+    },
+    {
+      "fr": "Sous-échantillonnage : {before} → {after} cellules (max {cap}/cluster) pour accélérer FindAllMarkers.",
+      "en": "Subsampling: {before} → {after} cells (max {cap}/cluster) to speed up FindAllMarkers."
+    },
+    {
+      "fr": "Trouvé {n} marqueurs",
+      "en": "Found {n} markers"
+    },
+    {
+      "fr": "Recherche en cours...",
+      "en": "Searching..."
+    },
+    {
+      "fr": "Au moins 2 groupes nécessaires",
+      "en": "At least 2 groups required"
+    },
+    {
+      "fr": "✓ {n} marqueurs",
+      "en": "✓ {n} markers"
+    },
+    {
+      "fr": "Sélectionnez des lignes dans le tableau d'abord",
+      "en": "Select rows in the table first"
+    },
+    {
+      "fr": "Actuellement sélectionnés : {n} gène(s)",
+      "en": "Currently selected: {n} gene(s)"
+    },
+    {
+      "fr": "Aucun gène valide trouvé.",
+      "en": "No valid gene found."
+    },
+    {
+      "fr": "Sous-échantillonnage : {before} → {after} cellules (max {cap}/échantillon) pour accélérer la corrélation.",
+      "en": "Subsampling: {before} → {after} cells (max {cap}/sample) to speed up correlation."
+    },
+    {
+      "fr": "✓ {n} gènes corrélés avec {gene}",
+      "en": "✓ {n} genes correlated with {gene}"
+    },
+    {
+      "fr": "Réseau de Corrélation -",
+      "en": "Correlation Network -"
+    },
+    {
+      "fr": "Corrélation positive",
+      "en": "Positive correlation"
+    },
+    {
+      "fr": "Corrélation négative",
+      "en": "Negative correlation"
+    },
+    {
+      "fr": "Gène cible",
+      "en": "Target gene"
+    },
+    {
+      "fr": "Ajouté {n} gène(s) à Viz",
+      "en": "Added {n} gene(s) to Viz"
+    },
+    {
+      "fr": "Ajouté cible + {n} gènes corrélés",
+      "en": "Added target + {n} correlated genes"
+    },
+    {
+      "fr": "Organisme détecté : {org}.",
+      "en": "Organism detected: {org}."
+    },
+    {
+      "fr": "Pipeline réinitialisé — relancez l'étape 1.",
+      "en": "Pipeline reset — re-run step 1."
+    },
+    {
+      "fr": "t-SNE secondaire ignoré:",
+      "en": "Secondary t-SNE skipped:"
+    },
+    {
+      "fr": " indisponible/a échoué sur cet objet — repli sur Louvain standard. ",
+      "en": " unavailable/failed on this object — fallback to standard Louvain. "
+    },
+    {
+      "fr": "Algorithme",
+      "en": "Algorithm"
+    },
+    {
+      "fr": "Probe Affymetrix (non supporté pour SC)",
+      "en": "Affymetrix Probe (not supported for SC)"
+    },
+    {
+      "fr": "  • % Mito < %d%%  : %d cellules passent (%d%%)\\n",
+      "en": "  • % Mito < %d%%  : %d cellules passent (%d%%)\\n"
+    },
+    {
+      "fr": "  • Les 3 combinés  : %d cellules passent\\n\\n",
+      "en": "  • Les 3 combinés  : %d cellules passent\\n\\n"
+    },
+    {
+      "fr": "  • Max gènes < %d  : %d cellules passent (%d%%)\\n",
+      "en": "  • Max gènes < %d  : %d cellules passent (%d%%)\\n"
+    },
+    {
+      "fr": "  • Min gènes > %d  : %d cellules passent (%d%%)\\n",
+      "en": "  • Min gènes > %d  : %d cellules passent (%d%%)\\n"
+    },
+    {
+      "fr": "Marqueurs",
+      "en": "Marqueurs"
+    },
+    {
+      "fr": "PCA (sketch)...",
+      "en": "PCA (sketch)..."
+    },
+    {
+      "fr": "Seulement %d cellule(s) après QC (départ : %d). Diagnostic par filtre :\\n",
+      "en": "Seulement %d cellule(s) après QC (départ : %d). Diagnostic par filtre :\\n"
+    },
+    {
+      "fr": "Sélectionnez des lignes dans la table d'abord",
+      "en": "Sélectionnez des lignes dans la table d'abord"
+    },
+    {
+      "fr": "ℹ️",
+      "en": "ℹ️"
+    },
+    {
+      "fr": "⚠️",
+      "en": "⚠️"
+    },
+    {
+      "fr": "✓ {mapped} mappés, {unmapped} non-mappés ({pct}%), {collapsed} fusion(s) de doublon → {final} gènes finaux.",
+      "en": "✓ {mapped} mappés, {unmapped} non-mappés ({pct}%), {collapsed} fusion(s) de doublon → {final} gènes finaux."
+    }
   ]
 }

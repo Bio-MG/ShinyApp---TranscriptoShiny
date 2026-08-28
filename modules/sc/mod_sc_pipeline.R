@@ -211,16 +211,16 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
                    nFeature_RNA < input$qc_max_gene &
                    percent.mt   < input$qc_mt)
 
-        # Actionable QC error with per-filter diagnostics
+        # Actionable QC error with per-filter diagnostics (i18n)
         if (ncol(obj) < 10) {
           stop(sprintf(
             paste0(
-              "Seulement %d cellule(s) après QC (départ : %d). Diagnostique par filtre :\n",
-              "  • Min gènes > %d  : %d cellules passent (%d%%)\n",
-              "  • Max gènes < %d  : %d cellules passent (%d%%)\n",
-              "  • %% Mito < %d%%  : %d cellules passent (%d%%)\n",
-              "  • Les 3 combinés  : %d cellules passent\n\n",
-              "Suggestions : réduire Min gènes (essayez %d), augmenter Max gènes (%d) ou %% Mito (%d%%)."
+              .tr("Seulement %d cellule(s) après QC (départ : %d). Diagnostic par filtre :\n"),
+              .tr("  • Min gènes > %d  : %d cellules passent (%d%%)\n"),
+              .tr("  • Max gènes < %d  : %d cellules passent (%d%%)\n"),
+              .tr("  • % Mito < %d%%  : %d cellules passent (%d%%)\n"),
+              .tr("  • Les 3 combinés  : %d cellules passent\n\n"),
+              .tr("Suggestions : réduire Min gènes (essayez %d), augmenter Max gènes (%d) ou % Mito (%d%%).")
             ),
             ncol(obj), n_before,
             input$qc_min_gene, n_ok_min, round(100*n_ok_min/n_before),
@@ -345,7 +345,7 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
               # already used for Leiden (algorithm=4) below, generalized.
               algo_name <- c("2"="Louvain multilevel","3"="SLM","4"="Leiden")[as.character(algo)]
               showNotification(
-                paste0(algo_name %||% "Algorithme", " indisponible/a échoué sur cet objet — repli sur Louvain standard. ",
+                paste0(algo_name %||% .tr("Algorithme"), .tr(" indisponible/a échoué sur cet objet — repli sur Louvain standard. "),
                       e$message),
                 type = "warning", duration = 10)
               FindClusters(obj, resolution=input$clust_res, algorithm=1)
@@ -412,7 +412,7 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
             p$set(0.85, .tr("t-SNE (secondaire)..."))
             obj <- tryCatch(RunTSNE(obj, dims = 1:input$pca_dim, verbose = FALSE),
                             error = function(e) {
-                              showNotification(paste("t-SNE secondaire ignoré:", e$message),
+                              showNotification(paste(.tr("t-SNE secondaire ignoré:"), e$message),
                                                type = "warning", duration = 5)
                               obj
                             })

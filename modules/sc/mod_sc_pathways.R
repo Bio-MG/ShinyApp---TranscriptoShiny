@@ -48,15 +48,15 @@ mod_sc_pathways_ui <- function(id) {
         tags$br(),
         tags$small(i18n$t("Les IDs Ensembl (ENSG…) sont convertis automatiquement en symboles."))),
     selectInput(ns("pathway_source"), i18n$t("Source de genes"),
-      choices=c("Marqueurs calculés"="markers","Genes correles"="correlated","Selection manuelle"="manual")),
+      choices=setNames(c("markers","correlated","manual"), c(.tr_plain("Marqueurs calculés"), .tr_plain("Genes correles"), .tr_plain("Selection manuelle")))),
     conditionalPanel(condition="input.pathway_source == 'manual'", ns=ns,
       selectizeInput(ns("pathway_genes"), "Genes", choices=NULL, multiple=TRUE,
-                     options=list(placeholder="Selectionnez genes"))),
+                     options=list(placeholder=i18n$t("Selectionnez genes")))),
     fluidRow(
       column(6, selectInput(ns("pathway_db"), i18n$t("Base de donnees"),
-               choices=c("GO Biological Process"="GOBP","KEGG Pathways"="KEGG","Reactome"="Reactome"))),
-      column(6, selectInput(ns("pathway_org"), "Organisme",
-               choices=c("Humain"="human","Souris"="mouse")))
+               choices=setNames(c("GOBP","KEGG","Reactome"), c(.tr_plain("GO Biological Process"), .tr_plain("KEGG Pathways"), .tr_plain("Reactome"))))),
+      column(6, selectInput(ns("pathway_org"), i18n$t("Organisme"),
+               choices=setNames(c("human","mouse"), c(.tr_plain("Humain"), .tr_plain("Souris")))))
     ),
     numericInput(ns("pathway_pval"), i18n$t("P-value cutoff"), value=0.05, min=0.001, max=0.1, step=0.01),
     actionButton(ns("run_pathway"), i18n$t("Lancer Enrichissement"), class="btn-warning w-100", icon=icon("dna")),

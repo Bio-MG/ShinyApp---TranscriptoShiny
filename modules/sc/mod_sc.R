@@ -120,7 +120,7 @@ mod_sc_ui <- function(id) {
 
 mod_sc_server <- function(id, global_data) {
   moduleServer(id, function(input, output, session) {
-    .tr <- function(key) { tr <- global_data$i18n; if (is.null(tr)) return(key); tryCatch(.strip_i18n_html(tr$t(key)), error=function(e) key) }
+    .tr <- function(key) { tr <- isolate(global_data$i18n); if (is.null(tr)) return(key); tryCatch(.strip_i18n_html(tr$t(key)), error=function(e) key) }
 
     shared_rv <- reactiveValues(
       markers_data     = NULL,
@@ -168,12 +168,12 @@ mod_sc_server <- function(id, global_data) {
       div(style=paste0("display:flex;justify-content:space-around;font-size:0.72em;",
                        "background:#f8f9fa;border:1px solid #e3e6e8;border-radius:6px;",
                        "padding:4px 2px;margin-bottom:8px;"),
-          tags$span(style="padding:2px 4px;", s_qc,      " QC"),
-          tags$span(style="padding:2px 4px;", s_norm,    " Norm"),
-          tags$span(style="padding:2px 4px;", s_cluster, " Cluster"),
-          tags$span(style="padding:2px 4px;", s_umap,    " UMAP"),
-          tags$span(style="padding:2px 4px;", s_annot,   " Annot"),
-          tags$span(style="padding:2px 4px;", s_markers, " Marqueurs"))
+          tags$span(style="padding:2px 4px;", s_qc,      .tr(" QC")),
+          tags$span(style="padding:2px 4px;", s_norm,    .tr(" Norm")),
+          tags$span(style="padding:2px 4px;", s_cluster, .tr(" Cluster")),
+          tags$span(style="padding:2px 4px;", s_umap,    .tr(" UMAP")),
+          tags$span(style="padding:2px 4px;", s_annot,   .tr(" Annot")),
+          tags$span(style="padding:2px 4px;", s_markers, .tr(" Marqueurs")))
     })
 
     # ── Pipeline summary panel ────────────────────────────────────────────────
@@ -221,15 +221,14 @@ mod_sc_server <- function(id, global_data) {
     output$saved_viz_list_ui <- renderUI({
       lst <- shared_rv$report_viz_list %||% list()
       if (!length(lst))
-        return(div(class="text-muted small", "Aucune visualisation sauvegardée. ",
-                   "Utilisez '📌 Ajouter au Rapport' dans l'onglet Graphiques."))
+        return(div(class="text-muted small", paste0(.tr("Aucune visualisation sauvegardée. "), .tr("Utilisez '📌 Ajouter au Rapport' dans l'onglet Graphiques."))))
       tags$ul(style="font-size:0.8em;margin-bottom:0;",
               lapply(names(lst), function(nm) tags$li(nm)))
     })
 
     observeEvent(input$clear_saved_viz, {
       shared_rv$report_viz_list <- list()
-      showNotification("🗑️ Liste de visualisations vidée.", type="message", duration=3)
+      showNotification(.tr("🗑️ Liste de visualisations vidée."), type="message", duration=3)
     })
 
     # ── Child servers ─────────────────────────────────────────────────────────
@@ -417,7 +416,7 @@ mod_sc_server <- function(id, global_data) {
           detected <- tryCatch(detect_gene_id_type(rownames(obj)),
                                error=function(e) "unknown")
           if (detected %in% c("ensembl","entrez")) {
-            p$set(0.02,"Mapping IDs..."); log_sc(sprintf("Mapping IDs (%s)...", detected))
+            p$set(0.02,.tr("Mapping IDs...")); log_sc(sprintf(.tr("Mapping IDs (%s)..."), detected))
             map_res <- tryCatch(
               withCallingHandlers(
                 remap_seurat_ids_to_symbol(obj,
@@ -426,20 +425,20 @@ mod_sc_server <- function(id, global_data) {
                   collapse_method  = "sum"),
                 warning = function(w) { log_sc(paste("\u2139\ufe0f", conditionMessage(w))); invokeRestart("muffleWarning") }
               ),
-              error=function(e) { log_sc(paste("\u26a0\ufe0f Mapping ignoré:", e$message)); NULL }
+              error=function(e) { log_sc(paste(.tr("⚠️ Mapping ignoré:"), e$message)); NULL }
             )
             if (!is.null(map_res)) {
               obj <- map_res$object
-              log_sc(sprintf("\u2713 Mapping : %d gènes finaux (%d mappés, %d non-mappés)",
+              log_sc(sprintf(.tr("✓ Mapping : %d gènes finaux (%d mappés, %d non-mappés)"),
                              nrow(obj), map_res$n_mapped, map_res$n_unmapped))
             }
           } else {
-            log_sc("Mapping IDs : symboles déjà détectés (ou type inconnu) — ignoré.")
+            log_sc(.tr("Mapping IDs : symboles déjà détectés (ou type inconnu) — ignoré."))
           }
         }
 
         # ── Step 1: QC ──────────────────────────────────────────────────────
-        p$set(0.05,"QC..."); log_sc("QC...")
+        p$set(0.05,.tr("QC...")); log_sc(.tr("QC..."))
         mt_pat <- if (any(grepl("^MT-",rownames(obj)))) "^MT-"
                   else if (any(grepl("^mt-",rownames(obj)))) "^mt-" else NULL
         obj[["percent.mt"]] <- if (!is.null(mt_pat))
@@ -450,22 +449,22 @@ mod_sc_server <- function(id, global_data) {
                                nFeature_RNA < input$sc_ap_max_gene &
                                percent.mt   < input$sc_ap_mt)
         if (ncol(obj) < 10) stop(sprintf(
-          "Seulement %d cellule(s) après QC (départ: %d). Réduisez les seuils.", ncol(obj), n_before))
-        log_sc(sprintf("\u2713 QC : %d cellules (retirées: %d)", ncol(obj), n_before-ncol(obj)))
+          .tr("Seulement %d cellule(s) après QC (départ: %d). Réduisez les seuils."), ncol(obj), n_before))
+        log_sc(sprintf(.tr("✓ QC : %d cellules (retirées: %d)"), ncol(obj), n_before-ncol(obj)))
 
         # ── Step 1b: Backend disque (BPCells) — Step-3.7A ────────────────────
         if (isTRUE(input$sc_ap_bpcells) && ncol(obj) > .BPCELLS_AUTO_THRESHOLD &&
             sc_backend_status(obj) == "memory") {
           if (!.bpcells_available()) {
-            log_sc("\u26a0\ufe0f BPCells non installé — pipeline exécuté en RAM.")
+            log_sc(.tr("⚠️ BPCells non installé — pipeline exécuté en RAM."))
           } else {
             conv <- tryCatch(convert_seurat_to_bpcells(obj),
-                             error=function(e){ log_sc(paste("\u26a0\ufe0f BPCells:", e$message)); NULL })
+                             error=function(e){ log_sc(paste(.tr("⚠️ BPCells:"), e$message)); NULL })
             if (!is.null(conv)) {
               obj <- conv$object
               if (!isTRUE(conv$already_disk)) {
                 session$onSessionEnded(function() unlink(conv$dir, recursive = TRUE))
-                log_sc(sprintf("\u2713 Backend disque (BPCells) activé — %s cellules",
+                log_sc(sprintf(.tr("✓ Backend disque (BPCells) activé — %s cellules"),
                                format(conv$n_cells, big.mark=" ")))
               }
             }
@@ -488,14 +487,14 @@ mod_sc_server <- function(id, global_data) {
           .ap_old_plan <- future::plan()
           on.exit(future::plan(.ap_old_plan), add = TRUE)
           future::plan("sequential")
-          log_sc("\u2139\ufe0f Backend disque : future séquentiel forcé (Normalisation \u2192 Clustering) pour éviter un crash 'globals size'.")
+          log_sc(.tr("ℹ️ Backend disque : future séquentiel forcé (Normalisation → Clustering) pour éviter un crash 'globals size'."))
         }
 
         if (isTRUE(use_sketch)) {
           # ── Sketch: analyse sur sous-ensemble ────────────────────────────
           .t_sketch <- Sys.time()
-          p$set(0.15,"Sketch..."); log_sc(sprintf(
-            "Sketch : %s / %s cellules (preset '%s')...",
+          p$set(0.15,.tr("Sketch...")); log_sc(sprintf(
+            .tr("Sketch : %s / %s cellules (preset '%s')..."),
             format(sketch_params$ncells, big.mark=" "), format(n_total_cells, big.mark=" "),
             input$sc_ap_sketch_preset))
           DefaultAssay(obj) <- "RNA"
@@ -504,22 +503,22 @@ mod_sc_server <- function(id, global_data) {
           obj <- SketchData(object=obj, ncells=sketch_params$ncells,
                             method="LeverageScore", sketched.assay="sketch")
           DefaultAssay(obj) <- "sketch"
-          log_sc(sprintf("\u2713 Sketch OK (%.0fs)", as.numeric(difftime(Sys.time(), .t_sketch, units="secs"))))
+          log_sc(sprintf(.tr("✓ Sketch OK (%.0fs)"), as.numeric(difftime(Sys.time(), .t_sketch, units="secs"))))
 
-          p$set(0.30,"Normalisation (sketch)..."); log_sc("Normalisation (sketch)...")
+          p$set(0.30,.tr("Normalisation (sketch)...")); log_sc(.tr("Normalisation (sketch)..."))
           obj <- FindVariableFeatures(obj, nfeatures=2000, verbose=FALSE)
           obj <- ScaleData(obj, verbose=FALSE)
-          log_sc("\u2713 Normalisation OK")
+          log_sc(.tr("✓ Normalisation OK"))
 
-          p$set(0.40,"PCA (sketch)...")
+          p$set(0.40,.tr("PCA (sketch)..."))
           obj <- RunPCA(obj, npcs=sketch_params$npcs, verbose=FALSE)
-          log_sc(sprintf("\u2713 PCA (%d dims, sketch)", sketch_params$npcs))
+          log_sc(sprintf(.tr("✓ PCA (%d dims, sketch)"), sketch_params$npcs))
 
-          p$set(0.55,"Clustering (sketch)...")
+          p$set(0.55,.tr("Clustering (sketch)..."))
           obj <- FindNeighbors(obj, dims=1:sketch_params$npcs, verbose=FALSE)
           obj <- robust_find_clusters(obj, resolution=input$sc_ap_res, algo=input$sc_ap_cluster_algo,
                                       log_fn=function(m) log_sc(paste("\u26a0\ufe0f", m)))
-          log_sc(sprintf("\u2713 Clustering sketch OK (res %.1f)", input$sc_ap_res))
+          log_sc(sprintf(.tr("✓ Clustering sketch OK (res %.1f)"), input$sc_ap_res))
 
           # Step-3.8B: UMAP is the slowest step by far on large sketches --
           # skippable for fast debug iteration. When skipped, ProjectData()
@@ -527,18 +526,18 @@ mod_sc_server <- function(id, global_data) {
           # (Step 9) and any live/report preview fall back to PCA automatically.
           compute_umap_sketch <- isTRUE(input$sc_ap_compute_umap)
           if (compute_umap_sketch) {
-            p$set(0.63,"UMAP (sketch)...")
+            p$set(0.63,.tr("UMAP (sketch)..."))
             obj <- RunUMAP(obj, dims=1:sketch_params$npcs, reduction="pca",
                            return.model=TRUE, verbose=FALSE)
-            log_sc("\u2713 UMAP sketch OK")
+            log_sc(.tr("✓ UMAP sketch OK"))
           } else {
-            log_sc("\u2139\ufe0f UMAP d\u00e9sactiv\u00e9 (mode PCA seul, debug rapide) \u2014 previews/trajectoire utiliseront PCA.")
+            log_sc(.tr("ℹ️ UMAP désactivé (mode PCA seul, debug rapide) — previews/trajectoire utiliseront PCA."))
           }
 
           # ── Projection sketch → dataset complet ──────────────────────────
           .t_project <- Sys.time()
-          p$set(0.68,"Projection sur le dataset complet...")
-          log_sc("Projection (ProjectData) sur le dataset complet...")
+          p$set(0.68,.tr("Projection sur le dataset complet..."))
+          log_sc(.tr("Projection (ProjectData) sur le dataset complet..."))
           project_args <- list(
             object=obj, assay="RNA", sketched.assay="sketch",
             sketched.reduction="pca", full.reduction="pca.full",
@@ -549,17 +548,17 @@ mod_sc_server <- function(id, global_data) {
           obj <- standardize_sketch_reductions(obj, full_pca_name="pca.full")
           DefaultAssay(obj) <- "RNA"
           pca_dim <- sketch_params$npcs
-          log_sc(sprintf("\u2713 Projection OK \u2014 %s cellules (%.0fs)",
+          log_sc(sprintf(.tr("✓ Projection OK — %s cellules (%.0fs)"),
                          format(ncol(obj), big.mark=" "), as.numeric(difftime(Sys.time(), .t_project, units="secs"))))
 
         } else {
           # ── Dataset complet (comportement existant, inchangé) ────────────
           if (identical(input$sc_ap_norm, "sct"))
-            log_sc("\u2139\ufe0f Sketch non support\u00e9 avec SCTransform \u2014 pipeline sur dataset complet.")
+            log_sc(.tr("ℹ️ Sketch non supporté avec SCTransform — pipeline sur dataset complet."))
           else
-            log_sc("\u2139\ufe0f Sketch ignor\u00e9 : preset \u2265 taille du dataset \u2014 pipeline sur dataset complet.")
+            log_sc(.tr("ℹ️ Sketch ignoré : preset ≥ taille du dataset — pipeline sur dataset complet."))
 
-          p$set(0.20,"Normalisation..."); log_sc("Normalisation...")
+          p$set(0.20,.tr("Normalisation...")); log_sc(.tr("Normalisation..."))
           if (input$sc_ap_norm=="sct") {
             obj <- SCTransform(obj, verbose=FALSE, vst.flavor="v2")
           } else {
@@ -568,45 +567,45 @@ mod_sc_server <- function(id, global_data) {
             obj <- FindVariableFeatures(obj, nfeatures=2000, verbose=FALSE)
             obj <- smart_scale_data(obj)   # Step-3.7A: RAM-safe (VariableFeatures only)
           }
-          log_sc("\u2713 Normalisation OK")
+          log_sc(.tr("✓ Normalisation OK"))
 
-          p$set(0.40,"PCA...")
+          p$set(0.40,.tr("PCA..."))
           obj <- RunPCA(obj, verbose=FALSE, npcs=pca_dim)
-          log_sc(sprintf("\u2713 PCA (%d dims)", pca_dim))
+          log_sc(sprintf(.tr("✓ PCA (%d dims)"), pca_dim))
 
-          p$set(0.55,"Clustering...")
+          p$set(0.55,.tr("Clustering..."))
           obj <- FindNeighbors(obj, dims=1:pca_dim, verbose=FALSE)
           obj <- robust_find_clusters(obj, resolution=input$sc_ap_res, algo=input$sc_ap_cluster_algo,
                                       log_fn=function(m) log_sc(paste("\u26a0\ufe0f", m)))
-          log_sc(sprintf("\u2713 %d clusters (res %.1f)", length(unique(obj$seurat_clusters)), input$sc_ap_res))
+          log_sc(sprintf(.tr("✓ %d clusters (res %.1f)"), length(unique(obj$seurat_clusters)), input$sc_ap_res))
 
           if (isTRUE(input$sc_ap_compute_umap)) {
-            p$set(0.68,"UMAP...")
+            p$set(0.68,.tr("UMAP..."))
             obj <- RunUMAP(obj, dims=1:pca_dim, verbose=FALSE)
-            log_sc("\u2713 UMAP OK")
+            log_sc(.tr("✓ UMAP OK"))
           } else {
-            log_sc("\u2139\ufe0f UMAP d\u00e9sactiv\u00e9 (mode PCA seul, debug rapide).")
+            log_sc(.tr("ℹ️ UMAP désactivé (mode PCA seul, debug rapide)."))
           }
         }
 
         n_cl <- length(unique(obj$seurat_clusters))
-        if (isTRUE(use_sketch)) log_sc(sprintf("\u2713 %d clusters (projet\u00e9s sur dataset complet)", n_cl))
+        if (isTRUE(use_sketch)) log_sc(sprintf(.tr("✓ %d clusters (projetés sur dataset complet)"), n_cl))
 
         # ── Step 5b: t-SNE secondaire (Step-3.7) ──────────────────────────────
         # Toujours calculé (si dataset raisonnable) pour être disponible aux
         # côtés de PCA/UMAP dans le picker "Réduction à visualiser" — même
         # constante de garde que le module "1. Pipeline" (.AUTO_TSNE_MAX_CELLS).
         if (!isTRUE(input$sc_ap_compute_umap)) {
-          log_sc("\u2139\ufe0f t-SNE secondaire ignor\u00e9 (UMAP d\u00e9sactiv\u00e9, mode PCA seul).")
+          log_sc(.tr("ℹ️ t-SNE secondaire ignoré (UMAP désactivé, mode PCA seul)."))
         } else {
-          p$set(0.72,"t-SNE (secondaire)...")
+          p$set(0.72,.tr("t-SNE (secondaire)..."))
           if (ncol(obj) > .AUTO_TSNE_MAX_CELLS) {
-            log_sc(sprintf("\u26a0\ufe0f t-SNE secondaire ignoré (%s cellules > %s max).",
+            log_sc(sprintf(.tr("⚠️ t-SNE secondaire ignoré (%s cellules > %s max)."),
                            format(ncol(obj), big.mark=" "), format(.AUTO_TSNE_MAX_CELLS, big.mark=" ")))
           } else {
             obj <- tryCatch(RunTSNE(obj, dims=1:pca_dim, verbose=FALSE),
-                            error=function(e){ log_sc(paste("\u26a0\ufe0f t-SNE secondaire ignoré:", e$message)); obj })
-            log_sc("\u2713 t-SNE secondaire OK")
+                            error=function(e){ log_sc(paste(.tr("⚠️ t-SNE secondaire ignoré:"), e$message)); obj })
+            log_sc(.tr("✓ t-SNE secondaire OK"))
           }
         }
 
@@ -614,23 +613,23 @@ mod_sc_server <- function(id, global_data) {
         if (isTRUE(input$sc_ap_singler)) {
           if (!requireNamespace("SingleR",quietly=TRUE) ||
               !requireNamespace("celldex",quietly=TRUE)) {
-            log_sc("\u26a0\ufe0f SingleR/celldex non installés — annotation ignorée.")
+            log_sc(.tr("⚠️ SingleR/celldex non installés — annotation ignorée."))
           } else {
             .t_singler <- Sys.time()
-            p$set(0.76,"Annotation SingleR...")
+            p$set(0.76,.tr("Annotation SingleR..."))
             result <- tryCatch(
               withCallingHandlers(
                 .run_singler_safe(obj, input$sc_ap_singler_ref, input$sc_ap_singler_level),
                 warning=function(w) {
-                  log_sc(paste("\u26a0\ufe0f", conditionMessage(w)))
+                  log_sc(paste(.tr("⚠️"), conditionMessage(w)))
                   invokeRestart("muffleWarning")
                 }),
-              error=function(e) { log_sc(paste("\u26a0\ufe0f SingleR:", e$message)); NULL }
+              error=function(e) { log_sc(paste(.tr("⚠️ SingleR:"), e$message)); NULL }
             )
             if (!is.null(result)) {
               col_name <- paste0("SingleR_", input$sc_ap_singler_ref, "_", input$sc_ap_singler_level)
               obj[[col_name]] <- result$labels
-              log_sc(sprintf("\u2713 Annoté [%s] — %d types (%.0fs)",
+              log_sc(sprintf(.tr("✓ Annoté [%s] — %d types (%.0fs)"),
                              result$method, length(unique(result$labels)),
                              as.numeric(difftime(Sys.time(), .t_singler, units="secs"))))
             }
@@ -641,18 +640,18 @@ mod_sc_server <- function(id, global_data) {
         # Step-3.7: runs on a RAM-safety-capped subsample (shared_rv$max_cells_heavy,
         # set in "1. Pipeline") — `obj` itself (UMAP/t-SNE/clusters) stays full-size.
         if (isTRUE(input$sc_ap_markers) || isTRUE(input$sc_ap_correlation)) {
-          p$set(0.82,"FindAllMarkers...")
+          p$set(0.82,.tr("FindAllMarkers..."))
           cap_m   <- shared_rv$max_cells_heavy %||% Inf
           sub_res <- subsample_seurat_for_analysis(obj, max_per_group = cap_m, group_col = "seurat_clusters")
           if (sub_res$was_subsampled)
-            log_sc(sprintf("\u2139\ufe0f Sous-échantillonnage marqueurs : %d \u2192 %d cellules (max %d/cluster)",
+            log_sc(sprintf(.tr("ℹ️ Sous-échantillonnage marqueurs : %d → %d cellules (max %d/cluster)"),
                            sub_res$n_before, sub_res$n_after, cap_m))
-          log_sc("FindAllMarkers...")
+          log_sc(.tr("FindAllMarkers..."))
           markers <- tryCatch({
             Idents(sub_res$object) <- sub_res$object$seurat_clusters
             FindAllMarkers(sub_res$object, only.pos=TRUE, min.pct=0.1,
                            logfc.threshold=0.25, verbose=FALSE)
-          }, error=function(e) { log_sc(paste("\u26a0\ufe0f Markers:", e$message)); NULL })
+          }, error=function(e) { log_sc(paste(.tr("⚠️ Markers:"), e$message)); NULL })
 
           if (!is.null(markers) && nrow(markers) > 0) {
             markers <- as.data.frame(markers); rownames(markers) <- NULL
@@ -663,12 +662,12 @@ mod_sc_server <- function(id, global_data) {
             if (!"pct.1"      %in% colnames(markers)) markers$pct.1      <- NA_real_
             if (!"pct.2"      %in% colnames(markers)) markers$pct.2      <- NA_real_
             shared_rv$markers_data <- markers
-            log_sc(sprintf("\u2713 %d marqueurs", nrow(markers)))
+            log_sc(sprintf(.tr("✓ %d marqueurs"), nrow(markers)))
 
             # Step 7b: Pathway ORA on top markers (optional)
             if (isTRUE(input$sc_ap_pathway)) {
               .t_pathway <- Sys.time()
-              log_sc("Pathway ORA...")
+              log_sc(.tr("Pathway ORA..."))
               pathway_org <- input$sc_ap_pathway_org %||% "human"
               top_g_raw   <- head(markers$gene[order(markers$p_val_adj)], 100)
               # Step-3.8B: .remap_if_ensg() (mod_sc_pathways.R, globally
@@ -678,9 +677,9 @@ mod_sc_server <- function(id, global_data) {
               # Without this, sketch/auto-pipeline runs where mapping was
               # skipped or failed always produced "Aucun gene converti".
               top_g <- .remap_if_ensg(top_g_raw, pathway_org,
-                                      notify_fn = function(msg, ...) log_sc(paste("\u2139\ufe0f", msg)))
+                                      notify_fn = function(msg, ...) log_sc(paste(.tr("ℹ️"), msg)))
               if (length(top_g) == 0) {
-                log_sc(sprintf("\u26a0\ufe0f Pathway ignoré : 0/%d gènes convertibles (organisme '%s'). Exemples : %s.",
+                log_sc(sprintf(.tr("⚠️ Pathway ignoré : 0/%d gènes convertibles (organisme '%s'). Exemples : %s."),
                                length(top_g_raw), pathway_org, paste(head(top_g_raw, 5), collapse=", ")))
               } else {
                 pw <- tryCatch(
@@ -689,53 +688,53 @@ mod_sc_server <- function(id, global_data) {
                                          database = input$sc_ap_pathway_db %||% "GOBP",
                                          pval_cutoff = 0.05,
                                          universe = rownames(obj)),
-                  error=function(e) { log_sc(paste("\u26a0\ufe0f Pathway:", e$message,
-                                                    "\u2014 exemples testés :",
+                  error=function(e) { log_sc(paste(.tr("⚠️ Pathway:"), e$message,
+                                                    .tr("— exemples testés :"),
                                                     paste(head(top_g, 5), collapse=", "))); NULL }
                 )
                 if (!is.null(pw) && nrow(pw) > 0) {
                   shared_rv$pathway_results <- pw
                   shared_rv$pathway_db      <- input$sc_ap_pathway_db %||% "GOBP"
-                  log_sc(sprintf("\u2713 %d pathways (%d/%d gènes convertis, %.0fs)", nrow(pw), length(top_g), length(top_g_raw),
+                  log_sc(sprintf(.tr("✓ %d pathways (%d/%d gènes convertis, %.0fs)"), nrow(pw), length(top_g), length(top_g_raw),
                                  as.numeric(difftime(Sys.time(), .t_pathway, units="secs"))))
                 }
               }
             }
 
           } else {
-            log_sc("\u26a0\ufe0f Aucun marqueur trouvé.")
+            log_sc(.tr("⚠️ Aucun marqueur trouvé."))
           }
         }
 
         # ── Step 8: Gene Correlation (optional) — top significant marker ─────
         # Step-3.7: also subsampled (stratified by orig.ident) with the same cap.
         if (isTRUE(input$sc_ap_correlation)) {
-          p$set(0.90,"Corrélation..."); log_sc("Gene Correlation...")
+          p$set(0.90,.tr("Corrélation...")); log_sc(.tr("Gene Correlation..."))
           target_gene <- NULL
           if (!is.null(shared_rv$markers_data) && nrow(shared_rv$markers_data) > 0) {
             ranked      <- shared_rv$markers_data[order(shared_rv$markers_data$p_val_adj), ]
             target_gene <- ranked$gene[1]
           }
           if (is.null(target_gene)) {
-            log_sc("\u26a0\ufe0f Corrélation ignorée : aucun marqueur disponible (cochez 'Marqueurs').")
+            log_sc(.tr("⚠️ Corrélation ignorée : aucun marqueur disponible (cochez 'Marqueurs')."))
           } else {
             cap_c     <- shared_rv$max_cells_heavy %||% Inf
             sub_res_c <- subsample_seurat_for_analysis(obj, max_per_group = cap_c, group_col = "orig.ident")
             if (sub_res_c$was_subsampled)
-              log_sc(sprintf("\u2139\ufe0f Sous-échantillonnage corrélation : %d \u2192 %d cellules (max %d/échantillon)",
+              log_sc(sprintf(.tr("ℹ️ Sous-échantillonnage corrélation : %d → %d cellules (max %d/échantillon)"),
                              sub_res_c$n_before, sub_res_c$n_after, cap_c))
             corr_res <- tryCatch(
               find_correlated_genes(sub_res_c$object, target_gene=target_gene,
                                     method="pearson", threshold=0.3, top_n=50),
-              error=function(e) { log_sc(paste("\u26a0\ufe0f Corrélation:", e$message)); NULL }
+              error=function(e) { log_sc(paste(.tr("⚠️ Corrélation:"), e$message)); NULL }
             )
             if (!is.null(corr_res) && nrow(corr_res) > 0) {
               shared_rv$correlated_genes <- corr_res
               shared_rv$corr_target_gene <- target_gene
-              log_sc(sprintf("\u2713 %d gènes corrélés avec %s (top marqueur)",
+              log_sc(sprintf(.tr("✓ %d gènes corrélés avec %s (top marqueur)"),
                              nrow(corr_res), target_gene))
             } else {
-              log_sc(sprintf("\u26a0\ufe0f Aucun gène corrélé pour %s (seuil |r|\u22650.3).", target_gene))
+              log_sc(sprintf(.tr("⚠️ Aucun gène corrélé pour %s (seuil |r|≥0.3)."), target_gene))
             }
           }
         }
@@ -745,9 +744,9 @@ mod_sc_server <- function(id, global_data) {
         # Slingshot is opt-in only from the Trajectory module UI. No method
         # switch ever happens silently here.
         if (isTRUE(input$sc_ap_trajectory)) {
-          p$set(0.95,"Trajectoire..."); log_sc("Trajectory / Pseudotime...")
+          p$set(0.95,.tr("Trajectoire...")); log_sc(.tr("Trajectory / Pseudotime..."))
           if (ncol(obj) > .MAX_TRAJECTORY_CELLS) {
-            log_sc(sprintf("\u26a0\ufe0f Trajectoire ignorée : dataset trop grand (%d > %d).",
+            log_sc(sprintf(.tr("⚠️ Trajectoire ignorée : dataset trop grand (%d > %d)."),
                            ncol(obj), .MAX_TRAJECTORY_CELLS))
           } else {
             # Step-3.8B: fall back to PCA if UMAP was skipped ("PCA seul" mode)
@@ -760,7 +759,7 @@ mod_sc_server <- function(id, global_data) {
             traj_res <- tryCatch(
               calculate_pseudotime(embeddings = traj_embedding, k = 15,
                                    root_cells = NULL, root_method = "diameter"),
-              error=function(e) { log_sc(paste("\u26a0\ufe0f Trajectoire:", e$message)); NULL }
+              error=function(e) { log_sc(paste(.tr("⚠️ Trajectoire:"), e$message)); NULL }
             )
             if (!is.null(traj_res)) {
               obj@meta.data$pseudotime        <- traj_res$pseudotime
@@ -775,7 +774,7 @@ mod_sc_server <- function(id, global_data) {
               obj@meta.data$traj_root_component_size   <- rep(traj_res$root_component_size, ncol(obj))
               shared_rv$traj_reduction        <- traj_red_use
               shared_rv$traj_method           <- "exploratory_knn"
-              log_sc(sprintf("\u2713 Pseudotemps calculé (exploratoire kNN, racine auto/diamètre, réduction: %s)", toupper(traj_red_use)))
+              log_sc(sprintf(.tr("✓ Pseudotemps calculé (exploratoire kNN, racine auto/diamètre, réduction: %s)"), toupper(traj_red_use)))
             }
           }
         }
@@ -788,7 +787,7 @@ mod_sc_server <- function(id, global_data) {
           type="message", duration=6)
 
       }, error=function(e) {
-        log_sc(paste("\u274c Erreur:", e$message))
+        log_sc(paste(.tr("❌ Erreur:"), e$message))
         showNotification(paste(.tr("Erreur pipeline SC:"), e$message), type="error", duration=10)
       })
     })
@@ -797,8 +796,8 @@ mod_sc_server <- function(id, global_data) {
     # REPORT STATUS
     # =========================================================================
     output$report_status <- renderText({
-      if (is.null(global_data$sc_obj)) "Importez et traitez un objet SC."
-      else sprintf("Prêt — %d viz. sauvegardée(s) dans le panier.",
+      if (is.null(global_data$sc_obj)) .tr("Importez et traitez un objet SC.")
+      else sprintf(.tr("Prêt — %d viz. sauvegardée(s) dans le panier."),
                    length(shared_rv$report_viz_list %||% list()))
     })
 

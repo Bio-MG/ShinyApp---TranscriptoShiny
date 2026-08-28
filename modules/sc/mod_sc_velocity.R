@@ -10,54 +10,54 @@ mod_sc_velocity_ui <- function(id) {
   ns <- NS(id)
   tagList(
     div(class = "alert alert-light", style = "font-size:0.9em;border-left:3px solid #2980B9;",
-        "RNA Velocity — import strict des matrices spliced/unspliced alignees sur l'objet Seurat. ",
+        i18n$t("RNA Velocity — import strict des matrices spliced/unspliced alignees sur l'objet Seurat. "),
         i18n$t("Aucune inference n'est effectuee dans l'application.")),
 
     radioButtons(ns("velocity_import_mode"), i18n$t("Source d'import"),
-                 choices = c("RDS combine (spliced + unspliced)" = "rds",
-                             "Matrix Market (MTX + barcodes + features)" = "mtx"),
-                 selected = "rds"),
+                  choices = setNames(c("rds", "mtx"),
+                              c(.tr_plain("RDS combine (spliced + unspliced)"),
+                                .tr_plain("Matrix Market (MTX + barcodes + features)"))),
+                  selected = "rds"),
 
     conditionalPanel(
       condition = "input.velocity_import_mode == 'rds'", ns = ns,
       fileInput(ns("velocity_rds_file"), i18n$t("Fichier RDS velocity (liste spliced/unspliced)"),
                 accept = c(".rds", ".RDS"), width = "100%"),
       div(class = "small text-muted mb-2",
-          "Le RDS doit être une liste nommée avec spliced et unspliced. Noms inattendus bloqués.")
+           i18n$t("Le RDS doit être une liste nommée avec spliced et unspliced. Noms inattendus bloqués."))
     ),
 
     conditionalPanel(
       condition = "input.velocity_import_mode == 'mtx'", ns = ns,
       h6(i18n$t("Matrice spliced (MTX)"), style = "font-weight:bold;"),
-      fileInput(ns("velocity_mtx_spliced"), "Fichier .mtx (spliced)", accept = c(".mtx", ".gz"), width = "100%"),
+      fileInput(ns("velocity_mtx_spliced"), i18n$t("Fichier .mtx (spliced)"), accept = c(".mtx", ".gz"), width = "100%"),
       fileInput(ns("velocity_mtx_spliced_barcodes"), i18n$t("Barcodes spliced"), accept = c(".tsv", ".txt", ".gz"), width = "100%"),
       fileInput(ns("velocity_mtx_spliced_features"), i18n$t("Features/genes spliced"), accept = c(".tsv", ".txt", ".gz"), width = "100%"),
       h6(i18n$t("Matrice unspliced (MTX)"), style = "font-weight:bold;"),
-      fileInput(ns("velocity_mtx_unspliced"), "Fichier .mtx (unspliced)", accept = c(".mtx", ".gz"), width = "100%"),
+      fileInput(ns("velocity_mtx_unspliced"), i18n$t("Fichier .mtx (unspliced)"), accept = c(".mtx", ".gz"), width = "100%"),
       fileInput(ns("velocity_mtx_unspliced_barcodes"), i18n$t("Barcodes unspliced"), accept = c(".tsv", ".txt", ".gz"), width = "100%"),
       fileInput(ns("velocity_mtx_unspliced_features"), i18n$t("Features/genes unspliced"), accept = c(".tsv", ".txt", ".gz"), width = "100%"),
       h6(i18n$t("Matrice ambiguous (optionnel)"), style = "font-weight:bold;"),
-      fileInput(ns("velocity_mtx_ambiguous"), "Fichier .mtx (ambiguous)", accept = c(".mtx", ".gz"), width = "100%"),
-      fileInput(ns("velocity_mtx_ambiguous_barcodes"), "Barcodes ambiguous", accept = c(".tsv", ".txt", ".gz"), width = "100%"),
-      fileInput(ns("velocity_mtx_ambiguous_features"), "Features/genes ambiguous", accept = c(".tsv", ".txt", ".gz"), width = "100%"),
+      fileInput(ns("velocity_mtx_ambiguous"), i18n$t("Fichier .mtx (ambiguous)"), accept = c(".mtx", ".gz"), width = "100%"),
+      fileInput(ns("velocity_mtx_ambiguous_barcodes"), i18n$t("Barcodes ambiguous"), accept = c(".tsv", ".txt", ".gz"), width = "100%"),
+      fileInput(ns("velocity_mtx_ambiguous_features"), i18n$t("Features/genes ambiguous"), accept = c(".tsv", ".txt", ".gz"), width = "100%"),
       numericInput(ns("velocity_feature_column"),
-                   "Colonne d'identifiants dans features.tsv",
-                   value = 1, min = 1, step = 1, width = "100%"),
+                    i18n$t("Colonne d'identifiants dans features.tsv"),
+                    value = 1, min = 1, step = 1, width = "100%"),
       div(class = "small text-muted mb-2",
-          "Les fichiers 10x contiennent souvent gene_id (colonne 1) ET symbole ",
-          "(colonne 2). La colonne choisie doit correspondre aux rownames de ",
-          "l'objet Seurat — la premiere colonne n'est jamais supposee correcte.")
+           paste(i18n$t("Les fichiers 10x contiennent souvent gene_id (colonne 1) ET symbole "),
+                 i18n$t("(colonne 2). La colonne choisie doit correspondre aux rownames de "),
+                 i18n$t("l'objet Seurat — la premiere colonne n'est jamais supposee correcte.")))
     ),
 
     hr(),
     selectInput(
       ns("velocity_orientation"),
       i18n$t("Orientation des matrices"),
-      choices = c(
-        "Détection automatique stricte" = "auto_strict",
-        "Genes x cellules" = "genes_x_cells",
-        "Cellules x genes" = "cells_x_genes"
-      ),
+      choices = setNames(c("auto_strict", "genes_x_cells", "cells_x_genes"),
+        c(.tr_plain("Détection automatique stricte"),
+          .tr_plain("Genes x cellules"),
+          .tr_plain("Cellules x genes"))),
       selected = "auto_strict"
     ),
     checkboxInput(
@@ -77,8 +77,8 @@ mod_sc_velocity_ui <- function(id) {
     ),
     div(
       class = "small text-muted",
-      "Les corrections d'identifiants sont desactivees par defaut. ",
-      "Une collision bloque la validation."
+      paste(i18n$t("Les corrections d'identifiants sont desactivees par defaut. "),
+            i18n$t("Une collision bloque la validation."))
     ),
     hr(),
     actionButton(ns("velocity_validate"), i18n$t("Valider les matrices velocity"),
@@ -93,9 +93,9 @@ mod_sc_velocity_ui <- function(id) {
 
 mod_sc_velocity_output_ui <- function(id) {
   ns <- NS(id)
-  card(
+    card(
     full_screen = TRUE,
-    card_header("RNA Velocity — Phase portrait & vecteurs pre-calcules"),
+    card_header(i18n$t("RNA Velocity — Phase portrait & vecteurs pre-calcules")),
     navset_tab(
       nav_panel(i18n$t("Phase portrait"),
                 plotOutput(ns("velocity_phase_plot"), height = "500px")),
@@ -134,7 +134,7 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
     observeEvent(global_data$language, {
       # Re-translate dynamic labels on language switch
     }, ignoreInit = TRUE)
-    velocity_status_rv <- reactiveVal(.tr("En attente d'import velocity..."))
+    velocity_status_rv <- reactiveVal("En attente d'import velocity...")
 
     output$velocity_status <- renderText({ velocity_status_rv() })
     output$velocity_vector_status <- renderText({
