@@ -44,9 +44,13 @@ mod_sc_ui <- function(id) {
         accordion_panel(i18n$t("3. Visualisation"), icon = icon("chart-area"),
                         value = "3_viz",
                         mod_sc_viz_ui(ns("viz"))),
+        # maj
         accordion_panel(i18n$t("4. Marqueurs"), icon = icon("magnifying-glass-chart"),
                         value = "4_markers",
                         mod_sc_markers_ui(ns("markers"))),
+        accordion_panel(i18n$t("4b. Pseudobulk DE (Conditions)"), icon = icon("layer-group"),
+                        value = "4b_pseudobulk",
+                        mod_sc_pseudobulk_ui(ns("pseudobulk"))),
         accordion_panel(i18n$t("5. Gene Correlation"), icon = icon("project-diagram"),
                         value = "5_corr",
                         mod_sc_corr_ui(ns("corr"))),
@@ -100,7 +104,9 @@ mod_sc_ui <- function(id) {
     navset_card_underline(
       id = ns("main_tabs"), title = i18n$t("Résultats"),
       nav_panel(i18n$t("Graphiques"), value = "tab_viz", mod_sc_viz_output_ui(ns("viz"))),
+      # MAJ 2
       nav_panel(i18n$t("Table Marqueurs"), value = "tab_table", mod_sc_markers_output_ui(ns("markers"))),
+      nav_panel(i18n$t("Pseudobulk DE"), value = "tab_pseudobulk", mod_sc_pseudobulk_output_ui(ns("pseudobulk"))),
       nav_panel(i18n$t("Annotation"), value = "tab_annotation", mod_sc_annotation_output_ui(ns("annotation"))),
       nav_panel(i18n$t("Gènes Corrélés"), value = "tab_correlation", mod_sc_corr_output_ui(ns("corr"))),
       nav_panel(i18n$t("Pathways"), value = "tab_pathway", mod_sc_pathways_output_ui(ns("pathways"))),
@@ -260,7 +266,9 @@ mod_sc_server <- function(id, global_data) {
     mod_sc_pipeline_server(  "pipeline",  global_data, shared_rv)
     mod_sc_annotation_server("annotation",global_data, shared_rv)
     mod_sc_viz_server(       "viz",       global_data, shared_rv)
+    # maj 3
     mod_sc_markers_server(   "markers",   global_data, shared_rv)
+    mod_sc_pseudobulk_server("pseudobulk",global_data, shared_rv)
     mod_sc_corr_server(      "corr",      global_data, shared_rv)
     mod_sc_pathways_server(  "pathways",  global_data, shared_rv)
     mod_sc_trajectory_server("trajectory",global_data, shared_rv)
