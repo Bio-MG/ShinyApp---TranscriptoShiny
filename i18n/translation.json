@@ -5195,7 +5195,7 @@
     },
     {
       "fr": "RNA Velocity — import strict des matrices spliced/unspliced alignees sur l'objet Seurat.",
-      "en": "RNA Velocity — strict import of spliced/unspliced matrices aligned to the Seurat object."
+      "en": "RNA Velocity — strict import of spliced/unspliced matrices aligned with the Seurat object."
     },
     {
       "fr": "Aucune inference n'est effectuee dans l'application.",
@@ -6359,7 +6359,7 @@
     },
     {
       "fr": "Si coché : UMAP + t-SNE secondaire (si dataset raisonnable) sont calculés (le plus lent du pipeline). Si décoché : PCA seul — previews/trajectoire se rabattent automatiquement sur PCA, rien ne plante.",
-      "en": "If checked: UMAP + secondary t-SNE (if reasonable dataset) are computed (slowest part of the pipeline). If unchecked: PCA only — previews/trajectory automatically fall back to PCA, nothing breaks."
+      "en": "If checked: UMAP + secondary t-SNE (if reasonable dataset) are computed (slowest part of pipeline). If unchecked: PCA only — previews/trajectory fall back automatically to PCA, nothing crashes."
     },
     {
       "fr": "Sketch — gros datasets",
@@ -6367,7 +6367,7 @@
     },
     {
       "fr": "PCA/Clustering/UMAP tournent sur un sous-ensemble représentatif (LeverageScore), puis sont projetés sur toutes les cellules. Accélère fortement les gros datasets (ex: 1,3M cellules) sans perdre les clusters rares. Ignoré si SCTransform est choisi.",
-      "en": "PCA/Clustering/UMAP run on a representative subset (LeverageScore), then are projected onto all cells. Greatly speeds up large datasets (e.g. 1.3M cells) without losing rare clusters. Ignored if SCTransform is chosen."
+      "en": "PCA/Clustering/UMAP run on a representative subset (LeverageScore), then are projected onto all cells. Significantly speeds up large datasets (e.g. 1.3M cells) without losing rare clusters. Ignored if SCTransform is selected."
     },
     {
       "fr": "{n} / {total} cellules — npcs suggéré : {npcs} ({sketch})",
@@ -6399,7 +6399,7 @@
     },
     {
       "fr": "Requiert 'Marqueurs' coché. Corrèle le gène à p-adj minimal avec tous les autres.",
-      "en": "Requires 'Markers' checked. Correlates the gene with minimal p-adj against all others."
+      "en": "Requires 'Markers' checked. Correlates the gene with minimal p-adj across all others."
     },
     {
       "fr": "🧬 Trajectory / Pseudotemps (UMAP, racine auto)",
@@ -6875,7 +6875,7 @@
     },
     {
       "fr": "Marqueurs",
-      "en": "Marqueurs"
+      "en": "Markers"
     },
     {
       "fr": "PCA (sketch)...",
@@ -6900,6 +6900,198 @@
     {
       "fr": "✓ {mapped} mappés, {unmapped} non-mappés ({pct}%), {collapsed} fusion(s) de doublon → {final} gènes finaux.",
       "en": "✓ {mapped} mappés, {unmapped} non-mappés ({pct}%), {collapsed} fusion(s) de doublon → {final} gènes finaux."
+    },
+    {
+      "fr": "Ex: CD3D, CD8A",
+      "en": "E.g.: CD3D, CD8A"
+    },
+    {
+      "fr": "Example: CD3D, MS4A1, CD8A, NKG7",
+      "en": "Example: CD3D, MS4A1, CD8A, NKG7"
+    },
+    {
+      "fr": "Current selection in selectize box above",
+      "en": "Current selection in selectize box above"
+    },
+    {
+      "fr": "Selectionnez genes",
+      "en": "Select genes"
+    },
+    {
+      "fr": "Trajectory Analysis",
+      "en": "Trajectory Analysis"
+    },
+    {
+      "fr": "Le RDS doit être une liste nommée avec spliced et unspliced. Noms inattendus bloqués.",
+      "en": "The RDS must be a named list with spliced and unspliced. Unexpected names blocked."
+    },
+    {
+      "fr": "Fichier .mtx (spliced)",
+      "en": ".mtx file (spliced)"
+    },
+    {
+      "fr": "Fichier .mtx (unspliced)",
+      "en": ".mtx file (unspliced)"
+    },
+    {
+      "fr": "Fichier .mtx (ambiguous)",
+      "en": ".mtx file (ambiguous)"
+    },
+    {
+      "fr": "Barcodes ambiguous",
+      "en": "Ambiguous barcodes"
+    },
+    {
+      "fr": "Features/genes ambiguous",
+      "en": "Ambiguous features/genes"
+    },
+    {
+      "fr": "Colonne d'identifiants dans features.tsv",
+      "en": "Identifier column in features.tsv"
+    },
+    {
+      "fr": "Les fichiers 10x contiennent souvent gene_id (colonne 1) ET symbole ",
+      "en": "10x files often contain gene_id (column 1) AND symbol"
+    },
+    {
+      "fr": "(colonne 2). La colonne choisie doit correspondre aux rownames de ",
+      "en": "(column 2). The selected column must match rownames of"
+    },
+    {
+      "fr": "l'objet Seurat — la premiere colonne n'est jamais supposee correcte.",
+      "en": "the Seurat object — the first column is never assumed correct."
+    },
+    {
+      "fr": "Les corrections d'identifiants sont desactivees par defaut. ",
+      "en": "Identifier corrections are disabled by default."
+    },
+    {
+      "fr": "Une collision bloque la validation.",
+      "en": "A collision blocks validation."
+    },
+    {
+      "fr": "Variable de métadonnées pour groupement",
+      "en": "Metadata variable for grouping"
+    },
+    {
+      "fr": "Genes du panier ci-dessus (max 50). Clustering hierarchique lignes/colonnes.",
+      "en": "Genes from basket above (max 50). Hierarchical clustering of rows/columns."
+    },
+    {
+      "fr": "Utilise 'Grouper/Colorer par' ci-dessous. Si vide, choisissez PCA (UMAP/t-SNE sont 2D par defaut).",
+      "en": "Uses 'Group/Color by' below. If empty, choose PCA (UMAP/t-SNE are 2D by default)."
+    },
+    {
+      "fr": "Appliqué aux groupes/clusters colorés. Okabe-Ito = sûre pour daltoniens.",
+      "en": "Applied to colored groups/clusters. Okabe-Ito = colorblind safe."
+    },
+    {
+      "fr": "Sélectionnez une variable 'Grouper par' pour personnaliser les couleurs.",
+      "en": "Select a 'Group by' variable to customize colors."
+    },
+    {
+      "fr": "Dégradé manuel (expression)",
+      "en": "Manual gradient (expression)"
+    },
+    {
+      "fr": "Couleurs manuelles — Volcano",
+      "en": "Manual colors — Volcano"
+    },
+    {
+      "fr": " QC",
+      "en": " QC"
+    },
+    {
+      "fr": " Norm",
+      "en": " Norm"
+    },
+    {
+      "fr": " Cluster",
+      "en": " Cluster"
+    },
+    {
+      "fr": " UMAP",
+      "en": " UMAP"
+    },
+    {
+      "fr": " Annot",
+      "en": " Annot"
+    },
+    {
+      "fr": " Marqueurs",
+      "en": " Markers"
+    },
+    {
+      "fr": "✓ {n} gènes retenus.",
+      "en": "✓ {n} genes retained."
+    },
+    {
+      "fr": "💽 Backend disque (BPCells) si > 150 000 cellules",
+      "en": "💽 Disk backend (BPCells) if > 150,000 cells"
+    },
+    {
+      "fr": "Preset sketch",
+      "en": "Sketch preset"
+    },
+    {
+      "fr": "Les corrections d'identifiants sont desactivees par defaut.",
+      "en": "Identifier corrections are disabled by default."
+    },
+    {
+      "fr": "Objet Seurat modifie : reimportez et validez les donnees velocity.",
+      "en": "Seurat object changed: re-import and validate the velocity data."
+    },
+    {
+      "fr": "N cellules",
+      "en": "N cells"
+    },
+    {
+      "fr": "En attente de l'annotation...",
+      "en": "Waiting for annotation..."
+    },
+    {
+      "fr": "Générer le Rapport",
+      "en": "Generate Report"
+    },
+    {
+      "fr": "Mapping IDs → Symbol (auto-détecté, avant QC)",
+      "en": "Mapping IDs → Symbol (auto-detected, before QC)"
+    },
+    {
+      "fr": "LogNormalize",
+      "en": "LogNormalize"
+    },
+    {
+      "fr": "SCTransform",
+      "en": "SCTransform"
+    },
+    {
+      "fr": "Calculer UMAP (décochez pour PCA seul — bien plus rapide, mode debug)",
+      "en": "Compute UMAP (uncheck for PCA only — much faster, debug mode)"
+    },
+    {
+      "fr": "Référence",
+      "en": "Reference"
+    },
+    {
+      "fr": "FindAllMarkers après clustering",
+      "en": "FindAllMarkers after clustering"
+    },
+    {
+      "fr": "Pathway ORA sur top marqueurs",
+      "en": "Pathway ORA on top markers"
+    },
+    {
+      "fr": "GO BP",
+      "en": "GO BP"
+    },
+    {
+      "fr": "Gene Correlation (auto: gène le plus significatif)",
+      "en": "Gene Correlation (auto: most significant gene)"
+    },
+    {
+      "fr": "Trajectory / Pseudotemps (UMAP, racine auto)",
+      "en": "Trajectory / Pseudotime (UMAP, auto root)"
     }
   ]
 }

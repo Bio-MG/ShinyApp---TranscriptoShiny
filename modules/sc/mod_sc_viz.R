@@ -302,7 +302,7 @@ mod_sc_viz_ui <- function(id) {
   tagList(
 
     div(class = "alert alert-light", style = "font-size:0.78em;border-left:3px solid #2C3E50;",
-        bsicons::bs_icon("diagram-3"), tags$strong(i18n$t("Bloc 1 — Exploration Core")),
+        bsicons::bs_icon("diagram-3"), tags$strong(" Bloc 1 — Exploration Core"),
         i18n$t(" : réductions, expression, profils, heatmaps, densité 2D, 3D.")),
 
     # Step 5 (UI reorg, Phase 1): grouped <optgroup> choices instead of a flat
@@ -311,15 +311,17 @@ mod_sc_viz_ui <- function(id) {
     # switches downstream) -- zero reactivity change.
     selectInput(
       ns("viz_type"), i18n$t("Style de Visualisation"),
-      choices = stats::setNames(
+      choices = setNames(
         list(
-          stats::setNames(c("dim"), .tr_plain("Réduction Dimensionnelle (UMAP/PCA/t-SNE)")),
-          stats::setNames(c("feature", "dot"), c(.tr_plain("Feature Plot (Expression sur Réduction)"), .tr_plain("DotPlot"))),
-          stats::setNames(c("violin", "stacked_violin", "ridge", "scatter", "correlation_matrix", "multi_sample", "volcano"),
-                          c(.tr_plain("Distribution (Violin)"), .tr_plain("Stacked Violin Plot"), .tr_plain("Densité (Ridge Plot)"), .tr_plain("Corrélation Gènes (Scatter Amélioré)"), .tr_plain("Matrice Corrélation"), .tr_plain("Comparaison Multi-Échantillons"), .tr_plain("Volcano Plot"))),
-          stats::setNames(c("heatmap", "heatmap_hier"), c(.tr_plain("Heatmap (DoHeatmap)"), .tr_plain("Heatmap Hiérarchique (ComplexHeatmap)"))),
-          stats::setNames(c("density_2d"), .tr_plain("Densité d'Expression 2D")),
-          stats::setNames(c("reduction_3d"), .tr_plain("Réduction 3D (interactif)"))
+          setNames(c("dim"), .tr_plain("Réduction Dimensionnelle (UMAP/PCA/t-SNE)")),
+          setNames(c("feature", "dot"), c(.tr_plain("Feature Plot (Expression sur Réduction)"), .tr_plain("DotPlot"))),
+          setNames(c("violin", "stacked_violin", "ridge", "scatter", "correlation_matrix", "multi_sample", "volcano"),
+                   c(.tr_plain("Distribution (Violin)"), .tr_plain("Stacked Violin Plot"), .tr_plain("Densité (Ridge Plot)"),
+                     .tr_plain("Corrélation Gènes (Scatter Amélioré)"), .tr_plain("Matrice Corrélation"),
+                     .tr_plain("Comparaison Multi-Échantillons"), .tr_plain("Volcano Plot"))),
+          setNames(c("heatmap", "heatmap_hier"), c(.tr_plain("Heatmap (DoHeatmap)"), .tr_plain("Heatmap Hiérarchique (ComplexHeatmap)"))),
+          setNames(c("density_2d"), .tr_plain("Densité d'Expression 2D")),
+          setNames(c("reduction_3d"), .tr_plain("Réduction 3D (interactif)"))
         ),
         c(.tr_plain("Réductions"), .tr_plain("Expression"), .tr_plain("Profils"), .tr_plain("Heatmap"), .tr_plain("Densité 2D"), .tr_plain("Visualisation 3D"))
       )
@@ -345,7 +347,7 @@ mod_sc_viz_ui <- function(id) {
           selectizeInput(ns("scatter_gene2"), NULL, choices = NULL, multiple = FALSE,
                          options = list(placeholder = "Ex: CD8A"))),
       div(style="background:#f8f9fa;padding:10px;border-radius:5px;",
-          radioButtons(ns("scatter_cor_method"), i18n$t("Méthode"),
+          radioButtons(ns("scatter_cor_method"), .tr("Méthode"),
                        choices = c("Pearson"="pearson","Spearman"="spearman"),
                        selected = "pearson", inline = TRUE),
           checkboxInput(ns("scatter_smooth"), i18n$t("Ligne de tendance"), value = TRUE))
@@ -407,7 +409,7 @@ mod_sc_viz_ui <- function(id) {
       condition = "input.viz_type == 'heatmap_hier'", ns = ns,
       div(style="background:#f8f9fa;padding:10px;border-radius:5px;margin-bottom:10px;",
           h6(i18n$t("Heatmap Hierarchique"), style="font-weight:bold;"),
-          helpText(i18n$t("Genes du panier ci-dessus (max 50). Clustering hierarchique lignes/colonnes.")),
+          helpText("Genes du panier ci-dessus (max 50). Clustering hierarchique lignes/colonnes."),
           numericInput(ns("hier_max_cells"), i18n$t("Max cellules avant agregation par groupe"),
                        value = 5000, min = 200, max = 20000, step = 500))
     ),
@@ -434,7 +436,7 @@ mod_sc_viz_ui <- function(id) {
           numericInput(ns("reduction_3d_max_cells"), i18n$t("Max cellules affichees"),
                        value = 50000, min = 1000, max = 200000, step = 1000),
           div(class="text-muted", style="font-size:0.72em;",
-              i18n$t("Utilise 'Grouper/Colorer par' ci-dessous. Si vide, choisissez PCA (UMAP/t-SNE sont 2D par defaut).")))
+              "Utilise 'Grouper/Colorer par' ci-dessous. Si vide, choisissez PCA (UMAP/t-SNE sont 2D par defaut)."))
     ),
 
     sliderInput(ns("pt_size"), i18n$t("Taille points"), 0.1, 3, 0.5, 0.1),
@@ -443,23 +445,28 @@ mod_sc_viz_ui <- function(id) {
 
     # ── Palette ─────────────────────────────────────────────────────────────
     div(style="display:flex;align-items:center;gap:6px;",
-        tags$label(i18n$t("🎨 Palette couleur"), class="control-label", style="margin-bottom:0;"),
-        tooltip(bsicons::bs_icon("info-circle"),
-                i18n$t("Appliqué aux groupes/clusters colorés. Okabe-Ito = sûre pour daltoniens."))),
+         tags$label(i18n$t("🎨 Palette couleur"), class="control-label", style="margin-bottom:0;"),
+         tooltip(bsicons::bs_icon("info-circle"),
+                 i18n$t("Appliqué aux groupes/clusters colorés. Okabe-Ito = sûre pour daltoniens."))),
     selectInput(ns("sc_palette"), NULL,
-                choices = stats::setNames(c("default", "okabeito", "viridis", "set2", "manual"),
-                                          c(.tr_plain("Défaut (Seurat/ggplot)"), .tr_plain("Okabe-Ito (daltonien)"), .tr_plain("Viridis"), .tr_plain("Set2 (ColorBrewer)"), .tr_plain("Manuel")))),
+                choices = setNames(
+                  c("default", "okabeito", "viridis", "set2", "manual"),
+                  c(.tr_plain("Défaut (Seurat/ggplot)"), .tr_plain("Okabe-Ito (daltonien)"), "Viridis", "Set2 (ColorBrewer)", .tr_plain("Manuel"))
+                )
+    ), # <-- FIX syntax error (closing parenthesis was missing)
     uiOutput(ns("sc_manual_palette_ui")),
     uiOutput(ns("sc_manual_gradient_ui")),
     uiOutput(ns("sc_manual_volcano_ui")),
-
+    
     hr(),
     div(class = "alert alert-light", style = "font-size:0.72em;opacity:0.55;",
-        bsicons::bs_icon("hourglass-split"), tags$strong(i18n$t("Bloc 2 — Régulation & Fonction")),
+        bsicons::bs_icon("hourglass-split"), tags$strong(" Bloc 2 — Régulation & Fonction"),
         i18n$t(" (à venir — régulons, cartes d'enrichissement).")),
     div(class = "alert alert-light", style = "font-size:0.72em;opacity:0.55;margin-bottom:0;",
-        bsicons::bs_icon("hourglass-split"), tags$strong(i18n$t("Bloc 3 — Dynamique & Écosystème")),
+        bsicons::bs_icon("hourglass-split"), tags$strong(" Bloc 3 — Dynamique & Écosystème"),
         i18n$t(" (à venir — vélocité ARN, communication cellulaire, Milo, scCODA)."))
+    
+    
   )
 }
 
@@ -518,7 +525,32 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
     }
 
     observeEvent(global_data$language, {
-      updateSelectInput(session, "viz_type", label = .tr("Style de Visualisation"))
+      updateSelectInput(session, "viz_type",
+        label = .tr("Style de Visualisation"),
+        choices = setNames(
+          list(
+            setNames(c("dim"), .tr("Réduction Dimensionnelle (UMAP/PCA/t-SNE)")),
+            setNames(c("feature", "dot"), c(.tr("Feature Plot (Expression sur Réduction)"), .tr("DotPlot"))),
+            setNames(c("violin", "stacked_violin", "ridge", "scatter", "correlation_matrix", "multi_sample", "volcano"),
+                     c(.tr("Distribution (Violin)"), .tr("Stacked Violin Plot"), .tr("Densité (Ridge Plot)"),
+                       .tr("Corrélation Gènes (Scatter Amélioré)"), .tr("Matrice Corrélation"),
+                       .tr("Comparaison Multi-Échantillons"), .tr("Volcano Plot"))),
+            setNames(c("heatmap", "heatmap_hier"), c(.tr("Heatmap (DoHeatmap)"), .tr("Heatmap Hiérarchique (ComplexHeatmap)"))),
+            setNames(c("density_2d"), .tr("Densité d'Expression 2D")),
+            setNames(c("reduction_3d"), .tr("Réduction 3D (interactif)"))
+          ),
+          c(.tr("Réductions"), .tr("Expression"), .tr("Profils"), .tr("Heatmap"), .tr("Densité 2D"), .tr("Visualisation 3D"))
+        ),
+        selected = isolate(input$viz_type) %||% "dim"
+      )
+      updateSelectInput(session, "sc_palette",
+        label = NULL,
+        choices = setNames(
+          c("default", "okabeito", "viridis", "set2", "manual"),
+          c(.tr("Défaut (Seurat/ggplot)"), .tr("Okabe-Ito (daltonien)"), "Viridis", "Set2 (ColorBrewer)", .tr("Manuel"))
+        ),
+        selected = isolate(input$sc_palette) %||% "default"
+      )
       updateSliderInput(session, "pt_size", label = .tr("Taille points"))
     }, ignoreInit = TRUE)
 
@@ -582,7 +614,7 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
       cat_label <- .viz_category_map[[input$viz_type]] %||% "Exploration"
       div(class = "text-muted", style = "font-size:0.75em;margin-bottom:4px;",
           bsicons::bs_icon("diagram-3"),
-          sprintf(" %s / %s", .tr("Bloc 1 — Exploration Core"), cat_label))
+          sprintf(" Bloc 1 — Exploration Core / %s", cat_label))
     })
 
     # ── Helper: config snapshot (used ONLY for report basket — NOT for renders
@@ -663,7 +695,7 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
                    .tr("Sélectionnez une variable 'Grouper par' pour personnaliser les couleurs.")))
       }
       ids <- paste0("sc_color_", seq_along(lvls))
-       div(
+      div(
         class = "border rounded p-2 mb-2", style = "background:#f8f9fa;",
         h6(.t_fmt(.tr("Couleurs manuelles — {var}"), var = input$group_by),
            style = "font-size:0.85em;font-weight:bold;margin-bottom:6px;"),
@@ -702,7 +734,7 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
       }
       div(
         class = "border rounded p-2 mb-2", style = "background:#f8f9fa;",
-        h6(i18n$t("Dégradé manuel (expression)"), style = "font-size:0.85em;font-weight:bold;margin-bottom:6px;"),
+        h6(.tr("Dégradé manuel (expression)"), style = "font-size:0.85em;font-weight:bold;margin-bottom:6px;"),
         manual_color_picker_ui(ns, ids, labels, defaults)
       )
     })
@@ -730,7 +762,7 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
       defaults <- c("#E74C3C", "#2980B9", "#BDC3C7")
       div(
         class = "border rounded p-2 mb-2", style = "background:#f8f9fa;",
-        h6(i18n$t("Couleurs manuelles — Volcano"), style = "font-size:0.85em;font-weight:bold;margin-bottom:6px;"),
+        h6(.tr("Couleurs manuelles — Volcano"), style = "font-size:0.85em;font-weight:bold;margin-bottom:6px;"),
         manual_color_picker_ui(ns, ids, labels, defaults)
       )
     })

@@ -106,11 +106,11 @@ mod_sc_markers_ui <- function(id) {
           style = "background-color:#f8f9fa;",
           h6(i18n$t("Hybrid Gene Selector"), class = "mb-2 fw-bold"),
            textAreaInput(
-             ns("bulk_gene_input"),
-             label       = i18n$t("Paste genes (comma, space or newline separated):"),
-             rows        = 3,
-             placeholder = i18n$t("Example: CD3D, MS4A1, CD8A, NKG7")
-           ),
+              ns("bulk_gene_input"),
+              label       = i18n$t("Paste genes (comma, space or newline separated):"),
+              rows        = 3,
+              placeholder = "Example: CD3D, MS4A1, CD8A, NKG7"
+            ),
           actionButton(ns("add_bulk_genes"), i18n$t("Add to Visualization"),
                        class = "btn-primary btn-sm w-100 mb-3"),
           div(

@@ -142,6 +142,30 @@ mod_sc_server <- function(id, global_data) {
       sc_manual_volcano_colors = NULL
     )
 
+    # ── i18n: update report section choices on language switch ──────────────
+    observeEvent(global_data$language, {
+      updateCheckboxGroupInput(session, "report_sections",
+        label = .tr("Sections"),
+        choices = stats::setNames(
+          c("qc", "dim", "annotation", "markers", "correlation", "pathway", "trajectory", "custom_viz"),
+          c(.tr("QC"), .tr("Réduction Dimensionnelle"), .tr("Annotation"),
+            .tr("Marqueurs"), .tr("Réseau Corrélation"), .tr("Pathway Enrichment"),
+            .tr("Trajectoire"), .tr("Visualisations Sauvegardées"))))
+
+      updateRadioButtons(session, "report_format",
+        label = .tr("Format"),
+        choices = stats::setNames(c("html", "pdf", "both"),
+          c(.tr("HTML interactif"), .tr("PDF statique"), .tr("Les deux (.zip)"))))
+
+      updateTextInput(session, "report_title", label = .tr("Titre"))
+      updateTextInput(session, "report_subtitle", label = .tr("Sous-titre (optionnel)"))
+      updateTextAreaInput(session, "report_notes", label = .tr("Notes"))
+      updateCheckboxInput(session, "report_interactive",
+        label = .tr("Graphiques interactifs (HTML)"))
+      updateActionButton(session, "dl_report",
+        label = paste("📄", .tr("Générer le Rapport")))
+    }, ignoreInit = TRUE)
+
     observeEvent(shared_rv$active_tab, {
       req(shared_rv$active_tab)
       nav_select(id="main_tabs", selected=shared_rv$active_tab, session=session)
@@ -202,9 +226,9 @@ mod_sc_server <- function(id, global_data) {
         c(.tr("Pseudotemps"),           if ("pseudotime" %in% colnames(meta)) .tr("Calculé") else .tr("Non calculé")),
         c(.tr("Backend stockage"),      if (sc_backend_status(obj) == "disk") "\U0001f4bd Disque (BPCells)" else "\U0001f9e0 RAM (standard)"),
         c(.tr("Sous-échant. (marqueurs/corr)"), if (is.finite(shared_rv$max_cells_heavy %||% Inf))
-                                     paste0("max ", format(shared_rv$max_cells_heavy, big.mark=","), " cellules/groupe")
+                                     paste0("max ", format(shared_rv$max_cells_heavy, big.mark=","), " ", .tr_plain("cellules/groupe"))
                                    else .tr("désactivé")),
-        c(.tr("Viz. sauvegardées"),     paste(length(shared_rv$report_viz_list), "plot(s) dans le panier"))
+        c(.tr("Viz. sauvegardées"),     paste0(length(shared_rv$report_viz_list), " ", .tr_plain("plot(s) dans le panier")))
       )
       tagList(
         div(class="m-3",
@@ -258,11 +282,11 @@ mod_sc_server <- function(id, global_data) {
                                         input$sc_ap_sketch_ncells_custom)
       will_sketch <- params$ncells < n_total
       div(class="small", style=paste0("color:", if (will_sketch) "#18BC9C" else "#666", ";"),
-          sprintf("%s / %s cellules \u2014 npcs sugg\u00e9r\u00e9 : %d%s",
-                  format(params$ncells, big.mark=" "), format(n_total, big.mark=" "),
-                  params$npcs,
-                  if (will_sketch) " (sketch actif, slider Dims PCA ajust\u00e9)"
-                  else " (pas de sketch)"))
+          .t_fmt(.tr("{n} / {total} cellules — npcs suggéré : {npcs} ({sketch})"),
+                 n     = format(params$ncells, big.mark = " "),
+                 total = format(n_total, big.mark = " "),
+                 npcs  = params$npcs,
+                 sketch = if (will_sketch) .tr("sketch actif") else .tr("pas de sketch")))
     })
 
     observeEvent(input$sc_ap_sketch_preset, {
@@ -275,28 +299,23 @@ mod_sc_server <- function(id, global_data) {
     observeEvent(input$btn_auto_pipeline_sc, {
       req(global_data$sc_obj)
       ns_m <- session$ns
-      # Step-3.8B: pre-select organism from actual ID prefixes (ENSMUSG.../
-      # ENSG...) -- was always defaulting to "Humain", the direct cause of
-      # "None of the keys entered are valid keys for 'ENSEMBL'" on the real
-      # mouse dataset (org.Hs.eg.db has no ENSMUSG keys). The mapping call
-      # itself now also auto-corrects (see remap_seurat_ids_to_symbol()) but
-      # pre-selecting here avoids relying on that silent correction.
       detected_map_org <- tryCatch(detect_organism_from_ids(rownames(global_data$sc_obj)),
                                    error = function(e) NA_character_)
       mapping_org_selected <- if (!is.na(detected_map_org)) detected_map_org else "human"
       showModal(modalDialog(
-        title="\u25b6 Pipeline SC \u2014 Paramètres", size="m", easyClose=TRUE,
+        title=paste("\u25b6", .tr("Pipeline SC — Paramètres")), size="m", easyClose=TRUE,
 
         # ── Step 0: Mapping ─────────────────────────────────────────────────
         checkboxInput(ns_m("sc_ap_mapping"),
-                      "\U0001f504 Mapping IDs → Symbol (auto-détecté, avant QC)", value=TRUE),
+                      paste("\U0001f504", .tr("Mapping IDs → Symbol (auto-détecté, avant QC)")), value=TRUE),
         conditionalPanel(
           condition=sprintf("input['%s'] == true", ns_m("sc_ap_mapping")),
-          selectInput(ns_m("sc_ap_mapping_org"), "Organisme (mapping)",
-                      c("Humain"="human","Souris"="mouse"), selected = mapping_org_selected)),
+          selectInput(ns_m("sc_ap_mapping_org"), .tr("Organisme (mapping)"),
+                      stats::setNames(c("human","mouse"), c(.tr("Humain"), .tr("Souris"))),
+                      selected = mapping_org_selected)),
         checkboxInput(ns_m("sc_ap_bpcells"),
-                      sprintf("\U0001f4bd Backend disque (BPCells) si > %s cellules",
-                              format(.BPCELLS_AUTO_THRESHOLD, big.mark=" ")),
+                      .t_fmt(.tr("💽 Backend disque (BPCells) si > {n} cellules"),
+                             n = format(.BPCELLS_AUTO_THRESHOLD, big.mark = " ")),
                       value = TRUE),
         hr(),
 
@@ -311,85 +330,90 @@ mod_sc_server <- function(id, global_data) {
           column(6,
             h6(.tr("Normalisation & Réduction"), style="font-weight:bold;"),
             radioButtons(ns_m("sc_ap_norm"), .tr("Normalisation"),
-                         c("LogNormalize"="log","SCTransform"="sct")),
+                         stats::setNames(c("log","sct"),
+                                         c(.tr("LogNormalize"), .tr("SCTransform")))),
             sliderInput(ns_m("sc_ap_pca_dim"), .tr("Dims PCA"), 5, 50, 20),
             numericInput(ns_m("sc_ap_res"), .tr("Résolution clustering"), 0.5, min=0.1, step=0.1),
             selectInput(ns_m("sc_ap_cluster_algo"), .tr("Algorithme de clustering"),
-                       choices = c("Louvain"="1","Louvain (multilevel)"="2",
-                                  "SLM"="3","Leiden (reticulate)"="4"), selected="1")
+                       choices = stats::setNames(c("1","2","3","4"),
+                                                 c(.tr("Louvain (standard)"),
+                                                   .tr("Louvain (multilevel refinement)"),
+                                                   .tr("SLM (Smart Local Moving)"),
+                                                   .tr("Leiden (nécessite reticulate + leidenalg)"))),
+                       selected="1")
           )
         ),
         checkboxInput(ns_m("sc_ap_compute_umap"),
-                     "\u2713 Calculer UMAP (d\u00e9cochez pour PCA seul \u2014 bien plus rapide, mode debug)",
+                     paste("\u2713", .tr("Calculer UMAP (décochez pour PCA seul — bien plus rapide, mode debug)")),
                      value = TRUE),
         div(class="small text-muted mb-2",
-            "Si coché : UMAP + t-SNE secondaire (si dataset raisonnable) sont calculés ",
-            "(le plus lent du pipeline). Si décoché : PCA seul \u2014 previews/trajectoire ",
-            "se rabattent automatiquement sur PCA, rien ne plante."),
+            .tr("Si coché : UMAP + t-SNE secondaire (si dataset raisonnable) sont calculés (le plus lent du pipeline). Si décoché : PCA seul — previews/trajectoire se rabattent automatiquement sur PCA, rien ne plante.")),
         hr(),
 
-        # ── Step-3.8A: Sketch (sous-échantillonnage intelligent) ─────────────
-        h6("Sketch — gros datasets", style="font-weight:bold;"),
+        # ── Sketch ─────────────────────────────────────────────────────────
+        h6(.tr("Sketch — gros datasets"), style="font-weight:bold;"),
         div(class="small text-muted mb-1",
-            "PCA/Clustering/UMAP tournent sur un sous-ensemble représentatif ",
-            "(LeverageScore), puis sont projetés sur toutes les cellules. ",
-            "Accélère fortement les gros datasets (ex: 1,3M cellules) sans ",
-            "perdre les clusters rares. Ignoré si SCTransform est choisi."),
+            .tr("PCA/Clustering/UMAP tournent sur un sous-ensemble représentatif (LeverageScore), puis sont projetés sur toutes les cellules. Accélère fortement les gros datasets (ex: 1,3M cellules) sans perdre les clusters rares. Ignoré si SCTransform est choisi.")),
         fluidRow(
-          column(7, selectInput(ns_m("sc_ap_sketch_preset"), "Preset sketch",
-            choices = list(
-              "Rapide (test, 5 000 cellules)"         = "fast",
-              "Léger (10 000 cellules)"                = "light",
-              "Moyen (25 000 cellules)"                = "medium",
-              "Standard (50 000 cellules)"             = "standard",
-              "Élevé (100 000 cellules)"                = "high",
-              "Max (dataset complet, pas de sketch)"   = "max",
-              "Personnalisé"                            = "custom"
-            ), selected = "standard")),
+          column(7, selectInput(ns_m("sc_ap_sketch_preset"), .tr("Preset sketch"),
+            choices = stats::setNames(
+              c("fast","light","medium","standard","high","max","custom"),
+              c(.tr("Rapide (test, 5 000 cellules)"),
+                .tr("Léger (10 000 cellules)"),
+                .tr("Moyen (25 000 cellules)"),
+                .tr("Standard (50 000 cellules)"),
+                .tr("Élevé (100 000 cellules)"),
+                .tr("Max (dataset complet)"),
+                .tr("Personnalisé"))),
+            selected = "standard")),
           column(5, conditionalPanel(
             condition = sprintf("input['%s'] == 'custom'", ns_m("sc_ap_sketch_preset")),
-            numericInput(ns_m("sc_ap_sketch_ncells_custom"), "N cellules",
+            numericInput(ns_m("sc_ap_sketch_ncells_custom"), .tr("N cellules"),
                          value = 20000, min = 1000, max = 500000, step = 1000)))
         ),
         uiOutput(ns_m("sc_ap_sketch_hint")),
         hr(),
 
         # ── Steps 2-7 optional ──────────────────────────────────────────────
-        h6("Options supplémentaires", style="font-weight:bold;"),
-        checkboxInput(ns_m("sc_ap_singler"), "\U0001f9ec Annotation SingleR", value=FALSE),
+        h6(.tr("Options supplémentaires"), style="font-weight:bold;"),
+        checkboxInput(ns_m("sc_ap_singler"), paste("\U0001f9ec", .tr("Annotation SingleR")), value=FALSE),
         conditionalPanel(
           condition=sprintf("input['%s'] == true", ns_m("sc_ap_singler")),
           fluidRow(
-            column(6, selectInput(ns_m("sc_ap_singler_ref"), "Référence",
-                       c("Human Primary Cell Atlas"="hpca","Blueprint Encode"="blueprint",
-                         "ImmGen (Souris)"="immgen","DICE Immune"="dice"))),
-            column(6, radioButtons(ns_m("sc_ap_singler_level"), "Niveau",
-                       c("Main"="main","Fine"="fine"), inline=TRUE))
+            column(6, selectInput(ns_m("sc_ap_singler_ref"), .tr("Référence"),
+                       stats::setNames(c("hpca","blueprint","immgen","dice"),
+                                       c(.tr("Human Primary Cell Atlas"), .tr("Blueprint Encode"),
+                                         .tr("ImmGen (Mouse)"), .tr("DICE Immune"))))),
+            column(6, radioButtons(ns_m("sc_ap_singler_level"), .tr("Niveau"),
+                       stats::setNames(c("main","fine"),
+                                       c(.tr("Main (General)"), .tr("Fine (Specifique)"))), inline=TRUE))
           )
         ),
         checkboxInput(ns_m("sc_ap_markers"),
-                      "\U0001f9ec FindAllMarkers après clustering", value=FALSE),
+                      paste("\U0001f9ec", .tr("FindAllMarkers après clustering")), value=FALSE),
         checkboxInput(ns_m("sc_ap_pathway"),
-                      "\U0001f9ec Pathway ORA sur top marqueurs", value=FALSE),
+                      paste("\U0001f9ec", .tr("Pathway ORA sur top marqueurs")), value=FALSE),
         conditionalPanel(
           condition=sprintf("input['%s'] == true", ns_m("sc_ap_pathway")),
           fluidRow(
-            column(6, selectInput(ns_m("sc_ap_pathway_db"), "Base",
-                       c("GO BP"="GOBP","KEGG"="KEGG","Reactome"="Reactome"))),
-            column(6, selectInput(ns_m("sc_ap_pathway_org"), "Organisme",
-                       c("Humain"="human","Souris"="mouse")))
+            column(6, selectInput(ns_m("sc_ap_pathway_db"), .tr("Base"),
+                       stats::setNames(c("GOBP","KEGG","Reactome"),
+                                       c(.tr("GO BP"), .tr("KEGG"), .tr("Reactome"))))),
+            column(6, selectInput(ns_m("sc_ap_pathway_org"), .tr("Organisme"),
+                       stats::setNames(c("human","mouse"),
+                                       c(.tr("Humain"), .tr("Souris")))))
           )
         ),
         checkboxInput(ns_m("sc_ap_correlation"),
-                      "\U0001f9ec Gene Correlation (auto: gène le plus significatif)", value=FALSE),
+                      paste("\U0001f9ec", .tr("Gene Correlation (auto: gène le plus significatif)")), value=FALSE),
         helpText(style="font-size:0.78em;color:#666;",
-                 "Requiert 'Marqueurs' coché. Corrèle le gène à p-adj minimal avec tous les autres."),
+                 .tr("Requiert 'Marqueurs' coché. Corrèle le gène à p-adj minimal avec tous les autres.")),
         checkboxInput(ns_m("sc_ap_trajectory"),
-                      "\U0001f9ec Trajectory / Pseudotemps (UMAP, racine auto)", value=FALSE),
+                      paste("\U0001f9ec", .tr("Trajectory / Pseudotemps (UMAP, racine auto)")), value=FALSE),
 
         footer=tagList(
-          modalButton("Annuler"),
-          actionButton(ns_m("sc_ap_confirm"), "\u25b6 Lancer", class="btn-success"))
+          modalButton(.tr("Annuler")),
+          actionButton(ns_m("sc_ap_confirm"), paste("\u25b6", .tr("Lancer")), class="btn-success"))
       ))
     })
 
@@ -866,7 +890,7 @@ mod_sc_server <- function(id, global_data) {
           report_language  = lang
         )
 
-        withProgress(message="Génération du rapport...", value=0.2, {
+        withProgress(message=.tr_plain("Génération du rapport..."), value=0.2, {
           formats_needed <- switch(input$report_format,
             html="html_document", pdf="pdf_document",
             both=c("html_document","pdf_document"))
@@ -885,7 +909,7 @@ mod_sc_server <- function(id, global_data) {
                                  type="error", duration=12); NULL })
             if (!is.null(res)) out_files <- c(out_files, res)
           }
-          if (!length(out_files)) stop("Aucun format généré.")
+          if (!length(out_files)) stop(.tr_plain("Aucun format généré."))
           else if (length(out_files)==1) file.copy(out_files[1], file, overwrite=TRUE)
           else zip::zip(file, files=out_files, mode="cherry-pick")
         })

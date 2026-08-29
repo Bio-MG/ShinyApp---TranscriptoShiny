@@ -19,7 +19,7 @@ mod_sc_corr_ui <- function(id) {
     div(style="background:#f8f9fa;padding:10px;border-radius:5px;margin-bottom:10px;",
         h6(i18n$t("Gene Cible"),style="font-weight:bold;color:#E74C3C;"),
         selectizeInput(ns("target_gene"),NULL,choices=NULL,multiple=FALSE,
-                       options=list(placeholder=i18n$t("Ex: CD3D, CD8A"))),
+                       options=list(placeholder="Ex: CD3D, CD8A")),
         helpText(i18n$t("Gene de reference pour calculer les correlations"))),
     h6(i18n$t("Parametres de Recherche"),style="font-weight:bold;"),
     fluidRow(

@@ -15,8 +15,8 @@
   if (!requireNamespace("AnnotationDbi", quietly = TRUE) ||
       !requireNamespace(orgdb_pkg,       quietly = TRUE)) {
     if (!is.null(notify_fn))
-      notify_fn(paste0("⚠️ IDs ENSEMBL détectés mais ", orgdb_pkg,
-                       " non installé — enrichissement peut échouer."), type = "warning")
+      notify_fn(paste0(.tr_plain("⚠️ IDs ENSEMBL détectés mais "), orgdb_pkg,
+                       .tr_plain(" non installé — enrichissement peut échouer.")), type = "warning")
     return(genes)
   }
 
@@ -51,7 +51,7 @@ mod_sc_pathways_ui <- function(id) {
       choices=setNames(c("markers","correlated","manual"), c(.tr_plain("Marqueurs calculés"), .tr_plain("Genes correles"), .tr_plain("Selection manuelle")))),
     conditionalPanel(condition="input.pathway_source == 'manual'", ns=ns,
       selectizeInput(ns("pathway_genes"), "Genes", choices=NULL, multiple=TRUE,
-                     options=list(placeholder=i18n$t("Selectionnez genes")))),
+                     options=list(placeholder="Selectionnez genes"))),
     fluidRow(
       column(6, selectInput(ns("pathway_db"), i18n$t("Base de donnees"),
                choices=setNames(c("GOBP","KEGG","Reactome"), c(.tr_plain("GO Biological Process"), .tr_plain("KEGG Pathways"), .tr_plain("Reactome"))))),
@@ -103,7 +103,29 @@ mod_sc_pathways_server <- function(id, global_data, shared_rv) {
     })
 
     observeEvent(global_data$language, {
-      # Re-translate dynamic labels on language switch
+      updateSelectInput(session, "pathway_source",
+        label = .tr("Source de genes"),
+        choices = setNames(
+          c("markers", "correlated", "manual"),
+          c(.tr("Marqueurs calculés"), .tr("Genes correles"), .tr("Selection manuelle"))
+        ),
+        selected = isolate(input$pathway_source) %||% "markers"
+      )
+      updateSelectInput(session, "pathway_db",
+        label = .tr("Base de donnees"),
+        choices = setNames(
+          c("GOBP", "KEGG", "Reactome"),
+          c(.tr("GO Biological Process"), .tr("KEGG Pathways"), .tr("Reactome"))
+        ),
+        selected = isolate(input$pathway_db) %||% "GOBP"
+      )
+      updateSelectInput(session, "pathway_org",
+        label = .tr("Organisme"),
+        choices = setNames(c("human", "mouse"), c(.tr("Humain"), .tr("Souris"))),
+        selected = isolate(input$pathway_org) %||% "human"
+      )
+      updateNumericInput(session, "pathway_pval", label = .tr("P-value cutoff"))
+      updateActionButton(session, "run_pathway", label = .tr("Lancer Enrichissement"))
     }, ignoreInit = TRUE)
     # ── Step-3.7 BUG1 fix: sync local table + db selector from shared_rv,
     #    written by either this module's own button OR the auto-pipeline. ──────
@@ -170,7 +192,7 @@ mod_sc_pathways_server <- function(id, global_data, shared_rv) {
         showNotification(paste("✅", nrow(res), "pathways enrichis"), type="message")
         shared_rv$active_tab <- "tab_pathway"
       }, error=function(e) {
-        showNotification(paste0("❌ Erreur pathway: ", as.character(e$message)[1]),
+        showNotification(paste0(.tr_plain("❌ Erreur pathway: "), as.character(e$message)[1]),
                          type="error", duration=5)
         pathway_rv(NULL)
       })

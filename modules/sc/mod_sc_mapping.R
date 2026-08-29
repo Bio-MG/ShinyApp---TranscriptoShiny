@@ -57,7 +57,24 @@ mod_sc_mapping_server <- function(id, global_data) {
     mapping_status_rv <- reactiveVal(NULL)
 
     observeEvent(global_data$language, {
-      # Re-translate dynamic labels on language switch
+      updateSelectInput(session, "map_organism",
+        label = .tr("Organisme"),
+        choices = setNames(c("human", "mouse"), c(.tr("Humain"), .tr("Souris"))),
+        selected = isolate(input$map_organism) %||% "human"
+      )
+      updateSelectInput(session, "map_from_type",
+        label = .tr("Type source"),
+        choices = setNames(c("ensembl", "entrez"), c(.tr("Ensembl Gene ID"), .tr("Entrez ID"))),
+        selected = isolate(input$map_from_type) %||% "ensembl"
+      )
+      updateRadioButtons(session, "collapse_method",
+        label = .tr("Fusion des doublons (plusieurs ID → même symbole)"),
+        choices = setNames(c("sum", "max_mean"), c(.tr("Somme des counts (recommandé)"), .tr("Garder l'ID le plus exprimé"))),
+        selected = isolate(input$collapse_method) %||% "sum"
+      )
+      updateCheckboxInput(session, "strip_ensembl_version",
+        label = .tr("Retirer le suffixe de version Ensembl (ENSG...5 → ENSG...)"))
+      updateActionButton(session, "run_mapping", label = .tr("Appliquer le Mapping"))
     }, ignoreInit = TRUE)
     # ── Auto-detect gene ID type when sc_obj changes ──────────────────────
     output$detected_id_type_ui <- renderUI({

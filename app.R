@@ -451,8 +451,8 @@ server <- function(input, output, session) {
     global_data$language
     .tr <- function(key) {
       tr <- global_data$i18n
-      if (is.null(tr)) return(key)
-      tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+      if (is.null(tr)) return(as.character(key))
+      tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) as.character(key))
     }
     
     # ── Single-Cell state ────────────────────────────────────────────────

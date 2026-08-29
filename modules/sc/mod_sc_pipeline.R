@@ -152,13 +152,52 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
       updateNumericInput(session, "qc_min_gene", label = .tr("Min Gènes"))
       updateNumericInput(session, "qc_max_gene", label = .tr("Max Gènes"))
       updateSliderInput(session, "qc_mt", label = .tr("% Mito Max"))
-      updateSelectInput(session, "sketch_preset", label = .tr("Taille du sketch (vitesse vs precision)"))
-      updateSelectInput(session, "reduction_method", label = .tr("Méthode de Réduction (principale)"))
+      updateSelectInput(session, "sketch_preset",
+        label = .tr("Taille du sketch (vitesse vs precision)"),
+        choices = setNames(
+          c("fast", "light", "medium", "standard", "high", "max", "custom"),
+          c(.tr("Rapide (test, 5 000 cellules)"),
+            .tr("Léger (10 000 cellules)"),
+            .tr("Moyen (25 000 cellules)"),
+            .tr("Standard (50 000 cellules)"),
+            .tr("Élevé (100 000 cellules)"),
+            .tr("Max (dataset complet)"),
+            .tr("Personnalisé"))
+        ),
+        selected = isolate(input$sketch_preset) %||% "standard"
+      )
+      updateSelectInput(session, "reduction_method",
+        label = .tr("Méthode de Réduction (principale)"),
+        choices = setNames(
+          c("umap", "pca", "tsne", "dm", "harmony"),
+          c("UMAP", .tr("PCA"), "t-SNE", .tr("Diffusion Maps"), "Harmony")
+        ),
+        selected = isolate(input$reduction_method) %||% "umap"
+      )
       updateSliderInput(session, "pca_dim", label = .tr("Dims PCA"))
       updateNumericInput(session, "clust_res", label = .tr("Résolution"))
-      updateSelectInput(session, "cluster_algo", label = .tr("Algorithme de clustering"))
+      updateSelectInput(session, "cluster_algo",
+        label = .tr("Algorithme de clustering"),
+        choices = setNames(
+          c("1", "2", "3", "4"),
+          c(.tr("Louvain (standard)"),
+            .tr("Louvain (multilevel refinement)"),
+            .tr("SLM (Smart Local Moving)"),
+            .tr("Leiden (nécessite reticulate + leidenalg)"))
+        ),
+        selected = isolate(input$cluster_algo) %||% "1"
+      )
       updateActionButton(session, "run_pipeline", label = .tr("Lancer Pipeline"))
-      updateSelectInput(session, "bpcells_mode", label = .tr("Mode"))
+      updateSelectInput(session, "bpcells_mode",
+        label = .tr("Mode"),
+        choices = setNames(
+          c("auto", "always", "never"),
+          c(.tr("Auto (recommandé)"),
+            .tr("Toujours (forcer disque)"),
+            .tr("Jamais (toujours RAM)"))
+        ),
+        selected = isolate(input$bpcells_mode) %||% "auto"
+      )
       updateNumericInput(session, "max_cells_heavy", label = .tr("Max cellules/cluster pour analyses lourdes (Marqueurs, Corrélation)"))
     }, ignoreInit = TRUE)
 

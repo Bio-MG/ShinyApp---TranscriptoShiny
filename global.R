@@ -309,6 +309,21 @@ if (I18N_AVAILABLE) {
 #' Kept as alias to .tr_plain() for backward compatibility (Phase 1 callers).
 i18n_plain <- function(key) .tr_plain(key)
 
+#' Simple scalar translation helper (wrapper around session translator or fallback).
+#' Returns the English translation when available and active session, otherwise French.
+.tr <- function(key) {
+  if (!isTRUE(I18N_AVAILABLE)) return(key)
+  # Try session-specific translator first (global_data exists in server context)
+  if (exists("global_data") && !is.null(global_data$i18n)) {
+    res <- tryCatch(global_data$i18n$t(key), error = function(e) key)
+    # Session translator may return HTML-wrapped content; strip for scalar use
+    if (!is.character(res) || length(res) > 1L) return(as.character(res)[1])
+    return(res)
+  }
+  # Fallback: use global i18n translator (for static labels, source time)
+  tryCatch(i18n$t(key), error = function(e) key)
+}
+
 my_theme <- bs_theme(
   
   version = 5,

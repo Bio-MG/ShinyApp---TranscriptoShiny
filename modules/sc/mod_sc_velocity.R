@@ -45,9 +45,9 @@ mod_sc_velocity_ui <- function(id) {
                     i18n$t("Colonne d'identifiants dans features.tsv"),
                     value = 1, min = 1, step = 1, width = "100%"),
       div(class = "small text-muted mb-2",
-           paste(i18n$t("Les fichiers 10x contiennent souvent gene_id (colonne 1) ET symbole "),
+           HTML(paste(i18n$t("Les fichiers 10x contiennent souvent gene_id (colonne 1) ET symbole "),
                  i18n$t("(colonne 2). La colonne choisie doit correspondre aux rownames de "),
-                 i18n$t("l'objet Seurat — la premiere colonne n'est jamais supposee correcte.")))
+                 i18n$t("l'objet Seurat — la premiere colonne n'est jamais supposee correcte."))))
     ),
 
     hr(),
@@ -77,8 +77,9 @@ mod_sc_velocity_ui <- function(id) {
     ),
     div(
       class = "small text-muted",
-      paste(i18n$t("Les corrections d'identifiants sont desactivees par defaut. "),
-            i18n$t("Une collision bloque la validation."))
+      i18n$t("Les corrections d'identifiants sont desactivees par defaut. "),
+      " ",
+      i18n$t("Une collision bloque la validation.")
     ),
     hr(),
     actionButton(ns("velocity_validate"), i18n$t("Valider les matrices velocity"),
@@ -132,9 +133,30 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
     )
 
     observeEvent(global_data$language, {
-      # Re-translate dynamic labels on language switch
+      updateRadioButtons(session, "velocity_import_mode",
+        label = .tr("Source d'import"),
+        choices = setNames(
+          c("rds", "mtx"),
+          c(.tr("RDS combine (spliced + unspliced)"), .tr("Matrix Market (MTX + barcodes + features)"))
+        ),
+        selected = isolate(input$velocity_import_mode) %||% "rds"
+      )
+      updateSelectInput(session, "velocity_orientation",
+        label = .tr("Orientation des matrices"),
+        choices = setNames(
+          c("auto_strict", "genes_x_cells", "cells_x_genes"),
+          c(.tr("Détection automatique stricte"), .tr("Genes x cellules"), .tr("Cellules x genes"))
+        ),
+        selected = isolate(input$velocity_orientation) %||% "auto_strict"
+      )
+      updateCheckboxInput(session, "velocity_strip_cell_suffix", label = .tr("Retirer les suffixes de barcodes (ex. -1, -2)"))
+      updateCheckboxInput(session, "velocity_strip_gene_version", label = .tr("Retirer les suffixes de version Ensembl (ex. .1, .2)"))
+      updateCheckboxInput(session, "velocity_allow_low_overlap", label = .tr("Forcer l'alignement malgre un recouvrement < 80%"))
+      updateActionButton(session, "velocity_validate", label = .tr("Valider les matrices velocity"))
+      updateSelectInput(session, "velocity_gene", label = .tr("Gene pour phase portrait"))
+      updateSelectInput(session, "velocity_reduction", label = .tr("Reduction pour vecteurs"))
     }, ignoreInit = TRUE)
-    velocity_status_rv <- reactiveVal("En attente d'import velocity...")
+    velocity_status_rv <- reactiveVal(.tr("En attente d'import velocity..."))
 
     output$velocity_status <- renderText({ velocity_status_rv() })
     output$velocity_vector_status <- renderText({
@@ -189,7 +211,7 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       velocity_state$object_fingerprint <- NULL
 
       velocity_status_rv(
-        "Objet Seurat modifie : reimportez et validez les donnees velocity."
+        .tr("Objet Seurat modifie : reimportez et validez les donnees velocity.")
       )
 
       updateSelectInput(
@@ -231,11 +253,11 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       current_fp <- velocity_object_fingerprint(global_data$sc_obj)
       if (!identical(velocity_state$object_fingerprint, current_fp)) {
         showNotification(
-          "Les donnees RNA velocity ne correspondent plus a l'objet Seurat courant.",
+          .tr_plain("Les donnees RNA velocity ne correspondent plus a l'objet Seurat courant."),
           type = "error",
           duration = 8
         )
-        shiny::validate(shiny::need(FALSE, "Les donnees RNA velocity ne correspondent plus a l'objet Seurat courant."))
+        shiny::validate(shiny::need(FALSE, .tr_plain("Les donnees RNA velocity ne correspondent plus a l'objet Seurat courant.")))
       }
       invisible(TRUE)
     }

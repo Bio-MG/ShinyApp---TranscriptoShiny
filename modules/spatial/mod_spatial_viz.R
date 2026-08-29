@@ -1795,6 +1795,8 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         priority = "event"
       ),
       {
+        req(output$combined_spatial_plot)
+
         ids <- selected_event_ids(ns("combined_spatial_src"))
         if (length(ids) > 0L) linked_selection(ids)
       },
@@ -1809,6 +1811,8 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         priority = "event"
       ),
       {
+        req(output$combined_umap_plot)
+
         ids <- selected_event_ids(ns("combined_umap_src"))
         if (length(ids) > 0L) linked_selection(ids)
       },

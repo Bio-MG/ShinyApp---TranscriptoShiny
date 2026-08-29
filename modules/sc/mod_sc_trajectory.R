@@ -243,7 +243,7 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
 
 
     ns <- session$ns
-    traj_status_rv <- reactiveVal("En attente du calcul...")
+    traj_status_rv <- reactiveVal(.tr("En attente du calcul..."))
     # Raw result of the LAST trajectory run — either method:
     #   - exploratory : calculate_pseudotime() list (graph, root_cell,
     #     in_root_component, computation_reduction)
@@ -253,7 +253,25 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
     traj_result    <- reactiveVal(NULL)
 
     observeEvent(global_data$language, {
-      # Re-translate dynamic labels on language switch
+      updateSelectInput(session, "traj_method",
+        label = .tr("Méthode de trajectoire"),
+        choices = setNames(
+          c("exploratory_knn", "slingshot"),
+          c(.tr("Pseudotemps exploratoire — graphe kNN pondéré"), .tr("Slingshot — inférence de lignées"))
+        ),
+        selected = isolate(input$traj_method) %||% "exploratory_knn"
+      )
+      updateSelectInput(session, "traj_reduction",
+        label = .tr("Reduction a utiliser (calcul + affichage)"),
+        choices = setNames(c("pca", "umap"), c("PCA", "UMAP")),
+        selected = isolate(input$traj_reduction) %||% "pca"
+      )
+      updateSelectInput(session, "traj_color", label = .tr("Colorer par"))
+      updateActionButton(session, "calc_trajectory", label = .tr("Calculer Trajectoire"))
+      updateActionButton(session, "plot_trajectory_btn", label = .tr("Actualiser Plot"))
+      updateSelectInput(session, "traj_smooth", label = .tr("Lissage"))
+      updateCheckboxInput(session, "traj_auto_root", label = .tr("Detection auto racine"))
+      updateCheckboxInput(session, "traj_show_edges", label = .tr("Afficher le graphe (aretes echantillonnees)"))
     }, ignoreInit = TRUE)
     # ── Live cell-count badge ──────────────────────────────────────────────
     output$cell_count_badge <- renderUI({
@@ -336,8 +354,8 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
                        .tr("Cluster de départ (optionnel)"),
                        choices = NULL,
                        selected = isolate(input$traj_start_cluster),
-                       multiple = FALSE,
-                       options = list(placeholder = "Laisser vide pour le défaut Slingshot")),
+                        multiple = FALSE,
+                        options = list(placeholder = .tr_plain("Laisser vide pour le défaut Slingshot"))),
         selectizeInput(ns("traj_end_clusters"),
                        .tr("Clusters terminaux (optionnel)"),
                        choices = NULL,

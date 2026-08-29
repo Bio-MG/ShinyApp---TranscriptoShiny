@@ -216,14 +216,25 @@ mod_sc_annotation_server <- function(id, global_data, shared_rv) {
     }
 
     observeEvent(global_data$language, {
-      updateSelectInput(session, "ref_singler", label = .tr("Reference Cellulaire"))
-      updateRadioButtons(session, "label_level", label = .tr("Niveau de Detail"))
+      updateSelectInput(session, "ref_singler",
+        label = .tr("Reference Cellulaire"),
+        choices = setNames(
+          c("hpca", "blueprint", "immgen", "dice"),
+          c(.tr("Human Primary Cell Atlas"), .tr("Blueprint Encode"), .tr("ImmGen (Mouse)"), .tr("DICE Immune"))
+        ),
+        selected = isolate(input$ref_singler) %||% "hpca"
+      )
+      updateRadioButtons(session, "label_level",
+        label = .tr("Niveau de Detail"),
+        choices = setNames(c("main", "fine"), c(.tr("Main (General)"), .tr("Fine (Specifique)"))),
+        selected = isolate(input$label_level) %||% "main"
+      )
       updateActionButton(session, "run_annot", label = .tr("Annoter avec SingleR"))
       updateCheckboxInput(session, "annot_show_labels", label = .tr("Afficher les étiquettes de types cellulaires sur l'UMAP"))
     }, ignoreInit = TRUE)
 
 
-    annot_status_rv <- reactiveVal("En attente de l'annotation...")
+    annot_status_rv <- reactiveVal(.tr("En attente de l'annotation..."))
 
     observeEvent(input$run_annot, ignoreInit=TRUE, {
       req(global_data$sc_obj)
@@ -263,7 +274,7 @@ mod_sc_annotation_server <- function(id, global_data, shared_rv) {
 
       }, error=function(e) {
         annot_status_rv(paste(.tr("Erreur:"), e$message))
-        showNotification(paste("Erreur annotation:", e$message), type="error", duration=10)
+        showNotification(paste(.tr_plain("Erreur annotation:"), e$message), type="error", duration=10)
       })
     })
 

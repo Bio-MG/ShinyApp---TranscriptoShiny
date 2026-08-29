@@ -83,7 +83,7 @@
 
   actual_size <- tryCatch(file.info(datapath)$size, error = function(e) NA_real_)
   if (is.na(actual_size))
-    return(list(ok = FALSE, msg = "Fichier temporaire introuvable après upload — l'écriture a probablement échoué."))
+    return(list(ok = FALSE, msg = .tr_plain("Fichier temporaire introuvable après upload — l'écriture a probablement échoué.")))
 
   if (actual_size < expected_size) {
     gb <- function(b) sprintf("%.2f Go", b / 1024^3)
@@ -390,7 +390,7 @@ mod_import_sc_server <- function(id, global_data) {
           if (length(rds) == 1) { log(paste("  ℹ RDS dans dossier:", basename(rds))); return(readRDS(rds)) }
           stop(paste0(
             "Dossier sans fichier matrix.mtx(.gz) ni filtered_feature_bc_matrix.h5.\n",
-            "Si ce dossier contient un .rds ou .h5ad, utilisez l'Option B/C."))
+            .tr_plain("Si ce dossier contient un .rds ou .h5ad, utilisez l'Option B/C.")))
         }
 
         # CellRanger v2 compat: create features.tsv.gz if only genes.tsv present

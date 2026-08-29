@@ -222,9 +222,9 @@ mod_import_bulk_ui <- function(id) {
         # ── Mode selector ──────────────────────────────────────────────────
         radioButtons(
           ns("bulk_import_mode"),
-          label    = "Mode d'import",
-          choices  = c("Merged matrix (un seul fichier)" = "merged_matrix",
-                       "One file per sample"             = "per_sample"),
+          label    = i18n$t("Mode d'import"),
+          choices  = setNames(c("merged_matrix", "per_sample"),
+                              c(.tr_plain("Merged matrix (un seul fichier)"), .tr_plain("One file per sample"))),
           selected = "merged_matrix",
           inline   = TRUE
         ),
@@ -245,9 +245,9 @@ mod_import_bulk_ui <- function(id) {
                        "Un filtrage fin (par réplicat) est disponible à l'étape 1 du module d'analyse — ",
                        "le seuil ci-dessous (Options d'Import) n'est qu'un pré-nettoyage grossier."),
               
-              radioButtons(ns("counts_format"), "Format de la matrice",
-                           choices  = c("Genes en lignes (standard)" = "rows",
-                                        "Genes en colonnes (transposé)" = "cols"),
+              radioButtons(ns("counts_format"), i18n$t("Format de la matrice"),
+                           choices  = setNames(c("rows", "cols"),
+                                              c(.tr_plain("Genes en lignes (standard)"), .tr_plain("Genes en colonnes (transposé)"))),
                            selected = "rows"),
               
               checkboxInput(ns("counts_has_header"),   "La 1ère ligne est un en-tête", value = TRUE),
@@ -416,7 +416,32 @@ mod_import_bulk_ui <- function(id) {
 mod_import_bulk_server <- function(id, global_data) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
-    
+    # ── i18n proxy ──────────────────────────────────────────────────────────
+    .tr <- function(key) {
+      tr <- isolate(global_data$i18n)
+      if (is.null(tr)) return(key)
+      tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+    }
+
+    observeEvent(global_data$language, {
+      updateRadioButtons(session, "bulk_import_mode",
+        label = .tr("Mode d'import"),
+        choices = setNames(
+          c("merged_matrix", "per_sample"),
+          c(.tr("Merged matrix (un seul fichier)"), .tr("One file per sample"))
+        ),
+        selected = isolate(input$bulk_import_mode) %||% "merged_matrix"
+      )
+      updateRadioButtons(session, "counts_format",
+        label = .tr("Format de la matrice"),
+        choices = setNames(
+          c("rows", "cols"),
+          c(.tr("Genes en lignes (standard)"), .tr("Genes en colonnes (transposé)"))
+        ),
+        selected = isolate(input$counts_format) %||% "rows"
+      )
+    }, ignoreInit = TRUE)
+
     # ── Logger (inchangé) ──────────────────────────────────────────────────
     logs <- reactiveVal("En attente d'import...")
     add_log <- function(msg) {
