@@ -21,12 +21,12 @@ source("R/palettes.R")
 # il l'était aussi en tête de global.R (avant même le chargement des
 # packages), un double-sourcing confirmé par deux audits indépendants comme
 # risque de divergence latente. Seule source de vérité désormais.
-source("R/utils_spatial_async.R")
-source("R/utils_spatial_io.R")
+source("R/spatial/spatial_async.R")
+source("R/spatial/spatial_io.R")
 # Phase 4 (multi-echantillons) — pure helper, depends only on
-# write_mirai_log() (utils_spatial_async.R, sourced above); no Shiny
+# write_mirai_log() (spatial_async.R, sourced above); no Shiny
 # reactivity, safe to source alongside the other two.
-source("R/utils_spatial_multi.R")
+source("R/spatial/spatial_multi.R")
 # Chantier 3 (architecture fix — spatial deconvolution reference pipeline):
 # multi-format reference reader (.rds/.h5ad/.h5/.loom) + on-disk artifact
 # preparation for RCTD/Label Transfer. Runs ONLY on the main Shiny process
@@ -34,7 +34,7 @@ source("R/utils_spatial_multi.R")
 # source_files: the mirai daemon now loads the PREPARED artifact with base R
 # + BPCells only, never this file. See its header for the full rationale
 # (fixes "could not find function load_single_cell_data").
-source("R/utils_spatial_reference.R")
+source("R/spatial/spatial_reference.R")
 # FIX 2026-08 : init des daemons mirai DIFFEREE — elle n'est plus faite au
 # lancement mais a la premiere ouverture de l'onglet Spatial
 # (modules/spatial/mod_spatial.R : "if (!spatial_daemons_ready())
@@ -47,27 +47,27 @@ source("R/utils_spatial_reference.R")
 #   init_spatial_daemons(n_daemons = 6),
 #   error = function(e) warning("Initialisation des daemons mirai (spatial) impossible : ", conditionMessage(e))
 # )
-source("R/utils_spatial_niche.R")
+source("R/spatial/spatial_niche.R")
 # FIX : compute_getis_ord_hotspots()/compute_composition_differential()
 # etaient deja preloadees dans les daemons mirai mais jamais sourcees ici
 # (thread principal) -- casse tout appel SYNCHRONE (mod_spatial_qc.R,
 # mod_spatial_pipeline.R, mod_spatial_multi.R).
-source("R/utils_spatial_stats.R")
+source("R/spatial/spatial_stats.R")
 # Backlog #6 (RAM STdeconvolve/RCTD) : capping HVG avant densification —
 # pure helper, doit AUSSI etre dans source_files de init_spatial_daemons()
-# (R/utils_spatial_async.R) car appelee depuis un daemon mirai.
-source("R/utils_spatial_deconv_prep.R")
+# (R/spatial/spatial_async.R) car appelee depuis un daemon mirai.
+source("R/spatial/spatial_deconv_prep.R")
 # Moyen terme (export/auto-pipeline, voir handoff_spatial_bio-mg.md) : paquet
 # complet (.zip) + script R reproductible pour le module Spatial. Pure
 # helpers (aucune reactivite Shiny) appelés UNIQUEMENT depuis
 # modules/spatial/mod_spatial_export.R sur le thread principal (jamais dans
 # un daemon mirai) -- pas besoin de l'ajouter à init_spatial_daemons().
-source("R/utils_spatial_export.R")
+source("R/spatial/spatial_export.R")
 # Feedback biologiste (rapport HTML/PDF multi-echantillons) : idem, pure
 # helper (dataset-snapshot builder + resolution du chemin du template Rmd),
 # appelé UNIQUEMENT depuis modules/spatial/mod_spatial_report.R sur le
 # thread principal (rmarkdown::render() n'est jamais lancé dans un daemon).
-source("R/utils_spatial_report.R")
+source("R/spatial/spatial_report.R")
 
 source("modules/import/mod_import_sc.R")
 source("modules/import/mod_import_bulk.R")
@@ -104,7 +104,7 @@ source("modules/spatial/mod_spatial_multi.R")
 source("modules/spatial/mod_spatial_niche.R")
 
 # --- Spatial sub-deconv (Phase 2 split) ---
-source("R/utils_spatial_deconv_tasks.R") # BEFORE daemon init if not already
+source("R/spatial/spatial_deconv_tasks.R") # BEFORE daemon init if not already
 source("modules/spatial/deconv/mod_spatial_deconv_ui.R")
 source("modules/spatial/deconv/mod_spatial_deconv_reference.R")
 source("modules/spatial/deconv/mod_spatial_deconv_refviz.R")
