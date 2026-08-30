@@ -70,6 +70,7 @@ source("R/spatial/spatial_export.R")
 # appelé UNIQUEMENT depuis modules/spatial/mod_spatial_report.R sur le
 # thread principal (rmarkdown::render() n'est jamais lancé dans un daemon).
 source("R/spatial/spatial_report.R")
+source("R/spatial/spatial_plotting.R")
 
 source("modules/import/mod_import_sc.R")
 source("modules/import/mod_import_bulk.R")
