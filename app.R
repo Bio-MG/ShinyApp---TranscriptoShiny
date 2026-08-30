@@ -11,6 +11,7 @@ source("R/sc/sc_bpcells.R")
 source("R/bulk/bulk_helpers.R")
 source("R/core/pathway_helpers.R")
 source("R/plotting/palettes.R")
+source("R/sc/sc_plotting.R")
 
 # --- NOUVEAU (module Spatial v3, BPCells + mirai) ---
 # Ces deux fichiers ne dépendent que des packages chargés par global.R —
