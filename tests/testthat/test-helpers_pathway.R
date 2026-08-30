@@ -14,7 +14,7 @@
 # isolate without those.
 # =============================================================================
 
-source_project_file("helpers_pathway.R")
+source_project_file("R/core/pathway_helpers.R")
 
 .toy_pathway_df <- function(n = 5) {
   data.frame(

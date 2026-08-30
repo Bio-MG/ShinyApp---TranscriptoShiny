@@ -24,9 +24,9 @@
 # for the static-analysis guard that catches this class of bug going forward.
 # =============================================================================
 
-source_project_file("helpers_io.R")   # defines %||%, sourced first in app.R
-source_project_file("helpers_bulk.R")
-source_project_file("R/palettes.R")   # sourced last in app.R — wins on name clashes
+source_project_file("R/core/io_helpers.R")   # defines %||%, sourced first in app.R
+source_project_file("R/bulk/bulk_helpers.R")
+source_project_file("R/plotting/palettes.R")   # sourced last in app.R — wins on name clashes
 
 # ---------------------------------------------------------------------------
 # filter_bulk_counts()

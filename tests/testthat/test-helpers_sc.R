@@ -15,8 +15,8 @@
 # helpers_sc_velocity.R + a dedicated test file).
 # =============================================================================
 
-source_project_file("helpers_io.R")   # defines %||%, sourced first in app.R
-source_project_file("helpers_sc.R")
+source_project_file("R/core/io_helpers.R")   # defines %||%, sourced first in app.R
+source_project_file("R/sc/sc_helpers.R")
 
 # ---------------------------------------------------------------------------
 # resolve_sketch_preset()

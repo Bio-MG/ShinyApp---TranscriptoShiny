@@ -4,11 +4,12 @@ source("global.R")
 
 # Helpers (refactor : extraits de global.R — l'ordre entre eux n'a pas
 # d'importance, R ne résout les appels de fonction qu'à l'exécution).
-source("helpers_io.R")
-source("helpers_sc.R")
-source("helpers_sc_bpcells.R")
-source("helpers_bulk.R")
-source("helpers_pathway.R")
+# BLOCK 4 (domain separation): relocated to R/{core,sc,bulk}
+source("R/core/io_helpers.R")
+source("R/sc/sc_helpers.R")
+source("R/sc/sc_bpcells.R")
+source("R/bulk/bulk_helpers.R")
+source("R/core/pathway_helpers.R")
 source("R/plotting/palettes.R")
 
 # --- NOUVEAU (module Spatial v3, BPCells + mirai) ---

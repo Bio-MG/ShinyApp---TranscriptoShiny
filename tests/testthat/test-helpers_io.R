@@ -9,7 +9,7 @@
 # org.Hs.eg.db/org.Mm.eg.db or hdf5r and a real 10x-style dataset on disk.
 # =============================================================================
 
-source_project_file("helpers_io.R")
+source_project_file("R/core/io_helpers.R")
 
 # ---------------------------------------------------------------------------
 # detect_gene_id_type()

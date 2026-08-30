@@ -16,7 +16,7 @@
 # formula or a shape/sign regression.
 # =============================================================================
 
-source_project_file("R/utils_spatial_stats.R")
+source_project_file("R/spatial/spatial_stats.R")
 
 # ---------------------------------------------------------------------------
 # compute_composition_differential() — pure base R, no skip needed
