@@ -14,6 +14,8 @@ source("R/plotting/palettes.R")
 source("R/sc/sc_plotting.R")
 source("R/sc/sc_trajectory.R")
 source("R/sc/sc_velocity.R")
+source("R/sc/sc_state.R")
+source("R/sc/sc_pipeline.R")
 
 # --- NOUVEAU (module Spatial v3, BPCells + mirai) ---
 # Ces deux fichiers ne dépendent que des packages chargés par global.R —
