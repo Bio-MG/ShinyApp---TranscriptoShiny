@@ -435,9 +435,9 @@ mod_sc_server <- function(id, global_data) {
       },
       content = function(file) {
         req(global_data$sc_obj)
-        template_path <- file.path("modules","sc","sc_report_template.Rmd")
+        template_path <- file.path("reports","sc_report_template.Rmd")
         if (!file.exists(template_path))
-          stop("Template introuvable : modules/sc/sc_report_template.Rmd")
+          stop("Template introuvable : reports/sc_report_template.Rmd")
         tmp_rmd <- file.path(tempdir(), "sc_report_template.Rmd")
         file.copy(template_path, tmp_rmd, overwrite=TRUE)
 

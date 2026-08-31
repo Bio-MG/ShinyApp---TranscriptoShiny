@@ -21,14 +21,15 @@
 #' @return Character path to the template file.
 .find_bulk_report_template <- function() {
   candidates <- unique(c(
+    file.path("reports", "bulk_report_template.Rmd"),
+    file.path(getwd(), "reports", "bulk_report_template.Rmd"),
     file.path("modules", "bulk", "bulk_report_template.Rmd"),
-    file.path(getwd(), "modules", "bulk", "bulk_report_template.Rmd"),
-    file.path(dirname(getwd()), "modules", "bulk", "bulk_report_template.Rmd")
+    file.path(getwd(), "modules", "bulk", "bulk_report_template.Rmd")
   ))
   hit <- Filter(file.exists, candidates)
   if (length(hit) == 0) {
     stop(
-      "\u274c Template 'bulk_report_template.Rmd' introuvable. Chemins essay\u00e9s :\n  - ",
+       "\u274c Template 'bulk_report_template.Rmd' introuvable. Chemins essay\u00e9s :\n  - ",
       paste(candidates, collapse = "\n  - "),
       "\nV\u00e9rifiez que l'application est lanc\u00e9e depuis la racine du projet ",
       "(shiny::runApp() depuis le dossier contenant app.R).",

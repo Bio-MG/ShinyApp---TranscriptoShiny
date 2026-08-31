@@ -228,7 +228,9 @@ mod_spatial_report_server <- function(id, global_data, shared_rv) {
         on.exit(unlink(tmp_dir, recursive = TRUE), add = TRUE)
         tmp_rmd <- file.path(tmp_dir, "spatial_report_template.Rmd")
         file.copy(template_path, tmp_rmd, overwrite = TRUE)
-        child_src <- file.path(dirname(template_path), "spatial_report_dataset_child.Rmd")
+        child_src <- file.path("reports", "spatial_report_dataset_child.Rmd")
+        # Fallback to dirname(template_path) for legacy locations
+        if (!file.exists(child_src)) child_src <- file.path(dirname(template_path), "spatial_report_dataset_child.Rmd")
         if (file.exists(child_src)) {
           file.copy(child_src, file.path(tmp_dir, "spatial_report_dataset_child.Rmd"), overwrite = TRUE)
         }

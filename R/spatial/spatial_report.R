@@ -93,9 +93,10 @@ build_spatial_report_dataset <- function(spatial_obj, results = list()) {
 #' @keywords internal
 find_spatial_report_template <- function() {
   candidates <- unique(c(
+    file.path("reports", "spatial_report_template.Rmd"),
+    file.path(getwd(), "reports", "spatial_report_template.Rmd"),
     file.path("modules", "spatial", "spatial_report_template.Rmd"),
-    file.path(getwd(), "modules", "spatial", "spatial_report_template.Rmd"),
-    file.path(dirname(getwd()), "modules", "spatial", "spatial_report_template.Rmd")
+    file.path(getwd(), "modules", "spatial", "spatial_report_template.Rmd")
   ))
   hit <- Filter(file.exists, candidates)
   if (length(hit) == 0) {
