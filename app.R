@@ -1,4 +1,4 @@
-# app.R - TranscriptoShiny v2a
+# app.R - TranscriptoShiny v2a  -> V2b -> V3 (cerberus)
 
 source("global.R")
 
@@ -12,6 +12,8 @@ source("R/bulk/bulk_helpers.R")
 source("R/core/pathway_helpers.R")
 source("R/plotting/palettes.R")
 source("R/sc/sc_plotting.R")
+source("R/sc/sc_trajectory.R")
+source("R/sc/sc_velocity.R")
 
 # --- NOUVEAU (module Spatial v3, BPCells + mirai) ---
 # Ces deux fichiers ne dépendent que des packages chargés par global.R —
