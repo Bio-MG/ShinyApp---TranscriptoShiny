@@ -1,20 +1,9 @@
 # =============================================================================
 # helper-source.R — auto-sourced by testthat before any test-*.R file runs
-# (testthat convention: any tests/testthat/helper*.R is loaded first).
 # =============================================================================
-# TranscriptoShiny has no package structure (no DESCRIPTION/NAMESPACE) — it's
-# a flat Shiny app where app.R source()s every helper/module file directly.
-# testthat::test_path()/test_dir() therefore can't rely on package-install
-# conventions to locate the project root; this walks UP from the current
-# working directory (wherever `Rscript -e 'testthat::test_dir("tests/testthat")'`
-# or `testthat::test_file()` was invoked from) until it finds "app.R" — the
-# same root marker used throughout this project's own tooling.
-#
-# Deliberately does NOT source app.R/global.R themselves: those have real
-# side effects (future::plan(multisession, ...), options(shiny.maxRequestSize),
-# package-availability warnings) that a unit test run should never trigger.
-# Each helper file under test is self-contained (function definitions only,
-# no top-level side effects) — see each file's own header.
+# TranscriptoShiny has no package structure (no DESCRIPTION/NAMESPACE).
+# This walks UP from the current working directory until it finds "app.R"
+# to locate the project root.
 # =============================================================================
 
 .ts_find_project_root <- function(start = getwd(), marker = "app.R", max_up = 8) {
@@ -22,19 +11,16 @@
   for (i in seq_len(max_up)) {
     if (file.exists(file.path(d, marker))) return(d)
     parent <- dirname(d)
-    if (identical(parent, d)) break  # reached filesystem root
+    if (identical(parent, d)) break
     d <- parent
   }
   stop(
-    "Impossible de localiser la racine du projet (fichier '", marker, "' introuvable ",
-    "en remontant depuis '", start, "'). Lancez les tests depuis la racine du projet, ",
-    "ex: `Rscript -e \"testthat::test_dir('tests/testthat')\"` depuis le dossier ",
-    "contenant app.R.", call. = FALSE
+    "Impossible de localiser la racine du projet (fichier '", marker,
+    "' introuvable en remontant depuis '", start, "').",
+    call. = FALSE
   )
 }
 
-# Cached once per test session — every test-*.R file needing the project
-# root calls this instead of re-walking the filesystem each time.
 ts_project_root <- local({
   root <- NULL
   function() {
@@ -43,13 +29,8 @@ ts_project_root <- local({
   }
 })
 
-#' Source a project file (relative to the project root) into the global env
-#'
-#' Safe to call multiple times with the same path across different test
-#' files (idempotent — R just re-defines the same functions).
-#'
-#' @param relpath Character, path relative to the project root, e.g.
-#'   "helpers_bulk.R" or "R/utils_spatial_stats.R".
+#' Source a project file (relative to project root)
+#' Handles both old-style top-level files and new R/ subdirectory files.
 source_project_file <- function(relpath) {
   full <- file.path(ts_project_root(), relpath)
   if (!file.exists(full)) {
@@ -58,3 +39,11 @@ source_project_file <- function(relpath) {
   sys.source(full, envir = globalenv())
   invisible(full)
 }
+
+# Source config files first (if they exist — tests may run without them)
+.local_source_if_exists <- function(relpath) {
+  full <- file.path(ts_project_root(), relpath)
+  if (file.exists(full)) sys.source(full, envir = globalenv())
+}
+.local_source_if_exists("config/defaults.R")
+.local_source_if_exists("config/thresholds.R")
