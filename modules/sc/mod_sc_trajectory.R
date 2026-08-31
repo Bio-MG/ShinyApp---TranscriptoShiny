@@ -76,7 +76,7 @@
 #   mod_sc_trajectory_output_ui(id)  -> main panel i18n$t("Trajectory") tab
 # =============================================================================
 
-.MAX_TRAJECTORY_CELLS <- 100000L   # mirrors the guard in global.R
+.MAX_TRAJECTORY_CELLS <- if (exists("TS_MAX_TRAJECTORY_CELLS")) TS_MAX_TRAJECTORY_CELLS else 100000L   # mirrors the guard in global.R
 
 
 # ── UI: sidebar controls ──────────────────────────────────────────────────────

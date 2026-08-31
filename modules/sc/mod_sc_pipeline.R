@@ -29,14 +29,14 @@
 # "secondary" run so it never becomes the bottleneck of a routine pipeline run
 # on a 32Go CPU-only machine. Users who explicitly pick "t-SNE" as their PRIMARY
 # reduction method below are not capped (informed, deliberate choice).
-.AUTO_TSNE_MAX_CELLS <- 30000L
+.AUTO_TSNE_MAX_CELLS <- if (exists("TS_AUTO_TSNE_MAX_CELLS")) TS_AUTO_TSNE_MAX_CELLS else 30000L
 
 # Step-3.7A: default cell-count threshold above which "Auto" mode switches the
 # pipeline to a disk-backed (BPCells) counts layer instead of RAM. Below this,
 # a sparse dgCMatrix comfortably fits in 32Go even with generous headroom for
 # ScaleData()/RunPCA() intermediates -- BPCells' overhead (slower per-access,
 # disk I/O) only pays off once RAM would otherwise be the bottleneck.
-.BPCELLS_AUTO_THRESHOLD <- 150000L
+.BPCELLS_AUTO_THRESHOLD <- if (exists("TS_BPCELLS_AUTO_THRESHOLD")) TS_BPCELLS_AUTO_THRESHOLD else 150000L
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 

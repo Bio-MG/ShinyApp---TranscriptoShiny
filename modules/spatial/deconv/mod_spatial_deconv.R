@@ -16,7 +16,7 @@
 #   WRITE : shared_rv$deconv_props, shared_rv$deconv_params
 # =============================================================================
 
-RCTD_CELL_MIN_INSTANCE <- 25L
+RCTD_CELL_MIN_INSTANCE <- if (exists("TS_RCTD_MIN_CELLS_PER_TYPE")) TS_RCTD_MIN_CELLS_PER_TYPE else 25L
 LABEL_TRANSFER_MIN_SHARED_GENES <- 50L
 
 mod_spatial_deconv_server <- function(id, global_data, shared_rv) {

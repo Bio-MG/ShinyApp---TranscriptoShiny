@@ -82,19 +82,19 @@
 # Moran's I, sketch UMAP, neighborhood enrichment, hotspots, Ripley's K) —
 # after this, the ExtendedTask errors out instead of hanging forever, so the
 # UI always eventually gets actionable feedback.
-MIRAI_TASK_TIMEOUT_MS <- 20 * 60 * 1000  # 20 minutes
+MIRAI_TASK_TIMEOUT_MS <- if (exists("TS_MIRAI_TIMEOUT_MS")) TS_MIRAI_TIMEOUT_MS else 20 * 60 * 1000L  # 20 minutes
 # RCTD (mode="rctd", doublet_mode="full") peut aussi tourner longtemps,
 # independamment de la taille de la reference (observe en reel : une
 # reference lymph node ~73k cellules / ~20 types a depasse le plafond
 # partage de 20 min) — plafond dedie, meme logique que Label Transfer.
-RCTD_TIMEOUT_MS <- 40 * 60 * 1000  # 40 minutes
+RCTD_TIMEOUT_MS <- if (exists("TS_RCTD_TIMEOUT_MS")) TS_RCTD_TIMEOUT_MS else 40 * 60 * 1000L  # 40 minutes
 # Label Transfer (mod_spatial_deconv.R, mode="labeltransfer") runs TWO
 # SCTransform calls (reference + query) plus FindTransferAnchors/TransferData
 # — reported to hit the shared 20-minute ceiling even on a moderately-sized
 # reference on CPU-only hardware, especially without the optional
 # `glmGamPoi` package. Given a genuinely longer-running-by-design task, use
 # a longer, dedicated ceiling rather than raising the shared one.
-LABEL_TRANSFER_TIMEOUT_MS <- 45 * 60 * 1000  # 45 minutes
+LABEL_TRANSFER_TIMEOUT_MS <- if (exists("TS_LABEL_TRANSFER_TIMEOUT")) TS_LABEL_TRANSFER_TIMEOUT else 45 * 60 * 1000L  # 45 minutes
 
 #' Initialize the mirai daemon pool used by all spatial async tasks
 #'

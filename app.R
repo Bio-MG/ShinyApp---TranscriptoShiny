@@ -1,6 +1,8 @@
 # app.R - TranscriptoShiny v2a  -> V2b -> V3 (cerberus)
 
 source("global.R")
+source("config/defaults.R")
+source("config/thresholds.R")
 
 # Helpers (refactor : extraits de global.R — l'ordre entre eux n'a pas
 # d'importance, R ne résout les appels de fonction qu'à l'exécution).

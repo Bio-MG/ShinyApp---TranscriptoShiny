@@ -24,7 +24,7 @@
 `%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
 
 #' Default HVG cap shared by every deconvolution entry point.
-DECONV_DEFAULT_N_HVG <- 2000L
+DECONV_DEFAULT_N_HVG <- if (exists("TS_DECONV_DEFAULT_N_HVG")) TS_DECONV_DEFAULT_N_HVG else 2000L
 
 #' Select top-N highly variable genes from a (possibly disk-backed) counts matrix
 #'
