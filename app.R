@@ -44,9 +44,11 @@ source("config/defaults.R")
 source("config/thresholds.R")
 
 # 3. CORE INFRASTRUCTURE (Domain-agnostic)
+# Contrat d'etat transversal source EN PREMIER (TREE CERBERUS step 3 :
+# config/* -> R/core/state.R -> autres R/core/* -> domaines -> modules).
+source("R/core/state.R")        # contrat d'etat + fabriques d'etat partagees
 source("R/core/io_helpers.R")
 source("R/core/validation.R")   # <-- NEW
-source("R/core/state.R")        # <-- NEW
 source("R/core/provenance.R")   # <-- CHRYSALIS 2C : manifeste de provenance
 source("R/core/jobs.R")         # <-- CHRYSALIS 2D : wrapper fin sync/async
 source("R/core/caching.R")      # <-- CHRYSALIS 2D : memoisation a portee contrainte

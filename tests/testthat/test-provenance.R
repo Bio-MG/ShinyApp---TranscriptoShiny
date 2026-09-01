@@ -79,7 +79,7 @@ test_that("cells_used accepts a vector of cell ids (flattened as a count later)"
 # provenance_append()
 # ---------------------------------------------------------------------------
 test_that("provenance_append chains entries on a fresh analysis state", {
-  s <- new_analysis_state()
+  s <- create_analysis_state()
   i1 <- provenance_append(s, new_provenance_entry("step-1", "methodA"))
   i2 <- provenance_append(s, new_provenance_entry("step-2", "methodB"))
   expect_identical(i1, 1L)
@@ -97,13 +97,13 @@ test_that("provenance_append tolerates a NULL state (module sans etat partage)",
 })
 
 test_that("provenance_append refuses anything not built by new_provenance_entry", {
-  s <- new_analysis_state()
+  s <- create_analysis_state()
   expect_error(provenance_append(s, list(foo = 1)), "new_provenance_entry")
   expect_error(provenance_append(s, "not-a-list"), "new_provenance_entry")
 })
 
 test_that("provenance_append refuses a corrupted provenance field", {
-  s <- new_analysis_state()
+  s <- create_analysis_state()
   state_set(s, "provenance", data.frame(x = 1))
   expect_error(provenance_append(s, new_provenance_entry("a", "m")),
                "n'est pas une liste")
@@ -113,7 +113,7 @@ test_that("provenance_append refuses a corrupted provenance field", {
 # provenance_to_dataframe() — CONSOLIDATION uniquement
 # ---------------------------------------------------------------------------
 test_that("provenance_to_dataframe flattens 2 chained entries in order", {
-  s <- new_analysis_state()
+  s <- create_analysis_state()
   provenance_append(s, new_provenance_entry(
     "step-1", "slingshot",
     parameters = list(k = 5, root = "manual"),
@@ -149,7 +149,7 @@ test_that("provenance_to_dataframe flattens 2 chained entries in order", {
 })
 
 test_that("provenance_to_dataframe counts a vector of cell ids", {
-  s <- new_analysis_state()
+  s <- create_analysis_state()
   provenance_append(s, new_provenance_entry("a", "m",
                                             cells_used = c("c1", "c2", "c3")))
   df <- provenance_to_dataframe(s)
@@ -157,7 +157,7 @@ test_that("provenance_to_dataframe counts a vector of cell ids", {
 })
 
 test_that("provenance_to_dataframe returns a typed empty frame when nothing recorded", {
-  df_empty <- provenance_to_dataframe(new_analysis_state())
+  df_empty <- provenance_to_dataframe(create_analysis_state())
   # Un etat NULL est traite comme un etat sans entree (jamais d'erreur pour
   # le rapport — consolidation tolerant).
   df_null <- provenance_to_dataframe(NULL)
