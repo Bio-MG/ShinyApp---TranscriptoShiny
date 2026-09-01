@@ -267,6 +267,11 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       req(global_data$sc_obj)
 
       tryCatch({
+        # CHRYSALIS 2E : garde d'entree explicite — le req() ci-dessus laisse
+        # l'observateur silencieux si l'objet est absent/non-Seurat ; l'assert
+        # produit desormais un message FR clair dans le canal d'erreur.
+        assert_seurat(global_data$sc_obj, context = "velocity")
+
         # 1. Require Seurat object already ensured by req
         seurat_cells <- colnames(global_data$sc_obj)
         seurat_genes <- rownames(global_data$sc_obj)
@@ -436,6 +441,25 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
 
         # 9. Store current object fingerprint
         velocity_state$object_fingerprint <- velocity_object_fingerprint(global_data$sc_obj)
+
+        # CHRYSALIS 2E : provenance PRODUITE a l'etape de validation (regle 7
+        # AGENTS.md) — parametres deja disponibles uniquement ; consolidation
+        # reservee au rapport (macro-step 4F).
+        provenance_append(shared_rv, new_provenance_entry(
+          analysis_id = "sc-velocity",
+          method      = validated$velocity_method %||% "precomputed",
+          parameters  = list(
+            import_mode        = mode,
+            orientation        = validated$orientation,
+            strip_cell_suffix  = strip_cell_suffix,
+            strip_gene_version = strip_gene_version,
+            allow_low_overlap  = allow_low_overlap,
+            n_cells_matched    = validated$n_cells_matched,
+            n_genes_matched    = validated$n_genes_matched
+          ),
+          dataset    = global_data$sc_obj,
+          cells_used = validated$n_cells_matched
+        ))
 
         # 10. Populate gene selector
         gene_choices <- rownames(validated$spliced)

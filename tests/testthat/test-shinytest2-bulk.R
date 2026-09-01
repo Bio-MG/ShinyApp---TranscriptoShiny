@@ -8,14 +8,15 @@
 test_that("Bulk RNA domain: app boots, tab navigates, no Shiny error", {
   app <- new_app_driver("bulk_smoke")
   on.exit(app$stop(), add = TRUE)
-  click_nav_by_text(app, "Bulk RNA Analysis")
+  # Libellé FR par défaut (I18N_DEFAULT_LANG="fr") : "Analyse Bulk RNA".
+  click_nav_by_text(app, "Analyse Bulk RNA")
   assert_no_shiny_error(app)
 })
 
 test_that("Bulk RNA domain: expected namespaced inputs exist", {
   app <- new_app_driver("bulk_ids")
   on.exit(app$stop(), add = TRUE)
-  click_nav_by_text(app, "Bulk RNA Analysis")
+  click_nav_by_text(app, "Analyse Bulk RNA")
 
   inputs <- names(app$get_values()$input)
   expected_ids <- c(

@@ -212,8 +212,9 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
     #    Fires once at startup too (default ignoreInit=FALSE) so the cap is set
     #    even if the user never opens this accordion panel. ──────────────────────
     observeEvent(input$max_cells_heavy, {
-      shared_rv$max_cells_heavy <- if (is.na(input$max_cells_heavy) || input$max_cells_heavy <= 0)
-        Inf else input$max_cells_heavy
+      state_set(shared_rv, "max_cells_heavy",
+                if (is.na(input$max_cells_heavy) || input$max_cells_heavy <= 0)
+                  Inf else input$max_cells_heavy)
     })
 
     observeEvent(input$run_pipeline, {
@@ -224,6 +225,10 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
       p$set(message=.tr("Pipeline..."), value=0)
 
       tryCatch({
+        # CHRYSALIS 2E : garde d'entree explicite — un objet non-Seurat
+        # produit desormais un message FR clair au lieu d'un echec silencieux.
+        assert_seurat(obj, context = "pipeline Single-Cell")
+
         # ── Step 1 : QC ───────────────────────────────────────────────────
         p$set(0.10, .tr("QC — détection mitochondriale"))
         mt_pattern <- .get_mt_pattern(obj)
@@ -289,7 +294,7 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
           stringsAsFactors = FALSE
         )
         qc_snap$Pct_Conserve <- round(100 * qc_snap$Cellules_apres / pmax(qc_snap$Cellules_avant, 1), 1)
-        shared_rv$qc_snapshot <- qc_snap
+        state_set(shared_rv, "qc_snapshot", qc_snap)
 
         # ── Step 1b : Backend disque (BPCells) — Step-3.7A ─────────────────
         p$set(0.22, .tr("Backend stockage..."))

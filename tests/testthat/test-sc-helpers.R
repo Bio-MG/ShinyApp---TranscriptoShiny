@@ -16,7 +16,9 @@
 # =============================================================================
 
 source_project_file("R/core/io_helpers.R")   # defines %||%, sourced first in app.R
+source_project_file("R/plotting/palettes.R")   # required by sc_trajectory (scale helpers)
 source_project_file("R/sc/sc_helpers.R")
+source_project_file("R/sc/sc_trajectory.R")   # calculate_pseudotime moved here (Block 7 refactor)
 
 # ---------------------------------------------------------------------------
 # resolve_sketch_preset()

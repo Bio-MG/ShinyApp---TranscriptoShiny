@@ -9,16 +9,23 @@
 test_that("Single-Cell domain: app boots, tab navigates, no Shiny error", {
   app <- new_app_driver("sc_smoke")
   on.exit(app$stop(), add = TRUE)
-  click_nav_by_text(app, "Single-Cell Analysis")
+  # NB : les libellés de nav sont FR par défaut (I18N_DEFAULT_LANG="fr",
+  # app.R "Analyse Single-Cell") — les fragments anglophones d'origine ne
+  # matchaient AUCUN onglet (tests nés rouges, cf. run_check 2026-09-01).
+  click_nav_by_text(app, "Analyse Single-Cell")
   assert_no_shiny_error(app)
 })
 
 test_that("Single-Cell domain: expected namespaced inputs exist", {
   app <- new_app_driver("sc_ids")
   on.exit(app$stop(), add = TRUE)
-  click_nav_by_text(app, "Single-Cell Analysis")
+  click_nav_by_text(app, "Analyse Single-Cell")
 
-  inputs <- names(app$get_values()$input)
+  # NB : get_values() complet (outputs inclus) fait planter l'endpoint de
+  # test Shiny (500 "lexical error ... shiny.silent.error") sur cet onglet
+  # tres charge — or ce test ne pinnine que des INPUT ids. Collecte restreinte
+  # aux inputs : plus robuste et semantiquement plus precise.
+  inputs <- names(app$get_values(input = TRUE, output = FALSE, export = FALSE)$input)
   expected_ids <- c(
     "sc-mapping-run_mapping",   # regression guard: real NESTED mapping module
     "sc-pipeline-run_pipeline", "sc-annotation-run_annot",

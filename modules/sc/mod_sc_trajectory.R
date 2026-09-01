@@ -560,9 +560,24 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
         global_data$sc_obj <- obj
 
         traj_result(result)
-        shared_rv$active_tab <- "tab_trajectory"
-        shared_rv$traj_reduction <- reduction_used
-        shared_rv$traj_method    <- method_key
+        state_set(shared_rv, "active_tab", "tab_trajectory")
+        state_set(shared_rv, "traj_reduction", reduction_used)
+        state_set(shared_rv, "traj_method", method_key)
+
+        # CHRYSALIS 2E : provenance PRODUITE a cette etape (regle 7 AGENTS.md)
+        # — seuls les parametres deja calcules/disponibles sont enregistres ;
+        # la consolidation est reservee au rapport (macro-step 4F).
+        provenance_append(shared_rv, new_provenance_entry(
+          analysis_id = "sc-trajectory",
+          method      = method_key,
+          parameters  = list(
+            reduction   = reduction_used,
+            root_method = result$root_method,
+            auto_root   = isTRUE(input$traj_auto_root)
+          ),
+          dataset    = obj,
+          cells_used = result$n_cells
+        ))
 
         traj_status_rv(status_msg)
         showNotification(
@@ -587,7 +602,7 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
     # ── 1b. Mirror gene picker to shared_rv (Step-3.7 — read by the SC report
     #    to render the same "Gènes vs Pseudotemps" plot on export) ─────────
     observeEvent(input$traj_genes, {
-      shared_rv$traj_genes <- input$traj_genes
+      state_set(shared_rv, "traj_genes", input$traj_genes)
     }, ignoreNULL = FALSE)
 
     # ── 2. Main trajectory plot ────────────────────────────────────────────
@@ -622,8 +637,8 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
               embeddings = display_embedding,
               pseudotime = obj@meta.data$pseudotime,
               curves     = NULL,   # curves stay available in traj_result(); no fabricated overlay
-              palette         = shared_rv$sc_palette %||% "default",
-              manual_gradient = shared_rv$sc_manual_gradient
+              palette         = state_get(shared_rv, "sc_palette") %||% "default",
+              manual_gradient = state_get(shared_rv, "sc_manual_gradient")
             )
           } else {
             plot_trajectory(
@@ -632,8 +647,8 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
               graph       = result$graph,
               root_cell   = result$root_cell,
               show_edges  = isTRUE(input$traj_show_edges),
-              palette         = shared_rv$sc_palette %||% "default",
-              manual_gradient = shared_rv$sc_manual_gradient
+              palette         = state_get(shared_rv, "sc_palette") %||% "default",
+              manual_gradient = state_get(shared_rv, "sc_manual_gradient")
             )
           }
         } else {
@@ -652,8 +667,8 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
       req(global_data$sc_obj)
       validate(need("pseudotime" %in% colnames(global_data$sc_obj@meta.data), .tr("Pseudotemps non calculé.")))
       tryCatch(plot_pseudotime_distribution(global_data$sc_obj,
-                                            palette = shared_rv$sc_palette %||% "default",
-                                            manual_colors = shared_rv$sc_manual_colors),
+                                            palette = state_get(shared_rv, "sc_palette") %||% "default",
+                                            manual_colors = state_get(shared_rv, "sc_manual_colors")),
                error = function(e) { validate(need(FALSE, e$message)) })
     })
 
@@ -661,8 +676,8 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
       req(global_data$sc_obj)
       validate(need("pseudotime" %in% colnames(global_data$sc_obj@meta.data), .tr("Pseudotemps non calculé.")))
       tryCatch(plot_pseudotime_distribution(global_data$sc_obj,
-                                            palette = shared_rv$sc_palette %||% "default",
-                                            manual_colors = shared_rv$sc_manual_colors),
+                                            palette = state_get(shared_rv, "sc_palette") %||% "default",
+                                            manual_colors = state_get(shared_rv, "sc_manual_colors")),
                error = function(e) { validate(need(FALSE, e$message)) })
     })
 
@@ -672,8 +687,8 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
       req(global_data$sc_obj, input$traj_genes)
       validate(need("pseudotime" %in% colnames(global_data$sc_obj@meta.data), .tr("Pseudotemps non calculé.")))
       tryCatch(plot_genes_vs_pseudotime(global_data$sc_obj, input$traj_genes, input$traj_smooth %||% "loess",
-                                        palette = shared_rv$sc_palette %||% "default",
-                                        manual_colors = shared_rv$sc_manual_colors),
+                                        palette = state_get(shared_rv, "sc_palette") %||% "default",
+                                        manual_colors = state_get(shared_rv, "sc_manual_colors")),
                error = function(e) { validate(need(FALSE, e$message)) })
     })
 
@@ -803,8 +818,8 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
                 embeddings = Seurat::Embeddings(obj, reduction = input$traj_reduction),
                 pseudotime = obj@meta.data$pseudotime,
                 curves     = NULL,
-                palette         = shared_rv$sc_palette %||% "default",
-                manual_gradient = shared_rv$sc_manual_gradient
+                palette         = state_get(shared_rv, "sc_palette") %||% "default",
+                manual_gradient = state_get(shared_rv, "sc_manual_gradient")
               )
             } else {
               plot_trajectory(
@@ -813,8 +828,8 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
                 graph      = result$graph,
                 root_cell  = result$root_cell,
                 show_edges = isTRUE(input$traj_show_edges),
-                palette         = shared_rv$sc_palette %||% "default",
-                manual_gradient = shared_rv$sc_manual_gradient
+                palette         = state_get(shared_rv, "sc_palette") %||% "default",
+                manual_gradient = state_get(shared_rv, "sc_manual_gradient")
               )
             }
           } else {
@@ -833,8 +848,8 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
       content = function(file) {
         req(global_data$sc_obj, "pseudotime" %in% colnames(global_data$sc_obj@meta.data))
         p <- tryCatch(plot_pseudotime_distribution(global_data$sc_obj,
-                                                   palette = shared_rv$sc_palette %||% "default",
-                                                   manual_colors = shared_rv$sc_manual_colors),
+                                                   palette = state_get(shared_rv, "sc_palette") %||% "default",
+                                                   manual_colors = state_get(shared_rv, "sc_manual_colors")),
                       error = function(e) NULL)
         req(p)
         ggsave(file, plot = p, width = 7, height = 5, dpi = 300,
@@ -847,8 +862,8 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
         req(global_data$sc_obj, input$traj_genes, "pseudotime" %in% colnames(global_data$sc_obj@meta.data))
         p <- tryCatch(plot_genes_vs_pseudotime(global_data$sc_obj, input$traj_genes,
                                                input$traj_smooth %||% "loess",
-                                               palette = shared_rv$sc_palette %||% "default",
-                                               manual_colors = shared_rv$sc_manual_colors),
+                                               palette = state_get(shared_rv, "sc_palette") %||% "default",
+                                               manual_colors = state_get(shared_rv, "sc_manual_colors")),
                       error = function(e) NULL)
         req(p)
         ggsave(file, plot = p, width = 8, height = 6, dpi = 300,

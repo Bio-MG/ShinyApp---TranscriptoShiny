@@ -154,143 +154,24 @@ build_dds <- function(counts_matrix, metadata, design_formula = "~ condition",
 
 
 
-#' Detect if a covariate is fully confounded with the main condition
-
-#'
-
-#' DESeq2's design matrix loses full rank when a covariate level maps to
-
-#' exactly one condition level (and vice-versa) — this produces a cryptic
-
-#' "model matrix is not full rank" error deep inside DESeq(). This check
-
-#' runs BEFORE fitting, so the UI can show a clear, actionable message
-
-#' instead of a low-level matrix algebra error.
-
-#'
-
-#' @param metadata Sample metadata data.frame.
-
-#' @param condition_col Character, name of the main condition column.
-
-#' @param covariate_col Character, name of the covariate column to check.
-
-#' @return Logical — TRUE if covariate_col is fully confounded with condition_col.
-
-check_design_confounding <- function(metadata, condition_col, covariate_col) {
-
-  if (!condition_col %in% colnames(metadata) || !covariate_col %in% colnames(metadata)) {
-
-    return(FALSE)
-
-  }
-
-  tbl <- table(
-
-    factor(metadata[[condition_col]]),
-
-    factor(metadata[[covariate_col]])
-
+# CHRYSALIS PHASE — canonical guards MOVED to R/core/validation.R.
+# This file NO LONGER defines check_design_confounding / validate_bulk_design.
+# They are re-exported here via a thin shim that sources the canonical file
+# on demand, avoiding a 15+ line duplication that would trip
+# tests/testthat/test-check_duplication.R. In production app.R already
+# sourced R/core/validation.R BEFORE this file, so the shim is a no-op.
+if (!exists("check_design_confounding", envir = .GlobalEnv) ||
+    !exists("validate_bulk_design", envir = .GlobalEnv)) {
+  # Resolve project root relative to this file's location (works both in app.R
+  # and when test-bulk-helpers.R sources this file directly via helper-source.R)
+  .bulk_helpers_validation_candidates <- c(
+    "R/core/validation.R",
+    file.path(dirname(dirname(normalizePath("R/bulk/bulk_helpers.R", mustWork = FALSE))), "R", "core", "validation.R"),
+    file.path(getwd(), "R", "core", "validation.R")
   )
-
-  if (nrow(tbl) < 2 || ncol(tbl) < 2) return(FALSE)
-
-
-
-  # Confounded when every covariate level is observed in only one condition
-
-  # level (cross-tab has exactly one non-zero cell per covariate column).
-
-  nonzero_per_covariate_level <- colSums(tbl > 0)
-
-  all(nonzero_per_covariate_level == 1)
-
-}
-
-
-
-#' Validate a full design (condition + optional covariates) before fitting
-#'
-#' @param metadata Sample metadata data.frame.
-#' @param condition_col Character, main condition column.
-#' @param covariates Character vector of additional covariate columns (may be empty).
-#' @return Character vector of human-readable problem descriptions (empty if none).
-validate_bulk_design <- function(metadata, condition_col, covariates = character(0)) {
-  problems <- character(0)
-
-  if (!condition_col %in% colnames(metadata)) return(problems)
-
-  n_na <- sum(is.na(metadata[[condition_col]]))
-  if (n_na > 0) {
-    problems <- c(problems, sprintf(
-      "%d échantillon(s) ont une valeur manquante (NA) dans '%s'.", n_na, condition_col
-    ))
+  for (.p in .bulk_helpers_validation_candidates) {
+    if (file.exists(.p)) { source(.p, local = FALSE); break }
   }
-
-  grp_counts <- table(metadata[[condition_col]])
-  if (any(grp_counts < 2)) {
-    problems <- c(problems, sprintf(
-      "Groupe(s) avec un seul réplicat dans '%s' (sur '%s' seule) : %s — résultats statistiquement peu fiables.",
-      condition_col, condition_col, paste(names(grp_counts)[grp_counts < 2], collapse = ", ")
-    ))
-  }
-
-  # -- Effective (complete-case) replicate check -------------------------
-  # A covariate's own NAs can silently shrink a group to n=1 even though
-  # the naive check above (condition_col alone) looked fine -- common with
-  # badly-parsed GEO coldata (e.g. a "batch" column with blanks for some
-  # samples). DESeq2 drops incomplete rows from the design matrix, so the
-  # EFFECTIVE n actually used for testing can be smaller than what the
-  # condition column alone suggests.
-  covariates <- intersect(covariates, colnames(metadata))
-  if (length(covariates) > 0) {
-    design_cols <- unique(c(condition_col, covariates))
-    complete    <- stats::complete.cases(metadata[, design_cols, drop = FALSE])
-    n_dropped   <- sum(!complete)
-
-    if (n_dropped > 0) {
-      grp_counts_cc <- table(metadata[[condition_col]][complete])
-      if (any(grp_counts_cc < 2)) {
-        problems <- c(problems, sprintf(
-          paste0("Groupe(s) avec un seul réplicat APRÈS exclusion de %d échantillon(s) ayant un NA ",
-                 "dans une covariable (%s) : %s. Vérifiez vos métadonnées (coldata GEO mal parsé ?)."),
-          n_dropped, paste(covariates, collapse = ", "),
-          paste(names(grp_counts_cc)[grp_counts_cc < 2], collapse = ", ")
-        ))
-      }
-    }
-  }
-
-  # -- Single-level covariate ----------------------------------------------
-  # A covariate with only one observed level contributes nothing to the
-  # model -- R's contrast coding produces zero columns for it, so DESeq2
-  # silently fits ~ condition_col alone while the user believes they are
-  # also correcting for this covariate. No crash, no warning: just a
-  # design that quietly doesn't do what was asked.
-  for (cov in covariates) {
-    n_levels <- length(unique(metadata[[cov]][!is.na(metadata[[cov]])]))
-    if (n_levels < 2) {
-      only_val <- if (n_levels == 1) as.character(unique(na.omit(metadata[[cov]]))) else "aucune valeur exploitable"
-      problems <- c(problems, sprintf(
-        paste0("La covariable '%s' n'a qu'une seule modalité observée (%s) - elle n'apporte aucune ",
-               "information, sera ignorée silencieusement par le design (~ %s), et ne corrige donc PAS ",
-               "pour cet effet comme attendu. Retirez-la du design."),
-        cov, only_val, paste(unique(c(covariates, condition_col)), collapse = " + ")
-      ))
-    }
-  }
-
-  for (cov in covariates) {
-    if (check_design_confounding(metadata, condition_col, cov)) {
-      problems <- c(problems, sprintf(
-        "La covariable '%s' est entièrement confondue avec '%s' - son effet ne peut pas être estimé séparément (design non plein rang). Retirez-la ou vérifiez votre plan d'expérience.",
-        cov, condition_col
-      ))
-    }
-  }
-
-  problems
 }
 
 

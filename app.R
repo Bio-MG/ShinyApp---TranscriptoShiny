@@ -1,90 +1,94 @@
-# app.R - TranscriptoShiny v2a  -> V2b -> V3 (cerberus)
+# ==============================================================================
+# app.R - SOURCE DEPENDENCY GUARDS (CHRYSALIS PHASE)
+# ==============================================================================
 
+# 0. ENVIRONNEMENT GUARD (fail-fast) — bye-bye au message cryptique
+#    "Erreur dans loadNamespace(x) : aucun package nommé 'shinyjs'".
+#    Si shinyjs (premier requis à être *utilisé* par le UI) est introuvable,
+#    la cause réelle est presque toujours une session R démarrée HORS du
+#    contexte renv : la librairie projet renv/library/... n'est alors pas dans
+#    .libPaths() et ~30 packages requis "disparaissent" en cascade de warnings
+#    (global.R) avant l'échec dur. On diagnostique les deux cas ici, AVANT tout
+#    le reste, et on dit à l'utilisateur quoi faire.
+if (!requireNamespace("shinyjs", quietly = TRUE)) {
+  lib_proj <- normalizePath(file.path(getwd(), "renv", "library"),
+                            winslash = "/", mustWork = FALSE)
+  on_proj_renv <- any(startsWith(
+    normalizePath(.libPaths(), winslash = "/", mustWork = FALSE), lib_proj
+  ))
+  if (on_proj_renv) {
+    stop(
+      "TranscriptoShiny : packages requis introuvables alors que le renv du ",
+      "projet est actif. Librairie projet incomplète — exécutez ",
+      "renv::restore() puis relancez.",
+      call. = FALSE
+    )
+  }
+  stop(
+    "TranscriptoShiny : cette session R a été démarrée en dehors du projet ",
+    "(renv du projet inactif — renv/library/ absent de .libPaths()).\n",
+    "Corrections possibles :\n",
+    "  1. Ouvrez le projet via 'SHINYAPP test.Rproj' (renv s'active au ",
+    "démarrage), puis relancez runApp() ;\n",
+    "  2. ou dans la session courante : setwd('",
+    getwd(), "') ; source('renv/activate.R') ; runApp().",
+    call. = FALSE
+  )
+}
+
+# 1. GLOBAL OPTIONS & PACKAGES
 source("global.R")
+
+# 2. CONFIGURATION (Defensive guards)
 source("config/defaults.R")
 source("config/thresholds.R")
 
-# Helpers (refactor : extraits de global.R — l'ordre entre eux n'a pas
-# d'importance, R ne résout les appels de fonction qu'à l'exécution).
-# BLOCK 4 (domain separation): relocated to R/{core,sc,bulk}
+# 3. CORE INFRASTRUCTURE (Domain-agnostic)
 source("R/core/io_helpers.R")
+source("R/core/validation.R")   # <-- NEW
+source("R/core/state.R")        # <-- NEW
+source("R/core/provenance.R")   # <-- CHRYSALIS 2C : manifeste de provenance
+source("R/core/jobs.R")         # <-- CHRYSALIS 2D : wrapper fin sync/async
+source("R/core/caching.R")      # <-- CHRYSALIS 2D : memoisation a portee contrainte
+source("R/core/pathway_helpers.R")
+
+# 4. DOMAIN PURE LOGIC (No Shiny reactivity)
+# 4a. Plotting & Palettes
+source("R/plotting/palettes.R")
+source("R/sc/sc_plotting.R")
+source("R/spatial/spatial_plotting.R")
+
+# 4b. Domain Specific Logic
 source("R/sc/sc_helpers.R")
 source("R/sc/sc_bpcells.R")
+source("R/sc/sc_trajectory.R")
+source("R/sc/sc_velocity.R")
+source("R/sc/sc_pipeline.R")
+source("R/sc/sc_export.R")
+
 source("R/bulk/bulk_helpers.R")
 source("R/bulk/bulk_report_engine.R")
 source("R/bulk/bulk_import_engine.R")
-source("R/core/pathway_helpers.R")
-source("R/plotting/palettes.R")
-source("R/sc/sc_plotting.R")
-source("R/sc/sc_trajectory.R")
-source("R/sc/sc_velocity.R")
-source("R/sc/sc_state.R")
-source("R/sc/sc_pipeline.R")
 
-# --- NOUVEAU (module Spatial v3, BPCells + mirai) ---
-# Ces deux fichiers ne dépendent que des packages chargés par global.R —
-# doivent être sourcés avant tout module qui les utilise (import spatial,
-# modules/spatial/*). init_spatial_daemons() est idempotent : sans risque si
-# rappelé plus tard (voir mod_spatial.R, appel défensif dans le module).
-#
-# AUDIT FIX (quick win) : R/utils_spatial_io.R n'est plus sourcé qu'ICI —
-# il l'était aussi en tête de global.R (avant même le chargement des
-# packages), un double-sourcing confirmé par deux audits indépendants comme
-# risque de divergence latente. Seule source de vérité désormais.
 source("R/spatial/spatial_async.R")
 source("R/spatial/spatial_io.R")
-# Phase 4 (multi-echantillons) — pure helper, depends only on
-# write_mirai_log() (spatial_async.R, sourced above); no Shiny
-# reactivity, safe to source alongside the other two.
 source("R/spatial/spatial_multi.R")
-# Chantier 3 (architecture fix — spatial deconvolution reference pipeline):
-# multi-format reference reader (.rds/.h5ad/.h5/.loom) + on-disk artifact
-# preparation for RCTD/Label Transfer. Runs ONLY on the main Shiny process
-# (mod_spatial_deconv.R) — deliberately NOT part of init_spatial_daemons()'s
-# source_files: the mirai daemon now loads the PREPARED artifact with base R
-# + BPCells only, never this file. See its header for the full rationale
-# (fixes "could not find function load_single_cell_data").
 source("R/spatial/spatial_reference.R")
-# FIX 2026-08 : init des daemons mirai DIFFEREE — elle n'est plus faite au
-# lancement mais a la premiere ouverture de l'onglet Spatial
-# (modules/spatial/mod_spatial.R : "if (!spatial_daemons_ready())
-# init_spatial_daemons(6)"). Raison : au demarrage, 6 processus R de plus en
-# concurrence avec les workers future faisait exploser les connectTimeout
-# ("Cluster setup failed", ".dispatcher_wait fige"). Le badge d'etat du pool
-# dans l'UI affichera simplement "inactive" jusqu'a cet appel paresseux.
-# Pour restaurer l'init eager, decommenter :
-# tryCatch(
-#   init_spatial_daemons(n_daemons = 6),
-#   error = function(e) warning("Initialisation des daemons mirai (spatial) impossible : ", conditionMessage(e))
-# )
 source("R/spatial/spatial_niche.R")
-# FIX : compute_getis_ord_hotspots()/compute_composition_differential()
-# etaient deja preloadees dans les daemons mirai mais jamais sourcees ici
-# (thread principal) -- casse tout appel SYNCHRONE (mod_spatial_qc.R,
-# mod_spatial_pipeline.R, mod_spatial_multi.R).
 source("R/spatial/spatial_stats.R")
-# Backlog #6 (RAM STdeconvolve/RCTD) : capping HVG avant densification —
-# pure helper, doit AUSSI etre dans source_files de init_spatial_daemons()
-# (R/spatial/spatial_async.R) car appelee depuis un daemon mirai.
 source("R/spatial/spatial_deconv_prep.R")
-# Moyen terme (export/auto-pipeline, voir handoff_spatial_bio-mg.md) : paquet
-# complet (.zip) + script R reproductible pour le module Spatial. Pure
-# helpers (aucune reactivite Shiny) appelés UNIQUEMENT depuis
-# modules/spatial/mod_spatial_export.R sur le thread principal (jamais dans
-# un daemon mirai) -- pas besoin de l'ajouter à init_spatial_daemons().
+source("R/spatial/spatial_deconv_tasks.R")
 source("R/spatial/spatial_export.R")
-# Feedback biologiste (rapport HTML/PDF multi-echantillons) : idem, pure
-# helper (dataset-snapshot builder + resolution du chemin du template Rmd),
-# appelé UNIQUEMENT depuis modules/spatial/mod_spatial_report.R sur le
-# thread principal (rmarkdown::render() n'est jamais lancé dans un daemon).
 source("R/spatial/spatial_report.R")
-source("R/spatial/spatial_plotting.R")
 
+# 5. SHINY MODULES (UI + Reactive Glue)
+# 5a. Import
 source("modules/import/mod_import_sc.R")
 source("modules/import/mod_import_bulk.R")
 source("modules/import/mod_import_spatial.R")
 source("modules/import/mod_geo.R")
 
+# 5b. Single-Cell
 source("modules/sc/mod_sc_pipeline.R")
 source("modules/sc/mod_sc_annotation.R")
 source("modules/sc/mod_sc_viz.R")
@@ -95,37 +99,27 @@ source("modules/sc/mod_sc_pathways.R")
 source("modules/sc/mod_sc_trajectory.R")
 source("modules/sc/mod_sc_velocity.R")
 source("modules/sc/mod_sc_mapping.R")
-source("R/sc/sc_export.R")
 source("modules/sc/mod_sc.R")
 
-
+# 5c. Bulk
 source("modules/bulk/mod_bulk_mapping.R")
 source("modules/bulk/mod_bulk_filter.R")
-#source("modules/bulk/mod_bulk_de.R")
 for (f in list.files("modules/bulk_de", pattern = "\\.R$", full.names = TRUE)) source(f)
 source("modules/bulk/mod_bulk_pathways.R")
 source("modules/bulk/mod_bulk_report.R")
 source("modules/bulk/mod_bulk.R")
 
-# --- Spatial (parent + sous-modules enfants) ---
+# 5d. Spatial
 source("modules/spatial/mod_spatial_qc.R")
 source("modules/spatial/mod_spatial_cluster.R")
-
 source("modules/spatial/mod_spatial_viz.R")
 source("modules/spatial/mod_spatial_multi.R")
 source("modules/spatial/mod_spatial_niche.R")
-
-# --- Spatial sub-deconv (Phase 2 split) ---
-source("R/spatial/spatial_deconv_tasks.R") # BEFORE daemon init if not already
 source("modules/spatial/deconv/mod_spatial_deconv_ui.R")
 source("modules/spatial/deconv/mod_spatial_deconv_reference.R")
 source("modules/spatial/deconv/mod_spatial_deconv_refviz.R")
 source("modules/spatial/deconv/mod_spatial_deconv_outputs.R")
 source("modules/spatial/deconv/mod_spatial_deconv.R")
-# Moyen terme (voir handoff_spatial_bio-mg.md) : pipeline automatique 1-clic
-# + export (paquet .zip / script reproductible) -- sourcés avant
-# mod_spatial.R, qui appelle mod_spatial_pipeline_server()/
-# mod_spatial_export_server() au meme titre que les autres sous-modules.
 source("modules/spatial/mod_spatial_pipeline.R")
 source("modules/spatial/mod_spatial_export.R")
 source("modules/spatial/mod_spatial_report.R")

@@ -154,9 +154,9 @@ mod_sc_server <- function(id, global_data) {
         label = paste("📄", .tr("Générer le Rapport")))
     }, ignoreInit = TRUE)
 
-    observeEvent(shared_rv$active_tab, {
-      req(shared_rv$active_tab)
-      nav_select(id="main_tabs", selected=shared_rv$active_tab, session=session)
+    observeEvent(state_get(shared_rv, "active_tab"), {
+      req(state_get(shared_rv, "active_tab"))
+      nav_select(id="main_tabs", selected=state_get(shared_rv, "active_tab"), session=session)
     })
 
     # ── QC plot ──────────────────────────────────────────────────────────────
@@ -176,7 +176,7 @@ mod_sc_server <- function(id, global_data) {
       s_cluster <- if ("seurat_clusters" %in% colnames(meta))                     "\u2705" else "\u26aa"
       s_umap    <- if ("umap"            %in% names(obj@reductions))              "\u2705" else "\u26aa"
       s_annot   <- if (any(grepl("^SingleR_", colnames(meta))))                   "\u2705" else "\u26aa"
-      s_markers <- if (!is.null(shared_rv$markers_data))                          "\u2705" else "\u26aa"
+      s_markers <- if (!is.null(state_get(shared_rv, "markers_data")))                          "\u2705" else "\u26aa"
       div(style=paste0("display:flex;justify-content:space-around;font-size:0.72em;",
                        "background:#f8f9fa;border:1px solid #e3e6e8;border-radius:6px;",
                        "padding:4px 2px;margin-bottom:8px;"),
@@ -207,16 +207,16 @@ mod_sc_server <- function(id, global_data) {
         c(.tr("Annotation SingleR"),    if (length(singler_cols)) paste(singler_cols,collapse=", ") else .tr("Non effectuée")),
         c(.tr("Gènes variables"),       if (length(tryCatch(VariableFeatures(obj),error=function(e) character(0))))
                                      format(length(VariableFeatures(obj)),big.mark=",") else "\u2014"),
-        c(.tr("Marqueurs calculés"),    if (!is.null(shared_rv$markers_data))
-                                     paste(nrow(shared_rv$markers_data),"marqueurs") else .tr("Non calculés")),
-        c(.tr("Pathways"),              if (!is.null(shared_rv$pathway_results))
-                                     paste(nrow(shared_rv$pathway_results),"pathways") else .tr("Non calculés")),
+        c(.tr("Marqueurs calculés"),    if (!is.null(state_get(shared_rv, "markers_data")))
+                                     paste(nrow(state_get(shared_rv, "markers_data")),"marqueurs") else .tr("Non calculés")),
+        c(.tr("Pathways"),              if (!is.null(state_get(shared_rv, "pathway_results")))
+                                     paste(nrow(state_get(shared_rv, "pathway_results")),"pathways") else .tr("Non calculés")),
         c(.tr("Pseudotemps"),           if ("pseudotime" %in% colnames(meta)) .tr("Calculé") else .tr("Non calculé")),
         c(.tr("Backend stockage"),      if (sc_backend_status(obj) == "disk") "\U0001f4bd Disque (BPCells)" else "\U0001f9e0 RAM (standard)"),
-        c(.tr("Sous-échant. (marqueurs/corr)"), if (is.finite(shared_rv$max_cells_heavy %||% Inf))
-                                     paste0("max ", format(shared_rv$max_cells_heavy, big.mark=","), " ", .tr_plain("cellules/groupe"))
+        c(.tr("Sous-échant. (marqueurs/corr)"), if (is.finite(state_get(shared_rv, "max_cells_heavy") %||% Inf))
+                                     paste0("max ", format(state_get(shared_rv, "max_cells_heavy"), big.mark=","), " ", .tr_plain("cellules/groupe"))
                                    else .tr("désactivé")),
-        c(.tr("Viz. sauvegardées"),     paste0(length(shared_rv$report_viz_list), " ", .tr_plain("plot(s) dans le panier")))
+        c(.tr("Viz. sauvegardées"),     paste0(length(state_get(shared_rv, "report_viz_list")), " ", .tr_plain("plot(s) dans le panier")))
       )
       tagList(
         div(class="m-3",
@@ -231,7 +231,7 @@ mod_sc_server <- function(id, global_data) {
 
     # ── Saved viz basket UI ───────────────────────────────────────────────────
     output$saved_viz_list_ui <- renderUI({
-      lst <- shared_rv$report_viz_list %||% list()
+      lst <- state_get(shared_rv, "report_viz_list") %||% list()
       if (!length(lst))
         return(div(class="text-muted small", paste0(.tr("Aucune visualisation sauvegardée. "), .tr("Utilisez '📌 Ajouter au Rapport' dans l'onglet Graphiques."))))
       tags$ul(style="font-size:0.8em;margin-bottom:0;",
@@ -239,7 +239,7 @@ mod_sc_server <- function(id, global_data) {
     })
 
     observeEvent(input$clear_saved_viz, {
-      shared_rv$report_viz_list <- list()
+      state_set(shared_rv, "report_viz_list", list())
       showNotification(.tr("🗑️ Liste de visualisations vidée."), type="message", duration=3)
     })
 
@@ -422,7 +422,7 @@ mod_sc_server <- function(id, global_data) {
     output$report_status <- renderText({
       if (is.null(global_data$sc_obj)) .tr("Importez et traitez un objet SC.")
       else sprintf(.tr("Prêt — %d viz. sauvegardée(s) dans le panier."),
-                   length(shared_rv$report_viz_list %||% list()))
+                   length(state_get(shared_rv, "report_viz_list") %||% list()))
     })
 
     # =========================================================================
@@ -442,11 +442,11 @@ mod_sc_server <- function(id, global_data) {
         file.copy(template_path, tmp_rmd, overwrite=TRUE)
 
         # NULL-guard corr params
-        corr_genes  <- if (!is.null(shared_rv$correlated_genes) &&
-                           is.data.frame(shared_rv$correlated_genes) &&
-                           nrow(shared_rv$correlated_genes) > 0) shared_rv$correlated_genes else NULL
-        corr_target <- if (!is.null(shared_rv$corr_target_gene) &&
-                           nchar(shared_rv$corr_target_gene %||% "") > 0) shared_rv$corr_target_gene else NULL
+        corr_genes  <- if (!is.null(state_get(shared_rv, "correlated_genes")) &&
+                           is.data.frame(state_get(shared_rv, "correlated_genes")) &&
+                           nrow(state_get(shared_rv, "correlated_genes")) > 0) state_get(shared_rv, "correlated_genes") else NULL
+        corr_target <- if (!is.null(state_get(shared_rv, "corr_target_gene")) &&
+                           nchar(state_get(shared_rv, "corr_target_gene") %||% "") > 0) state_get(shared_rv, "corr_target_gene") else NULL
 
         # i18n Phase 6 : build translation map for report (French keys -> current language)
         lang <- isolate(global_data$language) %||% "fr"
@@ -467,21 +467,21 @@ mod_sc_server <- function(id, global_data) {
 
         render_params <- list(
           sc_obj           = global_data$sc_obj,
-          markers_data     = shared_rv$markers_data,
-          pathway_results  = shared_rv$pathway_results,
-          pathway_db       = shared_rv$pathway_db,
+          markers_data     = state_get(shared_rv, "markers_data"),
+          pathway_results  = state_get(shared_rv, "pathway_results"),
+          pathway_db       = state_get(shared_rv, "pathway_db"),
           correlated_genes = corr_genes,
           corr_target_gene = corr_target,
           sections         = input$report_sections %||% character(0),
           reduction        = "umap",
-          traj_reduction   = shared_rv$traj_reduction %||% "umap",
-          traj_method      = shared_rv$traj_method,   # transient fallback; obj@meta.data provenance wins in the report
-          traj_genes       = shared_rv$traj_genes %||% character(0),  # Step-3.7
-          saved_viz_list   = if (length(shared_rv$report_viz_list)) shared_rv$report_viz_list else NULL,
+          traj_reduction   = state_get(shared_rv, "traj_reduction") %||% "umap",
+          traj_method      = state_get(shared_rv, "traj_method"),   # transient fallback; obj@meta.data provenance wins in the report
+          traj_genes       = state_get(shared_rv, "traj_genes") %||% character(0),  # Step-3.7
+          saved_viz_list   = if (length(state_get(shared_rv, "report_viz_list"))) state_get(shared_rv, "report_viz_list") else NULL,
           group_by         = "seurat_clusters",
-          sc_palette         = shared_rv$sc_palette %||% "default",
-          sc_manual_colors   = shared_rv$sc_manual_colors,
-          sc_manual_gradient = shared_rv$sc_manual_gradient,
+          sc_palette         = state_get(shared_rv, "sc_palette") %||% "default",
+          sc_manual_colors   = state_get(shared_rv, "sc_manual_colors"),
+          sc_manual_gradient = state_get(shared_rv, "sc_manual_gradient"),
           report_title     = input$report_title    %||% "Analyse Single-Cell",
           report_subtitle  = input$report_subtitle %||% "",
           report_notes     = input$report_notes    %||% "",

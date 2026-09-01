@@ -14,7 +14,10 @@
 # isolate without those.
 # =============================================================================
 
+source_project_file("R/plotting/palettes.R")
 source_project_file("R/core/pathway_helpers.R")
+# ggplot2 is required for plot builders but not auto-loaded by helper-source.R
+if (requireNamespace("ggplot2", quietly = TRUE)) suppressPackageStartupMessages(library(ggplot2))
 
 .toy_pathway_df <- function(n = 5) {
   data.frame(

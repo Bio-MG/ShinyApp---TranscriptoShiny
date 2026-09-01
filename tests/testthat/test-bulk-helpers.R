@@ -25,6 +25,7 @@
 # =============================================================================
 
 source_project_file("R/core/io_helpers.R")   # defines %||%, sourced first in app.R
+source_project_file("R/core/validation.R")     # canonical guards (app.R loads before bulk_helpers)
 source_project_file("R/bulk/bulk_helpers.R")
 source_project_file("R/plotting/palettes.R")   # sourced last in app.R — wins on name clashes
 

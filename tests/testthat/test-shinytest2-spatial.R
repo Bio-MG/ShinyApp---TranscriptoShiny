@@ -8,14 +8,16 @@
 test_that("Spatial domain: app boots, tab navigates, no Shiny error", {
   app <- new_app_driver("spatial_smoke")
   on.exit(app$stop(), add = TRUE)
-  click_nav_by_text(app, "Spatial Analysis")
+  # Libellé FR par défaut (I18N_DEFAULT_LANG="fr") : "Analyse Spatiale".
+  # NB : cliquer cet onglet déclenche l'init lazy des 6 daemons mirai.
+  click_nav_by_text(app, "Analyse Spatiale")
   assert_no_shiny_error(app)
 })
 
 test_that("Spatial domain: expected namespaced inputs exist", {
   app <- new_app_driver("spatial_ids")
   on.exit(app$stop(), add = TRUE)
-  click_nav_by_text(app, "Spatial Analysis")
+  click_nav_by_text(app, "Analyse Spatiale")
 
   inputs <- names(app$get_values()$input)
   expected_ids <- c(

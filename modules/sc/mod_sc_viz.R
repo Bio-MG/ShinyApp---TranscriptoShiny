@@ -1,4 +1,4 @@
-﻿# =============================================================================
+# =============================================================================
 # mod_sc_viz.R  —  Child 3: Visualisation (11 types) + Export + Palette SC
 # =============================================================================
 # Changes vs prev version:
@@ -410,11 +410,11 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
       new_sel <- unique(c(current, valid))
       updateSelectizeInput(session, "feat_sel", selected=new_sel,
                            choices=rownames(global_data$sc_obj), server=TRUE)
-      shared_rv$selected_genes <- new_sel
+      state_set(shared_rv, "selected_genes", new_sel)
       if (length(valid) > 0) {
         showNotification(sprintf("Added %d gene(s) (%d invalid skipped)", length(valid), length(invalid)),
                          type="message", duration=5)
-        shared_rv$active_tab <- "tab_viz"
+        state_set(shared_rv, "active_tab", "tab_viz")
       } else {
         showNotification(paste("No valid genes. Invalid:", paste(invalid, collapse=", ")),
                          type="error", duration=5)
@@ -521,16 +521,16 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
     # vague 6) : Annotation/Trajectoire/Pathways/rapport lisent shared_rv
     # au lieu de recalculer leur propre palette locale. ─────────────────
     observe({
-      shared_rv$sc_palette   <- input$sc_palette %||% "default"
-      shared_rv$sc_manual_colors <- if (identical(input$sc_palette, "manual")) sc_manual_colors_vec() else NULL
-      shared_rv$sc_manual_gradient <- if (identical(input$sc_palette, "manual")) sc_gradient_vec() else NULL
-      shared_rv$sc_manual_volcano_colors <- if (identical(input$sc_palette, "manual")) sc_volcano_colors_vec() else NULL
+      state_set(shared_rv, "sc_palette", input$sc_palette %||% "default")
+      state_set(shared_rv, "sc_manual_colors", if (identical(input$sc_palette, "manual")) sc_manual_colors_vec() else NULL)
+      state_set(shared_rv, "sc_manual_gradient", if (identical(input$sc_palette, "manual")) sc_gradient_vec() else NULL)
+      state_set(shared_rv, "sc_manual_volcano_colors", if (identical(input$sc_palette, "manual")) sc_volcano_colors_vec() else NULL)
     })
 
     # ── Sync gene basket from sibling modules ────────────────────────────────
-    observeEvent(shared_rv$selected_genes, {
+    observeEvent(state_get(shared_rv, "selected_genes"), {
       req(global_data$sc_obj)
-      genes <- shared_rv$selected_genes
+      genes <- state_get(shared_rv, "selected_genes")
       if (length(genes) > 0)
         updateSelectizeInput(session, "feat_sel", selected=genes,
                              choices=rownames(global_data$sc_obj), server=TRUE)
@@ -654,26 +654,10 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
 
       if (type %in% c("heatmap","stacked_violin","heatmap_hier","density_2d")) return(plotly_empty())
 
-      cfg <- list(
-        type               = type,
-        reduction          = input$viz_reduction,
-        feat_sel           = input$feat_sel,
-        group_by           = input$group_by,
-        scatter_gene1      = input$scatter_gene1,
-        scatter_gene2      = input$scatter_gene2,
-        scatter_cor_method = input$scatter_cor_method,
-        scatter_smooth     = input$scatter_smooth,
-        multi_gene         = input$multi_gene,
-        multi_plot_type    = input$multi_plot_type,
-        violin_boxplot     = input$violin_boxplot,
-        volcano_group1     = input$volcano_group1,
-        volcano_group2     = input$volcano_group2,
-        volcano_logfc      = input$volcano_logfc,
-        volcano_pval       = input$volcano_pval,
-        volcano_show_labels= input$volcano_show_labels,
-        pt_size            = input$pt_size,
-        plot_theme         = input$plot_theme
-      )
+      # Deduplicated: reuse .current_cfg() (check_duplication guard, 15-line threshold)
+      base_cfg <- .current_cfg()
+      cfg <- base_cfg[c("type","reduction","feat_sel","group_by","scatter_gene1","scatter_gene2","scatter_cor_method","scatter_smooth","multi_gene","multi_plot_type","violin_boxplot","volcano_group1","volcano_group2","volcano_logfc","volcano_pval","volcano_show_labels","pt_size","plot_theme")]
+      cfg$type <- type
 
       # Step-3.8B: fast preview on large objects (see .preview_obj() above) --
       # export_plot() re-renders on the untouched `obj`/full dataset separately.
@@ -835,9 +819,9 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
         return()
       }
       title <- paste0(cfg$type, "_", format(Sys.time(), "%H%M%S"))
-      current <- shared_rv$report_viz_list %||% list()
+      current <- state_get(shared_rv, "report_viz_list") %||% list()
       current[[title]] <- cfg
-      shared_rv$report_viz_list <- current
+      state_set(shared_rv, "report_viz_list", current)
       showNotification(paste("📌 Ajouté au rapport:", cfg$type),
                        type="message", duration=3)
     })
@@ -855,9 +839,9 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
       if (!length(sig)) {
         showNotification("Aucun gène significatif.", type="warning"); return()
       }
-      current <- shared_rv$selected_genes %||% character(0)
-      shared_rv$selected_genes <- unique(c(current, sig))
-      shared_rv$active_tab     <- "tab_viz"
+      current <- state_get(shared_rv, "selected_genes") %||% character(0)
+      state_set(shared_rv, "selected_genes", unique(c(current, sig)))
+      state_set(shared_rv, "active_tab", "tab_viz")
       showNotification(paste(length(sig), .tr("gènes significatifs ajoutés.")), type="message")
     })
 
