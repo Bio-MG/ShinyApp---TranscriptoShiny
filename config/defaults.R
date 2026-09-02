@@ -35,3 +35,11 @@ TS_MAX_SVG_HEATMAP         <- 60L     # max SVGs in grid display
 # --- Velocity ----------------------------------------------------------------
 TS_VELOCITY_MAX_PORTRAIT_CELLS <- 50000L  # phase portrait subsample cap
 TS_VELOCITY_MAX_EMBED_CELLS    <- 5000L   # embedding plot subsample cap
+
+# --- Differential abundance design (4E-0) ------------------------------------
+# Principe central : les cellules ne sont PAS des replicats biologiques
+# (pas de pseudoreplication) — le blocage est hard en dessous du plancher.
+TS_DA_MIN_REPLICATES_PER_CONDITION  <- 2L   # blocage en dessous (par condition)
+TS_DA_MIN_CELLS_PER_SAMPLE          <- 10L  # avertissement en dessous (echantillon faible)
+TS_DA_MIN_IDENTITY_CELLS_PER_SAMPLE <- 5L   # avertissement en dessous (identite sous-representee)
+TS_DA_CELLS_IMBALANCE_RATIO         <- 3    # avertissement au-dessus (ratio max/min cellules par echantillon)

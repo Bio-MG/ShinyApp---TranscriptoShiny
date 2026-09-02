@@ -1231,3 +1231,52 @@ remap_gene_ids_to_symbol <- function(counts_matrix, from_type, organism = "human
     n_collapsed = n_before_collapse - nrow(mat)
   )
 }
+
+# =============================================================================
+# Identite d'objet pour les contrats de resultat (Stages 8+, TREE CERBERUS)
+# =============================================================================
+# Bloc object_identity PARTAGE par tous les finalisateurs de resultats
+# canoniques (velocity, communication, DA design...) : l'empreinte est celle
+# de velocity_object_fingerprint() (v2, deterministe, sans adresse memoire),
+# REUTILISEE jamais dupliquee. R/sc/sc_velocity.R doit etre source avant
+# l'appel (ordre garanti par app.R).
+#
+#' Bloc object_identity partage des resultats canoniques (empreinte v2)
+#'
+#' @param obj Objet quelconque a dimnames (NULL accepte : empreinte NULL).
+#' @return list(fingerprint, method, seurat_dims) — contrat commun des
+#'   resultats canoniques (velocity, communication, DA design).
+#' @export
+build_object_identity_v2 <- function(obj) {
+  if (is.null(obj)) {
+    return(list(
+      fingerprint = NULL,
+      method = paste0(
+        "v2 (velocity_object_fingerprint reutilise) : dimensions + 20 ",
+        "premiers/derniers barcodes de cellules et identifiants de genes ",
+        "(deterministe, sans adresse memoire)"
+      ),
+      seurat_dims = c(seurat_genes = NA_integer_, seurat_cells = NA_integer_)
+    ))
+  }
+  if (!exists("velocity_object_fingerprint", mode = "function")) {
+    stop(
+      paste0(
+        "build_object_identity_v2() : R/sc/sc_velocity.R doit etre source ",
+        "avant usage (velocity_object_fingerprint est reutilise, jamais ",
+        "duplique)."
+      ),
+      call. = FALSE
+    )
+  }
+  list(
+    fingerprint = velocity_object_fingerprint(obj),
+    method = paste0(
+      "v2 (velocity_object_fingerprint reutilise) : dimensions + 20 ",
+      "premiers/derniers barcodes de cellules et identifiants de genes ",
+      "(deterministe, sans adresse memoire)"
+    ),
+    seurat_dims = c(seurat_genes = as.integer(nrow(obj)),
+                    seurat_cells = as.integer(ncol(obj)))
+  )
+}

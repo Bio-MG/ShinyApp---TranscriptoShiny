@@ -7376,6 +7376,154 @@
     {
       "fr": "%d interaction(s) affichée(s) sur %d — retirées : score %d, p-value %d, pathway %d, sender %d, receiver %d, auto %d",
       "en": "%d interaction(s) displayed of %d — removed: score %d, p-value %d, pathway %d, sender %d, receiver %d, self %d"
+    },
+    {
+      "fr": "8c. Abondance différentielle (design)",
+      "en": "8c. Differential abundance (design)"
+    },
+    {
+      "fr": "DA design",
+      "en": "DA design"
+    },
+    {
+      "fr": "Abondance différentielle — validation du plan expérimental AVANT tout calcul (Milo / scCODA). ",
+      "en": "Differential abundance — experimental design validation BEFORE any computation (Milo / scCODA). "
+    },
+    {
+      "fr": "Les cellules ne sont PAS des réplicats biologiques : l'unité statistique est l'échantillon.",
+      "en": "Cells are NOT biological replicates: the statistical unit is the sample."
+    },
+    {
+      "fr": "Colonne ID échantillon (requis)",
+      "en": "Sample ID column (required)"
+    },
+    {
+      "fr": "Colonne condition (requis)",
+      "en": "Condition column (required)"
+    },
+    {
+      "fr": "Colonne réplicat biologique",
+      "en": "Biological replicate column"
+    },
+    {
+      "fr": "L'échantillon EST le réplicat",
+      "en": "The sample IS the replicate"
+    },
+    {
+      "fr": "(aucun)",
+      "en": "(none)"
+    },
+    {
+      "fr": "(aucune)",
+      "en": "(none)"
+    },
+    {
+      "fr": "L'équivalence « échantillon = réplicat » doit être déclarée explicitement ci-dessus — elle est tracée dans la provenance.",
+      "en": "The 'sample = replicate' equivalence must be explicitly declared above — it is recorded in the provenance."
+    },
+    {
+      "fr": "Valider le design",
+      "en": "Validate design"
+    },
+    {
+      "fr": "Exporter résumé du design (CSV)",
+      "en": "Export design summary (CSV)"
+    },
+    {
+      "fr": "Exporter table échantillons (CSV)",
+      "en": "Export samples table (CSV)"
+    },
+    {
+      "fr": "Exporter résultat (RDS)",
+      "en": "Export result (RDS)"
+    },
+    {
+      "fr": "Abondance différentielle — plan expérimental",
+      "en": "Differential abundance — experimental design"
+    },
+    {
+      "fr": "Verdict",
+      "en": "Verdict"
+    },
+    {
+      "fr": "Conditions",
+      "en": "Conditions"
+    },
+    {
+      "fr": "Conditions × Batch",
+      "en": "Conditions × Batch"
+    },
+    {
+      "fr": "Couverture identités",
+      "en": "Identity coverage"
+    },
+    {
+      "fr": "Les cellules ne sont pas des réplicats biologiques : aucun résumé par cellule ne peut servir de test statistique.",
+      "en": "Cells are not biological replicates: no per-cell summary can serve as a statistical test."
+    },
+    {
+      "fr": "Un design bloqué produit un rapport explicatif mais n'est JAMAIS consommable par Milo ou scCODA.",
+      "en": "A blocked design produces an explanatory report but is NEVER consumable by Milo or scCODA."
+    },
+    {
+      "fr": "Seuils : 2 réplicats minimum par condition (bloc), 10 cellules par échantillon et 5 cellules par identité (avertissements) — config/defaults.R.",
+      "en": "Thresholds: 2 replicates minimum per condition (block), 10 cells per sample and 5 cells per identity (warnings) — config/defaults.R."
+    },
+    {
+      "fr": "En attente de validation du design...",
+      "en": "Waiting for design validation..."
+    },
+    {
+      "fr": "Objet Seurat modifié : revalidez le design.",
+      "en": "Seurat object changed: re-validate the design."
+    },
+    {
+      "fr": "Validation du design terminée.",
+      "en": "Design validation completed."
+    },
+    {
+      "fr": "Erreur validation design :",
+      "en": "Design validation error:"
+    },
+    {
+      "fr": "Aucune condition exploitable.",
+      "en": "No usable condition."
+    },
+    {
+      "fr": "éligible",
+      "en": "eligible"
+    },
+    {
+      "fr": "NON éligible — ",
+      "en": "NOT eligible — "
+    },
+    {
+      "fr": "Éligibilité des méthodes (design actuel) :",
+      "en": "Method eligibility (current design):"
+    },
+    {
+      "fr": "Unité de composition : %s. Colonnes : échantillon « %s », condition « %s », réplicat « %s », batch « %s », identité « %s ».",
+      "en": "Composition unit: %s. Columns: sample '%s', condition '%s', replicate '%s', batch '%s', identity '%s'."
+    },
+    {
+      "fr": "Aucun batch demandé (ou aucune paire condition × batch exploitable) — le terme batch ne sera pas modelisé.",
+      "en": "No batch requested (or no usable condition × batch pair) — the batch term will not be modelled."
+    },
+    {
+      "fr": "Comptage d'échantillons par condition × batch — une condition confinée à un seul batch bloquerait un modèle batch.",
+      "en": "Sample counts per condition × batch — a condition confined to a single batch would block a batch model."
+    },
+    {
+      "fr": "Aucune colonne d'identité sélectionnée — la couverture par type cellulaire ne peut pas être évaluée.",
+      "en": "No identity column selected — per-cell-type coverage cannot be assessed."
+    },
+    {
+      "fr": "Représentation de chaque identité par échantillon — les identités présentes dans moins de 2 échantillons ne seront pas interprétables par condition.",
+      "en": "Per-sample representation of each identity — identities present in fewer than 2 samples will not be interpretable per condition."
+    },
+    {
+      "fr": "%s %s — %d échantillon(s), %d condition(s), %d cellule(s).",
+      "en": "%s %s — %d sample(s), %d condition(s), %d cell(s)."
     }
   ]
 }
