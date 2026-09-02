@@ -34,7 +34,9 @@ test_that("Single-Cell domain: expected namespaced inputs exist", {
     "sc-corr-target_gene", "sc-corr-cor_method", "sc-corr-find_correlated",
     # Trajectory (mod_sc_trajectory.R -> ns("trajectory"))
     "sc-trajectory-traj_method", "sc-trajectory-traj_reduction",
-    "sc-trajectory-calc_trajectory"
+    "sc-trajectory-calc_trajectory",
+    # Rapport consolidé (mod_sc_report_consolidated.R -> ns("report_consolide"))
+    "sc-report_consolide-rep_title"
   )
   missing <- setdiff(expected_ids, inputs)
   expect_true(length(missing) == 0,

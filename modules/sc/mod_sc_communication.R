@@ -325,6 +325,11 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
         comm_state$result <- canonical
         comm_state$object_fingerprint <- velocity_object_fingerprint(obj)
 
+        # Stage 17 (4F) : exposition ADDITIVE du resultat canonique au rapport
+        # consolide (lecture seule ; comm_state reste la reference du panel
+        # 8b — aucun changement de comportement du panneau).
+        shared_rv$communication_result <- canonical
+
         provenance_append(shared_rv, canonical$provenance)
 
         # Filtres : reset a chaque import (les anciens choix ne sont plus

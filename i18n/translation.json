@@ -7816,6 +7816,94 @@
     {
       "fr": "Les cellules ne sont pas des réplicats biologiques : chaque vue porte le contexte de composition par échantillon. Un désaccord peut provenir des échelles, des effectifs ou d'une biologie captée différemment — rien ne tranche.",
       "en": "Cells are not biological replicates: every view carries the per-sample composition context. A disagreement may stem from scales, sample sizes or biology captured differently — nothing arbitrates."
+    },
+    {
+      "fr": "9b. Rapport consolidé (4F)",
+      "en": "9b. Consolidated report (4F)"
+    },
+    {
+      "fr": "Rapport consolidé",
+      "en": "Consolidated report"
+    },
+    {
+      "fr": "Compile l'état canonique + la provenance en un rapport HTML autonome et un bundle d'export projet. Aucune analyse n'est ré-exécutée.",
+      "en": "Compiles canonical state + provenance into a standalone HTML report and a project export bundle. No analysis is re-run."
+    },
+    {
+      "fr": "Inclure les tables de résumés",
+      "en": "Include summary tables"
+    },
+    {
+      "fr": "📄 Rapport HTML compilé",
+      "en": "📄 Compiled HTML report"
+    },
+    {
+      "fr": "🧳 Bundle d'export projet (.zip)",
+      "en": "🧳 Project export bundle (.zip)"
+    },
+    {
+      "fr": "Rapport consolidé — aperçu des verdicts",
+      "en": "Consolidated report — verdict overview"
+    },
+    {
+      "fr": "Section",
+      "en": "Section"
+    },
+    {
+      "fr": "État",
+      "en": "State"
+    },
+    {
+      "fr": "Objet SC requis : importez et traitez un objet d'abord.",
+      "en": "SC object required: import and process an object first."
+    },
+    {
+      "fr": "Objet SC requis.",
+      "en": "SC object required."
+    },
+    {
+      "fr": "Provenance consolidée :",
+      "en": "Consolidated provenance:"
+    },
+    {
+      "fr": "entrée(s) produite(s) par les analyses",
+      "en": "entry(ies) produced by the analyses"
+    },
+    {
+      "fr": "⚠ sections refusées (provenance absente) :",
+      "en": "⚠ refused sections (missing provenance):"
+    },
+    {
+      "fr": "Prêt —",
+      "en": "Ready —"
+    },
+    {
+      "fr": "section(s) avec résultat.",
+      "en": "section(s) with a result."
+    },
+    {
+      "fr": "Échec du rapport consolidé : ",
+      "en": "Consolidated report failure: "
+    },
+    {
+      "fr": "Rapport consolidé généré.",
+      "en": "Consolidated report generated."
+    },
+    {
+      "fr": "Génération du rapport consolidé...",
+      "en": "Generating the consolidated report..."
+    },
+    {
+      "fr": "Assemblage du bundle d'export...",
+      "en": "Assembling the export bundle..."
+    },
+    {
+      "fr": "Échec du bundle d'export : ",
+      "en": "Export bundle failure: "
+    },
+    {
+      "fr": "Bundle d'export généré.",
+      "en": "Export bundle generated."
     }
   ]
 }

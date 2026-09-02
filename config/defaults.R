@@ -84,3 +84,10 @@ TS_DA_SCCODA_SEED           <- 15L     # graine tensorflow enregistree
 # significatifs de l'identite >= ce plancher (seuil SpatialFDR : reutilise
 # TS_DA_MILO_DISPLAY_ALPHA).
 TS_DA_CROSS_SIGNIF_FRACTION <- 0.5    # plancher de voisinages significatifs (Milo)
+
+# --- Rapport consolide (4F / Stage 17) -----------------------------------------
+# Le rapport est un COMPILATEUR d'etat + de provenance : aucune re-execution
+# d'analyse. Les plafonds ci-dessous ne concernent que l'AFFICHAGE (tables
+# HTML inline) — les exports du bundle ne sont jamais plafonnes.
+TS_REPORT_MAX_TABLE_ROWS       <- 200L   # lignes max par table HTML inline
+TS_REPORT_MAX_PROVENANCE_ROWS  <- 500L   # lignes max de la table de provenance inline

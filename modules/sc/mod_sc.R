@@ -113,7 +113,13 @@ mod_sc_ui <- function(id) {
           downloadButton(ns("dl_sc_r_script"), i18n$t("🧾 Export Script R (.zip)"),
                          class = "btn-outline-secondary w-100"),
           div(class = "small text-muted mt-1", textOutput(ns("report_status")))
-        )
+        ),
+        # Stage 17 (4F) : rapport consolide — compile l'etat canonique + la
+        # provenance (aucune re-execution d'analyse ; le panneau 9 historique
+        # reste le rapport Rmd par domaine, inchangé).
+        accordion_panel(i18n$t("9b. Rapport consolidé (4F)"), icon = icon("clipboard-check"),
+                        value = "9b_report_consolide",
+                        mod_sc_report_consolidated_ui(ns("report_consolide")))
       )
     ),
     navset_card_underline(
@@ -132,6 +138,7 @@ mod_sc_ui <- function(id) {
       nav_panel(i18n$t("Milo DA"), value = "tab_da_milo", mod_sc_da_milo_output_ui(ns("da_milo"))),
       nav_panel(i18n$t("scCODA DA"), value = "tab_da_sccoda", mod_sc_da_sccoda_output_ui(ns("da_sccoda"))),
       nav_panel(i18n$t("DA croisées"), value = "tab_da_cross", mod_sc_da_cross_output_ui(ns("da_cross"))),
+      nav_panel(i18n$t("Rapport consolidé"), value = "tab_report_consolide", mod_sc_report_consolidated_output_ui(ns("report_consolide"))),
       nav_panel(i18n$t("QC"), value = "tab_qc",
         card(max_height = 750,
           div(class = "card-header bg-light", h5(i18n$t("Contrôle Qualité"), class = "card-title mb-0")),
@@ -280,6 +287,7 @@ mod_sc_server <- function(id, global_data) {
     mod_sc_da_milo_server("da_milo", global_data, shared_rv)
     mod_sc_da_sccoda_server("da_sccoda", global_data, shared_rv)
     mod_sc_da_cross_server("da_cross", global_data, shared_rv)
+    mod_sc_report_consolidated_server("report_consolide", global_data, shared_rv)  # Stage 17 (4F)
 
     # ── traj_reduction / traj_genes mirrors (written by mod_sc_trajectory_server)
 

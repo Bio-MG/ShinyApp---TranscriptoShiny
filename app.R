@@ -91,6 +91,14 @@ source("R/spatial/spatial_deconv_tasks.R")
 source("R/spatial/spatial_export.R")
 source("R/spatial/spatial_report.R")
 
+# 4c. Consolidated report domain (4F / Stage 17) — COMPILATEUR d'etat + de
+#     provenance ; APRES tous les domaines (reutilise les gardes assert_*,
+#     les empreintes v2, sc_r_script_text et les vues croisées pures).
+source("R/reports/report_collector.R")
+source("R/reports/report_validator.R")
+source("R/reports/report_render.R")
+source("R/reports/report_bundle.R")
+
 # 5. SHINY MODULES (UI + Reactive Glue)
 # 5a. Import
 source("modules/import/mod_import_sc.R")
@@ -113,6 +121,7 @@ source("modules/sc/mod_sc_da_design.R")
 source("modules/sc/mod_sc_da_milo.R")  # Stage 14 (4E-1) : orchestration Milo (consomme le design 8c)
 source("modules/sc/mod_sc_da_sccoda.R")  # Stage 15 (4E-2) : orchestration scCODA (consomme le design 8c)
 source("modules/sc/mod_sc_da_cross.R")  # Stage 16 (4E-3) : vues croisées (consomme 8d + 8e, aucun calcul)
+source("modules/sc/mod_sc_report_consolidated.R")  # Stage 17 (4F) : rapport consolidé (compile l'état partagé, aucun calcul)
 source("modules/sc/mod_sc_mapping.R")
 source("modules/sc/mod_sc.R")
 

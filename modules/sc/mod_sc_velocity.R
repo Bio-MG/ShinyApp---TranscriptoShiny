@@ -541,6 +541,11 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
         )
         velocity_state$result <- canonical
 
+        # Stage 17 (4F) : exposition ADDITIVE du resultat canonique au rapport
+        # consolide (lecture seule ; velocity_state reste la reference du
+        # panel 8 — aucun changement de comportement du panneau).
+        shared_rv$velocity_result <- canonical
+
         provenance_append(shared_rv, canonical$provenance)
 
         # 10. Populate gene selector
