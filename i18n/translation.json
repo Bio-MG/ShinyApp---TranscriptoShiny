@@ -7308,6 +7308,74 @@
     {
       "fr": "Avertissements produits a l'import",
       "en": "Warnings produced at import"
+    },
+    {
+      "fr": "Objet CellChat (.rds, resultats deja calcules)",
+      "en": "CellChat object (.rds, already-computed results)"
+    },
+    {
+      "fr": "Objet CellChat sauvegarde (.rds)",
+      "en": "Saved CellChat object (.rds)"
+    },
+    {
+      "fr": "Extraction des resultats deja calcules (net$prob) — aucune methode CellChat n'est relancee. La colonne pathway reste vide pour cette route.",
+      "en": "Extraction of already-computed results (net$prob) — no CellChat method is re-run. The pathway column stays empty on this route."
+    },
+    {
+      "fr": "Exporter table filtree (CSV)",
+      "en": "Export filtered table (CSV)"
+    },
+    {
+      "fr": "Exporter centralite (CSV)",
+      "en": "Export centrality (CSV)"
+    },
+    {
+      "fr": "Score minimum (importé)",
+      "en": "Minimum score (imported)"
+    },
+    {
+      "fr": "P-value maximum (importée)",
+      "en": "Maximum p-value (imported)"
+    },
+    {
+      "fr": "Senders",
+      "en": "Senders"
+    },
+    {
+      "fr": "Receivers",
+      "en": "Receivers"
+    },
+    {
+      "fr": "Tous",
+      "en": "All"
+    },
+    {
+      "fr": "Inclure les auto-interactions",
+      "en": "Include self-interactions"
+    },
+    {
+      "fr": "Table (filtres)",
+      "en": "Table (filters)"
+    },
+    {
+      "fr": "Heatmap pathways",
+      "en": "Pathway heatmap"
+    },
+    {
+      "fr": "Réseau",
+      "en": "Network"
+    },
+    {
+      "fr": "Centralité",
+      "en": "Centrality"
+    },
+    {
+      "fr": "Centralité dérivée du réseau, descriptive — ce n'est pas un contrôle biologique.",
+      "en": "Network-derived centrality, descriptive — not a biological control."
+    },
+    {
+      "fr": "%d interaction(s) affichée(s) sur %d — retirées : score %d, p-value %d, pathway %d, sender %d, receiver %d, auto %d",
+      "en": "%d interaction(s) displayed of %d — removed: score %d, p-value %d, pathway %d, sender %d, receiver %d, self %d"
     }
   ]
 }

@@ -185,6 +185,44 @@ test_that("report/export consumers do not reimplement communication import", {
   }
 })
 
+# ── Stage 12 : fichier de vues fige (consommateurs purs) ────────────────────
+test_that("views file surface is frozen (Stage 12)", {
+  defined <- .comm_top_level_assignments("R/sc/sc_communication_views.R")
+  public <- defined[!grepl("^\\.", defined)]
+  expect_setequal(public, communication_views_public_api())
+  expect_true(all(c(".views_stop", ".communication_node_keys",
+                    ".communication_agg_pairs",
+                    ".communication_empty_view_plot") %in%
+                    setdiff(defined, public)))
+})
+
+test_that("views are pure consumers of the canonical result (no fabrication)", {
+  src <- paste(readLines(file.path(ts_project_root(),
+                                   "R/sc/sc_communication_views.R")),
+               collapse = "\n")
+  expect_match(src, "assert_communication_result(", fixed = TRUE)
+  # Les vues ne produisent jamais un contrat : pas de finalize ici.
+  expect_false(grepl("finalize_communication_result", src))
+  # Reseau en ggplot pur — aucune dependance nouvelle.
+  expect_false(grepl("library\\(|igraph::|ggraph::|circlize::", src))
+  # Les filtres sont des operations d'affichage : la table du resultat n'est
+  # jamais assignee (aucune ecriture dans le canonique).
+  expect_false(grepl("canonical_table\\s*(<-|=)", src))
+})
+
+test_that("module consumes the frozen views accessors (Stage 12)", {
+  src <- paste(readLines(file.path(ts_project_root(),
+                                   "modules/sc/mod_sc_communication.R")),
+               collapse = "\n")
+  expect_match(src, "communication_apply_filters(", fixed = TRUE)
+  expect_match(src, "plot_communication_dotplot(", fixed = TRUE)
+  expect_match(src, "plot_communication_pathway_heatmap(", fixed = TRUE)
+  expect_match(src, "plot_communication_circle(", fixed = TRUE)
+  expect_match(src, "build_communication_centrality(", fixed = TRUE)
+  expect_match(src, "build_communication_filter_provenance(", fixed = TRUE)
+  expect_match(src, "parse_cellchat_object(", fixed = TRUE)
+})
+
 # ── Synchronisation code <-> contrat documentaire ───────────────────────────
 test_that("contract document is in sync with the frozen code", {
   doc_path <- file.path(ts_project_root(), "docs", "contracts",
@@ -202,4 +240,9 @@ test_that("contract document is in sync with the frozen code", {
   expect_match(doc, "finalize_communication_result", fixed = TRUE)
   expect_match(doc, "assert_communication_result", fixed = TRUE)
   expect_match(doc, "communication_public_api", fixed = TRUE)
+  # Stage 12 : route objet + vues documentees.
+  expect_match(doc, "parse_cellchat_object", fixed = TRUE)
+  expect_match(doc, "communication_apply_filters", fixed = TRUE)
+  expect_match(doc, "build_communication_filter_provenance", fixed = TRUE)
+  expect_match(doc, "communication_views_public_api", fixed = TRUE)
 })

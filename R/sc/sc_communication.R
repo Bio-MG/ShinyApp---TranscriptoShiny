@@ -237,6 +237,202 @@ communication_error_state <- function(e) {
 # Parseurs par source
 # =============================================================================
 
+#' Importer un objet CellChat sauvegarde (.rds) — extraction, PAS de calcul
+#'
+#' Route "load" (Stage 12) : lit un objet CellChat produit HORS de
+#' l'application et extrait ses tables d'interactions DEJA calculees
+#' (@net$prob, @net$pval optionnel). Aucune methode CellChat n'est relancee,
+#' aucun score re-agrege au-dela du remodelage deterministe du tableau
+#' (non-zero entries par paire "sender|receiver" — exactement ce que renvoie
+#' subsetCommunication(slot.name="net")). Accepte :
+#'   - un objet S4 CellChat (package CellChat installe — sinon erreur
+#'     explicite avec guidage d'installation) ;
+#'   - une liste nommee replicant les slots utilises (contrat documente :
+#'     net$prob = array 3D dimnames ligands/recepteurs/paires "A|B",
+#'     net$pval optionnel de meme forme) — route testable sans CellChat.
+#' La colonne pathway reste NA pour cette route (le mapping LR -> pathway de
+#' netP n'est PAS reconstitue) avec un avertissement explicite ; p_adjusted
+#' reste NA (non produit par CellChat au niveau net).
+#'
+#' @param obj Chemin .rds, objet S4 CellChat, ou liste nommee (contrat ci-dessus).
+#' @param source_file Nom ORIGINAL du fichier (jamais le chemin local).
+#' @return list(table = champs canoniques, column_mapping, n_input_rows,
+#'   warnings) — meme contrat que parse_cellchat_import().
+#' @export
+parse_cellchat_object <- function(obj, source_file = NA_character_) {
+  if (is.character(obj) && length(obj) == 1L) {
+    if (!file.exists(obj)) {
+      .communication_stop(
+        "invalid_input",
+        sprintf("Import objet CellChat : fichier introuvable : %s.", obj)
+      )
+    }
+    obj <- tryCatch(readRDS(obj), error = function(e) {
+      .communication_stop(
+        "invalid_input",
+        sprintf(
+          paste0("Import objet CellChat : lecture RDS impossible (%s). ",
+                 "L'objet requiert peut-etre un package non installe : %s."),
+          basename(obj), conditionMessage(e)
+        )
+      )
+    })
+  }
+
+  net <- NULL
+  if (isS4(obj)) {
+    slots <- tryCatch(methods::slotNames(obj), error = function(e) character(0))
+    if (!"net" %in% slots) {
+      .communication_stop(
+        "invalid_schema",
+        paste0(
+          "Import objet CellChat : objet S4 sans slot 'net' — pas un objet ",
+          "CellChat reconnaissable. Si le fichier provient d'une session sans ",
+          "le package CellChat, reouvrez-le dans R avec CellChat installe ",
+          "(BiocManager::install('CellChat')) ou exportez la table via ",
+          "subsetCommunication()."
+        )
+      )
+    }
+    net <- tryCatch(methods::slot(obj, "net"), error = function(e) {
+      .communication_stop(
+        "invalid_input",
+        paste0(
+          "Import objet CellChat : lecture du slot 'net' impossible — le ",
+          "package CellChat est probablement absent de cette session. ",
+          "Installez-le ou exportez la table (subsetCommunication) en CSV."
+        )
+      )
+    })
+  } else if (is.list(obj)) {
+    net <- obj$net
+  } else {
+    .communication_stop(
+      "invalid_input",
+      sprintf(
+        paste0("Import objet CellChat : objet CellChat (.rds) ou liste avec ",
+               "slot net requis (recu : %s)."),
+        paste(class(obj), collapse = "/")
+      )
+    )
+  }
+
+  if (is.null(net) || is.null(net$prob)) {
+    .communication_stop(
+      "invalid_schema",
+      paste0(
+        "Import objet CellChat : net$prob absent — l'objet ne contient pas ",
+        "de resultats d'interactions calculees (computeCommunProb doit avoir ",
+        "ete execute hors de l'application)."
+      )
+    )
+  }
+  prob <- net$prob
+  if (length(dim(prob)) != 3L || is.null(dimnames(prob)) ||
+      any(vapply(dimnames(prob), is.null, logical(1)))) {
+    .communication_stop(
+      "invalid_schema",
+      paste0(
+        "Import objet CellChat : net$prob doit etre un array 3D avec ",
+        "dimnames (ligands x recepteurs x paires 'sender|receiver') — ",
+        "forme recue : ",
+        if (is.null(dim(prob))) paste(class(prob), collapse = "/")
+        else paste(dim(prob), collapse = " x ")
+      )
+    )
+  }
+
+  pair_names <- as.character(dimnames(prob)[[3L]])
+  pairs_split <- strsplit(pair_names, "|", fixed = TRUE)
+  bad_pairs <- which(lengths(pairs_split) != 2L)
+  if (length(bad_pairs)) {
+    .communication_stop(
+      "invalid_schema",
+      sprintf(
+        paste0("Import objet CellChat : %d nom(s) de paire sans separateur ",
+               "'|' unique (ex. : %s) — impossible de determiner sender/",
+               "receiver sans supposition."),
+        length(bad_pairs),
+        paste(utils::head(pair_names[bad_pairs], 3), collapse = " ; ")
+      )
+    )
+  }
+
+  # p-values optionnelles (net$pval, meme forme que prob) : rapprochement
+  # par indices — aucune valeur inventee.
+  pval_arr <- if (!is.null(net$pval) &&
+                  identical(dim(net$pval), dim(prob))) net$pval else NULL
+  pval_warning <- if (!is.null(net$pval) && is.null(pval_arr)) {
+    "Import objet CellChat : net$pval present mais de forme differente de net$prob — p_value laissee a NA (jamais fabrique)."
+  } else character(0)
+
+  rows <- list()
+  i_row <- 0L
+  ligands <- dimnames(prob)[[1L]]
+  receptors <- dimnames(prob)[[2L]]
+  for (k in seq_along(pair_names)) {
+    m <- prob[, , k, drop = TRUE]
+    idx <- which(!is.na(m) & m != 0, arr.ind = TRUE)
+    if (!nrow(idx)) next
+    sp <- pairs_split[[k]]
+    for (r in seq_len(nrow(idx))) {
+      i_row <- i_row + 1L
+      pv <- if (!is.null(pval_arr)) {
+        v <- pval_arr[idx[r, 1L], idx[r, 2L], k]
+        ifelse(is.na(v) || is.finite(v), v, NA_real_)
+      } else NA_real_
+      rows[[i_row]] <- data.frame(
+        sender = trimws(sp[1L]), receiver = trimws(sp[2L]),
+        ligand = as.character(ligands[idx[r, 1L]]),
+        receptor = as.character(receptors[idx[r, 2L]]),
+        interaction = paste(as.character(ligands[idx[r, 1L]]),
+                            as.character(receptors[idx[r, 2L]]), sep = " -> "),
+        pathway = NA_character_,
+        score = as.numeric(m[idx[r, 1L], idx[r, 2L]]),
+        p_value = pv,
+        p_adjusted = NA_real_,
+        source_method = "cellchat",
+        source_file = as.character(source_file)[1L],
+        source_cell_identity_level = NA_character_,
+        stringsAsFactors = FALSE
+      )
+    }
+  }
+
+  if (!length(rows)) {
+    .communication_stop(
+      "invalid_input",
+      paste0("Import objet CellChat : aucune interaction non nulle dans ",
+             "net$prob — rien a importer.")
+    )
+  }
+  table <- do.call(rbind, rows)
+
+  warnings <- c(
+    pval_warning,
+    paste0("Import objet CellChat : colonne pathway laissee a NA pour les ",
+           nrow(table), " interactions extraites (le mapping LR -> pathway ",
+           "de netP n'est pas reconstitue — utilisez la table exportee ",
+           "CellChat si le niveau pathway est necessaire).")
+  )
+
+  column_mapping <- list(
+    sender = "dimnames(net$prob)[[3]] avant '|'",
+    receiver = "dimnames(net$prob)[[3]] apres '|'",
+    ligand = "dimnames(net$prob)[[1]]",
+    receptor = "dimnames(net$prob)[[2]]",
+    score = "net$prob (valeurs non nulles, par paire)",
+    p_value = if (!is.null(pval_arr)) "net$pval (meme forme que net$prob)" else NULL
+  )
+
+  list(
+    table = table,
+    column_mapping = column_mapping,
+    n_input_rows = as.integer(length(pair_names)),
+    warnings = warnings
+  )
+}
+
 #' Importer une table de resultats CellChat (table exportee)
 #'
 #' Convertit une table exportee de CellChat (ex. sortie de
@@ -1185,6 +1381,7 @@ communication_public_api <- function() {
     "assert_communication_result", "communication_public_api",
     # Parseurs par source
     "parse_cellchat_import", "parse_cellphonedb_import",
+    "parse_cellchat_object",
     # Harmonisation / QC / finalisation
     "harmonize_communication_identities", "communication_import_qc",
     "finalize_communication_result", "communication_result_is_stale",

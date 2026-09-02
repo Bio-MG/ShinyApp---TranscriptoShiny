@@ -28,6 +28,7 @@ source_project_file("R/core/state.R")
 source_project_file("R/core/provenance.R")
 source_project_file("R/sc/sc_velocity.R")
 source_project_file("R/sc/sc_communication.R")
+source_project_file("R/sc/sc_communication_views.R")
 
 # ── Fixture CellChat : table exportee (subsetCommunication-like) ────────────
 .comm_cellchat_tab <- function() {
@@ -96,6 +97,51 @@ source_project_file("R/sc/sc_communication.R")
               dimnames = list(paste0("gene", 1:6),
                               c("c1", "c2", "c3", "c4")))
   m
+}
+
+# Table riche pour les vues d'aggregation (Stage 12) : 3 senders x 3
+# receivers, pathways partiellement renseignes, auto-interaction, label sans
+# correspondance ("Mono").
+.comm_cellchat_tab_big <- function() {
+  data.frame(
+    source   = c("CD4 T", "CD4 T", "CD4 T", "B", "B", "NK", "NK", "NK", "Mono"),
+    target   = c("B", "B", "NK", "CD4 T", "NK", "CD4 T", "B", "NK", "B"),
+    ligand   = c("IL7", "CCL5", "IL7", "CD40", "TNF", "GZMB", "CCL5", "PTGDS", "S100A8"),
+    receptor = c("IL7R", "CCR5", "IL7R", "CD40", "TNFRSF1B", "NKG7", "CCR5", "PTGDR", "TLR4"),
+    prob     = c(0.3, 0.5, 0.2, 0.7, 0.4, 0.1, 0.6, 0.8, 0.9),
+    p_value  = c(0.01, 0.50, 0.02, 0.30, 0.90, 0.40, 0.05, 0.01, 0.20),
+    pathway  = c("IL7 signaling", NA, "IL7 signaling", "CD40 signaling", NA,
+                 "Cytotoxicity", "CCL signaling", "PTGDS signaling", "TLR signaling"),
+    stringsAsFactors = FALSE
+  )
+}
+
+# ── Stub objet CellChat (contrat documente : liste avec net$prob/net$pval) ──
+# net$prob : array 3D ligands x recepteurs x paires "sender|receiver". Les
+# valeurs nulles ne donnent pas de ligne (extraction fidele des non-nuls).
+.comm_cellchat_object_stub <- function(with_pval = TRUE) {
+  lig <- c("IL7", "CCL5")
+  rec <- c("IL7R", "CCR5")
+  prs <- c("CD4 T|B", "B|CD4 T")
+  prob <- array(c(0.5, 0.0, 0.0, 0.3,   # paire CD4 T|B
+                  0.2, 0.4, 0.0, 0.1),  # paire B|CD4 T
+                dim = c(2, 2, 2),
+                dimnames = list(lig, rec, prs))
+  net <- list(prob = prob)
+  if (with_pval) {
+    net$pval <- array(c(0.01, 0.5, 0.9, 0.02,
+                        0.03, 0.2, 0.8, 0.01),
+                      dim = c(2, 2, 2),
+                      dimnames = list(lig, rec, prs))
+  }
+  list(net = net)
+}
+
+# ── Resultat canonique riche (vues Stage 12) ────────────────────────────────
+.comm_result_big <- function() {
+  parsed <- parse_cellchat_import(.comm_cellchat_tab_big(),
+                                  source_file = "cellchat_big.csv")
+  .comm_import_and_finalize(parsed, source_files = list(table = "cellchat_big.csv"))
 }
 
 # ── Orchestration miroir du module (sequence d'import Stage 11) ─────────────

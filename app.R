@@ -66,6 +66,7 @@ source("R/sc/sc_bpcells.R")
 source("R/sc/sc_trajectory.R")
 source("R/sc/sc_velocity.R")
 source("R/sc/sc_communication.R")  # Stage 11 (4D-1) : APRES sc_velocity.R (reutilise velocity_object_fingerprint)
+source("R/sc/sc_communication_views.R")  # Stage 12 (4D-2) : vues exploratoires, APRES sc_communication.R
 source("R/sc/sc_pipeline.R")
 source("R/sc/sc_export.R")
 
