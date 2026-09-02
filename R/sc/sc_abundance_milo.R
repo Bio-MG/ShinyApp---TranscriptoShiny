@@ -194,27 +194,11 @@ milo_available <- function(stop_if_missing = FALSE) {
 }
 
 #' Recapitulatif du design Stage 13 consomme par Milo (trace dans le resultat)
+#'
+#' Delegation a da_design_recap() (Stage 13, partage avec scCODA) — le corps
+#' n'est PAS duplique entre les deux methodes.
 .milo_design_recap <- function(da_design_result) {
-  cfg <- da_design_result$config %||% list()
-  p <- da_design_result$provenance$parameters %||% list()
-  list(
-    design_analysis_id = da_design_result$analysis_id %||% NA_character_,
-    design_status = da_design_result$status %||% NA_character_,
-    design_timestamp_utc = da_design_result$timestamp_utc %||% NA_character_,
-    sample_id_column = cfg$sample_id %||% NA_character_,
-    condition_column = cfg$condition %||% NA_character_,
-    replicate_id_column = cfg$replicate_id %||% NA_character_,
-    replicate_equals_sample = isTRUE(cfg$replicate_equals_sample),
-    batch_column = cfg$batch %||% NA_character_,
-    identity_column = cfg$identity %||% NA_character_,
-    composition_unit = da_design_result$composition_unit %||% "sample",
-    design_fingerprint = da_design_result$object_identity$fingerprint %||%
-      NA_character_,
-    n_samples = p$n_samples %||% NA_integer_,
-    n_conditions = p$n_conditions %||% NA_integer_,
-    n_cells = p$n_cells %||% NA_integer_,
-    design_warnings = as.character(da_design_result$warnings %||% character(0))
-  )
+  da_design_recap(da_design_result)
 }
 
 #' SCE minimal pour le calcul Milo (colData + reduction, SANS comptes)

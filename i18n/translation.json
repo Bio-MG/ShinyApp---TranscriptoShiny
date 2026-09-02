@@ -7640,6 +7640,114 @@
     {
       "fr": "Erreur Milo :",
       "en": "Milo error:"
+    },
+    {
+      "fr": "8e. Abondance différentielle — scCODA (composition)",
+      "en": "8e. Differential abundance — scCODA (composition)"
+    },
+    {
+      "fr": "scCODA DA",
+      "en": "scCODA DA"
+    },
+    {
+      "fr": "scCODA teste la DA COMPOSITIONNELLE au niveau ECHANTILLON (modèle bayésien avec identité de référence) — distinct de Milo (voisinages). ",
+      "en": "scCODA tests SAMPLE-LEVEL compositional DA (Bayesian model with a reference cell type) — distinct from Milo (neighbourhoods). "
+    },
+    {
+      "fr": "Un environnement Python avec sccoda est requis : aucun repli silencieux n'est effectué.",
+      "en": "A Python environment with sccoda is required: no silent fallback is performed."
+    },
+    {
+      "fr": "Environnement scCODA disponible.",
+      "en": "scCODA environment available."
+    },
+    {
+      "fr": "Environnement scCODA indisponible : le calcul sera refusé explicitement. ",
+      "en": "scCODA environment unavailable: the computation will be explicitly refused. "
+    },
+    {
+      "fr": "Condition cible (effet > 0)",
+      "en": "Target condition (effect > 0)"
+    },
+    {
+      "fr": "Identité de référence (déclaration scientifique explicite)",
+      "en": "Reference identity (explicit scientific declaration)"
+    },
+    {
+      "fr": "(la plus abondante — politique enregistrée)",
+      "en": "(most abundant — recorded policy)"
+    },
+    {
+      "fr": "Inclure le terme batch (design) dans la formule",
+      "en": "Include the design batch term in the formula"
+    },
+    {
+      "fr": "Échantillons MCMC",
+      "en": "MCMC samples"
+    },
+    {
+      "fr": "Burnin MCMC",
+      "en": "MCMC burnin"
+    },
+    {
+      "fr": "Seuil FDR crédible",
+      "en": "Credible FDR threshold"
+    },
+    {
+      "fr": "Lancer scCODA",
+      "en": "Run scCODA"
+    },
+    {
+      "fr": "En attente : validez d'abord le design (panel 8c), puis lancez scCODA.",
+      "en": "Waiting: first validate the design (panel 8c), then run scCODA."
+    },
+    {
+      "fr": "Design valide disponible : choisissez le contraste et la référence, puis lancez scCODA.",
+      "en": "Valid design available: choose the contrast and the reference, then run scCODA."
+    },
+    {
+      "fr": "Exporter résumé scCODA (CSV)",
+      "en": "Export scCODA summary (CSV)"
+    },
+    {
+      "fr": "Exporter table d'effets (CSV)",
+      "en": "Export effect table (CSV)"
+    },
+    {
+      "fr": "Exporter matrice de composition (CSV)",
+      "en": "Export composition matrix (CSV)"
+    },
+    {
+      "fr": "Abondance différentielle — scCODA (composition)",
+      "en": "Differential abundance — scCODA (composition)"
+    },
+    {
+      "fr": "Effets crédibles",
+      "en": "Credible effects"
+    },
+    {
+      "fr": "Incertitude (HDI)",
+      "en": "Uncertainty (HDI)"
+    },
+    {
+      "fr": "Les effets scCODA sont des INTERVALLES DE CRÉDIBILITÉ bayésiens (prior spike-and-slab) — pas des p-values ; \"crédible\" désigne une probabilité postérieure directe au seuil FDR enregistré.",
+      "en": "scCODA effects are Bayesian CREDIBLE INTERVALS (spike-and-slab prior) — not p-values; \"credible\" denotes a direct posterior probability at the recorded FDR threshold."
+    },
+    {
+      "fr": "L'unité de composition est l'ÉCHANTILLON — les cellules ne sont pas des réplicats biologiques. L'identité de référence est une hypothèse scientifique (supposée inchangée), affichée sur chaque figure.",
+      "en": "The composition unit is the SAMPLE — cells are not biological replicates. The reference identity is a scientific assumption (assumed unchanged), displayed on every figure."
+    },
+    {
+      "fr": "Le modèle porte sur la paire de conditions choisie ; scCODA n'interprète pas les voisinages Milo — les deux méthodes restent des résultats distincts (vues croisées descriptives à l'étape 16).",
+      "en": "The model covers the chosen pair of conditions; scCODA does not interpret Milo neighbourhoods — both methods remain distinct results (descriptive cross-views in stage 16)."
+    },
+    {
+      "fr": "Analyse scCODA terminée.",
+      "en": "scCODA analysis completed."
+    },
+    {
+      "fr": "Erreur scCODA :",
+      "en": "scCODA error:"
     }
   ]
 }

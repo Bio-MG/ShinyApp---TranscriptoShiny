@@ -793,6 +793,50 @@ da_design_export_filename <- function(da_design_result, kind, ext) {
   )
 }
 
+#' Recapitulatif du design DA consomme par une methode (Stage 15, partage)
+#'
+#' Structure de trace commune des consommateurs du design (Milo 4E-1,
+#' scCODA 4E-2) : colonnes choisies, unite de composition, empreinte du
+#' design, compteurs et avertissements. Lecture directe du resultat canonique
+#' — aucune deduction. Ajoutee en Stage 15 pour de-dupliquer les recapitulatifs
+#' precedemment copies dans chaque methode (evolution d'API additive :
+#' code + test de freeze + contrat documente simultanement).
+#'
+#' @param da_design_result Resultat canonique (finalize_da_design_result()).
+#' @return list(design_analysis_id, design_status, design_timestamp_utc,
+#'   colonnes, replicate_equals_sample, composition_unit, design_fingerprint,
+#'   n_samples, n_conditions, n_cells, design_warnings).
+#' @export
+da_design_recap <- function(da_design_result) {
+  if (is.null(da_design_result) || !is.list(da_design_result) ||
+      !identical(da_design_result$type %||% NULL, "da_design")) {
+    .da_design_stop(
+      "invalid_input",
+      "da_design_recap() : resultat design DA canonique requis."
+    )
+  }
+  cfg <- da_design_result$config %||% list()
+  p <- da_design_result$provenance$parameters %||% list()
+  list(
+    design_analysis_id = da_design_result$analysis_id %||% NA_character_,
+    design_status = da_design_result$status %||% NA_character_,
+    design_timestamp_utc = da_design_result$timestamp_utc %||% NA_character_,
+    sample_id_column = cfg$sample_id %||% NA_character_,
+    condition_column = cfg$condition %||% NA_character_,
+    replicate_id_column = cfg$replicate_id %||% NA_character_,
+    replicate_equals_sample = isTRUE(cfg$replicate_equals_sample),
+    batch_column = cfg$batch %||% NA_character_,
+    identity_column = cfg$identity %||% NA_character_,
+    composition_unit = da_design_result$composition_unit %||% "sample",
+    design_fingerprint = da_design_result$object_identity$fingerprint %||%
+      NA_character_,
+    n_samples = p$n_samples %||% NA_integer_,
+    n_conditions = p$n_conditions %||% NA_integer_,
+    n_cells = p$n_cells %||% NA_integer_,
+    design_warnings = as.character(da_design_result$warnings %||% character(0))
+  )
+}
+
 #' Surface publique figee de R/sc/sc_abundance_design.R (Stage 13)
 #'
 #' Le test de freeze refuse toute fonction top-level non prefixee d'un point
@@ -808,6 +852,6 @@ da_design_public_api <- function() {
     "validate_da_design", "finalize_da_design_result",
     "da_design_result_is_stale",
     "build_da_design_summary", "build_da_design_sample_export",
-    "da_design_export_filename"
+    "da_design_export_filename", "da_design_recap"
   )
 }

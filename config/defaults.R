@@ -58,3 +58,22 @@ TS_DA_MILO_ROBUST                <- TRUE       # glmQLFit robust (defaut miloR)
 TS_DA_MILO_IDENTITY_FRACTION_MIN <- 0.7        # fraction min d'identite pour annoter un voisinage (convention miloR)
 TS_DA_MILO_DISPLAY_ALPHA         <- 0.1        # seuil SpatialFDR d'affichage des voisinages significatifs (vues)
 TS_DA_MILO_SEED                  <- 14L        # graine enregistree dans la provenance
+
+# --- scCODA (4E-2) ------------------------------------------------------------
+# DA compositionnelle au niveau ECHANTILLON via l'environnement Python sccoda
+# (detection explicite — jamais de repli silencieux). Defauts MCMC = defauts
+# scCODA (resultats/burnin/leapfrog/step size) ; la convergence est evaluee
+# en pure R : ESS < ESS_FAIL = ECHEC (posteriorite inutilisable) ; ESS <
+# ESS_MIN = avertissement (le spike-and-slab deprime structurellement l'ESS du
+# HMC tensorflow — calibre empiriquement : ESS ~11 a 20000 tirages sur le
+# fixture) ; r_hat/divergences bloquent quand ils sont disponibles (NA = note).
+TS_DA_SCCODA_NUM_RESULTS    <- 20000L  # echantillons MCMC conserves (defaut scCODA)
+TS_DA_SCCODA_NUM_BURNIN     <- 5000L   # burnin MCMC (defaut scCODA)
+TS_DA_SCCODA_NUM_LEAPFROG   <- 10L     # pas de leapfrog HMC (defaut scCODA)
+TS_DA_SCCODA_STEP_SIZE      <- 0.01    # step size initial HMC (defaut scCODA)
+TS_DA_SCCODA_FDR_TARGET     <- 0.05    # seuil FDR des effets credibles
+TS_DA_SCCODA_RHAT_MAX       <- 1.01    # echec de convergence au-dela (NA = note)
+TS_DA_SCCODA_ESS_FAIL       <- 10      # echec de convergence en dessous
+TS_DA_SCCODA_ESS_MIN        <- 100     # avertissement de convergence en dessous
+TS_DA_SCCODA_MAX_DIVERGENCES<- 0       # divergences NUTS tolerees (NA = note)
+TS_DA_SCCODA_SEED           <- 15L     # graine tensorflow enregistree
