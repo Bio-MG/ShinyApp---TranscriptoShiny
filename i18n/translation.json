@@ -7132,6 +7132,182 @@
     {
       "fr": "Trajectory / Pseudotemps (UMAP, racine auto)",
       "en": "Trajectory / Pseudotime (UMAP, auto root)"
+    },
+    {
+      "fr": "8b. Communication (import)",
+      "en": "8b. Communication (import)"
+    },
+    {
+      "fr": "Communication",
+      "en": "Communication"
+    },
+    {
+      "fr": "Communication cellule-cellule — import de resultats externes uniquement (CellChat / CellPhoneDB). ",
+      "en": "Cell-cell communication — external results import only (CellChat / CellPhoneDB). "
+    },
+    {
+      "fr": "Aucun recalcul, aucun score recompose. Les scores de sources differentes ne sont pas comparables.",
+      "en": "No recomputation, no rebuilt scores. Scores from different sources are not comparable."
+    },
+    {
+      "fr": "Source des resultats",
+      "en": "Results source"
+    },
+    {
+      "fr": "CellChat (table exportee)",
+      "en": "CellChat (exported table)"
+    },
+    {
+      "fr": "CellPhoneDB (means.txt)",
+      "en": "CellPhoneDB (means.txt)"
+    },
+    {
+      "fr": "Table CellChat exportee (CSV/TSV)",
+      "en": "Exported CellChat table (CSV/TSV)"
+    },
+    {
+      "fr": "Colonnes attendues : source, target, ligand, receptor, prob (pathway/pval optionnels).",
+      "en": "Expected columns: source, target, ligand, receptor, prob (pathway/pval optional)."
+    },
+    {
+      "fr": "CellPhoneDB means.txt (requis)",
+      "en": "CellPhoneDB means.txt (required)"
+    },
+    {
+      "fr": "CellPhoneDB pvalues.txt (optionnel)",
+      "en": "CellPhoneDB pvalues.txt (optional)"
+    },
+    {
+      "fr": "Format v2 : colonne interacting_pair (ligand|receptor) + une colonne par paire sender|receiver.",
+      "en": "v2 format: interacting_pair column (ligand|receptor) + one column per sender|receiver pair."
+    },
+    {
+      "fr": "Colonne d'identites cellulaires (Seurat)",
+      "en": "Cell identity column (Seurat)"
+    },
+    {
+      "fr": "Harmonisation par exact match uniquement : aucun renommage de populations, labels sans correspondance listes integralement.",
+      "en": "Exact-match harmonization only: no population renaming, unmatched labels listed in full."
+    },
+    {
+      "fr": "Importer et valider",
+      "en": "Import and validate"
+    },
+    {
+      "fr": "Exporter table canonique (CSV)",
+      "en": "Export canonical table (CSV)"
+    },
+    {
+      "fr": "Exporter harmonisation identites (CSV)",
+      "en": "Export identity harmonization (CSV)"
+    },
+    {
+      "fr": "Exporter resume d'import (CSV)",
+      "en": "Export import summary (CSV)"
+    },
+    {
+      "fr": "Communication cellule-cellule — resultats importes",
+      "en": "Cell-cell communication — imported results"
+    },
+    {
+      "fr": "Table interactions",
+      "en": "Interactions table"
+    },
+    {
+      "fr": "Schema source",
+      "en": "Source schema"
+    },
+    {
+      "fr": "Harmonisation identites",
+      "en": "Identity harmonization"
+    },
+    {
+      "fr": "QC import",
+      "en": "Import QC"
+    },
+    {
+      "fr": "Limites",
+      "en": "Limitations"
+    },
+    {
+      "fr": "Validite technique uniquement : un import valide n'implique aucune validite biologique.",
+      "en": "Technical validity only: a valid import implies no biological validity."
+    },
+    {
+      "fr": "Les scores ne sont pas compares entre sources differentes (CellChat vs CellPhoneDB).",
+      "en": "Scores are not compared across different sources (CellChat vs CellPhoneDB)."
+    },
+    {
+      "fr": "Une association ligand-receptor n'etablit aucune causalite.",
+      "en": "A ligand-receptor association establishes no causality."
+    },
+    {
+      "fr": "Les labels sans correspondance exacte dans la colonne choisie sont conserves tels quels et listes — jamais renommes.",
+      "en": "Labels with no exact match in the chosen column are kept as-is and listed — never renamed."
+    },
+    {
+      "fr": "En attente d'import de resultats de communication...",
+      "en": "Waiting for communication results import..."
+    },
+    {
+      "fr": "Objet Seurat modifie : reimportez la table de communication.",
+      "en": "Seurat object changed: re-import the communication table."
+    },
+    {
+      "fr": "Import communication valide.",
+      "en": "Communication import validated."
+    },
+    {
+      "fr": "Erreur import communication :",
+      "en": "Communication import error:"
+    },
+    {
+      "fr": "Mapping resolu de facon deterministe a l'import — aucune conversion supposee entre schemas incompatibles.",
+      "en": "Mapping resolved deterministically at import — no assumed conversion between incompatible schemas."
+    },
+    {
+      "fr": "Lignes source (avant conversion)",
+      "en": "Source rows (before conversion)"
+    },
+    {
+      "fr": "Lignes canoniques (apres QC)",
+      "en": "Canonical rows (after QC)"
+    },
+    {
+      "fr": "Lignes supprimees (champs requis vides)",
+      "en": "Dropped rows (empty required fields)"
+    },
+    {
+      "fr": "Auto-interactions (sender = receiver)",
+      "en": "Self-interactions (sender = receiver)"
+    },
+    {
+      "fr": "Interactions dupliquees (conservees et flagees)",
+      "en": "Duplicated interactions (kept and flagged)"
+    },
+    {
+      "fr": "Pathways manquants",
+      "en": "Missing pathways"
+    },
+    {
+      "fr": "P-values hors [0,1]",
+      "en": "P-values outside [0,1]"
+    },
+    {
+      "fr": "Labels sources distincts",
+      "en": "Distinct source labels"
+    },
+    {
+      "fr": "Labels harmonises (exact match)",
+      "en": "Harmonized labels (exact match)"
+    },
+    {
+      "fr": "Labels sans correspondance",
+      "en": "Unmatched labels"
+    },
+    {
+      "fr": "Avertissements produits a l'import",
+      "en": "Warnings produced at import"
     }
   ]
 }

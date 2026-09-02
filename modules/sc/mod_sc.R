@@ -63,6 +63,9 @@ mod_sc_ui <- function(id) {
         accordion_panel(i18n$t("8. RNA Velocity"), icon = icon("wind"),
                         value = "8_velocity",
                         mod_sc_velocity_ui(ns("velocity"))),
+        accordion_panel(i18n$t("8b. Communication (import)"), icon = icon("satellite-dish"),
+                        value = "8b_communication",
+                        mod_sc_communication_ui(ns("communication"))),
         accordion_panel(
           i18n$t("9. Rapport Complet"), icon = icon("file-export"),
           value = "9_report",
@@ -112,6 +115,7 @@ mod_sc_ui <- function(id) {
       nav_panel(i18n$t("Pathways"), value = "tab_pathway", mod_sc_pathways_output_ui(ns("pathways"))),
       nav_panel(i18n$t("Trajectory"), value = "tab_trajectory", mod_sc_trajectory_output_ui(ns("trajectory"))),
       nav_panel(i18n$t("Velocity"), value = "tab_velocity", mod_sc_velocity_output_ui(ns("velocity"))),
+      nav_panel(i18n$t("Communication"), value = "tab_communication", mod_sc_communication_output_ui(ns("communication"))),
       nav_panel(i18n$t("QC"), value = "tab_qc",
         card(max_height = 750,
           div(class = "card-header bg-light", h5(i18n$t("Contrôle Qualité"), class = "card-title mb-0")),
@@ -255,6 +259,7 @@ mod_sc_server <- function(id, global_data) {
     mod_sc_pathways_server(  "pathways",  global_data, shared_rv)
     mod_sc_trajectory_server("trajectory",global_data, shared_rv)
     mod_sc_velocity_server("velocity", global_data, shared_rv)
+    mod_sc_communication_server("communication", global_data, shared_rv)
 
     # ── traj_reduction / traj_genes mirrors (written by mod_sc_trajectory_server)
 
