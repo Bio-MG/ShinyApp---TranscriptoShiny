@@ -5,9 +5,176 @@
 # Pure functions: no Shiny reactivity. Called by:
 #   - modules/sc/mod_sc_velocity.R (UI module)
 #
-# Depends on: Matrix, ggplot2
+# Depends on: Matrix, ggplot2 ; R/core/{io_helpers (fournit %||%), state,
+# provenance} pour finalize_velocity_result().
 # Sourced in app.R AFTER helpers_io.R, BEFORE modules/sc/*.R
 # =============================================================================
+#
+# ── CONTRAT DE RESULTAT CANONIQUE (Stage 8 — Velocity 3B-1) ─────────────────
+# La chaine import -> validation -> alignement produit UN objet canonique,
+# assemble par finalize_velocity_result() a partir de la structure validee de
+# validate_velocity_matrices() (dont il est un SUR-ENSEMBLE : tous les champs
+# historiques restent presents pour compatibilite). Champs du contrat :
+#
+#   type                  "rna_velocity" (constant)
+#   status                etat de validite technique, voir
+#                         velocity_validity_states() / velocity_status_labels()
+#   spliced, unspliced    matrices alignees (genes x cellules) ; NULL si absent
+#   ambiguous             matrice alignee optionnelle ; NULL si non fournie
+#   cell_names            barcodes alignes (ordre Seurat)
+#   gene_names            identifiants de genes alignes (ordre Seurat)
+#   dimensions            c(cells = ncol(spliced), genes = nrow(spliced))
+#   orientation           orientation detectee/apres transposition
+#   cell_alignment        list(match_mode, n_input, n_matched, n_missing,
+#                         overlap_raw, overlap_normalized, low_overlap_override)
+#   gene_alignment        list(match_mode, n_input, n_matched, n_missing)
+#   embedding_alignment   sortie de align_velocity_embedding() ou NULL
+#   velocity_vectors      matrice dx/dy STRICTEMENT validee ou NULL (jamais
+#                         fabriquee a partir des coordonnees)
+#   vector_validation     list(field, ok, reason) ou NULL
+#   input_summary         list(input_mode, files, velocity_source,
+#                         velocity_method, orientation_declared,
+#                         orientation_detected, strip_cell_suffix,
+#                         strip_gene_version, allow_low_overlap, n_cells_input,
+#                         n_genes_input)
+#   object_identity       list(fingerprint, method, seurat_dims) — empreinte
+#                         deterministe (voir velocity_object_fingerprint)
+#   warnings              vecteur character (avertissements produits a la
+#                         validation ; JAMAIS reconstruits apres coup)
+#   provenance            entree new_provenance_entry() enrichie
+#                         (analysis_type, input_mode, timestamp_utc, status)
+#   analysis_id           identifiant d'analyse (ex. "sc-velocity")
+#   timestamp_utc         horodatage UTC ISO-8601 de la validation
+#   cell_mapping          data.frame d'alignement cellules (ou NULL)
+#   gene_mapping          data.frame d'alignement genes (ou NULL)
+#
+# Un etat de validite exprime une validite TECHNIQUE exclusivement : il
+# n'implique AUCUNE validite biologique. Les resultats perimes
+# (stale_against_current_seurat_object) ne doivent jamais etre affiches ni
+# exportes comme s'ils etaient current. La documentation complete du contrat
+# (schema d'export, politique de compatibilite) est figee au Stage 10 dans
+# docs/contracts/VELOCITY_RESULT_CONTRACT.md.
+# =============================================================================
+
+# Etats de validite explicites du contrat (source de verite ; ne pas
+# re-enseigner ailleurs — velocity_validity_states() est l'accesseur public).
+.VELOCITY_STATUS_STATES <- c(
+    "valid",
+    "valid_no_vectors",
+    "valid_partial_embedding",
+    "invalid_input",
+    "invalid_orientation",
+    "invalid_cell_alignment",
+    "invalid_gene_alignment",
+    "invalid_vector_projection",
+    "stale_against_current_seurat_object"
+)
+
+#' Etats de validite du contrat RNA velocity
+#'
+#' Les etats "valid*" expriment une validite TECHNIQUE (matrices alignees,
+#' vecteurs verifies) et n'impliquent aucune validite biologique. Les etats
+#' "invalid*" et "stale*" sont des echecs : ils sont leves comme erreurs
+#' classees (velocity_validation_error) par la chaine de validation, sauf
+#' "stale_against_current_seurat_object" qui est un etat derive au moment de
+#' l'affichage (velocity_result_is_stale()).
+#'
+#' @return Vecteur character des 9 etats documentes du contrat.
+#' @export
+velocity_validity_states <- function() .VELOCITY_STATUS_STATES
+
+#' Libelles francais des etats de validite (affichage utilisateur)
+#'
+#' Chaque libelle explique l'etat SANS suggerer une validite biologique a
+#' partir d'une validite technique.
+#'
+#' @return Vecteur character nomme par etat (names = velocity_validity_states()).
+#' @export
+velocity_status_labels <- function() {
+    c(
+        valid = paste0(
+            "Valide (technique) : matrices alignees sur l'objet Seurat et ",
+            "vecteurs verifies. Validite technique uniquement — aucune ",
+            "interpretation biologique n'est impliquee."
+        ),
+        valid_no_vectors = paste0(
+            "Valide sans vecteurs : matrices alignees, aucun vecteur ",
+            "pre-calcule fourni — fleches desactivees, coordonnees seules."
+        ),
+        valid_partial_embedding = paste0(
+            "Valide partiel : les coordonnees d'embedding ne couvrent qu'une ",
+            "partie des cellules alignees — la couverture est affichee ",
+            "explicitement."
+        ),
+        invalid_input = paste0(
+            "Entree invalide : fichiers ou matrices velocity inutilisables ",
+            "(structure, identifiants, dimensions)."
+        ),
+        invalid_orientation = paste0(
+            "Orientation invalide : impossible ou ambigue — l'orientation ",
+            "doit etre declaree explicitement."
+        ),
+        invalid_cell_alignment = paste0(
+            "Alignement des cellules invalide : recouvrement insuffisant ou ",
+            "nul avec l'objet Seurat."
+        ),
+        invalid_gene_alignment = paste0(
+            "Alignement des genes invalide : aucun gene velocity ne ",
+            "correspond a l'objet Seurat."
+        ),
+        invalid_vector_projection = paste0(
+            "Vecteurs rejetes : les vecteurs pre-calcules fournis ont echoue ",
+            "a la validation stricte — les matrices alignees restent ",
+            "utilisables, fleches desactivees."
+        ),
+        stale_against_current_seurat_object = paste0(
+            "Perime : le resultat velocity correspond a un objet Seurat ",
+            "anterieur — reimportez et revalidez les donnees velocity."
+        )
+    )
+}
+
+#' Le statut exprime-t-il un resultat techniquement exploitable ?
+#'
+#' @param status Chaine d'etat (result$status).
+#' @return Logical — TRUE uniquement pour valid / valid_no_vectors /
+#'   valid_partial_embedding.
+#' @export
+velocity_status_is_valid <- function(status) {
+    status %in% c("valid", "valid_no_vectors", "valid_partial_embedding")
+}
+
+#' Erreur de validation velocity avec etat structure
+#'
+#' Interne : la chaine de validation leve des erreurs portant la classe
+#' "velocity_validation_error" et un champ `state` parmi
+#' velocity_validity_states(). Les messages restent inchanges (contractuel).
+.velocity_stop <- function(state, message) {
+    # errorCondition() construit la condition c("velocity_validation_error",
+    # "error", "condition") ; stop() la signale telle quelle.
+    stop(errorCondition(
+        message,
+        state = state,
+        class = "velocity_validation_error"
+    ))
+}
+
+#' Etat de validite associe a une erreur velocity
+#'
+#' @param e Condition (erreur) capturee.
+#' @return La chaine d'etat structuree, NA_character_ pour une erreur sans
+#'   etat (ex. erreur R generique).
+#' @export
+velocity_error_state <- function(e) {
+    if (inherits(e, "velocity_validation_error")) e$state else NA_character_
+}
+
+# is.numeric() renvoie FALSE pour les matrices creuses Matrix (dgCMatrix) dans
+# les versions actuelles du package : la compatibilite "numerique/sparse" du
+# contrat passe donc par ce test dedie (double dense OU classe dMatrix).
+.velocity_matrix_is_numeric <- function(x) {
+    is.numeric(x) || inherits(x, "dMatrix")
+}
 
 #' Detect matrix orientation from explicit identifiers
 #'
@@ -31,9 +198,12 @@ detect_velocity_orientation <- function(
     mat <- as.matrix(mat)
 
     if (is.null(rownames(mat)) || is.null(colnames(mat))) {
-        stop(
-            "Orientation impossible : les matrices doivent posseder des ",
-            "identifiants de lignes et de colonnes."
+        .velocity_stop(
+            "invalid_orientation",
+            paste0(
+                "Orientation impossible : les matrices doivent posseder des ",
+                "identifiants de lignes et de colonnes."
+            )
         )
     }
 
@@ -42,9 +212,12 @@ detect_velocity_orientation <- function(
     }
 
     if (is.null(seurat_cells) || is.null(seurat_genes)) {
-        stop(
-            "Orientation automatique impossible sans identifiants ",
-            "de cellules et de genes Seurat."
+        .velocity_stop(
+            "invalid_input",
+            paste0(
+                "Orientation automatique impossible sans identifiants ",
+                "de cellules et de genes Seurat."
+            )
         )
     }
 
@@ -57,9 +230,13 @@ detect_velocity_orientation <- function(
     cells_x_genes_score <- col_gene_overlap + row_cell_overlap
 
     if (genes_x_cells_score == cells_x_genes_score) {
-        stop(
-            "Orientation ambigue : les deux orientations restent plausibles. ",
-            "Choisissez explicitement Genes x cellules ou Cellules x genes."
+        .velocity_stop(
+            "invalid_orientation",
+            paste0(
+                "Orientation ambigue : les deux orientations restent ",
+                "plausibles. Choisissez explicitement Genes x cellules ou ",
+                "Cellules x genes."
+            )
         )
     }
 
@@ -81,10 +258,13 @@ validate_velocity_identifiers <- function(
     label = "velocity matrix"
 ) {
     if (is.null(rownames(mat)) || is.null(colnames(mat))) {
-        stop(
-            "Identifiants absents dans ",
-            label,
-            " : rownames et colnames sont obligatoires."
+        .velocity_stop(
+            "invalid_input",
+            paste0(
+                "Identifiants absents dans ",
+                label,
+                " : rownames et colnames sont obligatoires."
+            )
         )
     }
 
@@ -92,22 +272,28 @@ validate_velocity_identifiers <- function(
     duplicated_cols <- unique(colnames(mat)[duplicated(colnames(mat))])
 
     if (length(duplicated_rows) > 0L) {
-        stop(
-            "Identifiants de lignes dupliques dans ",
-            label,
-            " : ",
-            paste(head(duplicated_rows, 10L), collapse = ", "),
-            "."
+        .velocity_stop(
+            "invalid_input",
+            paste0(
+                "Identifiants de lignes dupliques dans ",
+                label,
+                " : ",
+                paste(head(duplicated_rows, 10L), collapse = ", "),
+                "."
+            )
         )
     }
 
     if (length(duplicated_cols) > 0L) {
-        stop(
-            "Identifiants de colonnes dupliques dans ",
-            label,
-            " : ",
-            paste(head(duplicated_cols, 10L), collapse = ", "),
-            "."
+        .velocity_stop(
+            "invalid_input",
+            paste0(
+                "Identifiants de colonnes dupliques dans ",
+                label,
+                " : ",
+                paste(head(duplicated_cols, 10L), collapse = ", "),
+                "."
+            )
         )
     }
 
@@ -134,10 +320,13 @@ normalize_velocity_cell_barcodes <- function(
     collisions <- unique(normalized[duplicated(normalized)])
 
     if (length(collisions) > 0L) {
-        stop(
-            "Le retrait des suffixes de barcodes cree des collisions : ",
-            paste(head(collisions, 10L), collapse = ", "),
-            ". Desactivez cette option ou corrigez les identifiants."
+        .velocity_stop(
+            "invalid_input",
+            paste0(
+                "Le retrait des suffixes de barcodes cree des collisions : ",
+                paste(head(collisions, 10L), collapse = ", "),
+                ". Desactivez cette option ou corrigez les identifiants."
+            )
         )
     }
 
@@ -164,10 +353,13 @@ normalize_velocity_gene_ids <- function(
     collisions <- unique(normalized[duplicated(normalized)])
 
     if (length(collisions) > 0L) {
-        stop(
-            "Le retrait des versions de genes cree des collisions : ",
-            paste(head(collisions, 10L), collapse = ", "),
-            ". Desactivez cette option ou corrigez les identifiants."
+        .velocity_stop(
+            "invalid_input",
+            paste0(
+                "Le retrait des versions de genes cree des collisions : ",
+                paste(head(collisions, 10L), collapse = ", "),
+                ". Desactivez cette option ou corrigez les identifiants."
+            )
         )
     }
 
@@ -184,8 +376,13 @@ normalize_velocity_gene_ids <- function(
 #' @param orientation Matrix orientation.
 #' @param strip_cell_suffix Remove cell barcode suffixes.
 #' @param strip_gene_version Remove gene version suffixes.
-#' @param allow_low_overlap Allow overlap < 80 percent.
-#' @return Validated velocity structure and alignment report.
+#' @param allow_low_overlap Allow overlap below the declared minimum.
+#' @param min_cell_overlap Optional numeric override of the declared minimum
+#'   overlap fraction (TS_VELOCITY_OVERLAP_MIN, historique 0.8). NULL par defaut.
+#' @return Validated velocity structure and alignment report. La structure
+#'   inclut les tables d'alignement `cell_mapping`/`gene_mapping` (Stage 8)
+#'   lorsque les identifiants Seurat sont fournis (NULL sinon), ainsi que les
+#'   avertissements produits pendant la validation (`warnings`).
 #' @export
 validate_velocity_matrices <- function(
     spliced,
@@ -196,23 +393,65 @@ validate_velocity_matrices <- function(
     orientation = "auto_strict",
     strip_cell_suffix = FALSE,
     strip_gene_version = FALSE,
-    allow_low_overlap = FALSE
+    allow_low_overlap = FALSE,
+    min_cell_overlap = NULL
 ) {
     if (!requireNamespace("Matrix", quietly = TRUE)) {
-        stop("Le package Matrix est requis pour valider les matrices.")
+        .velocity_stop(
+            "invalid_input",
+            "Le package Matrix est requis pour valider les matrices."
+        )
     }
 
     if (!is.matrix(spliced) && !inherits(spliced, "Matrix")) {
-        stop("La matrice spliced doit etre une matrice numerique.")
+        .velocity_stop(
+            "invalid_input",
+            "La matrice spliced doit etre une matrice numerique."
+        )
+    }
+
+    if (!.velocity_matrix_is_numeric(spliced)) {
+        .velocity_stop(
+            "invalid_input",
+            "La matrice spliced doit contenir des valeurs numeriques."
+        )
     }
 
     if (!is.matrix(unspliced) && !inherits(unspliced, "Matrix")) {
-        stop("La matrice unspliced doit etre une matrice numerique.")
+        .velocity_stop(
+            "invalid_input",
+            "La matrice unspliced doit etre une matrice numerique."
+        )
     }
 
+    if (!.velocity_matrix_is_numeric(unspliced)) {
+        .velocity_stop(
+            "invalid_input",
+            "La matrice unspliced doit contenir des valeurs numeriques."
+        )
+    }
+
+    # Seuil de recouvrement declare (config/thresholds.R) : valeur explicite
+    # prioritaire, sinon parametre declare, sinon historique 0.8.
+    min_overlap <- if (!is.null(min_cell_overlap)) {
+        as.numeric(min_cell_overlap)
+    } else if (exists("TS_VELOCITY_OVERLAP_MIN")) {
+        as.numeric(TS_VELOCITY_OVERLAP_MIN)
+    } else {
+        0.8
+    }
+
+    # Avertissements PRODUITS pendant la validation (Stage 8) ; aucun
+    # avertissement n'est reconstruit apres coup.
+    extra_warnings <- character(0)
+
     if (!identical(dim(spliced), dim(unspliced))) {
-        stop(
-            "Les matrices spliced et unspliced doivent avoir les memes dimensions."
+        .velocity_stop(
+            "invalid_input",
+            paste0(
+                "Les matrices spliced et unspliced doivent avoir les memes ",
+                "dimensions."
+            )
         )
     }
 
@@ -221,17 +460,30 @@ validate_velocity_matrices <- function(
 
     if (!identical(rownames(spliced), rownames(unspliced)) ||
         !identical(colnames(spliced), colnames(unspliced))) {
-        stop(
-            "Les identifiants des matrices spliced et unspliced ",
-            "doivent etre identiques et dans le meme ordre."
+        .velocity_stop(
+            "invalid_input",
+            paste0(
+                "Les identifiants des matrices spliced et unspliced ",
+                "doivent etre identiques et dans le meme ordre."
+            )
         )
     }
 
     if (!is.null(ambiguous)) {
         if (!identical(dim(spliced), dim(ambiguous))) {
-            stop(
-                "La matrice ambiguous doit avoir les memes dimensions ",
-                "que spliced et unspliced."
+            .velocity_stop(
+                "invalid_input",
+                paste0(
+                    "La matrice ambiguous doit avoir les memes dimensions ",
+                    "que spliced et unspliced."
+                )
+            )
+        }
+
+        if (!.velocity_matrix_is_numeric(ambiguous)) {
+            .velocity_stop(
+                "invalid_input",
+                "La matrice ambiguous doit contenir des valeurs numeriques."
             )
         }
 
@@ -239,9 +491,12 @@ validate_velocity_matrices <- function(
 
         if (!identical(rownames(spliced), rownames(ambiguous)) ||
             !identical(colnames(spliced), colnames(ambiguous))) {
-            stop(
-                "Les identifiants de la matrice ambiguous doivent etre ",
-                "identiques a ceux de spliced."
+            .velocity_stop(
+                "invalid_input",
+                paste0(
+                    "Les identifiants de la matrice ambiguous doivent etre ",
+                    "identiques a ceux de spliced."
+                )
             )
         }
     }
@@ -275,14 +530,22 @@ validate_velocity_matrices <- function(
     )
 
     if (anyDuplicated(cell_ids)) {
-        stop(
-            "Les identifiants de cellules deviennent dupliques apres normalisation."
+        .velocity_stop(
+            "invalid_input",
+            paste0(
+                "Les identifiants de cellules deviennent dupliques apres ",
+                "normalisation."
+            )
         )
     }
 
     if (anyDuplicated(gene_ids)) {
-        stop(
-            "Les identifiants de genes deviennent dupliques apres normalisation."
+        .velocity_stop(
+            "invalid_input",
+            paste0(
+                "Les identifiants de genes deviennent dupliques apres ",
+                "normalisation."
+            )
         )
     }
 
@@ -300,8 +563,12 @@ validate_velocity_matrices <- function(
         )
 
         if (anyDuplicated(seurat_cells_normalized)) {
-            stop(
-                "Les cellules Seurat deviennent dupliquees apres normalisation."
+            .velocity_stop(
+                "invalid_input",
+                paste0(
+                    "Les cellules Seurat deviennent dupliquees apres ",
+                    "normalisation."
+                )
             )
         }
 
@@ -310,17 +577,45 @@ validate_velocity_matrices <- function(
             cell_ids
         )
 
+        if (length(matched_cells) == 0L) {
+            .velocity_stop(
+                "invalid_cell_alignment",
+                paste0(
+                    "Aucune cellule alignee entre les matrices velocity et ",
+                    "l'objet Seurat courant. Verifiez que l'objet charge ",
+                    "correspond au meme run Cell Ranger et activez le retrait ",
+                    "des suffixes (-1) si necessaire."
+                )
+            )
+        }
+
         n_cells_input <- length(cell_ids)
         n_cells_matched <- length(matched_cells)
         overlap <- n_cells_matched / max(1L, length(seurat_cells_normalized))
 
-        if (overlap < 0.8 && !isTRUE(allow_low_overlap)) {
-            stop(
-                "Recouvrement des cellules inferieur a 80 pourcent : ",
-                sprintf("%.1f", 100 * overlap),
-                " pourcent. Activez explicitement l'option ",
-                "'Forcer l'alignement faible' pour continuer."
+        if (overlap < min_overlap && !isTRUE(allow_low_overlap)) {
+            .velocity_stop(
+                "invalid_cell_alignment",
+                paste0(
+                    "Recouvrement des cellules inferieur a ",
+                    sprintf("%.0f", 100 * min_overlap), " pourcent : ",
+                    sprintf("%.1f", 100 * overlap),
+                    " pourcent. Activez explicitement l'option ",
+                    "'Forcer l'alignement faible' pour continuer."
+                )
             )
+        }
+
+        if (overlap < min_overlap && isTRUE(allow_low_overlap)) {
+            extra_warnings <- c(extra_warnings, sprintf(
+                paste0(
+                    "Recouvrement des cellules faible : %.1f pourcent ",
+                    "(< %.0f pourcent) — alignement force explicitement via ",
+                    "l'option 'Forcer l'alignement faible'. Validite ",
+                    "technique conservee, prudence d'interpretation requise."
+                ),
+                100 * overlap, 100 * min_overlap
+            ))
         }
 
         cell_order <- match(
@@ -338,12 +633,41 @@ validate_velocity_matrices <- function(
         }
 
         aligned_cells <- seurat_cells[keep_cells]
+
+        # Table d'alignement cellules (Stage 8) : paires alignees (ordre
+        # Seurat), cellules Seurat sans donnees velocity, puis barcodes
+        # velocity hors objet. Enregistree a la validation, jamais reconstruite.
+        velocity_only_cell_idx <- setdiff(seq_along(cell_ids), cell_order[keep_cells])
+        cell_mapping <- rbind(
+            data.frame(
+                seurat_cell = seurat_cells[keep_cells],
+                velocity_cell_original = cell_ids_original[cell_order[keep_cells]],
+                velocity_cell_normalized = cell_ids[cell_order[keep_cells]],
+                aligned = rep(TRUE, sum(keep_cells)),
+                stringsAsFactors = FALSE
+            ),
+            data.frame(
+                seurat_cell = seurat_cells[!keep_cells],
+                velocity_cell_original = rep(NA_character_, sum(!keep_cells)),
+                velocity_cell_normalized = rep(NA_character_, sum(!keep_cells)),
+                aligned = rep(FALSE, sum(!keep_cells)),
+                stringsAsFactors = FALSE
+            ),
+            data.frame(
+                seurat_cell = rep(NA_character_, length(velocity_only_cell_idx)),
+                velocity_cell_original = cell_ids_original[velocity_only_cell_idx],
+                velocity_cell_normalized = cell_ids[velocity_only_cell_idx],
+                aligned = rep(FALSE, length(velocity_only_cell_idx)),
+                stringsAsFactors = FALSE
+            )
+        )
     } else {
         aligned_cells <- cell_ids_original
         n_cells_input <- length(cell_ids)
         n_cells_matched <- length(cell_ids)
         overlap <- NA_real_
         raw_cell_overlap <- NA_real_
+        cell_mapping <- NULL
     }
 
     if (!is.null(seurat_genes)) {
@@ -354,8 +678,12 @@ validate_velocity_matrices <- function(
         )
 
         if (anyDuplicated(seurat_genes_normalized)) {
-            stop(
-                "Les genes Seurat deviennent dupliques apres normalisation."
+            .velocity_stop(
+                "invalid_input",
+                paste0(
+                    "Les genes Seurat deviennent dupliques apres ",
+                    "normalisation."
+                )
             )
         }
 
@@ -367,8 +695,12 @@ validate_velocity_matrices <- function(
         keep_genes <- !is.na(gene_order)
 
         if (!any(keep_genes)) {
-            stop(
-                "Aucun gene velocity ne correspond aux genes de l'objet Seurat."
+            .velocity_stop(
+                "invalid_gene_alignment",
+                paste0(
+                    "Aucun gene velocity ne correspond aux genes de ",
+                    "l'objet Seurat."
+                )
             )
         }
 
@@ -380,8 +712,35 @@ validate_velocity_matrices <- function(
         }
 
         aligned_genes <- seurat_genes[keep_genes]
+
+        # Table d'alignement genes (Stage 8) : meme contrat que cell_mapping.
+        velocity_only_gene_idx <- setdiff(seq_along(gene_ids), gene_order[keep_genes])
+        gene_mapping <- rbind(
+            data.frame(
+                seurat_gene = seurat_genes[keep_genes],
+                velocity_gene_original = gene_ids_original[gene_order[keep_genes]],
+                velocity_gene_normalized = gene_ids[gene_order[keep_genes]],
+                aligned = rep(TRUE, sum(keep_genes)),
+                stringsAsFactors = FALSE
+            ),
+            data.frame(
+                seurat_gene = seurat_genes[!keep_genes],
+                velocity_gene_original = rep(NA_character_, sum(!keep_genes)),
+                velocity_gene_normalized = rep(NA_character_, sum(!keep_genes)),
+                aligned = rep(FALSE, sum(!keep_genes)),
+                stringsAsFactors = FALSE
+            ),
+            data.frame(
+                seurat_gene = rep(NA_character_, length(velocity_only_gene_idx)),
+                velocity_gene_original = gene_ids_original[velocity_only_gene_idx],
+                velocity_gene_normalized = gene_ids[velocity_only_gene_idx],
+                aligned = rep(FALSE, length(velocity_only_gene_idx)),
+                stringsAsFactors = FALSE
+            )
+        )
     } else {
         aligned_genes <- gene_ids_original
+        gene_mapping <- NULL
     }
 
     # update rownames/colnames to reflect aligned Seurat identifiers for downstream consistency
@@ -423,11 +782,13 @@ validate_velocity_matrices <- function(
         },
         n_cell_collisions = 0L,
         n_gene_collisions = 0L,
-        warnings = character(0),
+        warnings = extra_warnings,
         overlap = overlap,
         raw_cell_overlap = raw_cell_overlap,
         normalized_cell_overlap = overlap,
-        allow_low_overlap = isTRUE(allow_low_overlap)
+        allow_low_overlap = isTRUE(allow_low_overlap),
+        cell_mapping = cell_mapping,
+        gene_mapping = gene_mapping
     )
 }
 
@@ -462,9 +823,12 @@ read_velocity_rds <- function(path) {
     )
 
     if (!is.list(object) || is.null(names(object))) {
-        stop(
-            "Le fichier RDS velocity doit contenir une liste nommee avec ",
-            "spliced et unspliced."
+        .velocity_stop(
+            "invalid_input",
+            paste0(
+                "Le fichier RDS velocity doit contenir une liste nommee avec ",
+                "spliced et unspliced."
+            )
         )
     }
 
@@ -472,19 +836,25 @@ read_velocity_rds <- function(path) {
     unexpected_names <- setdiff(observed_names, allowed_names)
 
     if (length(unexpected_names) > 0L) {
-        stop(
-            "Noms inattendus dans le RDS velocity : ",
-            paste(unexpected_names, collapse = ", "),
-            ". Noms observes : ",
-            paste(observed_names, collapse = ", "),
-            "."
+        .velocity_stop(
+            "invalid_input",
+            paste0(
+                "Noms inattendus dans le RDS velocity : ",
+                paste(unexpected_names, collapse = ", "),
+                ". Noms observes : ",
+                paste(observed_names, collapse = ", "),
+                "."
+            )
         )
     }
 
     if (!all(c("spliced", "unspliced") %in% observed_names)) {
-        stop(
-            "Le RDS velocity doit contenir exactement les elements ",
-            "'spliced' et 'unspliced'."
+        .velocity_stop(
+            "invalid_input",
+            paste0(
+                "Le RDS velocity doit contenir exactement les elements ",
+                "'spliced' et 'unspliced'."
+            )
         )
     }
 
@@ -502,16 +872,19 @@ read_velocity_rds <- function(path) {
 #' @export
 validate_velocity_rds_metadata <- function(velocity_input) {
     if (is.null(velocity_input) || !is.list(velocity_input)) {
-        stop("Entrée velocity invalide : liste nommee attendue.")
+        .velocity_stop(
+            "invalid_input",
+            "Entrée velocity invalide : liste nommee attendue."
+        )
     }
 
     .assert_optional_single_string <- function(value, field) {
         if (is.null(value)) return(invisible(TRUE))
         if (!is.character(value) || length(value) != 1L || is.na(value)) {
-            stop(sprintf(
-                "%s doit etre une chaine de caracteres unique.",
-                field
-            ))
+            .velocity_stop(
+                "invalid_input",
+                sprintf("%s doit etre une chaine de caracteres unique.", field)
+            )
         }
         invisible(TRUE)
     }
@@ -519,7 +892,10 @@ validate_velocity_rds_metadata <- function(velocity_input) {
     .assert_optional_string_vector <- function(value, field) {
         if (is.null(value)) return(invisible(TRUE))
         if (!is.character(value) || anyNA(value)) {
-            stop(sprintf("%s doit etre un vecteur de chaines sans NA.", field))
+            .velocity_stop(
+                "invalid_input",
+                sprintf("%s doit etre un vecteur de chaines sans NA.", field)
+            )
         }
         invisible(TRUE)
     }
@@ -528,22 +904,33 @@ validate_velocity_rds_metadata <- function(velocity_input) {
         if (is.null(value)) return(invisible(TRUE))
         value <- as.matrix(value)
         if (!is.numeric(value) || ncol(value) != 2L) {
-            stop(sprintf(
-                "%s doit etre une matrice numerique avec exactement deux colonnes.",
-                field
-            ))
+            .velocity_stop(
+                "invalid_input",
+                sprintf(
+                    paste0("%s doit etre une matrice numerique avec ",
+                           "exactement deux colonnes."),
+                    field
+                )
+            )
         }
         if (is.null(rownames(value))) {
-            stop(sprintf(
-                "%s doit posseder des noms de lignes (barcodes de cellules).",
-                field
-            ))
+            .velocity_stop(
+                "invalid_input",
+                sprintf(
+                    paste0("%s doit posseder des noms de lignes (barcodes ",
+                           "de cellules)."),
+                    field
+                )
+            )
         }
         if (anyDuplicated(rownames(value))) {
-            stop(sprintf(
-                "%s contient des noms de lignes dupliques.",
-                field
-            ))
+            .velocity_stop(
+                "invalid_input",
+                sprintf(
+                    "%s contient des noms de lignes dupliques.",
+                    field
+                )
+            )
         }
         invisible(TRUE)
     }
@@ -560,10 +947,13 @@ validate_velocity_rds_metadata <- function(velocity_input) {
     if (!is.null(velocity_input$orientation) &&
         !velocity_input$orientation %in%
             c("genes_x_cells", "cells_x_genes", "auto_strict")) {
-        stop(paste(
-            "'orientation' doit valoir 'genes_x_cells', 'cells_x_genes'",
-            "ou 'auto_strict'."
-        ))
+        .velocity_stop(
+            "invalid_input",
+            paste(
+                "'orientation' doit valoir 'genes_x_cells', 'cells_x_genes'",
+                "ou 'auto_strict'."
+            )
+        )
     }
 
     .assert_optional_string_vector(velocity_input$gene_names, "'gene_names'")
@@ -579,10 +969,14 @@ validate_velocity_rds_metadata <- function(velocity_input) {
             spliced_dim[2L]
         }
         if (length(velocity_input$clusters) != n_cells_rds) {
-            stop(sprintf(
-                "'clusters' doit contenir une valeur par cellule velocity (%d attendues, %d fournies).",
-                n_cells_rds, length(velocity_input$clusters)
-            ))
+            .velocity_stop(
+                "invalid_input",
+                sprintf(
+                    paste0("'clusters' doit contenir une valeur par cellule ",
+                           "velocity (%d attendues, %d fournies)."),
+                    n_cells_rds, length(velocity_input$clusters)
+                )
+            )
         }
     }
 
@@ -641,9 +1035,12 @@ read_velocity_mtx <- function(
     if (!file.exists(matrix_path) ||
         !file.exists(barcode_path) ||
         !file.exists(feature_path)) {
-        stop(
-            "Les trois fichiers sont obligatoires : matrice, barcodes ",
-            "et features/genes."
+        .velocity_stop(
+            "invalid_input",
+            paste0(
+                "Les trois fichiers sont obligatoires : matrice, barcodes ",
+                "et features/genes."
+            )
         )
     }
 
@@ -664,10 +1061,13 @@ read_velocity_mtx <- function(
 
     if (length(n_detected_cols) > 1L) {
         # Ragged feature file — refuse rather than guess a per-row column.
-        stop(
-            "Fichier features/genes irregulier : nombre de colonnes ",
-            "variable entre les lignes. Corrigez le fichier ou fournissez ",
-            "un TSV tabule homogene."
+        .velocity_stop(
+            "invalid_input",
+            paste0(
+                "Fichier features/genes irregulier : nombre de colonnes ",
+                "variable entre les lignes. Corrigez le fichier ou fournissez ",
+                "un TSV tabule homogene."
+            )
         )
     }
 
@@ -678,21 +1078,27 @@ read_velocity_mtx <- function(
         feature_column_int <- suppressWarnings(as.integer(feature_column))
         if (is.na(feature_column_int) || feature_column_int < 1L ||
             feature_column_int > n_feature_cols) {
-            stop(sprintf(
-                "Colonne d'identifiants invalide : %s (le fichier features ",
-                "contient %d colonne(s)).",
-                paste(feature_column, collapse = ","), n_feature_cols
-            ))
+            .velocity_stop(
+                "invalid_input",
+                sprintf(
+                    paste0("Colonne d'identifiants invalide : %s (le fichier ",
+                           "features contient %d colonne(s))."),
+                    paste(feature_column, collapse = ","), n_feature_cols
+                )
+            )
         }
     } else if (n_feature_cols > 1L) {
-        stop(sprintf(
-            paste0("Le fichier features/genes contient %d colonnes. ",
-                   "Indiquez explicitement quelle colonne correspond aux ",
-                   "identifiants de l'objet Seurat (champ 'Colonne ",
-                   "d'identifiants features'). La premiere colonne n'est ",
-                   "jamais supposee correcte."),
-            n_feature_cols
-        ))
+        .velocity_stop(
+            "invalid_input",
+            sprintf(
+                paste0("Le fichier features/genes contient %d colonnes. ",
+                       "Indiquez explicitement quelle colonne correspond aux ",
+                       "identifiants de l'objet Seurat (champ 'Colonne ",
+                       "d'identifiants features'). La premiere colonne n'est ",
+                       "jamais supposee correcte."),
+                n_feature_cols
+            )
+        )
     } else {
         feature_column_int <- 1L
     }
@@ -705,9 +1111,12 @@ read_velocity_mtx <- function(
 
     if (nrow(mat) != length(features) ||
         ncol(mat) != length(barcodes)) {
-        stop(
-            "Les dimensions de la matrice MTX ne correspondent pas aux ",
-            "fichiers features/barcodes."
+        .velocity_stop(
+            "invalid_input",
+            paste0(
+                "Les dimensions de la matrice MTX ne correspondent pas aux ",
+                "fichiers features/barcodes."
+            )
         )
     }
 
@@ -804,41 +1213,59 @@ validate_precomputed_velocity_vectors <- function(
     stored_reduction = NULL
 ) {
     if (is.null(vectors)) {
-        stop("Aucun vecteur velocity pre-calcule n'est disponible.")
+        .velocity_stop(
+            "invalid_vector_projection",
+            "Aucun vecteur velocity pre-calcule n'est disponible."
+        )
     }
 
     vectors <- as.matrix(vectors)
 
     if (!is.numeric(vectors) ||
         ncol(vectors) != 2L) {
-        stop(
-            "Les vecteurs velocity pre-calcules doivent avoir exactement ",
-            "deux colonnes numeriques."
+        .velocity_stop(
+            "invalid_vector_projection",
+            paste0(
+                "Les vecteurs velocity pre-calcules doivent avoir exactement ",
+                "deux colonnes numeriques."
+            )
         )
     }
 
     if (nrow(vectors) != length(cell_names)) {
-        stop(
-            "Le nombre de vecteurs velocity ne correspond pas au nombre ",
-            "de cellules alignees."
+        .velocity_stop(
+            "invalid_vector_projection",
+            paste0(
+                "Le nombre de vecteurs velocity ne correspond pas au nombre ",
+                "de cellules alignees."
+            )
         )
     }
 
     if (is.null(rownames(vectors))) {
-        stop(
-            "Les vecteurs velocity doivent posseder des noms de lignes ",
-            "correspondant aux cellules."
+        .velocity_stop(
+            "invalid_vector_projection",
+            paste0(
+                "Les vecteurs velocity doivent posseder des noms de lignes ",
+                "correspondant aux cellules."
+            )
         )
     }
 
     if (anyDuplicated(rownames(vectors))) {
-        stop("Les vecteurs velocity contiennent des noms de lignes dupliques.")
+        .velocity_stop(
+            "invalid_vector_projection",
+            "Les vecteurs velocity contiennent des noms de lignes dupliques."
+        )
     }
 
     if (!identical(rownames(vectors), as.character(cell_names))) {
-        stop(
-            "L'ordre des cellules des vecteurs velocity ne correspond pas ",
-            "a l'ordre des cellules Seurat."
+        .velocity_stop(
+            "invalid_vector_projection",
+            paste0(
+                "L'ordre des cellules des vecteurs velocity ne correspond pas ",
+                "a l'ordre des cellules Seurat."
+            )
         )
     }
 
@@ -847,18 +1274,25 @@ validate_precomputed_velocity_vectors <- function(
             as.character(stored_reduction),
             as.character(selected_reduction)
         )) {
-        stop(
-            "Les vecteurs velocity ont ete calcules pour la reduction '",
-            stored_reduction,
-            "' et ne peuvent pas etre affiches dans '",
-            selected_reduction,
-            "'."
+        .velocity_stop(
+            "invalid_vector_projection",
+            paste0(
+                "Les vecteurs velocity ont ete calcules pour la reduction '",
+                stored_reduction,
+                "' et ne peuvent pas etre affiches dans '",
+                selected_reduction,
+                "'."
+            )
         )
     }
 
     if (any(!is.finite(vectors))) {
-        stop(
-            "Les vecteurs velocity contiennent des valeurs NA, NaN ou infinies."
+        .velocity_stop(
+            "invalid_vector_projection",
+            paste0(
+                "Les vecteurs velocity contiennent des valeurs NA, NaN ou ",
+                "infinies."
+            )
         )
     }
 
@@ -887,17 +1321,26 @@ align_velocity_embedding <- function(
 
     if (!is.numeric(embedding) ||
         ncol(embedding) != 2L) {
-        stop(
-            "L'embedding doit avoir exactement deux colonnes numeriques."
+        .velocity_stop(
+            "invalid_input",
+            paste0(
+                "L'embedding doit avoir exactement deux colonnes numeriques."
+            )
         )
     }
 
     if (is.null(rownames(embedding))) {
-        stop("L'embedding doit posseder des noms de lignes.")
+        .velocity_stop(
+            "invalid_input",
+            "L'embedding doit posseder des noms de lignes."
+        )
     }
 
     if (anyDuplicated(rownames(embedding))) {
-        stop("L'embedding contient des cellules dupliquees.")
+        .velocity_stop(
+            "invalid_input",
+            "L'embedding contient des cellules dupliquees."
+        )
     }
 
     if (!is.null(stored_reduction) &&
@@ -905,12 +1348,15 @@ align_velocity_embedding <- function(
             as.character(stored_reduction),
             as.character(selected_reduction)
         )) {
-        stop(
-            "L'embedding correspond a la reduction '",
-            stored_reduction,
-            "' et non a '",
-            selected_reduction,
-            "'."
+        .velocity_stop(
+            "invalid_input",
+            paste0(
+                "L'embedding correspond a la reduction '",
+                stored_reduction,
+                "' et non a '",
+                selected_reduction,
+                "'."
+            )
         )
     }
 
@@ -918,8 +1364,12 @@ align_velocity_embedding <- function(
     matched <- intersect(cell_names, rownames(embedding))
 
     if (!length(matched)) {
-        stop(
-            "Aucune cellule de l'embedding ne correspond aux cellules velocity."
+        .velocity_stop(
+            "invalid_input",
+            paste0(
+                "Aucune cellule de l'embedding ne correspond aux cellules ",
+                "velocity."
+            )
         )
     }
 
@@ -948,17 +1398,408 @@ align_velocity_embedding <- function(
 
 #' Velocity object fingerprint
 #'
+#' Empreinte deterministe de l'objet Seurat courant (Stage 8) : dimensions des
+#' deux axes + 20 premiers/derniers barcodes de cellules + 20 premiers/derniers
+#' identifiants de genes. N'utilise JAMAIS l'adresse memoire : deux sessions
+#' avec le meme jeu de donnees produisent la meme empreinte. Toute modification
+#' des cellules OU des genes rend un resultat velocity anterieur perime
+#' (velocity_result_is_stale()).
+#'
 #' @param obj Seurat object.
-#' @return Character fingerprint.
+#' @return Character fingerprint ("v2::n_genes::n_cells::..."), NULL si objet NULL.
 #' @export
 velocity_object_fingerprint <- function(obj) {
     if (is.null(obj)) return(NULL)
     paste(
+        "v2",
+        nrow(obj),
         ncol(obj),
         paste(head(colnames(obj), 20L), collapse = "|"),
         paste(tail(colnames(obj), 20L), collapse = "|"),
+        paste(head(rownames(obj), 20L), collapse = "|"),
+        paste(tail(rownames(obj), 20L), collapse = "|"),
         sep = "::"
     )
+}
+
+#' Le resultat velocity est-il perime vis-a-vis de l'objet Seurat courant ?
+#'
+#' @param velocity_result Resultat canonique (finalize_velocity_result()).
+#' @param seurat_obj Objet Seurat courant.
+#' @return TRUE si les empreintes divergent, FALSE sinon, NA si l'identite du
+#'   resultat ou de l'objet est indeterminable.
+#' @export
+velocity_result_is_stale <- function(velocity_result, seurat_obj) {
+    if (is.null(velocity_result)) return(NA)
+    fp <- velocity_result$object_identity$fingerprint %||% NULL
+    if (is.null(fp) || is.null(seurat_obj)) return(NA)
+    !identical(fp, velocity_object_fingerprint(seurat_obj))
+}
+
+#' Finaliser le resultat velocity canonique (Stage 8 — Velocity 3B-1)
+#'
+#' Assemble l'objet canonique documente (voir en-tete de fichier) a partir de
+#' la structure validee par validate_velocity_matrices(). Aucune inference,
+#' aucun remplissage : les donnees absentes restent NULL avec un statut ou un
+#' avertissement explicite. Les vecteurs fournis sont re-valides strictement
+#' (meme contrat que validate_precomputed_velocity_vectors()). La provenance
+#' est PRODUITE ici (regle 7 AGENTS.md) ; l'appelant l'append ensuite a l'etat
+#' partage — elle n'est jamais reconstruite apres coup.
+#'
+#' Resolution du statut (etat le plus limitant d'abord) :
+#'   1. invalid_vector_projection — vecteurs fournis mais rejetes (les
+#'      matrices alignees restent dans l'objet, fleches interdites) ;
+#'   2. valid_partial_embedding  — embedding couvrant partiellement les
+#'      cellules alignees ;
+#'   3. valid_no_vectors         — aucune vecteur valide disponible ;
+#'   4. valid                    — matrices + vecteurs verifies.
+#' Les etats invalid_input/invalid_orientation/invalid_cell_alignment/
+#' invalid_gene_alignment sont des erreurs levees EN AMONT par la chaine de
+#' validation (classe velocity_validation_error) : aucun objet canonique n'est
+#' produit dans ces cas.
+#'
+#' @param validated Structure validee retournee par validate_velocity_matrices()
+#'   (enrichie des metadonnees RDS : velocity_source, velocity_method,
+#'   input_orientation, embedding_reduction, umap_embedding, clusters).
+#' @param input_mode Mode d'import declare : "rds" ou "mtx".
+#' @param input_files Liste nommee decrivant la source (noms de fichiers
+#'   ORIGINAUX — jamais les chemins locaux complets — et options de lecture
+#'   comme feature_column).
+#' @param seurat_obj Objet Seurat courant. Seule l'identite est extraite ; tout
+#'   objet a dimnames est acceptable (testabilite hors Shiny).
+#' @param assay_used Assay Seurat utilise, NULL si non applicable (import
+#'   pre-calcule : le champ reste NULL avec cette raison documentee).
+#' @param requested_reduction Reduction demandee pour l'affichage des vecteurs.
+#' @param embedding_alignment Sortie de align_velocity_embedding() ou NULL.
+#' @param velocity_vectors Matrice dx/dy deja validee ou NULL. Toute matrice
+#'   non NULL est re-valide strictement ici.
+#' @param vector_validation list(field =, ok =, reason =) decrivant le sort du
+#'   champ de vecteurs fourni (ok = FALSE => statut invalid_vector_projection).
+#' @param extra_warnings Avertissements supplementaires produits par
+#'   l'orchestration (ex. embedding ignore) — fusionnes, sans doublon.
+#' @param analysis_id Identifiant d'analyse (ex. "sc-velocity").
+#' @param seed Graine ; NULL car aucune operation stochastique dans la chaine
+#'   de validation.
+#' @return L'objet canonique : la structure validee ENRICHIE des champs du
+#'   contrat (type, status, dimensions, cell_alignment, gene_alignment,
+#'   embedding_alignment, velocity_vectors, vector_validation, input_summary,
+#'   object_identity, warnings, provenance, analysis_id, timestamp_utc).
+#' @export
+finalize_velocity_result <- function(
+    validated,
+    input_mode = c("rds", "mtx"),
+    input_files = NULL,
+    seurat_obj = NULL,
+    assay_used = NULL,
+    requested_reduction = NULL,
+    embedding_alignment = NULL,
+    velocity_vectors = NULL,
+    vector_validation = NULL,
+    extra_warnings = character(0),
+    analysis_id = "sc-velocity",
+    seed = NULL
+) {
+    input_mode <- match.arg(input_mode)
+
+    if (!is.list(validated) || is.null(validated$spliced) ||
+        is.null(validated$unspliced)) {
+        .velocity_stop(
+            "invalid_input",
+            paste0(
+                "finalize_velocity_result() : structure validee absente — ",
+                "validate_velocity_matrices() doit etre appelee d'abord."
+            )
+        )
+    }
+
+    # Vecteurs fournis : re-validation stricte ; tout echec est une erreur
+    # classee invalid_vector_projection (aucune fabrication de fleches).
+    if (!is.null(velocity_vectors)) {
+        velocity_vectors <- validate_precomputed_velocity_vectors(
+            vectors = velocity_vectors,
+            cell_names = validated$cell_names,
+            selected_reduction = requested_reduction,
+            stored_reduction = validated$embedding_reduction
+        )
+    }
+
+    vector_rejected <- !is.null(vector_validation) && isFALSE(vector_validation$ok)
+    n_embedding_missing <- embedding_alignment$n_embedding_missing %||% 0L
+    partial_embedding <- !is.null(embedding_alignment) &&
+        n_embedding_missing > 0L
+
+    status <- if (isTRUE(vector_rejected)) {
+        "invalid_vector_projection"
+    } else if (partial_embedding) {
+        "valid_partial_embedding"
+    } else if (is.null(velocity_vectors)) {
+        "valid_no_vectors"
+    } else {
+        "valid"
+    }
+
+    warnings_all <- unique(c(
+        as.character(validated$warnings %||% character(0)),
+        as.character(extra_warnings)
+    ))
+    if (isTRUE(vector_rejected)) {
+        warnings_all <- c(warnings_all, paste0(
+            "Vecteurs velocity pre-calcules rejetes (champ '",
+            vector_validation$field %||% "inconnu", "') : ",
+            vector_validation$reason %||% "raison inconnue",
+            ". Fleches desactivees ; les matrices alignees restent utilisables."
+        ))
+    }
+
+    result <- validated
+    result$type <- "rna_velocity"
+    result$status <- status
+    result$dimensions <- c(
+        cells = ncol(validated$spliced),
+        genes = nrow(validated$spliced)
+    )
+    result$cell_alignment <- list(
+        match_mode = validated$cell_match_mode,
+        n_input = validated$n_cells_input,
+        n_matched = validated$n_cells_matched,
+        n_missing = validated$n_cells_missing,
+        overlap_raw = validated$raw_cell_overlap,
+        overlap_normalized = validated$normalized_cell_overlap %||%
+            validated$overlap,
+        low_overlap_override = isTRUE(validated$allow_low_overlap)
+    )
+    result$gene_alignment <- list(
+        match_mode = validated$gene_match_mode,
+        n_input = validated$n_genes_input,
+        n_matched = validated$n_genes_matched,
+        n_missing = validated$n_genes_missing
+    )
+    result$embedding_alignment <- embedding_alignment
+    result$velocity_vectors <- velocity_vectors
+    result$vector_validation <- vector_validation
+    result$input_summary <- list(
+        input_mode = input_mode,
+        files = input_files,
+        velocity_source = validated$velocity_source,
+        velocity_method = validated$velocity_method,
+        orientation_declared = validated$input_orientation,
+        orientation_detected = validated$orientation,
+        strip_cell_suffix = isTRUE(validated$strip_cell_suffix),
+        strip_gene_version = isTRUE(validated$strip_gene_version),
+        allow_low_overlap = isTRUE(validated$allow_low_overlap),
+        n_cells_input = validated$n_cells_input,
+        n_genes_input = validated$n_genes_input
+    )
+    result$object_identity <- list(
+        fingerprint = velocity_object_fingerprint(seurat_obj),
+        method = paste0(
+            "v2 : dimensions + 20 premiers/derniers barcodes de cellules et ",
+            "identifiants de genes (deterministe, sans adresse memoire)"
+        ),
+        seurat_dims = if (is.null(seurat_obj)) {
+            c(seurat_genes = NA_integer_, seurat_cells = NA_integer_)
+        } else {
+            c(
+                seurat_genes = as.integer(nrow(seurat_obj)),
+                seurat_cells = as.integer(ncol(seurat_obj))
+            )
+        }
+    )
+    result$warnings <- warnings_all
+
+    # Provenance PRODUITE a la validation (regle 7 AGENTS.md) ; consolidation
+    # reservee au rapport (macro-step 4F).
+    entry <- new_provenance_entry(
+        analysis_id = analysis_id,
+        method = validated$velocity_method %||% "precomputed",
+        parameters = list(
+            input_mode = input_mode,
+            input_files = input_files,
+            orientation_declared = validated$input_orientation,
+            orientation_detected = validated$orientation,
+            strip_cell_suffix = isTRUE(validated$strip_cell_suffix),
+            strip_gene_version = isTRUE(validated$strip_gene_version),
+            allow_low_overlap = isTRUE(validated$allow_low_overlap),
+            n_cells_input = validated$n_cells_input,
+            n_genes_input = validated$n_genes_input,
+            n_cells_matched = validated$n_cells_matched,
+            n_genes_matched = validated$n_genes_matched,
+            n_cells_missing = validated$n_cells_missing,
+            n_genes_missing = validated$n_genes_missing,
+            vectors_available = !is.null(velocity_vectors),
+            vector_field = vector_validation$field %||% NULL,
+            embedding_cells_matched = embedding_alignment$n_embedding_matched %||% NULL,
+            embedding_cells_missing = n_embedding_missing,
+            requested_reduction = requested_reduction,
+            assay_used = assay_used,
+            object_fingerprint = velocity_object_fingerprint(seurat_obj)
+        ),
+        dataset = seurat_obj,
+        cells_used = validated$n_cells_matched,
+        cells_excluded = validated$n_cells_missing,
+        seed = seed,
+        warnings = warnings_all
+    )
+    entry$analysis_type <- "rna_velocity"
+    entry$status <- status
+    entry$input_mode <- input_mode
+    entry$timestamp_utc <- format(
+        entry$timestamp,
+        "%Y-%m-%dT%H:%M:%SZ",
+        tz = "UTC"
+    )
+
+    result$provenance <- entry
+    result$analysis_id <- analysis_id
+    result$timestamp_utc <- entry$timestamp_utc
+
+    result
+}
+
+#' Resume de validation velocity pour export CSV (Stage 8)
+#'
+#' Une ligne, colonnes stables : analysis_id, horodatage, statut, identite
+#' source/resultat, reglages, compteurs d'alignement, couverture d'embedding,
+#' disponibilite des vecteurs, empreinte objet, avertissements et versions
+#' logicielles. Lecture directe de l'objet canonique — aucune deduction.
+#'
+#' @param velocity_result Resultat canonique (finalize_velocity_result()).
+#' @return data.frame a une ligne, colonnes character.
+#' @export
+build_velocity_validation_summary <- function(velocity_result) {
+    r <- velocity_result
+    if (is.null(r) || !is.list(r)) {
+        .velocity_stop(
+            "invalid_input",
+            paste0(
+                "build_velocity_validation_summary() : resultat velocity ",
+                "canonique requis."
+            )
+        )
+    }
+
+    p <- r$provenance %||% list()
+    emb <- r$embedding_alignment
+    vv <- r$vector_validation
+    fp <- r$object_identity$fingerprint %||% NA_character_
+    seurat_dims <- r$object_identity$seurat_dims %||%
+        c(seurat_genes = NA_integer_, seurat_cells = NA_integer_)
+
+    .fmt_file_list <- function(files) {
+        if (is.null(files) || length(files) == 0L) return(NA_character_)
+        files <- as.list(files)
+        paste(
+            sprintf("%s=%s", names(files), vapply(files, paste, character(1), collapse = ",")),
+            collapse = "; "
+        )
+    }
+
+    data.frame(
+        analysis_id = r$analysis_id %||% NA_character_,
+        analysis_type = r$type %||% "rna_velocity",
+        status = r$status %||% NA_character_,
+        timestamp_utc = r$timestamp_utc %||% NA_character_,
+        input_mode = r$input_summary$input_mode %||% NA_character_,
+        input_files = .fmt_file_list(r$input_summary$files),
+        velocity_source = r$velocity_source %||% NA_character_,
+        velocity_method = r$velocity_method %||% NA_character_,
+        orientation_declared = r$input_summary$orientation_declared %||% NA_character_,
+        orientation_detected = r$orientation %||% NA_character_,
+        strip_cell_suffix = as.character(isTRUE(r$strip_cell_suffix)),
+        strip_gene_version = as.character(isTRUE(r$strip_gene_version)),
+        allow_low_overlap = as.character(isTRUE(r$allow_low_overlap)),
+        n_cells_input = as.character(r$n_cells_input %||% NA_integer_),
+        n_genes_input = as.character(r$n_genes_input %||% NA_integer_),
+        n_cells_matched = as.character(r$n_cells_matched %||% NA_integer_),
+        n_genes_matched = as.character(r$n_genes_matched %||% NA_integer_),
+        n_cells_missing = as.character(r$n_cells_missing %||% NA_integer_),
+        n_genes_missing = as.character(r$n_genes_missing %||% NA_integer_),
+        raw_cell_overlap = as.character(r$raw_cell_overlap %||% NA_real_),
+        normalized_cell_overlap = as.character(
+            r$normalized_cell_overlap %||% r$overlap %||% NA_real_
+        ),
+        embedding_cells_matched = as.character(
+            emb$n_embedding_matched %||% NA_integer_
+        ),
+        embedding_cells_missing = as.character(
+            emb$n_embedding_missing %||% NA_integer_
+        ),
+        embedding_cells_total = as.character(
+            emb$n_velocity_cells %||% NA_integer_
+        ),
+        vectors_available = as.character(!is.null(r$velocity_vectors)),
+        vector_field = vv$field %||% NA_character_,
+        vector_ok = as.character(vv$ok %||% NA),
+        requested_reduction = r$provenance$parameters$requested_reduction %||% NA_character_,
+        assay_used = r$provenance$parameters$assay_used %||% "non_applicable_import_precalcule",
+        object_fingerprint = fp,
+        seurat_n_genes = as.character(seurat_dims["seurat_genes"]),
+        seurat_n_cells = as.character(seurat_dims["seurat_cells"]),
+        seed = if (is.null(p$seed)) "" else as.character(p$seed),
+        warnings = paste(r$warnings %||% character(0), collapse = " | "),
+        package_versions = .provenance_versions_string(p$versions),
+        stringsAsFactors = FALSE
+    )
+}
+
+# Versions logicielles aplaties pour l'export CSV (lecture seule de l'entree
+# de provenance ; aucune re-interrogation des packages ici).
+.provenance_versions_string <- function(versions) {
+    if (is.null(versions) || length(versions) == 0L) return(NA_character_)
+    paste(
+        sprintf("%s=%s", names(versions), as.character(versions)),
+        collapse = "; "
+    )
+}
+
+#' Table d'alignement cellules/genes pour export CSV (Stage 8)
+#'
+#' Fusionne les tables d'alignement produites a la validation en un format long
+#' exportable : axis ("cell"/"gene"), identifiant Seurat, identifiants velocity
+#' (original et normalise), statut d'alignement. La table est enregistree au
+#' moment de la validation — elle n'est jamais reconstruite ici.
+#'
+#' @param velocity_result Resultat canonique (finalize_velocity_result()).
+#' @return data.frame (colonnes : axis, seurat_id, velocity_id_original,
+#'   velocity_id_normalized, aligned).
+#' @export
+build_velocity_alignment_mapping <- function(velocity_result) {
+    r <- velocity_result
+    cm <- r$cell_mapping %||% NULL
+    gm <- r$gene_mapping %||% NULL
+
+    if (is.null(cm) && is.null(gm)) {
+        .velocity_stop(
+            "invalid_input",
+            paste0(
+                "Aucune table d'alignement disponible : les tables ",
+                "cell_mapping/gene_mapping sont produites par ",
+                "validate_velocity_matrices() lorsque les identifiants Seurat ",
+                "sont fournis."
+            )
+        )
+    }
+
+    cells_df <- if (is.null(cm)) NULL else data.frame(
+        axis = "cell",
+        seurat_id = cm$seurat_cell,
+        velocity_id_original = cm$velocity_cell_original,
+        velocity_id_normalized = cm$velocity_cell_normalized,
+        aligned = cm$aligned,
+        stringsAsFactors = FALSE
+    )
+
+    genes_df <- if (is.null(gm)) NULL else data.frame(
+        axis = "gene",
+        seurat_id = gm$seurat_gene,
+        velocity_id_original = gm$velocity_gene_original,
+        velocity_id_normalized = gm$velocity_gene_normalized,
+        aligned = gm$aligned,
+        stringsAsFactors = FALSE
+    )
+
+    out <- rbind(cells_df, genes_df)
+    out[order(match(out$axis, c("cell", "gene"))), , drop = FALSE]
 }
 
 #' Build velocity provenance export data

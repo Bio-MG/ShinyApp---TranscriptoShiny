@@ -1,9 +1,13 @@
 # =============================================================================
-# mod_sc_velocity.R — RNA Velocity Phase 3A Hardening
+# mod_sc_velocity.R — RNA Velocity Phase 3A Hardening + Stage 8 (3B-1)
 # =============================================================================
 # Strict RDS/MTX import, matrix validation, orientation, cell/gene alignment,
 # precomputed UMAP vector validation, phase portraits, provenance export,
 # reset when Seurat object changes. No inference, no loom/h5ad, no projection.
+# Stage 8 : le module ORCHESTRE uniquement — la validation, le statut canonique
+# (velocity_status_labels), la provenance et les exports residuent dans
+# R/sc/sc_velocity.R. Validite technique affichee explicitement ; aucune
+# validite biologique n'est suggeree.
 # =============================================================================
 
 mod_sc_velocity_ui <- function(id) {
@@ -88,7 +92,10 @@ mod_sc_velocity_ui <- function(id) {
     hr(),
     selectInput(ns("velocity_gene"), i18n$t("Gene pour phase portrait"), choices = character(0)),
     selectInput(ns("velocity_reduction"), i18n$t("Reduction pour vecteurs"), choices = c("umap", "pca")),
-    downloadButton(ns("dl_velocity_provenance"), i18n$t("Exporter provenance (CSV)"), class = "btn-sm btn-info w-100 mt-1")
+    downloadButton(ns("dl_velocity_provenance"), i18n$t("Exporter provenance (CSV)"), class = "btn-sm btn-info w-100 mt-1"),
+    downloadButton(ns("dl_velocity_summary"), i18n$t("Exporter resume validation (CSV)"), class = "btn-sm btn-info w-100 mt-1"),
+    downloadButton(ns("dl_velocity_mapping"), i18n$t("Exporter alignement cellules/genes (CSV)"), class = "btn-sm btn-info w-100 mt-1"),
+    downloadButton(ns("dl_velocity_result_rds"), i18n$t("Exporter resultat valide (RDS)"), class = "btn-sm btn-info w-100 mt-1")
   )
 }
 
@@ -114,6 +121,33 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       tr <- isolate(global_data$i18n)
       if (is.null(tr)) return(key)
       tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+    }
+
+    # ── helpers contrat Stage 8 ────────────────────────────────────────────
+    # Libelle francais d'un etat de validite (fallback = code d'etat).
+    .status_label <- function(st) {
+      lab <- velocity_status_labels()
+      if (is.character(st) && length(st) == 1L && st %in% names(lab)) lab[[st]] else st
+    }
+
+    # Fichiers sources declares (NOMS ORIGINAUX uniquement — jamais les
+    # chemins locaux complets) + options de lecture, pour input_summary.
+    .collect_input_files <- function(mode) {
+      if (identical(mode, "rds")) {
+        if (is.null(input$velocity_rds_file)) return(list())
+        return(list(rds = input$velocity_rds_file$name))
+      }
+      files <- list()
+      for (slot in c("velocity_mtx_spliced", "velocity_mtx_spliced_barcodes",
+                     "velocity_mtx_spliced_features", "velocity_mtx_unspliced",
+                     "velocity_mtx_unspliced_barcodes", "velocity_mtx_unspliced_features",
+                     "velocity_mtx_ambiguous", "velocity_mtx_ambiguous_barcodes",
+                     "velocity_mtx_ambiguous_features")) {
+        fi <- input[[slot]]
+        if (!is.null(fi)) files[[slot]] <- fi$name
+      }
+      files$feature_column <- as.character(input$velocity_feature_column %||% 1L)
+      files
     }
 
 
@@ -161,6 +195,10 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
     output$velocity_status <- renderText({ velocity_status_rv() })
     output$velocity_vector_status <- renderText({
       parts <- character(0)
+      res <- velocity_state$result
+      if (!is.null(res) && !is.null(res$status)) {
+        parts <- c(parts, paste0("Statut : ", .status_label(res$status)))
+      }
       ali <- velocity_state$embedding_alignment
       if (!is.null(ali)) {
         parts <- c(parts, sprintf(
@@ -246,18 +284,16 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       )
     }, ignoreInit = TRUE)
 
-    # Helper to check fingerprint before plot/export
+    # Helper to check fingerprint before plot/export — etat derive
+    # stale_against_current_seurat_object (contrat Stage 8).
     .check_fingerprint <- function() {
       req(global_data$sc_obj)
       req(velocity_state$object_fingerprint)
       current_fp <- velocity_object_fingerprint(global_data$sc_obj)
       if (!identical(velocity_state$object_fingerprint, current_fp)) {
-        showNotification(
-          .tr_plain("Les donnees RNA velocity ne correspondent plus a l'objet Seurat courant."),
-          type = "error",
-          duration = 8
-        )
-        shiny::validate(shiny::need(FALSE, .tr_plain("Les donnees RNA velocity ne correspondent plus a l'objet Seurat courant.")))
+        stale_msg <- .status_label("stale_against_current_seurat_object")
+        showNotification(stale_msg, type = "error", duration = 8)
+        shiny::validate(shiny::need(FALSE, stale_msg))
       }
       invisible(TRUE)
     }
@@ -376,9 +412,8 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
         validated$clusters <- rds_meta$clusters %||% NULL
         validated$umap_embedding <- rds_meta$umap_embedding %||% NULL
 
-        # 8. Store validated result
+        # 8. Store validated result (structure plate, compatibilite)
         velocity_state$validated <- validated
-        velocity_state$result <- validated
         velocity_state$alignment <- list(cells = validated$cell_names, genes = validated$gene_names)
 
         # Reset per-import derived state before repopulating
@@ -388,6 +423,7 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
         velocity_state$umap_vectors <- NULL
 
         sel_red <- input$velocity_reduction %||% "umap"
+        orchestration_warnings <- character(0)
 
         # BUG 3/BUG 4: partial coordinate display via align_velocity_embedding()
         if (!is.null(validated$umap_embedding)) {
@@ -399,6 +435,8 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
               stored_reduction = validated$embedding_reduction
             ),
             error = function(e) {
+              orchestration_warnings <<- c(orchestration_warnings,
+                paste0("Embedding UMAP ignore : ", conditionMessage(e)))
               showNotification(paste("Embedding UMAP ignore :", conditionMessage(e)),
                                type = "warning", duration = 8)
               NULL
@@ -432,7 +470,9 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
             }, error = function(e) {
               velocity_state$umap_vectors <- NULL
               velocity_state$vector_validation <- list(field = vector_field, ok = FALSE,
-                                                       error = conditionMessage(e))
+                                                       reason = conditionMessage(e))
+              orchestration_warnings <<- c(orchestration_warnings,
+                paste0("Vecteurs velocity rejetes : ", conditionMessage(e)))
               showNotification(paste("Vecteurs velocity refuses :", conditionMessage(e)),
                                type = "error", duration = 8)
             })
@@ -442,30 +482,34 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
         # 9. Store current object fingerprint
         velocity_state$object_fingerprint <- velocity_object_fingerprint(global_data$sc_obj)
 
-        # CHRYSALIS 2E : provenance PRODUITE a l'etape de validation (regle 7
-        # AGENTS.md) — parametres deja disponibles uniquement ; consolidation
-        # reservee au rapport (macro-step 4F).
-        provenance_append(shared_rv, new_provenance_entry(
-          analysis_id = "sc-velocity",
-          method      = validated$velocity_method %||% "precomputed",
-          parameters  = list(
-            import_mode        = mode,
-            orientation        = validated$orientation,
-            strip_cell_suffix  = strip_cell_suffix,
-            strip_gene_version = strip_gene_version,
-            allow_low_overlap  = allow_low_overlap,
-            n_cells_matched    = validated$n_cells_matched,
-            n_genes_matched    = validated$n_genes_matched
-          ),
-          dataset    = global_data$sc_obj,
-          cells_used = validated$n_cells_matched
-        ))
+        # Stage 8 (3B-1) : resultat canonique — contrat documente dans
+        # R/sc/sc_velocity.R. La provenance est PRODUITE dans l'objet (regle 7
+        # AGENTS.md) puis appendee a l'etat partage ; consolidation reservee au
+        # rapport (macro-step 4F).
+        canonical <- finalize_velocity_result(
+          validated           = validated,
+          input_mode          = mode,
+          input_files         = .collect_input_files(mode),
+          seurat_obj          = global_data$sc_obj,
+          assay_used          = NULL,
+          requested_reduction = sel_red,
+          embedding_alignment = velocity_state$embedding_alignment,
+          velocity_vectors    = velocity_state$umap_vectors,
+          vector_validation   = velocity_state$vector_validation,
+          extra_warnings      = orchestration_warnings,
+          analysis_id         = "sc-velocity"
+        )
+        velocity_state$result <- canonical
+
+        provenance_append(shared_rv, canonical$provenance)
 
         # 10. Populate gene selector
         gene_choices <- rownames(validated$spliced)
         updateSelectInput(session, "velocity_gene", choices = gene_choices, selected = gene_choices[1])
 
-        # 11. French status summary (+ BUG 3 message when only coordinates exist)
+        # 11. French status summary : statut canonique explicite (+ BUG 3
+        # message when only coordinates exist). Validite technique uniquement —
+        # aucune validite biologique n'est impliquee.
         msg <- sprintf(
           paste0(
             "Validation OK : %d cellules, %d genes. ",
@@ -485,6 +529,7 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
             sep = "\n"
           )
         }
+        msg <- paste0("[", .status_label(canonical$status), "]\n", msg)
         velocity_status_rv(msg)
         showNotification(.tr("Validation velocity reussie."), type = "message", duration = 4)
 
@@ -575,6 +620,44 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
           selected_reduction = input$velocity_reduction %||% NA_character_
         )
         utils::write.csv(df, file, row.names = FALSE)
+      }
+    )
+
+    # ── Exports contrat Stage 8 ─────────────────────────────────────────────
+    # Resume de validation (1 ligne : analysis_id, statut, reglages, compteurs,
+    # avertissements, versions).
+    output$dl_velocity_summary <- downloadHandler(
+      filename = function() paste0("velocity_validation_summary_", format(Sys.Date(), "%Y-%m-%d"), ".csv"),
+      content = function(file) {
+        req(velocity_state$result)
+        .check_fingerprint()
+        df <- build_velocity_validation_summary(velocity_state$result)
+        utils::write.csv(df, file, row.names = FALSE)
+      }
+    )
+
+    # Table d'alignement cellules/genes produite a la validation.
+    output$dl_velocity_mapping <- downloadHandler(
+      filename = function() paste0("velocity_alignment_mapping_", format(Sys.Date(), "%Y-%m-%d"), ".csv"),
+      content = function(file) {
+        req(velocity_state$result)
+        .check_fingerprint()
+        df <- build_velocity_alignment_mapping(velocity_state$result)
+        utils::write.csv(df, file, row.names = FALSE)
+      }
+    )
+
+    # Resultat canonique complet (RDS) — identite, statut, reglages et
+    # avertissements embarques dans l'objet ; analysis_id dans le nom de fichier.
+    output$dl_velocity_result_rds <- downloadHandler(
+      filename = function() {
+        aid <- velocity_state$result$analysis_id %||% "sc-velocity"
+        paste0("velocity_result_", aid, "_", format(Sys.Date(), "%Y-%m-%d"), ".rds")
+      },
+      content = function(file) {
+        req(velocity_state$result)
+        .check_fingerprint()
+        saveRDS(velocity_state$result, file)
       }
     )
 

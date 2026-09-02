@@ -5302,6 +5302,18 @@
       "en": "Export provenance (CSV)"
     },
     {
+      "fr": "Exporter resume validation (CSV)",
+      "en": "Export validation summary (CSV)"
+    },
+    {
+      "fr": "Exporter alignement cellules/genes (CSV)",
+      "en": "Export cell/gene alignment table (CSV)"
+    },
+    {
+      "fr": "Exporter resultat valide (RDS)",
+      "en": "Export validated result (RDS)"
+    },
+    {
       "fr": "En attente d'import velocity...",
       "en": "Waiting for velocity import..."
     },
