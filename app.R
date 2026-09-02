@@ -72,6 +72,7 @@ source("R/sc/sc_abundance_milo.R")  # Stage 14 (4E-1) : Milo, GATED sur le desig
 source("R/sc/sc_abundance_milo_views.R")  # Stage 14 : vues pures du resultat Milo
 source("R/sc/sc_abundance_sccoda.R")  # Stage 15 (4E-2) : scCODA, GATED sur le design Stage 13 (reticulate, jamais de repli silencieux)
 source("R/sc/sc_abundance_sccoda_views.R")  # Stage 15 : vues pures du resultat scCODA
+source("R/sc/sc_abundance_cross_views.R")  # Stage 16 (4E-3) : vues croisées Milo x scCODA, consommatrices pures des deux contrats
 source("R/sc/sc_pipeline.R")
 source("R/sc/sc_export.R")
 
@@ -111,6 +112,7 @@ source("modules/sc/mod_sc_communication.R")
 source("modules/sc/mod_sc_da_design.R")
 source("modules/sc/mod_sc_da_milo.R")  # Stage 14 (4E-1) : orchestration Milo (consomme le design 8c)
 source("modules/sc/mod_sc_da_sccoda.R")  # Stage 15 (4E-2) : orchestration scCODA (consomme le design 8c)
+source("modules/sc/mod_sc_da_cross.R")  # Stage 16 (4E-3) : vues croisées (consomme 8d + 8e, aucun calcul)
 source("modules/sc/mod_sc_mapping.R")
 source("modules/sc/mod_sc.R")
 

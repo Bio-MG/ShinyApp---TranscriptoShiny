@@ -75,6 +75,9 @@ mod_sc_ui <- function(id) {
         accordion_panel(i18n$t("8e. Abondance différentielle — scCODA (composition)"), icon = icon("chart-pie"),
                         value = "8e_da_sccoda",
                         mod_sc_da_sccoda_ui(ns("da_sccoda"))),
+        accordion_panel(i18n$t("8f. Abondance différentielle — vues croisées (Milo × scCODA)"), icon = icon("scale-balanced"),
+                        value = "8f_da_cross",
+                        mod_sc_da_cross_ui(ns("da_cross"))),
         accordion_panel(
           i18n$t("9. Rapport Complet"), icon = icon("file-export"),
           value = "9_report",
@@ -128,6 +131,7 @@ mod_sc_ui <- function(id) {
       nav_panel(i18n$t("DA design"), value = "tab_da_design", mod_sc_da_design_output_ui(ns("da_design"))),
       nav_panel(i18n$t("Milo DA"), value = "tab_da_milo", mod_sc_da_milo_output_ui(ns("da_milo"))),
       nav_panel(i18n$t("scCODA DA"), value = "tab_da_sccoda", mod_sc_da_sccoda_output_ui(ns("da_sccoda"))),
+      nav_panel(i18n$t("DA croisées"), value = "tab_da_cross", mod_sc_da_cross_output_ui(ns("da_cross"))),
       nav_panel(i18n$t("QC"), value = "tab_qc",
         card(max_height = 750,
           div(class = "card-header bg-light", h5(i18n$t("Contrôle Qualité"), class = "card-title mb-0")),
@@ -275,6 +279,7 @@ mod_sc_server <- function(id, global_data) {
     mod_sc_da_design_server("da_design", global_data, shared_rv)
     mod_sc_da_milo_server("da_milo", global_data, shared_rv)
     mod_sc_da_sccoda_server("da_sccoda", global_data, shared_rv)
+    mod_sc_da_cross_server("da_cross", global_data, shared_rv)
 
     # ── traj_reduction / traj_genes mirrors (written by mod_sc_trajectory_server)
 

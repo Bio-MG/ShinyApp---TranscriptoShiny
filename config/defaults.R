@@ -77,3 +77,10 @@ TS_DA_SCCODA_ESS_FAIL       <- 10      # echec de convergence en dessous
 TS_DA_SCCODA_ESS_MIN        <- 100     # avertissement de convergence en dessous
 TS_DA_SCCODA_MAX_DIVERGENCES<- 0       # divergences NUTS tolerees (NA = note)
 TS_DA_SCCODA_SEED           <- 15L     # graine tensorflow enregistree
+
+# --- Vues croisées Milo x scCODA (4E-3 / Stage 16) -----------------------------
+# La comparaison est DESCRIPTIVE (regles explicites, jamais un score composite
+# ni une p-value de consensus). "Signal" Milo = fraction de voisinages
+# significatifs de l'identite >= ce plancher (seuil SpatialFDR : reutilise
+# TS_DA_MILO_DISPLAY_ALPHA).
+TS_DA_CROSS_SIGNIF_FRACTION <- 0.5    # plancher de voisinages significatifs (Milo)

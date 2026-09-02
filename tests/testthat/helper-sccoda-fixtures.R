@@ -38,6 +38,7 @@ source_project_file("R/sc/sc_abundance_milo.R")
 source_project_file("R/sc/sc_abundance_milo_views.R")
 source_project_file("R/sc/sc_abundance_sccoda.R")
 source_project_file("R/sc/sc_abundance_sccoda_views.R")
+source_project_file("R/sc/sc_abundance_cross_views.R")  # Stage 16
 
 .sccoda_identities_by_sample <- list(
   s1 = c(rep("CD4 T", 35), rep("B", 5), rep("NK", 10)),
@@ -46,13 +47,27 @@ source_project_file("R/sc/sc_abundance_sccoda_views.R")
   s4 = c(rep("CD4 T", 15), rep("B", 25), rep("NK", 10))
 )
 
-#' Objet Seurat scCODA : composition decalee + shift PCA (compatible Milo)
-.sccoda_seurat_obj <- function(...) {
-  .milo_seurat_obj(
+#' Objet Seurat scCODA : composition decalee + shifts PCA (compatible Milo).
+#' identity_shift decale les cellules d'identite B sur PC2 — regions
+#' spatialement COHERENTES : les voisinages Milo annotent des nhoods purs B
+#' (pont descriptif voisinages -> identite pour les vues croisees Stage 16).
+.sccoda_seurat_obj <- function(..., identity_shift = 3) {
+  obj <- .milo_seurat_obj(
     meta = .da_meta(samples = c(s1 = 50, s2 = 50, s3 = 50, s4 = 50),
                     identities_by_sample = .sccoda_identities_by_sample),
     ...
   )
+  if (identity_shift != 0) {
+    emb <- SeuratObject::Embeddings(obj, "pca")
+    is_b <- as.character(obj@meta.data$cell_type) == "B"
+    emb[is_b, 2] <- emb[is_b, 2] + identity_shift
+    obj[["pca"]] <- SeuratObject::CreateDimReducObject(
+      embeddings = emb,
+      loadings = matrix(0, nrow = nrow(obj), ncol = ncol(emb)),
+      assay = "RNA", key = "PC_"
+    )
+  }
+  obj
 }
 
 #' Orchestration miroir du module (MCMC reduit pour la vitesse des tests ;

@@ -7748,6 +7748,70 @@
     {
       "fr": "Erreur scCODA :",
       "en": "scCODA error:"
+    },
+    {
+      "fr": "8f. Abondance différentielle — vues croisées (Milo × scCODA)",
+      "en": "8f. Differential abundance — cross-views (Milo × scCODA)"
+    },
+    {
+      "fr": "DA croisées",
+      "en": "Cross-DA views"
+    },
+    {
+      "fr": "Vues croisées DESCRIPTIVES : Milo teste des VOISINAGES (régions d'un graphe), scCODA teste la COMPOSITION par échantillon — deux grandeurs différentes, jamais fusionnées. ",
+      "en": "DESCRIPTIVE cross-views: Milo tests NEIGHBOURHOODS (graph regions), scCODA tests per-sample COMPOSITION — two different quantities, never merged. "
+    },
+    {
+      "fr": "Aucune « p-value de consensus » n'est calculée.",
+      "en": "No \"consensus p-value\" is computed."
+    },
+    {
+      "fr": "Rafraîchir la comparaison",
+      "en": "Refresh the comparison"
+    },
+    {
+      "fr": "Exporter concordance par identité (CSV)",
+      "en": "Export per-identity concordance (CSV)"
+    },
+    {
+      "fr": "Abondance différentielle — vues croisées (Milo × scCODA)",
+      "en": "Differential abundance — cross-views (Milo × scCODA)"
+    },
+    {
+      "fr": "Concordance par identité",
+      "en": "Per-identity concordance"
+    },
+    {
+      "fr": "Mappage voisinages → identités",
+      "en": "Neighbourhood → identity mapping"
+    },
+    {
+      "fr": "Effets scCODA (rappel)",
+      "en": "scCODA effects (reminder)"
+    },
+    {
+      "fr": "Lancez Milo (8d) ET scCODA (8e) pour activer la lecture croisée.",
+      "en": "Run Milo (8d) AND scCODA (8e) to enable the cross-reading."
+    },
+    {
+      "fr": "Résultats comparables : même objet, même contraste, même colonne d'identité.",
+      "en": "Comparable results: same object, same contrast, same identity column."
+    },
+    {
+      "fr": "Comparabilité partielle — lisez les réserves :",
+      "en": "Partial comparability — read the caveats:"
+    },
+    {
+      "fr": "Erreur vues croisées :",
+      "en": "Cross-views error:"
+    },
+    {
+      "fr": "Deux GRANDEURS DIFFÉRENTES : la médiane des logFC de voisinages (Milo, niveau voisinage) et l'effet compositionnel (scCODA, niveau échantillon) ne mesurent pas la même chose — la concordance est descriptive et exploratoire.",
+      "en": "Two DIFFERENT QUANTITIES: the median neighbourhood logFC (Milo, neighbourhood level) and the compositional effect (scCODA, sample level) do not measure the same thing — the concordance is descriptive and exploratory."
+    },
+    {
+      "fr": "Les cellules ne sont pas des réplicats biologiques : chaque vue porte le contexte de composition par échantillon. Un désaccord peut provenir des échelles, des effectifs ou d'une biologie captée différemment — rien ne tranche.",
+      "en": "Cells are not biological replicates: every view carries the per-sample composition context. A disagreement may stem from scales, sample sizes or biology captured differently — nothing arbitrates."
     }
   ]
 }
