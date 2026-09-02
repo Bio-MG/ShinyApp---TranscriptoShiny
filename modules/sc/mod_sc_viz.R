@@ -205,9 +205,11 @@ mod_sc_viz_ui <- function(id) {
     div(class = "alert alert-light", style = "font-size:0.72em;opacity:0.55;",
         bsicons::bs_icon("hourglass-split"), tags$strong(" Bloc 2 — Régulation & Fonction"),
         i18n$t(" (à venir — régulons, cartes d'enrichissement).")),
-    div(class = "alert alert-light", style = "font-size:0.72em;opacity:0.55;margin-bottom:0;",
-        bsicons::bs_icon("hourglass-split"), tags$strong(" Bloc 3 — Dynamique & Écosystème"),
-        i18n$t(" (à venir — vélocité ARN, communication cellulaire, Milo, scCODA)."))
+    # Bloc 3 : fonctionnalites livrees (panels 8 a 8f + 9b) — carte "disponible"
+    # (plus un placeholder "a venir") ; decision UX 2026-09-03, mission 4F.
+    div(class = "alert alert-light", style = "font-size:0.72em;margin-bottom:0;",
+        bsicons::bs_icon("check-circle-fill"), tags$strong(" Bloc 3 — Dynamique & Écosystème"),
+        i18n$t(" Disponible : vélocité ARN (8), communication (8b), Milo (8d), scCODA (8e), vues croisées (8f) — rapport consolidé (9b)."))
     
     
   )
