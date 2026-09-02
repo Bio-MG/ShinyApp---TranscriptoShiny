@@ -177,6 +177,9 @@ mod_sc_da_design_server <- function(id, global_data, shared_rv = NULL) {
         )
         da_state$result <- canonical
         da_state$object_fingerprint <- velocity_object_fingerprint(obj)
+        # Expose le resultat canonique aux consommateurs Stage 14+ (Milo,
+        # scCODA) — ils passent TOUS par assert_da_design_result(method=...).
+        if (!is.null(shared_rv)) shared_rv$da_design_result <- canonical
 
         provenance_append(shared_rv, canonical$provenance)
 

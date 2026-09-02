@@ -43,3 +43,18 @@ TS_DA_MIN_REPLICATES_PER_CONDITION  <- 2L   # blocage en dessous (par condition)
 TS_DA_MIN_CELLS_PER_SAMPLE          <- 10L  # avertissement en dessous (echantillon faible)
 TS_DA_MIN_IDENTITY_CELLS_PER_SAMPLE <- 5L   # avertissement en dessous (identite sous-representee)
 TS_DA_CELLS_IMBALANCE_RATIO         <- 3    # avertissement au-dessus (ratio max/min cellules par echantillon)
+
+# --- Milo (4E-1) --------------------------------------------------------------
+# Construction des voisinages + modele DA par voisinage (miloR). La graine
+# est enregistree pour la reproductibilite declaree (le graphe kNN exact est
+# deterministe ; la graine couvre les eventuels liens/empiriques).
+TS_DA_MILO_K                     <- 30L        # k du graphe kNN et des voisinages
+TS_DA_MILO_PROP                  <- 0.1        # proportion de voisinages conserves (makeNhoods)
+TS_DA_MILO_D                     <- 30L        # dimensionnalite latente (plafonnee a ncol de la reduction)
+TS_DA_MILO_REFINEMENT_SCHEME     <- "graph"    # makeNhoods refinement_scheme
+TS_DA_MILO_FDR_WEIGHTING         <- "k-distance" # graphSpatialFDR (ponderation k-distance)
+TS_DA_MILO_MIN_MEAN              <- 0          # seuil d'expression minimale testNhoods (defaut miloR)
+TS_DA_MILO_ROBUST                <- TRUE       # glmQLFit robust (defaut miloR)
+TS_DA_MILO_IDENTITY_FRACTION_MIN <- 0.7        # fraction min d'identite pour annoter un voisinage (convention miloR)
+TS_DA_MILO_DISPLAY_ALPHA         <- 0.1        # seuil SpatialFDR d'affichage des voisinages significatifs (vues)
+TS_DA_MILO_SEED                  <- 14L        # graine enregistree dans la provenance

@@ -69,6 +69,9 @@ mod_sc_ui <- function(id) {
         accordion_panel(i18n$t("8c. Abondance différentielle (design)"), icon = icon("balance-scale"),
                         value = "8c_da_design",
                         mod_sc_da_design_ui(ns("da_design"))),
+        accordion_panel(i18n$t("8d. Abondance différentielle — Milo (voisinages)"), icon = icon("project-diagram"),
+                        value = "8d_da_milo",
+                        mod_sc_da_milo_ui(ns("da_milo"))),
         accordion_panel(
           i18n$t("9. Rapport Complet"), icon = icon("file-export"),
           value = "9_report",
@@ -120,6 +123,7 @@ mod_sc_ui <- function(id) {
       nav_panel(i18n$t("Velocity"), value = "tab_velocity", mod_sc_velocity_output_ui(ns("velocity"))),
       nav_panel(i18n$t("Communication"), value = "tab_communication", mod_sc_communication_output_ui(ns("communication"))),
       nav_panel(i18n$t("DA design"), value = "tab_da_design", mod_sc_da_design_output_ui(ns("da_design"))),
+      nav_panel(i18n$t("Milo DA"), value = "tab_da_milo", mod_sc_da_milo_output_ui(ns("da_milo"))),
       nav_panel(i18n$t("QC"), value = "tab_qc",
         card(max_height = 750,
           div(class = "card-header bg-light", h5(i18n$t("Contrôle Qualité"), class = "card-title mb-0")),
@@ -265,6 +269,7 @@ mod_sc_server <- function(id, global_data) {
     mod_sc_velocity_server("velocity", global_data, shared_rv)
     mod_sc_communication_server("communication", global_data, shared_rv)
     mod_sc_da_design_server("da_design", global_data, shared_rv)
+    mod_sc_da_milo_server("da_milo", global_data, shared_rv)
 
     # ── traj_reduction / traj_genes mirrors (written by mod_sc_trajectory_server)
 

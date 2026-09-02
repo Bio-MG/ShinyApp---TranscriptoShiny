@@ -68,6 +68,8 @@ source("R/sc/sc_velocity.R")
 source("R/sc/sc_communication.R")  # Stage 11 (4D-1) : APRES sc_velocity.R (reutilise velocity_object_fingerprint)
 source("R/sc/sc_communication_views.R")  # Stage 12 (4D-2) : vues exploratoires, APRES sc_communication.R
 source("R/sc/sc_abundance_design.R")  # Stage 13 (4E-0) : validation du design DA (reutilise check_design_confounding)
+source("R/sc/sc_abundance_milo.R")  # Stage 14 (4E-1) : Milo, GATED sur le design Stage 13
+source("R/sc/sc_abundance_milo_views.R")  # Stage 14 : vues pures du resultat Milo
 source("R/sc/sc_pipeline.R")
 source("R/sc/sc_export.R")
 
@@ -105,6 +107,7 @@ source("modules/sc/mod_sc_trajectory.R")
 source("modules/sc/mod_sc_velocity.R")
 source("modules/sc/mod_sc_communication.R")
 source("modules/sc/mod_sc_da_design.R")
+source("modules/sc/mod_sc_da_milo.R")  # Stage 14 (4E-1) : orchestration Milo (consomme le design 8c)
 source("modules/sc/mod_sc_mapping.R")
 source("modules/sc/mod_sc.R")
 

@@ -7524,6 +7524,122 @@
     {
       "fr": "%s %s — %d échantillon(s), %d condition(s), %d cellule(s).",
       "en": "%s %s — %d sample(s), %d condition(s), %d cell(s)."
+    },
+    {
+      "fr": "8d. Abondance différentielle — Milo (voisinages)",
+      "en": "8d. Differential abundance — Milo (neighbourhoods)"
+    },
+    {
+      "fr": "Milo DA",
+      "en": "Milo DA"
+    },
+    {
+      "fr": "Milo teste l'abondance différentielle PAR VOISINAGE (régions d'un graphe kNN) — ce n'est PAS un test par type cellulaire. ",
+      "en": "Milo tests differential abundance PER NEIGHBOURHOOD (regions of a kNN graph) — it is NOT a per-cell-type test. "
+    },
+    {
+      "fr": "Le design du panel 8c est OBLIGATOIRE : un design bloqué ou périmé est refusé.",
+      "en": "The panel 8c design is MANDATORY: a blocked or stale design is refused."
+    },
+    {
+      "fr": "Réduction de l'espace latent (graphe)",
+      "en": "Latent space reduction (graph)"
+    },
+    {
+      "fr": "Condition cible (logFC > 0)",
+      "en": "Target condition (logFC > 0)"
+    },
+    {
+      "fr": "Condition référence",
+      "en": "Reference condition"
+    },
+    {
+      "fr": "Annotation d'identité des voisinages (descriptive)",
+      "en": "Neighbourhood identity annotation (descriptive)"
+    },
+    {
+      "fr": "Inclure le terme batch (design) dans le modèle",
+      "en": "Include the design batch term in the model"
+    },
+    {
+      "fr": "Graine",
+      "en": "Seed"
+    },
+    {
+      "fr": "Lancer Milo",
+      "en": "Run Milo"
+    },
+    {
+      "fr": "En attente : validez d'abord le design (panel 8c), puis lancez Milo.",
+      "en": "Waiting: first validate the design (panel 8c), then run Milo."
+    },
+    {
+      "fr": "Exporter résumé Milo (CSV)",
+      "en": "Export Milo summary (CSV)"
+    },
+    {
+      "fr": "Exporter table DA par voisinage (CSV)",
+      "en": "Export per-neighbourhood DA table (CSV)"
+    },
+    {
+      "fr": "Exporter mappage cellules → voisinages (CSV)",
+      "en": "Export cell → neighbourhood mapping (CSV)"
+    },
+    {
+      "fr": "Exporter contexte échantillons (CSV)",
+      "en": "Export sample-level context (CSV)"
+    },
+    {
+      "fr": "Abondance différentielle — Milo (voisinages)",
+      "en": "Differential abundance — Milo (neighbourhoods)"
+    },
+    {
+      "fr": "Signal sur embedding",
+      "en": "Signal on embedding"
+    },
+    {
+      "fr": "Distribution logFC",
+      "en": "logFC distribution"
+    },
+    {
+      "fr": "Composition échantillons",
+      "en": "Sample composition"
+    },
+    {
+      "fr": "Table DA (voisinages)",
+      "en": "DA table (neighbourhoods)"
+    },
+    {
+      "fr": "Le signal Milo est NIVEAU VOISINAGE (région du graphe) : l'identité d'un voisinage (fraction ≥ 0.7) est descriptive et ne constitue PAS un DA par type cellulaire.",
+      "en": "The Milo signal is NEIGHBOURHOOD-LEVEL (graph region): a neighbourhood's identity (fraction ≥ 0.7) is descriptive and is NOT a per-cell-type DA."
+    },
+    {
+      "fr": "Les cellules ne sont pas des réplicats biologiques : le contexte de composition reste au niveau échantillon.",
+      "en": "Cells are not biological replicates: the composition context remains at the sample level."
+    },
+    {
+      "fr": "Milo n'interprète PAS la composition d'un type cellulaire — pour la DA compositionnelle par échantillon, voir scCODA (4E-2, à venir).",
+      "en": "Milo does NOT interpret cell-type composition — for sample-level compositional DA, see scCODA (4E-2, upcoming)."
+    },
+    {
+      "fr": "(définie par le design)",
+      "en": "(as defined by the design)"
+    },
+    {
+      "fr": "Aucun design validé : passez d'abord par le panel 8c (validation du plan expérimental).",
+      "en": "No validated design: go through panel 8c first (experimental design validation)."
+    },
+    {
+      "fr": "Design valide disponible : choisissez le contraste puis lancez Milo.",
+      "en": "Valid design available: choose the contrast then run Milo."
+    },
+    {
+      "fr": "Analyse Milo terminée.",
+      "en": "Milo analysis completed."
+    },
+    {
+      "fr": "Erreur Milo :",
+      "en": "Milo error:"
     }
   ]
 }
