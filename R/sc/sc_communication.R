@@ -1178,20 +1178,7 @@ finalize_communication_result <- function(
     n_rows_input = as.integer(n_input_rows),
     n_rows_canonical = as.integer(nrow(canonical_table))
   )
-  result$object_identity <- list(
-    fingerprint = .communication_object_fingerprint(seurat_obj),
-    method = paste0(
-      "v2 (velocity_object_fingerprint reutilise) : dimensions + 20 ",
-      "premiers/derniers barcodes de cellules et identifiants de genes ",
-      "(deterministe, sans adresse memoire)"
-    ),
-    seurat_dims = if (is.null(seurat_obj)) {
-      c(seurat_genes = NA_integer_, seurat_cells = NA_integer_)
-    } else {
-      c(seurat_genes = as.integer(nrow(seurat_obj)),
-        seurat_cells = as.integer(ncol(seurat_obj)))
-    }
-  )
+  result$object_identity <- build_object_identity_v2(seurat_obj)
   result$warnings <- warnings_all
 
   entry <- new_provenance_entry(
