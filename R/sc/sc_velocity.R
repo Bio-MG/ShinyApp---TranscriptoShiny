@@ -54,7 +54,80 @@
 # exportes comme s'ils etaient current. La documentation complete du contrat
 # (schema d'export, politique de compatibilite) est figee au Stage 10 dans
 # docs/contracts/VELOCITY_RESULT_CONTRACT.md.
+#
+# ── API PUBLIQUE FIGEE (Stage 10) ───────────────────────────────────────────
+# velocity_public_api() enumere la surface publique de ce fichier ; le test de
+# freeze (tests/testthat/test-velocity-contract-freeze.R) extrait les
+# affectations top-level et refuse TOUTE fonction publique ajoutée ou
+# renommée hors de cette liste (et toute disparition). Les helpers internes,
+# réservés à ce fichier, sont préfixés d'un point :
+#   .VELOCITY_STATUS_STATES        — états du contrat (accédé via
+#                                    velocity_validity_states())
+#   .velocity_stop()               — erreur classée velocity_validation_error
+#   .velocity_matrix_is_numeric()  — test numérique sparse-aware (dgCMatrix)
+#   .read_lines_maybe_gz()         — lecture barcodes/features (I/O MTX)
+#   .provenance_versions_string()  — aplatissage versions pour CSV export
 # =============================================================================
+
+# Champs du contrat de résultat canonique — SOURCE DE VÉRITÉ partagée par le
+# code (ci-dessous), le test de freeze (test-velocity-contract-freeze.R) et la
+# documentation (docs/contracts/VELOCITY_RESULT_CONTRACT.md). Toute
+# modification doit passer par les TROIS simultanément.
+
+#' Champs documentés du contrat de résultat velocity canonique
+#'
+#' Le résultat canonique est un SUR-ENSEMBLE de la structure validée (champs
+#' historiques conservés pour compatibilité) ; cette liste fige les champs
+#' contractuels documentés. Les champs absents restent NULL — jamais
+#' fabriqués.
+#'
+#' @return Vecteur character des 22 champs contractuels.
+#' @export
+velocity_contract_fields <- function() {
+    c(
+        "type", "status", "spliced", "unspliced", "ambiguous",
+        "cell_names", "gene_names", "dimensions", "orientation",
+        "cell_alignment", "gene_alignment", "embedding_alignment",
+        "velocity_vectors", "vector_validation", "input_summary",
+        "object_identity", "warnings", "provenance",
+        "analysis_id", "timestamp_utc", "cell_mapping", "gene_mapping"
+    )
+}
+
+#' Surface publique figée de R/sc/sc_velocity.R (Stage 10)
+#'
+#' Le test de freeze refuse toute fonction top-level non préfixée d'un point
+#' qui ne figure pas dans cette liste : l'API velocity ne peut évoluer que de
+#' façon explicite (code + test + contrat documentaire en même temps).
+#'
+#' @return Vecteur character des noms de fonctions publiques.
+#' @export
+velocity_public_api <- function() {
+    c(
+        # Contrat / états
+        "velocity_validity_states", "velocity_status_labels",
+        "velocity_status_is_valid", "velocity_status_allows_matrices",
+        "assert_velocity_result", "velocity_error_state",
+        "velocity_contract_fields", "velocity_public_api",
+        # I/O + validation d'entrée
+        "detect_velocity_orientation", "validate_velocity_identifiers",
+        "normalize_velocity_cell_barcodes", "normalize_velocity_gene_ids",
+        "validate_velocity_matrices", "read_velocity_rds",
+        "validate_velocity_rds_metadata", "read_velocity_mtx",
+        "validate_precomputed_velocity_vectors", "align_velocity_embedding",
+        # Résultat canonique / identité / provenance
+        "finalize_velocity_result", "velocity_object_fingerprint",
+        "velocity_result_is_stale", "build_velocity_validation_summary",
+        "build_velocity_alignment_mapping",
+        # Visualisations (consommatrices pures)
+        "plot_velocity_phase_portrait", "plot_velocity_embedding",
+        "plot_velocity_vector_field", "plot_velocity_coverage",
+        "plot_velocity_alignment_qc",
+        # Exports
+        "build_velocity_provenance_export",
+        "build_velocity_cell_vectors_export", "velocity_export_filename"
+    )
+}
 
 # Etats de validite explicites du contrat (source de verite ; ne pas
 # re-enseigner ailleurs — velocity_validity_states() est l'accesseur public).
