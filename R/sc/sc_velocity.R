@@ -144,6 +144,117 @@ velocity_status_is_valid <- function(status) {
     status %in% c("valid", "valid_no_vectors", "valid_partial_embedding")
 }
 
+#' Le statut autorise-t-il les vues basees sur les matrices alignees ?
+#'
+#' Les matrices d'un resultat invalide_vector_projection restent validees :
+#' les vues matricielles (phase portrait, coordonnees) restent licites, la
+#' couche vecteurs seule est interdite. Les etats fatals ne produisent jamais
+#' d'objet stocke (echec avant finalisation).
+#'
+#' @param status Chaine d'etat (result$status).
+#' @return Logical.
+#' @export
+velocity_status_allows_matrices <- function(status) {
+    status %in% c(
+        "valid", "valid_no_vectors", "valid_partial_embedding",
+        "invalid_vector_projection"
+    )
+}
+
+#' Verifier que l'objet est un resultat velocity canonique plottable (Stage 9)
+#'
+#' Garde de contrat pour TOUTE visualisation : consomme uniquement un objet
+#' produit par finalize_velocity_result(), refuse un resultat perime vis-a-vis
+#' de l'objet Seurat fourni, et applique le prerequis de la vue demandee.
+#' Une visualisation ne cree, n'infere et ne repare jamais un resultat
+#' scientifique (Stage 9).
+#'
+#' @param velocity_result Objet a verifier (resultat canonique attendu).
+#' @param view Vue demandee : "any" (contrat seul), "matrices" (vues
+#'   spliced/unspliced + coordonnees) ou "vectors" (vues fleches — exige des
+#'   vecteurs STRICTEMENT valides).
+#' @param seurat_obj Objet Seurat courant optionnel : fourni, la peremption
+#'   (stale_against_current_seurat_object) est verifiee.
+#' @param context Contexte cite dans les messages d'erreur.
+#' @return Le resultat, invisible (pipable, conforme au style assert_*).
+#' @export
+assert_velocity_result <- function(
+    velocity_result,
+    view = c("any", "matrices", "vectors"),
+    seurat_obj = NULL,
+    context = "visualisation velocity"
+) {
+    view <- match.arg(view)
+
+    if (!is.list(velocity_result) ||
+        !identical(velocity_result$type %||% NULL, "rna_velocity") ||
+        is.null(velocity_result$status)) {
+        .velocity_stop(
+            "invalid_input",
+            sprintf(
+                paste0("Echec %s : resultat velocity canonique requis ",
+                       "(finalize_velocity_result()) — recu : %s."),
+                context,
+                if (is.null(velocity_result)) "NULL"
+                else paste(class(velocity_result), collapse = "/")
+            )
+        )
+    }
+
+    if (!velocity_result$status %in% velocity_validity_states()) {
+        .velocity_stop(
+            "invalid_input",
+            sprintf(
+                "Echec %s : statut velocity inconnu '%s'.",
+                context, velocity_result$status
+            )
+        )
+    }
+
+    # Peremption : un resultat perime n'est jamais affiche ni exporte.
+    if (!is.null(seurat_obj) &&
+        isTRUE(velocity_result_is_stale(velocity_result, seurat_obj))) {
+        .velocity_stop(
+            "stale_against_current_seurat_object",
+            sprintf(
+                "Echec %s : %s",
+                context,
+                velocity_status_labels()[["stale_against_current_seurat_object"]]
+            )
+        )
+    }
+
+    if (view %in% c("matrices", "vectors")) {
+        if (is.null(velocity_result$spliced) ||
+            is.null(velocity_result$unspliced) ||
+            !velocity_status_allows_matrices(velocity_result$status)) {
+            .velocity_stop(
+                "invalid_input",
+                sprintf(
+                    paste0("Echec %s : matrices alignees validees requises ",
+                           "(statut actuel : %s)."),
+                    context, velocity_result$status
+                )
+            )
+        }
+    }
+
+    if (identical(view, "vectors") &&
+        is.null(velocity_result$velocity_vectors)) {
+        .velocity_stop(
+            "invalid_vector_projection",
+            sprintf(
+                paste0("Echec %s : aucun vecteur velocity valide — la vue ",
+                       "fleches est refusee. Importez des vecteurs pre-calcules ",
+                       "valides ou utilisez la vue coordonnees (points seuls)."),
+                context
+            )
+        )
+    }
+
+    invisible(velocity_result)
+}
+
 #' Erreur de validation velocity avec etat structure
 #'
 #' Interne : la chaine de validation leve des erreurs portant la classe
@@ -1128,53 +1239,88 @@ read_velocity_mtx <- function(
     mat
 }
 
-#' Plot an RNA velocity phase portrait
+#' Plot an RNA velocity phase portrait (Stage 9)
 #'
 #' Descriptive scatter of spliced vs unspliced counts for one gene. ALL cells
 #' are plotted, including zero-count cells (no filtering, no padding). No
 #' trend line of any kind is drawn: no geom_smooth(), no lm, no loess, no
-#' induction/repression curve.
+#' induction/repression curve. Consomme EXCLUSIVEMENT un resultat canonique
+#' valide (assert_velocity_result) — aucune creation, inference ni reparation.
 #'
-#' @param velocity_result Validated velocity result.
+#' Portee des donnees declaree dans le sous-titre :
+#'   - data_scope = "preview" : sous-echantillonnage au cap declare
+#'     (TS_VELOCITY_MAX_PORTRAIT_CELLS, tirage a graine fixe seed = 1) ;
+#'   - data_scope = "full"    : donnees completes, aucun sous-echantillonnage.
+#'
+#' @param validated_result Resultat velocity canonique (finalize_velocity_result()).
 #' @param gene Gene identifier.
-#' @param max_cells Maximum cells plotted.
+#' @param data_scope "preview" (apercu avec cap affiche) ou "full" (complet).
+#' @param max_cells Cap explicite ; par defaut le parametre declare en config.
+#' @param seurat_obj Objet Seurat courant optionnel (verification de peremption).
 #' @return A ggplot object.
 #' @export
 plot_velocity_phase_portrait <- function(
-    velocity_result,
+    validated_result,
     gene,
-    max_cells = 50000L
+    data_scope = c("preview", "full"),
+    max_cells = NULL,
+    seurat_obj = NULL
 ) {
-    if (!gene %in% rownames(velocity_result$spliced) ||
-        !gene %in% rownames(velocity_result$unspliced)) {
-        stop(
-            "Le gene selectionne est absent des matrices spliced et unspliced : ",
-            gene
+    data_scope <- match.arg(data_scope)
+    assert_velocity_result(
+        validated_result, view = "matrices", seurat_obj = seurat_obj,
+        context = "phase portrait velocity"
+    )
+
+    if (is.null(max_cells)) {
+        max_cells <- if (exists("TS_VELOCITY_MAX_PORTRAIT_CELLS")) {
+            TS_VELOCITY_MAX_PORTRAIT_CELLS
+        } else {
+            50000L
+        }
+    }
+    max_cells <- as.integer(max_cells)
+
+    if (!gene %in% rownames(validated_result$spliced) ||
+        !gene %in% rownames(validated_result$unspliced)) {
+        .velocity_stop(
+            "invalid_input",
+            paste0(
+                "Le gene selectionne est absent des matrices spliced et ",
+                "unspliced : ", gene
+            )
         )
     }
 
     spliced_values <- as.numeric(
-        velocity_result$spliced[gene, ]
+        validated_result$spliced[gene, ]
     )
 
     unspliced_values <- as.numeric(
-        velocity_result$unspliced[gene, ]
+        validated_result$unspliced[gene, ]
     )
 
     plot_data <- data.frame(
         unspliced = unspliced_values,
         spliced = spliced_values,
-        cell_barcode = colnames(velocity_result$spliced),
+        cell_barcode = colnames(validated_result$spliced),
         stringsAsFactors = FALSE
     )
 
-    if (nrow(plot_data) > max_cells) {
+    n_total <- nrow(plot_data)
+    scope_text <- sprintf("Portee des donnees : complet (%d cellules).", n_total)
+    if (identical(data_scope, "preview") && n_total > max_cells) {
         set.seed(1L)
         plot_data <- plot_data[
-            sample.int(nrow(plot_data), max_cells),
+            sample.int(n_total, max_cells),
             ,
             drop = FALSE
         ]
+        scope_text <- sprintf(
+            paste0("Apercu sous-echantillonne : %d/%d cellules ",
+                   "(tirage aleatoire a graine fixe : seed = 1)."),
+            max_cells, n_total
+        )
     }
 
     ggplot2::ggplot(
@@ -1191,9 +1337,14 @@ plot_velocity_phase_portrait <- function(
             x = "Transcrits unspliced",
             y = "Transcrits spliced",
             title = paste("Phase portrait :", gene),
-            subtitle = paste0(
-                "Nuage spliced / unspliced — visualisation descriptive, ",
-                "pas un modele de transcription."
+            subtitle = paste(
+                paste0(
+                    "Nuage spliced / unspliced — visualisation descriptive, ",
+                    "pas un modele de transcription."
+                ),
+                scope_text,
+                sprintf("Analyse : %s.", validated_result$analysis_id %||% NA_character_),
+                sep = " "
             )
         )
 }
@@ -1802,6 +1953,219 @@ build_velocity_alignment_mapping <- function(velocity_result) {
     out[order(match(out$axis, c("cell", "gene"))), , drop = FALSE]
 }
 
+#' Vue densite/couverture des vecteurs valides (Stage 9)
+#'
+#' Histogramme des magnitudes |dx,dy| des vecteurs STRICTEMENT valides du
+#' resultat canonique. Vue descriptive : aucune implication de direction ou
+#' de causalite. Sans vecteurs valides, affiche un message explicite au lieu
+#' d'un graphique vide.
+#'
+#' @param validated_result Resultat velocity canonique.
+#' @param seurat_obj Objet Seurat courant optionnel (peremption).
+#' @return ggplot object.
+#' @export
+plot_velocity_coverage <- function(validated_result, seurat_obj = NULL) {
+    assert_velocity_result(
+        validated_result, view = "matrices", seurat_obj = seurat_obj,
+        context = "couverture velocity"
+    )
+    vectors <- validated_result$velocity_vectors
+    if (is.null(vectors)) {
+        return(
+            ggplot2::ggplot() +
+                ggplot2::annotate(
+                    "text", x = 0.5, y = 0.5,
+                    label = paste0(
+                        "Aucun vecteur velocity valide : vue de couverture ",
+                        "indisponible (coordonnees seules, aucune fleche)."
+                    ),
+                    size = 4.5, colour = "grey40"
+                ) +
+                ggplot2::theme_void() +
+                ggplot2::labs(
+                    title = "Densite des vecteurs velocity valides",
+                    subtitle = sprintf(
+                        "Aucun vecteur valide (analyse : %s) — coordonnees seules.",
+                        validated_result$analysis_id %||% NA_character_
+                    )
+                )
+        )
+    }
+
+    vectors <- as.matrix(vectors)
+    coverage_df <- data.frame(
+        speed = sqrt(
+            as.numeric(vectors[, 1L])^2 + as.numeric(vectors[, 2L])^2
+        )
+    )
+
+    ggplot2::ggplot(coverage_df, ggplot2::aes(x = speed)) +
+        ggplot2::geom_histogram(
+            bins = 40, fill = "#3B82F6", colour = "white", alpha = 0.85
+        ) +
+        ggplot2::theme_classic() +
+        ggplot2::labs(
+            x = "Magnitude du vecteur pre-calcule (|dx, dy|)",
+            y = "Cellules",
+            title = "Densite des vecteurs velocity valides",
+            subtitle = sprintf(
+                paste0("%d cellules alignees avec vecteur valide (analyse : %s). ",
+                       "Vue descriptive — aucune interpretation biologique."),
+                nrow(coverage_df),
+                validated_result$analysis_id %||% NA_character_
+            )
+        )
+}
+
+#' Vue QC d'alignement velocity (Stage 9)
+#'
+#' Effectifs d'entree / alignes / absents pour les cellules, les genes et
+#' l'embedding, lus directement dans le resultat canonique. QC technique
+#' uniquement : aucune interpretation biologique des populations.
+#'
+#' @param validated_result Resultat velocity canonique.
+#' @param seurat_obj Objet Seurat courant optionnel (peremption).
+#' @return ggplot object.
+#' @export
+plot_velocity_alignment_qc <- function(validated_result, seurat_obj = NULL) {
+    assert_velocity_result(
+        validated_result, view = "matrices", seurat_obj = seurat_obj,
+        context = "QC alignement velocity"
+    )
+    ca <- validated_result$cell_alignment %||% list()
+    ga <- validated_result$gene_alignment %||% list()
+    emb <- validated_result$embedding_alignment
+
+    qc_df <- data.frame(
+        axis = c(
+            rep("Cellules", 3L),
+            rep("Genes", 3L)
+        ),
+        categorie = c(
+            "Entree", "Alignees", "Absentes",
+            "Entree", "Alignes", "Absents"
+        ),
+        n = as.integer(c(
+            ca$n_input %||% 0L, ca$n_matched %||% 0L, ca$n_missing %||% 0L,
+            ga$n_input %||% 0L, ga$n_matched %||% 0L, ga$n_missing %||% 0L
+        )),
+        stringsAsFactors = FALSE
+    )
+    if (!is.null(emb)) {
+        qc_df <- rbind(
+            qc_df,
+            data.frame(
+                axis = c("Embedding", "Embedding"),
+                categorie = c("Couvertes", "Manquantes"),
+                n = as.integer(c(
+                    emb$n_embedding_matched %||% 0L,
+                    emb$n_embedding_missing %||% 0L
+                )),
+                stringsAsFactors = FALSE
+            )
+        )
+    }
+
+    ggplot2::ggplot(
+        qc_df,
+        ggplot2::aes(x = stats::reorder(categorie, n), y = n)
+    ) +
+        ggplot2::geom_col(fill = "#2980B9", alpha = 0.9) +
+        ggplot2::facet_wrap(~axis, scales = "free_x") +
+        ggplot2::theme_classic() +
+        ggplot2::labs(
+            x = NULL,
+            y = "Effectifs",
+            title = "QC d'alignement velocity (technique)",
+            subtitle = sprintf(
+                "Aucune interpretation biologique. Analyse : %s.",
+                validated_result$analysis_id %||% NA_character_
+            )
+        )
+}
+
+#' Export CSV par cellule : vecteurs et alignement (Stage 9)
+#'
+#' Une ligne par cellule alignee : coordonnees d'embedding (si couvertes),
+#' composantes dx/dy du vecteur valide (si disponibles), indicateurs
+#' has_vector/in_embedding, plus l'identite de l'analyse. Lecture directe du
+#' resultat canonique — aucune deduction.
+#'
+#' @param validated_result Resultat velocity canonique.
+#' @return data.frame (n_cells lignes).
+#' @export
+build_velocity_cell_vectors_export <- function(validated_result) {
+    assert_velocity_result(
+        validated_result, view = "matrices",
+        context = "export vecteurs par cellule"
+    )
+    cells <- validated_result$cell_names
+    n <- length(cells)
+
+    vec <- validated_result$velocity_vectors
+    dx <- rep(NA_real_, n)
+    dy <- rep(NA_real_, n)
+    if (!is.null(vec)) {
+        vec <- as.matrix(vec)
+        m <- match(cells, rownames(vec))
+        ok <- !is.na(m)
+        dx[ok] <- as.numeric(vec[m[ok], 1L])
+        dy[ok] <- as.numeric(vec[m[ok], 2L])
+    }
+
+    ali <- validated_result$embedding_alignment
+    ex <- rep(NA_real_, n)
+    ey <- rep(NA_real_, n)
+    if (!is.null(ali) && !is.null(ali$embedding)) {
+        emb <- as.matrix(ali$embedding)
+        m2 <- match(cells, rownames(emb))
+        ok2 <- !is.na(m2)
+        ex[ok2] <- as.numeric(emb[m2[ok2], 1L])
+        ey[ok2] <- as.numeric(emb[m2[ok2], 2L])
+    }
+
+    data.frame(
+        cell_barcode = cells,
+        embedding_x = ex,
+        embedding_y = ey,
+        vector_dx = dx,
+        vector_dy = dy,
+        has_vector = !is.na(dx),
+        in_embedding = !is.na(ex),
+        analysis_id = rep(validated_result$analysis_id %||% NA_character_, n),
+        status = rep(validated_result$status %||% NA_character_, n),
+        timestamp_utc = rep(validated_result$timestamp_utc %||% NA_character_, n),
+        stringsAsFactors = FALSE
+    )
+}
+
+#' Nom de fichier d'export trace par l'identifiant d'analyse (Stage 9)
+#'
+#' @param validated_result Resultat velocity canonique.
+#' @param kind Prefixe descriptif (ex. "velocity_phase_portrait").
+#' @param ext Extension ("png", "pdf", "csv").
+#' @return Chaine "<kind>_<analysis_id>_<date>.<ext>".
+#' @export
+velocity_export_filename <- function(validated_result, kind, ext) {
+    if (is.null(validated_result) || !is.list(validated_result)) {
+        .velocity_stop(
+            "invalid_input",
+            paste0(
+                "velocity_export_filename() : resultat velocity canonique ",
+                "requis."
+            )
+        )
+    }
+    aid <- validated_result$analysis_id %||% "sc-velocity"
+    sprintf(
+        "%s_%s_%s.%s",
+        as.character(kind)[1L],
+        aid,
+        format(Sys.Date(), "%Y-%m-%d"),
+        as.character(ext)[1L]
+    )
+}
+
 #' Build velocity provenance export data
 #'
 #' @param velocity_result Validated velocity result.
@@ -1898,67 +2262,156 @@ build_velocity_provenance_export <- function(
     )
 }
 
-#' Plot precomputed velocity embedding (coordinates + optional arrows)
+#' Plot the velocity embedding of a validated result (Stage 9)
 #'
-#' Coordinates and velocity vectors are deliberately separate inputs:
-#' `vectors = NULL` renders the coordinate scatter ONLY (no arrows are ever
-#' fabricated from coordinates). When vectors are supplied, arrows are drawn
-#' only for cells present in BOTH layers, matched by exact barcode rownames
-#' (no silent reordering; partial coverage is allowed and reported).
+#' Consomme EXCLUSIVEMENT un resultat canonique valide. Les fleches proviennent
+#' UNIQUEMENT des vecteurs strictement valides embarques dans le resultat
+#' (result$velocity_vectors) : des coordonnees seules n'engendrent jamais de
+#' fleches, et les coordonnees ne sont JAMAIS substituees aux vecteurs.
+#' Couverture partielle, rejet de vecteurs et portee de donnees sont affiches
+#' explicitement dans le sous-titre.
 #'
-#' @param embeddings Two-column numeric matrix/data.frame of cell coordinates,
-#'   with cell barcodes as rownames.
-#' @param vectors Optional validated 2-column dx/dy matrix with cell-barcodes
-#'   as rownames (must pass validate_precomputed_velocity_vectors() upstream).
-#' @param max_cells Maximum cells displayed.
+#' @param validated_result Resultat velocity canonique (finalize_velocity_result()).
+#' @param embedding Matrice/data.frame numerique 2 colonnes de coordonnees,
+#'   barcodes en rownames (embedding RDS partiels OU reduction Seurat —
+#'   resolution par l'appelant).
+#' @param selected_reduction Nom de reduction affiche dans le sous-titre.
+#' @param data_scope "preview" (cap TS_VELOCITY_MAX_EMBED_CELLS affiche) ou
+#'   "full" (complet).
+#' @param max_cells Cap explicite ; par defaut le parametre declare en config.
+#' @param seurat_obj Objet Seurat courant optionnel (verification de peremption).
 #' @return ggplot object.
 #' @export
-plot_velocity_embedding <- function(embeddings, vectors = NULL, max_cells = 5000L) {
-    embeddings <- as.matrix(embeddings)
-    if (!is.numeric(embeddings) || ncol(embeddings) != 2L) {
-        stop("L'embedding d'affichage doit avoir exactement deux colonnes numeriques.")
+plot_velocity_embedding <- function(
+    validated_result,
+    embedding,
+    selected_reduction = NULL,
+    data_scope = c("preview", "full"),
+    max_cells = NULL,
+    seurat_obj = NULL
+) {
+    data_scope <- match.arg(data_scope)
+    assert_velocity_result(
+        validated_result, view = "matrices", seurat_obj = seurat_obj,
+        context = "embedding velocity"
+    )
+
+    if (is.null(max_cells)) {
+        max_cells <- if (exists("TS_VELOCITY_MAX_EMBED_CELLS")) {
+            TS_VELOCITY_MAX_EMBED_CELLS
+        } else {
+            5000L
+        }
     }
-    if (is.null(rownames(embeddings))) {
-        stop("L'embedding d'affichage doit posseder des noms de lignes (barcodes).")
+    max_cells <- as.integer(max_cells)
+
+    embedding <- as.matrix(embedding)
+    if (!is.numeric(embedding) || ncol(embedding) != 2L) {
+        .velocity_stop(
+            "invalid_input",
+            paste0(
+                "L'embedding d'affichage doit avoir exactement deux ",
+                "colonnes numeriques."
+            )
+        )
+    }
+    if (is.null(rownames(embedding))) {
+        .velocity_stop(
+            "invalid_input",
+            paste0(
+                "L'embedding d'affichage doit posseder des noms de lignes ",
+                "(barcodes)."
+            )
+        )
     }
 
+    # Fleches UNIQUEMENT depuis les vecteurs valides du resultat canonique ;
+    # correspondance exacte par barcodes, sans reordre ni fabrication.
+    vectors <- validated_result$velocity_vectors
+
     df <- data.frame(
-        x = as.numeric(embeddings[, 1]),
-        y = as.numeric(embeddings[, 2]),
+        x = as.numeric(embedding[, 1]),
+        y = as.numeric(embedding[, 2]),
         xend = NA_real_,
         yend = NA_real_,
         stringsAsFactors = FALSE
     )
-    rownames(df) <- rownames(embeddings)
+    rownames(df) <- rownames(embedding)
 
     if (!is.null(vectors)) {
         vectors <- as.matrix(vectors)
-        m <- match(rownames(embeddings), rownames(vectors))
+        m <- match(rownames(embedding), rownames(vectors))
         ok <- !is.na(m)
         df$xend[ok] <- df$x[ok] + as.numeric(vectors[m[ok], 1])
         df$yend[ok] <- df$y[ok] + as.numeric(vectors[m[ok], 2])
     }
     has_arrow <- !is.na(df$xend)
 
-    if (nrow(df) > max_cells) {
+    n_total <- nrow(df)
+    subsampled <- FALSE
+    if (identical(data_scope, "preview") && n_total > max_cells) {
         set.seed(1L)
-        keep_idx <- sample.int(nrow(df), max_cells)
+        keep_idx <- sample.int(n_total, max_cells)
         df <- df[keep_idx, , drop = FALSE]
         has_arrow <- has_arrow[keep_idx]
+        subsampled <- TRUE
     }
+
+    status_text <- if (any(has_arrow)) {
+        sprintf(
+            paste0("Fleches = deplacement predit valide (%d/%d cellules ",
+                   "affichees couvertes par un vecteur)."),
+            sum(has_arrow), nrow(df)
+        )
+    } else if (identical(validated_result$status, "invalid_vector_projection")) {
+        paste0(
+            "Vecteurs rejetes a la validation — coordonnees seules, aucune ",
+            "fleche (aucune substitution coordonnees -> vecteurs)."
+        )
+    } else {
+        paste0(
+            "Coordonnees uniquement — aucun vecteur velocity valide fourni ",
+            "(aucune fleche fabriquee)."
+        )
+    }
+
+    coverage_text <- NULL
+    ali <- validated_result$embedding_alignment
+    if (!is.null(ali) && !is.null(ali$n_velocity_cells) &&
+        ali$n_velocity_cells > 0L) {
+        coverage_text <- sprintf(
+            "Couverture embedding RDS : %d/%d cellules.",
+            ali$n_embedding_matched, ali$n_velocity_cells
+        )
+    }
+
+    scope_text <- if (isTRUE(subsampled)) {
+        sprintf(
+            paste0("Apercu sous-echantillonne : %d/%d cellules ",
+                   "(graine fixe : seed = 1)."),
+            max_cells, n_total
+        )
+    } else {
+        sprintf("Portee des donnees : complet (%d cellules).", n_total)
+    }
+
+    subtitle_parts <- c(
+        status_text,
+        coverage_text,
+        if (!is.null(selected_reduction)) {
+            paste0("Reduction : ", selected_reduction)
+        },
+        scope_text,
+        sprintf("Analyse : %s.", validated_result$analysis_id %||% NA_character_)
+    )
 
     p <- ggplot2::ggplot(df, ggplot2::aes(x = x, y = y)) +
         ggplot2::geom_point(size = 0.5, alpha = 0.5, colour = "grey60") +
         ggplot2::theme_classic() +
         ggplot2::labs(
             x = "Dimension 1", y = "Dimension 2",
-            title = "Vecteurs velocity pre-calcules (UMAP)",
-            subtitle = if (any(has_arrow)) {
-                sprintf("Fleches = deplacement predit (%d/%d cellules couvertes)",
-                        sum(has_arrow), nrow(df))
-            } else {
-                "Coordonnees uniquement — aucun vecteur velocity pre-calcule fourni."
-            }
+            title = "RNA Velocity — embedding",
+            subtitle = paste(subtitle_parts, collapse = " ")
         )
 
     if (any(has_arrow)) {
@@ -1971,4 +2424,41 @@ plot_velocity_embedding <- function(embeddings, vectors = NULL, max_cells = 5000
     }
 
     p
+}
+
+#' Vue champ de vecteurs (Stage 9) — embedding AVEC fleches validees
+#'
+#' Contrat explicite pour la vue fleches : refuse tout resultat sans vecteurs
+#' strictement valides (invalid_vector_projection). Delegation pure a
+#' plot_velocity_embedding() — aucune logique de rendu dupliquee.
+#'
+#' @param validated_result Resultat velocity canonique.
+#' @param embedding Coordonnees 2 colonnes, barcodes en rownames.
+#' @param selected_reduction Nom de reduction affiche.
+#' @param data_scope "preview" ou "full".
+#' @param max_cells Cap explicite optionnel.
+#' @param seurat_obj Objet Seurat courant optionnel (peremption).
+#' @return ggplot object.
+#' @export
+plot_velocity_vector_field <- function(
+    validated_result,
+    embedding,
+    selected_reduction = NULL,
+    data_scope = c("preview", "full"),
+    max_cells = NULL,
+    seurat_obj = NULL
+) {
+    data_scope <- match.arg(data_scope)
+    assert_velocity_result(
+        validated_result, view = "vectors", seurat_obj = seurat_obj,
+        context = "champ de vecteurs velocity"
+    )
+    plot_velocity_embedding(
+        validated_result = validated_result,
+        embedding = embedding,
+        selected_reduction = selected_reduction,
+        data_scope = data_scope,
+        max_cells = max_cells,
+        seurat_obj = seurat_obj
+    )
 }

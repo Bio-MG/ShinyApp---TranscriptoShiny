@@ -5314,6 +5314,34 @@
       "en": "Export validated result (RDS)"
     },
     {
+      "fr": "Couverture vecteurs",
+      "en": "Vector coverage"
+    },
+    {
+      "fr": "QC alignement",
+      "en": "Alignment QC"
+    },
+    {
+      "fr": "Exporter phase portrait (PNG)",
+      "en": "Export phase portrait (PNG)"
+    },
+    {
+      "fr": "Exporter phase portrait (PDF)",
+      "en": "Export phase portrait (PDF)"
+    },
+    {
+      "fr": "Exporter embedding (PNG)",
+      "en": "Export embedding (PNG)"
+    },
+    {
+      "fr": "Exporter embedding (PDF)",
+      "en": "Export embedding (PDF)"
+    },
+    {
+      "fr": "Exporter vecteurs par cellule (CSV)",
+      "en": "Export per-cell vectors (CSV)"
+    },
+    {
       "fr": "En attente d'import velocity...",
       "en": "Waiting for velocity import..."
     },

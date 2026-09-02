@@ -1,5 +1,5 @@
 # =============================================================================
-# mod_sc_velocity.R — RNA Velocity Phase 3A Hardening + Stage 8 (3B-1)
+# mod_sc_velocity.R — RNA Velocity Phase 3A Hardening + Stage 8 (3B-1) + 9 (3B-2)
 # =============================================================================
 # Strict RDS/MTX import, matrix validation, orientation, cell/gene alignment,
 # precomputed UMAP vector validation, phase portraits, provenance export,
@@ -8,6 +8,10 @@
 # (velocity_status_labels), la provenance et les exports residuent dans
 # R/sc/sc_velocity.R. Validite technique affichee explicitement ; aucune
 # validite biologique n'est suggeree.
+# Stage 9 : les visualisations sont des CONSOMMATRICES pures du resultat
+# canonique (assert_velocity_result) — fleches uniquement depuis des vecteurs
+# valides, portee de donnees (preview/full) affichee, exports traces par
+# analysis_id. Une figure ne cree, n'infere et ne repare jamais un resultat.
 # =============================================================================
 
 mod_sc_velocity_ui <- function(id) {
@@ -95,7 +99,12 @@ mod_sc_velocity_ui <- function(id) {
     downloadButton(ns("dl_velocity_provenance"), i18n$t("Exporter provenance (CSV)"), class = "btn-sm btn-info w-100 mt-1"),
     downloadButton(ns("dl_velocity_summary"), i18n$t("Exporter resume validation (CSV)"), class = "btn-sm btn-info w-100 mt-1"),
     downloadButton(ns("dl_velocity_mapping"), i18n$t("Exporter alignement cellules/genes (CSV)"), class = "btn-sm btn-info w-100 mt-1"),
-    downloadButton(ns("dl_velocity_result_rds"), i18n$t("Exporter resultat valide (RDS)"), class = "btn-sm btn-info w-100 mt-1")
+    downloadButton(ns("dl_velocity_result_rds"), i18n$t("Exporter resultat valide (RDS)"), class = "btn-sm btn-info w-100 mt-1"),
+    downloadButton(ns("dl_velocity_phase_png"), i18n$t("Exporter phase portrait (PNG)"), class = "btn-sm btn-info w-100 mt-1"),
+    downloadButton(ns("dl_velocity_phase_pdf"), i18n$t("Exporter phase portrait (PDF)"), class = "btn-sm btn-info w-100 mt-1"),
+    downloadButton(ns("dl_velocity_embedding_png"), i18n$t("Exporter embedding (PNG)"), class = "btn-sm btn-info w-100 mt-1"),
+    downloadButton(ns("dl_velocity_embedding_pdf"), i18n$t("Exporter embedding (PDF)"), class = "btn-sm btn-info w-100 mt-1"),
+    downloadButton(ns("dl_velocity_cell_vectors"), i18n$t("Exporter vecteurs par cellule (CSV)"), class = "btn-sm btn-info w-100 mt-1")
   )
 }
 
@@ -109,7 +118,11 @@ mod_sc_velocity_output_ui <- function(id) {
                 plotOutput(ns("velocity_phase_plot"), height = "500px")),
       nav_panel(i18n$t("Vecteurs UMAP"),
                 plotOutput(ns("velocity_embedding_plot"), height = "550px"),
-                div(class = "small text-muted", textOutput(ns("velocity_vector_status"))))
+                div(class = "small text-muted", textOutput(ns("velocity_vector_status")))),
+      nav_panel(i18n$t("Couverture vecteurs"),
+                plotOutput(ns("velocity_coverage_plot"), height = "450px")),
+      nav_panel(i18n$t("QC alignement"),
+                plotOutput(ns("velocity_qc_plot"), height = "450px"))
     )
   )
 }
@@ -148,6 +161,33 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       }
       files$feature_column <- as.character(input$velocity_feature_column %||% 1L)
       files
+    }
+
+    # Plot d'erreur standardise (message de validation exploitable).
+    .error_plot <- function(e) {
+      ggplot2::ggplot() +
+        ggplot2::annotate("text", x = 0.5, y = 0.5,
+                          label = conditionMessage(e), size = 5, colour = "red") +
+        ggplot2::theme_void()
+    }
+
+    # Coordonnees de base pour la vue embedding : embedding RDS partiel
+    # prioritaire, sinon reduction Seurat restreinte aux cellules velocity
+    # validees. NULL si introuvables (le demandeur affiche alors un message
+    # exploitable — jamais de coordonnees substituees).
+    .base_coords_for <- function(red) {
+      if (!is.null(velocity_state$partial_embedding)) {
+        return(velocity_state$partial_embedding)
+      }
+      obj <- global_data$sc_obj
+      if (is.null(obj) || is.null(velocity_state$result) ||
+          !red %in% names(obj@reductions)) {
+        return(NULL)
+      }
+      emb <- Seurat::Embeddings(obj, reduction = red)
+      common_cells <- intersect(velocity_state$result$cell_names, rownames(emb))
+      if (!length(common_cells)) return(NULL)
+      emb[common_cells, seq_len(min(2L, ncol(emb))), drop = FALSE]
     }
 
 
@@ -545,7 +585,8 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
       })
     })
 
-    # Phase portrait plot
+    # Phase portrait (Stage 9 : consommateur pur du resultat canonique ;
+    # apercu avec cap declare et affiche)
     output$velocity_phase_plot <- renderPlot({
       req(velocity_state$result)
       req(input$velocity_gene)
@@ -558,52 +599,61 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
           ggplot2::theme_void())
       }
       tryCatch({
-        plot_velocity_phase_portrait(velocity_state$result, input$velocity_gene)
-      }, error = function(e) {
-        ggplot2::ggplot() + ggplot2::annotate("text", x = 0.5, y = 0.5, label = conditionMessage(e), size = 5, colour = "red") + ggplot2::theme_void()
-      })
+        plot_velocity_phase_portrait(
+          velocity_state$result, input$velocity_gene,
+          data_scope = "preview", seurat_obj = global_data$sc_obj
+        )
+      }, error = function(e) .error_plot(e))
     })
 
-    # Embedding plot (BUG 3/4/8): coordinates and arrows are separate layers.
-    # Base coordinates: partial RDS umap_embedding if available, else the
-    # Seurat reduction restricted to validated velocity cells. Arrows are
-    # drawn ONLY from strictly validated dx/dy vectors; missing vectors or
-    # failed validation => points only, never fabricated arrows.
+    # Embedding plot (Stage 9) : les fleches proviennent UNIQUEMENT des
+    # vecteurs valides embarques dans le resultat canonique ; coordonnees
+    # RDS partielles prioritaires, sinon reduction Seurat. Reduction absente
+    # => message de validation exploitable, jamais de substitution.
     output$velocity_embedding_plot <- renderPlot({
       req(velocity_state$result)
       .check_fingerprint()
       red <- input$velocity_reduction %||% "umap"
 
-      base_coords <- velocity_state$partial_embedding
+      base_coords <- .base_coords_for(red)
       if (is.null(base_coords)) {
-        if (!red %in% names(global_data$sc_obj@reductions)) {
-          shiny::validate(shiny::need(
-            FALSE,
-            sprintf("Reduction '%s' non calculee sur l'objet Seurat.", red)
-          ))
-        }
-        emb <- Seurat::Embeddings(global_data$sc_obj, reduction = red)
-        common_cells <- intersect(velocity_state$result$cell_names, rownames(emb))
-        if (!length(common_cells)) {
-          shiny::validate(shiny::need(FALSE,
-            "Aucune cellule velocity trouvee dans l'embedding Seurat."
-          ))
-        }
-        base_coords <- emb[common_cells, seq_len(min(2L, ncol(emb))), drop = FALSE]
+        shiny::validate(shiny::need(
+          FALSE,
+          sprintf(paste0("Reduction '%s' introuvable sur l'objet Seurat ou ",
+                         "aucune cellule velocity dans l'embedding : calculez ",
+                         "la reduction ou choisissez-en une autre."), red)
+        ))
       }
 
-      # velocity_state$umap_vectors is non-NULL ONLY after strict validation
-      # passed (BUG 8); NULL here means no arrows at all.
-      vectors <- velocity_state$umap_vectors
-
       tryCatch(
-        plot_velocity_embedding(base_coords, vectors),
-        error = function(e) {
-          ggplot2::ggplot() +
-            ggplot2::annotate("text", x = 0.5, y = 0.5,
-                              label = conditionMessage(e), size = 5, colour = "red") +
-            ggplot2::theme_void()
-        }
+        plot_velocity_embedding(
+          velocity_state$result, base_coords,
+          selected_reduction = red, data_scope = "preview",
+          seurat_obj = global_data$sc_obj
+        ),
+        error = function(e) .error_plot(e)
+      )
+    })
+
+    # Vue densite/couverture des vecteurs valides (Stage 9)
+    output$velocity_coverage_plot <- renderPlot({
+      req(velocity_state$result)
+      .check_fingerprint()
+      tryCatch(
+        plot_velocity_coverage(velocity_state$result,
+                               seurat_obj = global_data$sc_obj),
+        error = function(e) .error_plot(e)
+      )
+    })
+
+    # Vue QC d'alignement (Stage 9)
+    output$velocity_qc_plot <- renderPlot({
+      req(velocity_state$result)
+      .check_fingerprint()
+      tryCatch(
+        plot_velocity_alignment_qc(velocity_state$result,
+                                   seurat_obj = global_data$sc_obj),
+        error = function(e) .error_plot(e)
       )
     })
 
@@ -658,6 +708,86 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
         req(velocity_state$result)
         .check_fingerprint()
         saveRDS(velocity_state$result, file)
+      }
+    )
+
+    # ── Exports figures Stage 9 ─────────────────────────────────────────────
+    # Figures PNG/PDF en portee COMPLETE ("full") — la portee est ecrite dans
+    # le sous-titre de la figure ; nom de fichier trace par analysis_id.
+    output$dl_velocity_phase_png <- downloadHandler(
+      filename = function() velocity_export_filename(velocity_state$result, "velocity_phase_portrait", "png"),
+      content = function(file) {
+        req(velocity_state$result); req(input$velocity_gene)
+        .check_fingerprint()
+        p <- plot_velocity_phase_portrait(
+          velocity_state$result, input$velocity_gene,
+          data_scope = "full", seurat_obj = global_data$sc_obj
+        )
+        ggplot2::ggsave(file, p, width = 8, height = 6, dpi = 150)
+      }
+    )
+
+    output$dl_velocity_phase_pdf <- downloadHandler(
+      filename = function() velocity_export_filename(velocity_state$result, "velocity_phase_portrait", "pdf"),
+      content = function(file) {
+        req(velocity_state$result); req(input$velocity_gene)
+        .check_fingerprint()
+        p <- plot_velocity_phase_portrait(
+          velocity_state$result, input$velocity_gene,
+          data_scope = "full", seurat_obj = global_data$sc_obj
+        )
+        ggplot2::ggsave(file, p, width = 8, height = 6)
+      }
+    )
+
+    # Figure embedding en portee COMPLETE — partagee PNG/PDF. Coordonnees
+    # introuvables => notification + annulation explicite (jamais de
+    # substitution silencieuse).
+    .export_embedding_figure <- function(file) {
+      red <- input$velocity_reduction %||% "umap"
+      coords <- .base_coords_for(red)
+      if (is.null(coords)) {
+        showNotification(
+          sprintf(paste0("Reduction '%s' introuvable ou aucune cellule ",
+                         "velocity dans l'embedding : export annule."), red),
+          type = "error", duration = 8
+        )
+        req(FALSE)
+      }
+      p <- plot_velocity_embedding(
+        velocity_state$result, coords,
+        selected_reduction = red, data_scope = "full",
+        seurat_obj = global_data$sc_obj
+      )
+      ggplot2::ggsave(file, p, width = 8, height = 6, dpi = 150)
+    }
+
+    output$dl_velocity_embedding_png <- downloadHandler(
+      filename = function() velocity_export_filename(velocity_state$result, "velocity_embedding", "png"),
+      content = function(file) {
+        req(velocity_state$result)
+        .check_fingerprint()
+        .export_embedding_figure(file)
+      }
+    )
+
+    output$dl_velocity_embedding_pdf <- downloadHandler(
+      filename = function() velocity_export_filename(velocity_state$result, "velocity_embedding", "pdf"),
+      content = function(file) {
+        req(velocity_state$result)
+        .check_fingerprint()
+        .export_embedding_figure(file)
+      }
+    )
+
+    # Vecteurs/alignement par cellule (CSV) — depuis le resultat canonique.
+    output$dl_velocity_cell_vectors <- downloadHandler(
+      filename = function() velocity_export_filename(velocity_state$result, "velocity_cell_vectors", "csv"),
+      content = function(file) {
+        req(velocity_state$result)
+        .check_fingerprint()
+        df <- build_velocity_cell_vectors_export(velocity_state$result)
+        utils::write.csv(df, file, row.names = FALSE)
       }
     )
 
