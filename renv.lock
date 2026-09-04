@@ -13464,6 +13464,38 @@
       "Maintainer": "Carson Sievert <carson@posit.co>",
       "Repository": "CRAN"
     },
+    "shinycssloaders": {
+      "Package": "shinycssloaders",
+      "Version": "1.1.0",
+      "Source": "Repository",
+      "Title": "Add Loading Animations to a 'shiny' Output While It's Recalculating",
+      "Authors@R": "c( person(\"Dean\",\"Attali\",email=\"daattali@gmail.com\",role=c(\"aut\",\"cre\"), comment = c(\"Maintainer/developer of shinycssloaders since 2019\", ORCID=\"0000-0002-5645-3493\")), person(\"Andras\",\"Sali\",email=\"andras.sali@alphacruncher.hu\",role=c(\"aut\"),comment=\"Original creator of shinycssloaders package\"), person(\"Luke\",\"Hass\",role=c(\"ctb\",\"cph\"),comment=\"Author of included CSS loader code\") )",
+      "Description": "When a 'Shiny' output (such as a plot, table, map, etc.) is recalculating, it remains visible but gets greyed out. Using 'shinycssloaders', you can add a loading animation (\"spinner\") to outputs instead. By wrapping a 'Shiny' output in 'withSpinner()', a spinner will automatically appear while the output is recalculating. You can also manually show and hide the spinner, or add a full-page spinner to cover the entire page. See the demo online at <https://daattali.com/shiny/shinycssloaders-demo/>.",
+      "URL": "https://github.com/daattali/shinycssloaders, https://daattali.com/shiny/shinycssloaders-demo/",
+      "BugReports": "https://github.com/daattali/shinycssloaders/issues",
+      "Depends": [
+        "R (>= 3.1)"
+      ],
+      "Imports": [
+        "digest",
+        "glue",
+        "grDevices",
+        "htmltools (>= 0.3.5)",
+        "shiny"
+      ],
+      "Suggests": [
+        "knitr",
+        "shinydisconnect",
+        "shinyjs"
+      ],
+      "License": "MIT + file LICENSE",
+      "RoxygenNote": "7.2.3",
+      "Encoding": "UTF-8",
+      "NeedsCompilation": "no",
+      "Author": "Dean Attali [aut, cre] (Maintainer/developer of shinycssloaders since 2019, <https://orcid.org/0000-0002-5645-3493>), Andras Sali [aut] (Original creator of shinycssloaders package), Luke Hass [ctb, cph] (Author of included CSS loader code)",
+      "Maintainer": "Dean Attali <daattali@gmail.com>",
+      "Repository": "CRAN"
+    },
     "shinyFiles": {
       "Package": "shinyFiles",
       "Version": "0.9.3",
@@ -13492,6 +13524,88 @@
       ],
       "NeedsCompilation": "no",
       "Author": "Thomas Lin Pedersen [cre, aut] (<https://orcid.org/0000-0002-5147-4711>), Vincent Nijs [aut], Thomas Schaffner [aut], Eric Nantz [aut]",
+      "Repository": "CRAN"
+    },
+    "shiny.i18n": {
+      "Package": "shiny.i18n",
+      "Version": "0.3.0",
+      "Source": "Repository",
+      "Title": "Shiny Applications Internationalization",
+      "Authors@R": "c( person(\"Jakub\", \"Nowicki\", email = \"opensource+kuba@appsilon.com\", role = c(\"cre\", \"aut\")), person(\"Dominik\", \"Krzemiński\", email = \"raymon92@gmail.com\", role = c(\"aut\")), person(\"Krystian\", \"Igras\", email = \"krystian8207@gmail.com\", role = c(\"aut\")), person(\"Jakub\", \"Sobolewski\", email = \"jakub.sobolewski@appsilon.com\", role = c(\"aut\")), person(\"Appsilon Sp. z o.o.\", role = \"cph\", email = \"opensource@appsilon.com\") )",
+      "Description": "It provides easy internationalization of Shiny applications. It can be used as standalone translation package to translate reports, interactive visualizations or graphical elements as well.",
+      "URL": "https://appsilon.github.io/shiny.i18n/, https://github.com/Appsilon/shiny.i18n",
+      "BugReports": "https://github.com/Appsilon/shiny.i18n/issues",
+      "Depends": [
+        "R (>= 3.3.0)"
+      ],
+      "Imports": [
+        "yaml",
+        "jsonlite",
+        "methods",
+        "stringr",
+        "R6",
+        "glue",
+        "shiny",
+        "rstudioapi",
+        "utils"
+      ],
+      "Suggests": [
+        "covr",
+        "googleLanguageR",
+        "knitr",
+        "lintr",
+        "rcmdcheck",
+        "rmarkdown",
+        "spelling",
+        "testthat",
+        "withr",
+        "quarto"
+      ],
+      "License": "MIT + file LICENSE",
+      "RoxygenNote": "7.2.1",
+      "Language": "en-US",
+      "Encoding": "UTF-8",
+      "NeedsCompilation": "no",
+      "Author": "Jakub Nowicki [cre, aut], Dominik Krzemiński [aut], Krystian Igras [aut], Jakub Sobolewski [aut], Appsilon Sp. z o.o. [cph]",
+      "Maintainer": "Jakub Nowicki <opensource+kuba@appsilon.com>",
+      "Repository": "CRAN"
+    },
+    "shinyWidgets": {
+      "Package": "shinyWidgets",
+      "Version": "0.9.1",
+      "Source": "Repository",
+      "Title": "Custom Inputs Widgets for Shiny",
+      "Authors@R": "c( person(\"Victor\", \"Perrier\", email = \"victor.perrier@dreamrs.fr\", role = c(\"aut\", \"cre\", \"cph\")), person(\"Fanny\", \"Meyer\", role = \"aut\"), person(\"David\", \"Granjon\", role = \"aut\"), person(\"Ian\", \"Fellows\", role = \"ctb\", comment = \"Methods for mutating vertical tabs & updateMultiInput\"), person(\"Wil\", \"Davis\", role = \"ctb\", comment = \"numericRangeInput function\"), person(\"Spencer\", \"Matthews\", role = \"ctb\", comment = \"autoNumeric methods\"), person(family = \"JavaScript and CSS libraries authors\", role = c(\"ctb\", \"cph\"), comment = \"All authors are listed in LICENSE.md\") )",
+      "Description": "Collection of custom input controls and user interface components for 'Shiny' applications. Give your applications a unique and colorful style !",
+      "URL": "https://github.com/dreamRs/shinyWidgets, https://dreamrs.github.io/shinyWidgets/",
+      "BugReports": "https://github.com/dreamRs/shinyWidgets/issues",
+      "Depends": [
+        "R (>= 3.1.0)"
+      ],
+      "Imports": [
+        "bslib",
+        "sass",
+        "shiny (>= 1.6.0)",
+        "htmltools (>= 0.5.1)",
+        "jsonlite",
+        "grDevices",
+        "rlang"
+      ],
+      "Suggests": [
+        "testthat",
+        "covr",
+        "ggplot2",
+        "DT",
+        "scales",
+        "shinydashboard",
+        "shinydashboardPlus"
+      ],
+      "License": "GPL-3",
+      "RoxygenNote": "7.3.3",
+      "Encoding": "UTF-8",
+      "NeedsCompilation": "no",
+      "Author": "Victor Perrier [aut, cre, cph], Fanny Meyer [aut], David Granjon [aut], Ian Fellows [ctb] (Methods for mutating vertical tabs & updateMultiInput), Wil Davis [ctb] (numericRangeInput function), Spencer Matthews [ctb] (autoNumeric methods), JavaScript and CSS libraries authors [ctb, cph] (All authors are listed in LICENSE.md)",
+      "Maintainer": "Victor Perrier <victor.perrier@dreamrs.fr>",
       "Repository": "CRAN"
     },
     "shinyjs": {
