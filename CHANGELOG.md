@@ -4,6 +4,18 @@ Tous les changements notables de TranscriptoShiny (« Cerberus ») sont document
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ;
 versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur `main`.
 
+## [V1.0.0] — 2026-09-04 (Stage 20)
+
+Déclaration V1.0 : toutes les exigences de la roadmap vérifiées et prouvées
+(`docs/release/V1_0_DECLARATION.md`) — contrats figés, provenance active,
+rapports compilés, exports traçables, limitations documentées, gates RC passées.
+
+### Vérification finale
+- Suite complète : **1837 PASS / 0 FAIL / 0 ERROR / 0 SKIP / 16 warnings bénins**.
+- Gates packaging : 6 PASS / 1 WARN documenté / 0 FAIL ; duplication 0 erreur ;
+  lancement headless HTTP 200.
+- Tags : `v1.0.0-rc.1` → `v1.0.0` (locaux ; push après confirmation).
+
 ## [V1.0.0-rc.1] — 2026-09-04 (Release Candidate, Stage 19)
 
 Première version formelle candidate à la V1.0. Macro-fonctionnalités livres :
