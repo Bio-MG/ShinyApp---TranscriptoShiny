@@ -121,6 +121,11 @@ mod_spatial_ui <- function(id) {
       accordion(
         id = ns("steps"),
         open = "panel_pipeline",
+        # multiple = FALSE: one workflow step open at a time (same semantics as
+        # the old horizontal navset). bslib's accordion input binding returns a
+        # vector of ALL open panels when multiple=TRUE, which crashes single-
+        # value indexing in the sync observer below (crash reported 2026-09-05).
+        multiple = FALSE,
 
         accordion_panel(i18n$t("0. Pipeline auto"), icon = icon("bolt"),
                         value = "panel_pipeline",
@@ -446,10 +451,16 @@ mod_spatial_server <- function(id, global_data) {
       panel_niche    = "niche",    panel_export = "export_report"
     )
     observeEvent(input$steps, {
-      req(input$steps)
-      sel <- .step_results[[input$steps]]
-      if (!is.null(sel)) nav_select(id = "results", selected = sel, session = session)
-      shared_rv$active_tab <- .step_tab[[input$steps]] %||% input$steps
+      # Defensive: bslib returns a vector of ALL open panels (or NULL). Take
+      # the LAST one (most recently opened step) so a multiple-open regression
+      # can never crash single-value indexing again.
+      panels <- input$steps
+      if (is.null(panels) || length(panels) == 0) return(invisible(NULL))
+      panel <- utils::tail(panels, 1)
+      if (length(panel) != 1 || is.na(panel)) return(invisible(NULL))
+      sel <- .step_results[[panel]]
+      if (!is.null(sel)) try(nav_select(id = "results", selected = sel, session = session), silent = TRUE)
+      shared_rv$active_tab <- .step_tab[[panel]] %||% panel
     }, ignoreNULL = TRUE)
   })
 }

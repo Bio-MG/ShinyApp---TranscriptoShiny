@@ -300,14 +300,6 @@ ui <- page_navbar(
 
     icon = icon("upload"),
 
-    # LOT 6A (V1.x UX): GEO is a public DATA SOURCE (feeds Bulk/SC), not a
-    # 4th modality — renamed and placed FIRST in the Import menu.
-    nav_panel(i18n$t("Source publique (GEO)"),
-
-              icon = icon("database"),
-
-              mod_geo_ui("geo")), ##ajout verif
-
     nav_panel(i18n$t("Single-Cell"),
 
               icon = icon("braille"),
@@ -328,7 +320,15 @@ ui <- page_navbar(
 
               icon = icon("map"),
 
-              mod_import_spatial_ui("import_spatial"))
+              mod_import_spatial_ui("import_spatial")),
+
+    # LOT 6A (revised per user 2026-09-05): GEO stays labelled as a public
+    # DATA SOURCE but is placed LAST in the Import menu (user preference).
+    nav_panel(i18n$t("Source publique (GEO)"),
+
+              icon = icon("database"),
+
+              mod_geo_ui("geo")) ##ajout verif
 
   ),
   
