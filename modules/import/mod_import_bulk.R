@@ -100,7 +100,8 @@ mod_import_bulk_ui <- function(id) {
               condition = sprintf("input['%s'] === 'merged_matrix'", ns("bulk_import_mode")),
               
               fileInput(ns("counts_file"), "Fichier de Counts (CSV/TSV/TXT)",
-                        accept = c(".csv", ".tsv", ".txt", ".xlsx", ".rda", ".RData")),
+                        accept = c(".csv", ".tsv", ".txt", ".xlsx",
+                                   ".rda", ".RData", ".rds", ".RDS")),
               
               helpText("Format attendu : Lignes = Gènes, Colonnes = Échantillons. ",
                        "Un filtrage fin (par réplicat) est disponible à l'étape 1 du module d'analyse — ",
@@ -134,7 +135,8 @@ mod_import_bulk_ui <- function(id) {
               condition = sprintf("input['%s'] === 'merged_matrix'", ns("bulk_import_mode")),
               
               fileInput(ns("metadata_file"), "Fichier de Métadonnées (CSV/TSV/TXT)",
-                        accept = c(".csv", ".tsv", ".txt", ".xlsx", ".rda", ".RData")),
+                        accept = c(".csv", ".tsv", ".txt", ".xlsx",
+                                   ".rda", ".RData", ".rds", ".RDS")),
               
               helpText("Format : Lignes = Échantillons, Colonnes = Variables (condition, batch, etc.)."),
               
@@ -418,8 +420,8 @@ mod_import_bulk_server <- function(id, global_data) {
     counts_reactive <- reactive({
       req(input$counts_file)
       tryCatch({
-        # Flux .rda/.RData : l'objet est déjà extrait/validé par le composant
-        if (rdata_is_supported_file(input$counts_file$datapath)) {
+        # Flux .rda/.RData/.rds : l'objet est déjà extrait/validé par le composant
+        if (rdata_is_explorable_file(input$counts_file$datapath)) {
           obj <- counts_rda_obj()
           if (is.null(obj)) {
             add_log("ℹ Aperçu .RData actif : sélectionnez l'objet à utiliser comme comptages.")
@@ -454,8 +456,8 @@ mod_import_bulk_server <- function(id, global_data) {
     metadata_file_reactive <- reactive({
       if (is.null(input$metadata_file)) return(NULL)
       tryCatch({
-        # Flux .rda/.RData : objet extrait/validé par le composant
-        if (rdata_is_supported_file(input$metadata_file$datapath)) {
+        # Flux .rda/.RData/.rds : objet extrait/validé par le composant
+        if (rdata_is_explorable_file(input$metadata_file$datapath)) {
           obj <- metadata_rda_obj()
           if (is.null(obj)) {
             add_log("ℹ Aperçu .RData actif : sélectionnez l'objet à utiliser comme métadonnées.")
@@ -559,9 +561,9 @@ mod_import_bulk_server <- function(id, global_data) {
     
     observeEvent(input$counts_file, {
       infer_preview_rv(NULL); inferred_metadata(NULL); temp_data$is_loaded <- FALSE
-      # .rda/.RData : transfert au composant "Inspect & Select" (ou reset)
+      # .rda/.RData/.rds : transfert au composant "Inspect & Select" (ou reset)
       f <- input$counts_file
-      if (is.null(f) || !rdata_is_supported_file(f$datapath)) {
+      if (is.null(f) || !rdata_is_explorable_file(f$datapath)) {
         rdata_counts_rv(NULL); counts_rda_obj(NULL)
       } else {
         counts_rda_obj(NULL)
@@ -570,9 +572,9 @@ mod_import_bulk_server <- function(id, global_data) {
     })
     observeEvent(input$metadata_file, {
       temp_data$is_loaded <- FALSE
-      # .rda/.RData : transfert au composant "Inspect & Select" (ou reset)
+      # .rda/.RData/.rds : transfert au composant "Inspect & Select" (ou reset)
       f <- input$metadata_file
-      if (is.null(f) || !rdata_is_supported_file(f$datapath)) {
+      if (is.null(f) || !rdata_is_explorable_file(f$datapath)) {
         rdata_meta_rv(NULL); metadata_rda_obj(NULL)
       } else {
         metadata_rda_obj(NULL)

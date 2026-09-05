@@ -96,7 +96,7 @@ rdata_picker_server <- function(id, file_rv, commit_fn, expected = NULL,
       env_rv(NULL); info_rv(NULL); forced_rv(FALSE)
 
       f <- file_rv()
-      if (is.null(f) || !rdata_is_supported_file(f$datapath)) return()
+      if (is.null(f) || !rdata_is_explorable_file(f$datapath)) return()
 
       warn_mb <- if (exists("TS_IMPORT_RDA_WARN_MB", inherits = TRUE))
         TS_IMPORT_RDA_WARN_MB else 500
@@ -105,19 +105,22 @@ rdata_picker_server <- function(id, file_rv, commit_fn, expected = NULL,
       }
 
       .log(paste("🔍", tr("Aperçu du contenu .RData"), "—", f$name))
-      env <- tryCatch(rdata_load_env(f$datapath), error = function(e) e)
+      env <- tryCatch(rdata_read_file_env(f$datapath), error = function(e) e)
       if (inherits(env, "condition")) {
         .log(paste("❌", conditionMessage(env)))
         .notify(conditionMessage(env))
         return()
       }
       env_rv(env)
-      info <- rdata_describe_objects(env)
+      # Aplatissement exploratoire : les listes nommees (workspaces, objets
+      # type data_humanSkin$data$...) produisent une ligne par chemin
+      # "objet$enfant$..." — l'utilisateur choisit la feuille a importer.
+      info <- rdata_flatten_env(env)
       info_rv(info)
 
       if (nrow(info) == 1L) {
         # Chemin rapide : import direct si l'objet unique est compatible
-        obj <- tryCatch(rdata_extract_object(env, info$name[1]),
+        obj <- tryCatch(rdata_extract_path(env, info$name[1]),
                         error = function(e) e)
         if (inherits(obj, "condition")) {
           .notify(conditionMessage(obj)); return()
@@ -168,20 +171,26 @@ rdata_picker_server <- function(id, file_rv, commit_fn, expected = NULL,
         ),
         h6(tr("Contenu .RData — choisissez les objets à importer ou à sauvegarder"),
            class = "text-muted mt-2"),
+        helpText(style = "font-size:0.78rem;",
+                 tr("Les listes nommées sont explorées (chemins type objet$enfant) — sélectionnez la feuille à importer ou à sauvegarder.")),
         DT::DTOutput(ns("preview_table")),
         layout_columns(
-          col_widths = c(6, 6),
+          col_widths = c(4, 4, 4),
           actionButton(ns("import_btn"),
                        tr(import_label),
                        class = "btn-primary btn-sm w-100"),
           downloadButton(ns("export_btn"),
                          tr("Exporter la sélection (.RData)"),
-                         class = "btn-info btn-sm w-100")
+                         class = "btn-info btn-sm w-100"),
+          downloadButton(ns("export_rds_btn"),
+                         tr("Exporter l'objet sélectionné (.rds)"),
+                         class = "btn-outline-info btn-sm w-100")
         ),
         if (n_sel != 1L) helpText(
           style = "font-size:0.78rem;",
           tr("Sélectionnez exactement un objet à importer."),
-          " ", tr("Sélectionnez au moins un objet à exporter.")
+          " ", tr("Sélectionnez au moins un objet à exporter."),
+          " ", tr("Sélectionnez exactement un objet à exporter en .rds.")
         )
       )
     })
@@ -206,7 +215,7 @@ rdata_picker_server <- function(id, file_rv, commit_fn, expected = NULL,
       }
       info <- info_rv()
       obj_name <- info$name[sel[1]]
-      obj <- tryCatch(rdata_extract_object(env, obj_name), error = function(e) e)
+      obj <- tryCatch(rdata_extract_path(env, obj_name), error = function(e) e)
       if (inherits(obj, "condition")) {
         .log(paste("❌", conditionMessage(obj)))
         .notify(conditionMessage(obj)); return()
@@ -235,12 +244,48 @@ rdata_picker_server <- function(id, file_rv, commit_fn, expected = NULL,
           return()
         }
         info <- info_rv()
-        nms <- rdata_export_selection(env, info$name[sel], file)
+        nms <- rdata_export_paths(env, info$name[sel], file)
         showNotification(
           sprintf(tr("Export .RData réussi : %d objet(s) sauvegardé(s) hors de l'application."), length(nms)),
           type = "message", duration = 8
         )
         .log(paste("⬇", tr("Exporter la sélection (.RData)"), "—", paste(nms, collapse = ", ")))
+      }
+    )
+
+    # ── Export : objet unique en .rds (monofile, hors application) ─────────
+    output$export_rds_btn <- downloadHandler(
+      filename = function() {
+        sel <- input$preview_table_rows_selected
+        base <- "objet"
+        if (!is.null(sel) && length(sel) == 1L) {
+          p <- info_rv()$name[sel[1]]
+          base <- gsub("[^[:alnum:]_-]", "_", p)
+        }
+        paste0("TranscriptoShiny_", base, "_", format(Sys.time(), "%Y%m%d_%H%M%S"),
+               ".rds")
+      },
+      content = function(file) {
+        env <- env_rv()
+        sel <- input$preview_table_rows_selected
+        if (is.null(env) || is.null(sel) || length(sel) != 1L) {
+          showNotification(tr("Sélectionnez exactement un objet à exporter en .rds."),
+                           type = "warning", duration = 8)
+          return()
+        }
+        info <- info_rv()
+        path <- info$name[sel[1]]
+        obj <- tryCatch(rdata_extract_path(env, path), error = function(e) e)
+        if (inherits(obj, "condition")) {
+          showNotification(conditionMessage(obj), type = "error", duration = 10)
+          return()
+        }
+        saveRDS(obj, file)
+        showNotification(
+          paste(tr("Exporter l'objet sélectionné (.rds)"), "—", path),
+          type = "message", duration = 8
+        )
+        .log(paste("⬇", tr("Exporter l'objet sélectionné (.rds)"), "—", path))
       }
     )
 

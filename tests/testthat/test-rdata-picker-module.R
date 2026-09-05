@@ -34,6 +34,17 @@ other <- "texte"
 multi_path <- file.path(.tmpdir, "multi.rda")
 save(mat, meta_df, other, file = multi_path)
 
+# Cas d'usage CellChat tutorial : objet unique = liste imbriquee
+skin <- list(
+  data = list(NL = matrix(1:6, 2, 3), LS = matrix(7:12, 2, 3)),
+  meta = data.frame(condition = c("NL", "LS"))
+)
+skin_path <- file.path(.tmpdir, "data_humanSkin_CellChat.rda")
+save(skin, file = skin_path)
+
+mat_rds_path <- file.path(.tmpdir, "single_mat.rds")
+saveRDS(mat, mat_rds_path)
+
 # Enregistreur de commits (l'hôte doit stop() en cas d'échec de commit)
 .new_recorder <- function() {
   env <- new.env(parent = emptyenv())
@@ -193,6 +204,83 @@ test_that("hôte Bulk: .rda matrice unique slot counts -> aperçu counts rendu",
     expect_false(is.null(df))
     expect_equal(dim(df), c(3L, 4L))
     expect_match(logs(), "Matrice de counts .RData", fixed = TRUE)
+  })
+})
+
+# ── Exploration imbriquée (cas data_humanSkin_CellChat.rda) ─────────────────
+test_that("picker: liste imbriquée unique -> preview aplatie, pas de commit auto", {
+  rec <- .new_recorder()
+  file_rv <- reactiveVal(NULL)
+
+  testServer(rdata_picker_server, args = list(
+    file_rv = file_rv, commit_fn = rec$commit_fn,
+    expected = c("Seurat", "SingleCellExperiment", "matrix", "dgCMatrix",
+                 "dgTMatrix", "data.frame"),
+    log_fn = function(m) NULL
+  ), expr = {
+    file_rv(list(datapath = skin_path, name = "data_humanSkin_CellChat.rda",
+                 size = 100))
+    session$flushReact()
+    # le conteneur liste n'est PAS importé automatiquement : preview
+    expect_length(rec$commits, 0L)
+    card_text <- paste(session$output$picker_card)
+    expect_true(any(grepl("preview_table", card_text)))
+  })
+})
+
+test_that("picker: import d'une feuille imbriquée par chemin (skin$data$NL)", {
+  rec <- .new_recorder()
+  file_rv <- reactiveVal(NULL)
+
+  testServer(rdata_picker_server, args = list(
+    file_rv = file_rv, commit_fn = rec$commit_fn,
+    expected = c("Seurat", "SingleCellExperiment", "matrix", "dgCMatrix",
+                 "dgTMatrix", "data.frame"),
+    log_fn = function(m) NULL
+  ), expr = {
+    file_rv(list(datapath = skin_path, name = "data_humanSkin_CellChat.rda",
+                 size = 100))
+    session$flushReact()
+    # lignes aplaties : 1=skin, 2=skin$data, 3=skin$data$NL, 4=skin$data$LS,
+    # 5=skin$meta — la feuille NL est importable, le conteneur skin est refusé
+    session$setInputs(preview_table_rows_selected = 1L)
+    session$setInputs(import_btn = 1L)
+    expect_length(rec$commits, 0L)  # conteneur liste -> classe refusée
+
+    session$setInputs(preview_table_rows_selected = 3L)
+    session$setInputs(import_btn = 2L)
+    expect_length(rec$commits, 1L)
+    expect_identical(rec$commits[[1L]]$name, "skin$data$NL")
+    expect_equal(dim(rec$commits[[1L]]$obj), c(2L, 3L))
+
+    session$setInputs(preview_table_rows_selected = 5L)
+    session$setInputs(import_btn = 3L)
+    expect_length(rec$commits, 2L)
+    expect_identical(rec$commits[[2L]]$name, "skin$meta")
+  })
+})
+
+test_that("hôte SC: .rds liste imbriquée -> preview ; .rds matrice -> auto-import", {
+  gd1 <- new.env(parent = emptyenv()); gd1$i18n <- NULL
+  testServer(mod_import_sc_server, args = list(global_data = gd1), expr = {
+    session$setInputs(single_file_upload = list(
+      name = "container.rds", size = as.integer(file.info(skin_path)$size),
+      datapath = skin_path  # un .rda : les .rds passent par le même chemin
+    ))
+    session$flushReact()
+    expect_null(gd1$sc_obj)  # liste imbriquée -> preview, pas de commit
+  })
+
+  gd2 <- new.env(parent = emptyenv()); gd2$i18n <- NULL
+  rds_path <- file.path(.tmpdir, "single_mat.rds")
+  testServer(mod_import_sc_server, args = list(global_data = gd2), expr = {
+    session$setInputs(single_file_upload = list(
+      name = "single_mat.rds", size = as.integer(file.info(rds_path)$size),
+      datapath = rds_path
+    ))
+    session$flushReact()
+    expect_false(is.null(gd2$sc_obj))   # feuille unique -> auto-import
+    expect_s4_class(gd2$sc_obj, "Seurat")
   })
 })
 

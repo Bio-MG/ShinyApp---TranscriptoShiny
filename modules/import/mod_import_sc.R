@@ -237,7 +237,7 @@ mod_import_sc_server <- function(id, global_data) {
     observeEvent(input$single_file_upload, {
       f <- input$single_file_upload
       req(f)
-      if (!rdata_is_supported_file(f$datapath)) {
+      if (!rdata_is_explorable_file(f$datapath)) {
         rdata_file_rv(NULL)
         return()
       }
@@ -397,8 +397,8 @@ mod_import_sc_server <- function(id, global_data) {
     # ── Option C ────────────────────────────────────────────────────────────
     observeEvent(input$btn_load_single, {
       req(input$single_file_upload)
-      if (rdata_is_supported_file(input$single_file_upload$datapath)) {
-        # Le contenu .RData est inspecté/importé dès le dépôt du fichier
+      if (rdata_is_explorable_file(input$single_file_upload$datapath)) {
+        # Le contenu .RData/.rds est inspecté/importé dès le dépôt du fichier
         # (observeEvent single_file_upload -> composant mutualisé).
         add_log(.tr("Le contenu .RData est inspecté automatiquement dès le dépôt du fichier (carte ci-dessous)."))
         return()

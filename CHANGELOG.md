@@ -23,6 +23,14 @@ contrat `docs/contracts/RDATA_IMPORT_CONTRACT.md` (gel :
   carte de preview (DT multi-sélection) avec « Importer l'objet sélectionné »
   (exactement 1 ligne) et « Exporter la sélection (.RData) » — bundle .RData
   téléchargé via le navigateur, SANS écriture dans `global_data`.
+- **Exploration imbriquée + .rds** : les listes nommées sont APLATIES en
+  chemins explorables (`objet$enfant$...`, profondeur 3 — cas type
+  `data_humanSkin$data$NL` d'un workspace CellChat tutorial) ; les `.rds`
+  (même contenant une liste) sont explorés comme les `.rda` ;
+  « Exporter l'objet sélectionné (.rds) » sauvegarde n'importe quelle
+  feuille en monofile `.rds` (remplace le workflow manuel
+  `load()` → `CreateSeuratObject` → `saveRDS`) ; `rdata_flatten_env()`,
+  `rdata_extract_path()`, `rdata_read_file_env()`, `rdata_export_paths()`.
 - **Import Single-Cell** : Options B/C acceptent `.rda`/`.RData` ; objet
   unique compatible → auto-import via `prepare_seurat_object()` ; workspace
   multi-objets → carte de preview (choisir 1 objet à importer, ou en exporter

@@ -35,12 +35,18 @@ test_that("l'API publique du contrat est gelée (noms + signatures)", {
   expected_api <- list(
     rdata_supported_extensions = list(),
     rdata_is_supported_file    = list(path = NULL),
+    rdata_is_explorable_file   = list(path = NULL),
     rdata_load_env             = list(path = NULL),
+    rdata_read_file_env        = list(path = NULL),
+    rdata_safe_name            = list(path = NULL),
     rdata_classify_object      = list(obj = NULL),
     rdata_describe_objects     = list(env = NULL),
+    rdata_flatten_env          = list(env = NULL, max_depth = NULL, max_rows = NULL),
     rdata_extract_object       = list(env = NULL, object_name = NULL),
+    rdata_extract_path         = list(env = NULL, path = NULL),
     rdata_assert_class         = list(obj = NULL, expected = NULL, context = NULL),
     rdata_export_selection     = list(env = NULL, object_names = NULL, file = NULL),
+    rdata_export_paths         = list(env = NULL, paths = NULL, file = NULL),
     rdata_free                 = list(env = NULL)
   )
   for (fn_name in names(expected_api)) {
@@ -66,6 +72,8 @@ test_that("le contrat documente est synchronise avec le code", {
   for (fn_name in c("rdata_load_env", "rdata_classify_object",
                     "rdata_describe_objects", "rdata_extract_object",
                     "rdata_assert_class", "rdata_export_selection",
+                    "rdata_flatten_env", "rdata_extract_path",
+                    "rdata_read_file_env", "rdata_export_paths",
                     "rdata_free")) {
     expect_match(txt, fn_name, fixed = TRUE,
                  info = paste("fonction absente du contrat :", fn_name))

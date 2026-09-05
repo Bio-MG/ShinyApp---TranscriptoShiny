@@ -228,4 +228,91 @@ test_that("rdata_free empties the environment and tolerates NULL", {
 })
 
 # nettoyage
+# ---------------------------------------------------------------------------
+# Exploration : rdata_flatten_env / rdata_extract_path / read_file_env
+# (cas d'usage : data_humanSkin_CellChat.rda — objet unique = liste imbriquee)
+# ---------------------------------------------------------------------------
+skin <- list(
+  data = list(NL = matrix(1:6, 2, 3), LS = matrix(7:12, 2, 3)),
+  meta = data.frame(condition = c("NL", "LS")),
+  source = "tutorial"
+)
+skin_path <- file.path(.tmpdir, "data_humanSkin_CellChat.rda")
+save(skin, file = skin_path)
+
+mat_rds_path <- file.path(.tmpdir, "single_mat.rds")
+saveRDS(counts_dense, mat_rds_path)
+
+test_that("rdata_flatten_env explore les listes imbriquees en chemins", {
+  env <- rdata_load_env(skin_path)
+  on.exit(rdata_free(env))
+  flat <- rdata_flatten_env(env)
+  expect_setequal(flat$name, c(
+    "skin", "skin$data", "skin$data$NL", "skin$data$LS",
+    "skin$meta", "skin$source"
+  ))
+  expect_identical(flat$type_code[flat$name == "skin$data$NL"], "matrix")
+  expect_identical(flat$type_code[flat$name == "skin$meta"], "metadata")
+  expect_identical(flat$dimensions[flat$name == "skin$data$NL"], "2 x 3")
+})
+
+test_that("rdata_flatten_env respecte max_depth et max_rows", {
+  env <- rdata_load_env(skin_path)
+  on.exit(rdata_free(env))
+  flat1 <- rdata_flatten_env(env, max_depth = 1L)
+  expect_setequal(flat1$name, "skin")
+  deep <- list(a = list(b = list(c = list(d = list(e = matrix(1))))))
+  env2 <- new.env(parent = emptyenv()); assign("deep", deep, envir = env2)
+  flat_deep <- rdata_flatten_env(env2, max_depth = 3L)
+  expect_false("deep$a$b$c" %in% flat_deep$name)  # 4 niveaux > max_depth
+  expect_true("deep$a$b" %in% flat_deep$name)     # 3 niveaux = max_depth
+  flat_cap <- rdata_flatten_env(env2, max_rows = 2L)
+  expect_identical(nrow(flat_cap), 2L)
+})
+
+test_that("rdata_extract_path extrait par chemin et echoue proprement", {
+  env <- rdata_load_env(skin_path)
+  on.exit(rdata_free(env))
+  nl <- rdata_extract_path(env, "skin$data$NL")
+  expect_identical(dim(nl), c(2L, 3L))
+  expect_identical(rdata_extract_path(env, "skin"), skin)
+  expect_error(rdata_extract_path(env, "skin$data$INEXISTANT"),
+               "introuvable", class = "rdata_import_error")
+  expect_error(rdata_extract_path(env, "inconnu"),
+               class = "rdata_import_error")
+  expect_error(rdata_extract_path(env, character(0)),
+               class = "rdata_import_error")
+})
+
+test_that("rdata_read_file_env accepte .rda et .rds (nom R valide)", {
+  env_rda <- rdata_read_file_env(skin_path)
+  on.exit(rdata_free(env_rda))
+  expect_setequal(ls(envir = env_rda), "skin")
+
+  env_rds <- rdata_read_file_env(mat_rds_path)
+  on.exit(rdata_free(env_rds), add = TRUE)
+  expect_setequal(ls(envir = env_rds), "single_mat")
+  expect_identical(dim(rdata_extract_object(env_rds, "single_mat")),
+                   c(3L, 4L))
+
+  expect_true(rdata_is_explorable_file("a.rda"))
+  expect_true(rdata_is_explorable_file("a.RData"))
+  expect_true(rdata_is_explorable_file("a.rds"))
+  expect_false(rdata_is_explorable_file("a.h5ad"))
+  expect_error(rdata_read_file_env("inexistant.rds"),
+               class = "rdata_import_error")
+})
+
+test_that("rdata_export_paths bundle des chemins imbriques en .RData", {
+  env <- rdata_load_env(skin_path)
+  on.exit(rdata_free(env))
+  out <- file.path(.tmpdir, "paths_bundle.rda")
+  nms <- rdata_export_paths(env, c("skin$data$NL", "skin$meta"), out)
+  expect_setequal(nms, c("skin_data_NL", "skin_meta"))
+  env2 <- new.env(parent = emptyenv())
+  load(out, envir = env2)
+  expect_setequal(ls(envir = env2), c("skin_data_NL", "skin_meta"))
+  expect_identical(dim(get("skin_data_NL", envir = env2)), c(2L, 3L))
+})
+
 unlink(.tmpdir, recursive = TRUE)

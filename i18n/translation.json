@@ -8204,6 +8204,18 @@
     {
       "fr": "Utiliser comme métadonnées",
       "en": "Use as metadata"
+    },
+    {
+      "fr": "Les listes nommées sont explorées (chemins type objet$enfant) — sélectionnez la feuille à importer ou à sauvegarder.",
+      "en": "Named lists are explored (paths like object$child) — select the leaf to import or save."
+    },
+    {
+      "fr": "Exporter l'objet sélectionné (.rds)",
+      "en": "Export the selected object (.rds)"
+    },
+    {
+      "fr": "Sélectionnez exactement un objet à exporter en .rds.",
+      "en": "Select exactly one object to export as .rds."
     }
   ]
 }
