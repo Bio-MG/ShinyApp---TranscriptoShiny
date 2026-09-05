@@ -24,6 +24,9 @@ mod_sc_ui <- function(id) {
   layout_sidebar(
     sidebar = sidebar(
       width = 420, title = i18n$t("Single-Cell Workflow"),
+      # LOT 1 (V1.x UX): paradigm badge — auto-pipeline exists, manual steps stay optional.
+      div(class = "alert alert-success", style = "font-size:0.78rem;padding:5px;margin-bottom:5px;",
+          icon("bolt"), " ", i18n$t("Auto-pipeline disponible — les étapes manuelles restent optionnelles")),
       div(class = "alert alert-info", style = "font-size:0.8rem;padding:5px;",
           bsicons::bs_icon("info-circle"), " ", i18n$t("Étapes séquentielles recommandées.")),
       actionButton(ns("btn_auto_pipeline_sc"), i18n$t("▶ Lancer Pipeline Complet (SC)"),
