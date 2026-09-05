@@ -4,6 +4,62 @@ Tous les changements notables de TranscriptoShiny (« Cerberus ») sont document
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ;
 versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur `main`.
 
+## [V1.1.0-rc] — 2026-09-05 (vague UX/UI, mandat utilisateur — candidat pré-release)
+
+Refonte UX/UI fondée sur l'audit utilisateur (6 frictions, see
+`docs/proposals/V1X_UX_REFACTOR_PROPOSAL.md`) : **zéro changement de
+comportement scientifique**, contrats figés intouchés, IDs de modules
+inchangés, migration par lots reversibles (un lot = un commit).
+
+### Ajouté
+- **Paradigme pipeline mutualisé** : le pipeline auto (1 clic) est le
+  **premier panneau de l'accordéon (0.)** dans les trois domaines (SC, Bulk,
+  Spatial), avec badge de paradigme en tête de chaque sidebar (« auto dispo » /
+  « mode guidé » / « auto async »).
+- **Bulk** : étape « 1. Pipeline Bulk — Contrôle qualité & filtrage » ;
+  vue « Résumé Pipeline Bulk » (champs `shared_rv` existants uniquement,
+  aucun nouveau calcul) ; dernier panneau = « 4. Livrables — Rapport & Script R ».
+- **Spatial** : conteneur standard `layout_sidebar` — étapes numérotées en
+  accordéon à gauche (une étape ouverte à la fois), résultats à droite ;
+  dataset + statut des daemons toujours visibles dans la sidebar ; le module
+  pipeline est scindé (contrôles dans l'accordéon, résumé dans le navset
+  droit, même namespace → serveur inchangé).
+- **Import** : rappel « mapping des IDs » + bouton natif « Aller au mapping
+  des IDs » dans Import Single-Cell/Bulk/GEO (saut via `page_navbar(id="main_nav")`
+  + `accordion_panel_open` ; aucun panneau déplacé, aucune UI dupliquée).
+- **GEO** : renommé « Source publique (GEO) » (source de données, pas une
+  4e modalité), phrase d'orientation ; placé en DERNIER du menu Import
+  (préférence utilisateur du 2026-09-05).
+- **i18n** : 36 clés FR/EN (glossaire double libellé : Pseudobulk, Vélocité
+  ARN, Niches spatiales… + tooltips Moran/Milo/scCODA). Clés figées 8b→9b
+  conservées (gate d'intégrité vert).
+- **Test fonctionnel** `test-sc-auto-pipeline.R` : run complet de
+  `run_sc_auto_pipeline` sur fixture minima (QC → PCA → clustering → UMAP →
+  t-SNE → marqueurs → trajectoire → commit) + chemin d'échec gracieux.
+
+### Modifié
+- **SC** : accordéon plat (17 panneaux) regroupé en 5 sections parent
+  (Préparation / Analyse / Dynamique / Abondance cellulaire / Livrables) ;
+  les 4 panneaux DA 8c–8f sont nidifiés en un panneau « Abondance
+  différentielle » à onglets internes (A. design — B. Milo/scCODA —
+  C. vues croisées ; gating inchangé). Valeurs de panneaux préservées.
+
+### Corrigé
+- **Crash Spatial** : le binding accordéon bslib retourne un **vecteur de tous
+  les panneaux ouverts** (`multiple=TRUE` par défaut) — l'observer de sync
+  crashait par indexation récursive dès l'ouverture d'un 2e panneau.
+  Correctif : `multiple = FALSE` (une étape à la fois, comme l'ancien navset
+  horizontal) + défense `tail(1)`.
+- **Gate G4** (`scripts/verify_release_gates.R`) : faux positif permanent
+  depuis le Stage 19 (le script se matchait lui-même sur ses propres regex de
+  chemins locaux) ; exclusion de soi via pathspec git.
+
+### Vérification (pré-release)
+- Suite complète : **1873 assertions PASS / 0 FAIL / 0 ERROR / 0 SKIP**
+  (référence V1.0 : 1858 + 15 du nouveau test fonctionnel).
+- Duplication : 0 erreur / 3 warnings pré-existants. Boot headless HTTP 200.
+- Gates packaging : 6 PASS / 1 WARN / 0 FAIL. e2e shinytest2 : 13 PASS.
+
 ## [Post-V1.0] — 2026-09-04 (polish mandat utilisateur — revue des manquants)
 
 Revue des fonctionnalités manquantes demandée après la V1.0 : les rapports ne
