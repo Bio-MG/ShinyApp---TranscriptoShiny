@@ -7,6 +7,9 @@ Une plateforme R/Shiny modulaire, **local-first**, dédiée à l’exploration e
 
 **Langues :** [Français](#français) · [English](#english)
 
+**Statut :** `V1.1.0-rc` — plateforme transcriptomique locale couvrant le single-cell RNA-seq, le bulk RNA-seq et la transcriptomique spatiale, avec des analyses avancées disponibles selon les dépendances installées (vitesse ARN, communication cellule-cellule importée, abondance différentielle Milo/scCODA, déconvolution spatiale, rapports reproductibles). La V1.1 est une vague UX/UI (pipeline auto 1 clic mutualisé, regroupement des panneaux, conteneur Spatial) — **zéro changement de comportement scientifique**.
+> Certaines analyses avancées reposent sur des dépendances optionnelles, des paquets GitHub ou un environnement Python dédié. Consultez la section Installation avant de lancer un workflow.
+
 ---
 
 # Français
@@ -21,16 +24,31 @@ L’application privilégie :
 - **Un accompagnement progressif** : des workflows intuitifs pour les non-experts, sans masquer les paramètres analytiques critiques aux utilisateurs avancés.
 - **La scalabilité** : des stratégies conscientes de la mémoire, par exemple le sketching de Seurat v5 et les matrices sur disque BPCells, pour traiter de grands jeux single-cell et spatiaux sur du matériel standard.
 - **La rigueur scientifique** : des garde-fous intégrés pour le design expérimental en expression différentielle bulk, ainsi que des étapes analytiques transparentes et exportables.
+- **La traçabilité** : provenance produite à chaque étape d'analyse et compilée au moment du rapport (jamais reconstruite après coup), avec contrats de résultats figés et couverts par des tests de gel.
 
-*Note sur la langue : l’interface principale est actuellement en français pour le moment. Une localisation anglaise est prévue dans une prochaine version.*
+*Langue : interface bilingue français / anglais (commutateur en barre latérale). Les clés de traduction sont les chaînes françaises ; le basculement est live (shiny.i18n + traducteur de session).*
 
 ## Workflows pris en charge
 
 TranscriptoShiny fournit des environnements modulaires dédiés à trois domaines transcriptomiques principaux :
 
-1. **Single-cell RNA-seq** : de l’import de données 10x ou de matrices jusqu’au clustering, à l’annotation, à la recherche de marqueurs et à l’analyse de voies.
+1. **Single-cell RNA-seq** : de l'import de données 10x ou de matrices jusqu'au clustering, à l'annotation, à la recherche de marqueurs et à l'analyse de voies — plus vitesse ARN, communication cellulaire, abondance différentielle (Milo/scCODA) et rapport consolidé.
 2. **Bulk RNA-seq** : des matrices de comptages bruts et métadonnées jusqu’à l’expression différentielle, à la comparaison multi-contrastes et à l’enrichissement fonctionnel.
 3. **Transcriptomique spatiale** : des imports Visium/Xenium/CosMx/Slide-seq jusqu’au clustering spatial, à la déconvolution, à l’intégration multi-échantillons et à l’analyse de niches.
+
+## Navigation dans l'application
+
+| Onglet / zone | Rôle |
+| :--- | :--- |
+| Import Données | Charger des fichiers Single-Cell, Bulk RNA ou Spatial, ou depuis la **Source publique (GEO)** (dernière entrée du menu). Rappel « mapping des IDs » + bouton natif « Aller au mapping des IDs » dans les imports Single-Cell/Bulk/GEO. |
+| Analyse Single-Cell | Cinq sections parent : **Préparation** (mapping, pipelines), **Analyse** (annotation, visualisation, marqueurs, corrélation, voies), **Dynamique** (trajectoire, pseudobulk, vitesse ARN), **Abondance cellulaire** (onglets internes : A. design — B. Milo/scCODA — C. vues croisées), **Livrables** (rapports/exports). |
+| Analyse Bulk RNA | Étapes numérotées 1→4 : pipeline QC & filtrage (avec vue compacte « Résumé Pipeline Bulk »), mapping d'identifiants, expression différentielle & voies, puis « 4. Livrables — Rapport & Script R ». |
+| Analyse Spatiale | Conteneur à sidebar : étapes numérotées en accordéon à gauche (une étape ouverte à la fois), résultats à droite ; dataset et statut des démons toujours visibles dans la sidebar. Pipeline spatial, QC, clustering, déconvolution, visualisation, intégration multi-échantillons, niches, rapport/export. |
+| Barre latérale système | Changement de langue, usage mémoire, nettoyage RAM, limites mémoire/upload, état des objets chargés, sauvegarde/chargement de session, aide intégrée. |
+
+**Paradigme pipeline mutualisé :** dans les trois domaines, le **pipeline automatique 1 clic** est le premier panneau de l'accordéon (0.), annoncé par un badge de paradigme en tête de sidebar (« auto dispo » / « mode guidé » / « auto async »). Le mode guidé pas-à-pas reste intégralement disponible ; les deux paradigmes partagent les mêmes calculs et le même état.
+
+> Note : l'entrée **« Source publique (GEO) »** est une source de données, pas une quatrième modalité. Elle accepte les fichiers `series_matrix.txt` compatibles en import local, ainsi que le chargement par accession ; ce n'est pas un simple visualiseur hors-ligne.
 
 ## Capacités principales
 
@@ -38,19 +56,34 @@ TranscriptoShiny fournit des environnements modulaires dédiés à trois domaine
 
 - **Import flexible** : prise en charge des dossiers 10x, ainsi que des formats `.rds`, `.h5`, `.h5ad` et `.loom`, avec conservation de `orig.ident` dans les workflows multi-échantillons.
 - **Mapping des identifiants géniques** : conversion optionnelle et robuste des identifiants Ensembl/Entrez en symboles géniques avant l’analyse.
-- **Pipeline standard** : contrôle qualité, normalisation, sélection de gènes hautement variables, PCA, construction du graphe de voisins, clustering, UMAP et t-SNE optionnel.
+> Le mapping d'identifiants dépend de l'espèce, de la version d'annotation et de la qualité des identifiants d'entrée. Les identifiants non résolus, ambigus ou dupliqués doivent être vérifiés avant toute interprétation biologique ; conservez toujours les identifiants originaux dans vos exports.
+- **Pipeline standard** : contrôle qualité, normalisation, sélection de gènes hautement variables, PCA, construction du graphe de voisins, clustering, UMAP et t-SNE optionnel. Disponible en **pipeline automatique 1 clic** (panneau 0 : mapping d'IDs optionnel, QC, normalisation/PCA/clustering/UMAP, t-SNE, puis étapes optionnelles annotation SingleR, marqueurs, corrélation génique, ORA sur top marqueurs, trajectoire) ou en mode guidé panneau par panneau.
+> L'interface Single-Cell regroupe ses panneaux en cinq sections parent (Préparation / Analyse / Dynamique / Abondance cellulaire / Livrables). Vitesse ARN, communication cellule-cellule et abondance différentielle exigent des prérequis spécifiques et restent hors du pipeline automatique.
 - **Correction de batch** : intégration avec Harmony lorsque plusieurs échantillons ou batchs sont présents.
 - **Scalabilité consciente de la mémoire** : workflows de sketch Seurat v5 (`SketchData` avec LeverageScore, `ProjectData`), gestion compatible BPCells, mise à l’échelle ciblée des variables et sous-échantillonnage stratifié pour les explorations coûteuses.
 - **Annotation et exploration** : annotation automatique des types cellulaires via SingleR (références celldex), recherche de marqueurs (`FindAllMarkers`), corrélation génique, analyse de voies et visualisations variées (embeddings, FeaturePlots, violons, DotPlots, heatmaps, vues ridge/empilées).
-- **Reproductibilité** : rapports HTML/PDF paramétrés et export de scripts R réutilisables.
-- *Note scientifique* : le module de trajectoire inclus fournit un **pseudotemps exploratoire basé sur un graphe**. Il ne remplace pas les outils dédiés d’inférence de lignage (par exemple Slingshot) ; la détection native de doublets et la régression du cycle cellulaire ne sont pas encore intégrées.
+- **Vitesse ARN** : import strict de données de vélocité pré-préparées (matrices spliced/unspliced et résultats/vecteurs compatibles) alignées sur l'objet Seurat. L'application effectue des contrôles de cohérence multi-états, fournit des visualisations phase-portrait et vectorielles, et exporte PNG/PDF/CSV. Elle visualise des résultats validés sans recalculer silencieusement un modèle de vélocité.
+- **Communication cellule-cellule (panneau 8b)** : import-only de résultats externes (table/objet CellChat, means+p-values CellPhoneDB). Table canonique à 12 champs, appariement exact des identités, QC, vues exploratoires (dotplot, heatmap de pathways, réseau circulaire), centralité descriptive, filtres avec provenance. Pas de génération de novo depuis les comptages bruts (reste un item de parking futur).
+- **Abondance différentielle (panneaux 8c–8f)** :
+> Prérequis : les analyses d'abondance différentielle exigent des métadonnées identifiant l'unité de réplication biologique (ex. sample_id, donor_id, patient_id) et une condition expérimentale. Un cluster de cellules seul n'est pas un réplica biologique.
+  - Validation du design expérimental qui **bloque la pseudo-réplication** (les cellules ne sont jamais traitées comme des réplicas biologiques ; planchers sur réplicas par condition, cellules par échantillon, etc.).
+  - Milo (DA par voisinages, seed enregistrée, graphSpatialFDR).
+  - scCODA (DA compositionnelle au niveau échantillon via environnement Python explicite ; diagnostics de convergence en pur R sur ESS / R-hat / divergences).
+  - Vues croisées (catégories de concordance descriptives entre Milo et scCODA ; aucune p-value composite).
+- **Trajectoire** : pseudotemps exploratoire sur graphe kNN **plus inférence de lignées Slingshot en option** (quand le paquet est installé). Plafond strict sur le nombre de cellules.
+- **Pseudobulk** et **rapport Single-Cell consolidé** (compilateur d'état canonique + provenance uniquement — ne ré-exécute jamais les analyses ; HTML autonome, bundle d'export avec manifeste, tables fidèles, script R reproductible, sessionInfo).
+- La provenance est enregistrée pour chaque étape d'analyse alimentant un rapport ; les sections sans provenance sont rejetées par le validateur.
+- *Note scientifique* : la trajectoire par défaut reste le pseudotemps léger sur graphe ; Slingshot est proposé comme moteur optionnel quand il est installé. La détection native de doublets et la régression du cycle cellulaire ne sont pas encore intégrées.
 
 ### Bulk RNA-seq
+
+> Pour DESeq2, edgeR et limma-voom, fournissez des comptages bruts au niveau gène, idéalement entiers ou de type entier, issus d'un outil de quantification compatible avec l'analyse sur comptages. N'utilisez pas de TPM, FPKM, CPM, log-counts ni de matrices corrigées du batch en entrée de l'expression différentielle.
 
 - **Import intelligent** : prise en charge de matrices de comptages bruts fusionnées ou de fichiers de comptages par échantillon, avec alignement automatique des métadonnées et résolution des doublons de gènes.
 - **Prise en charge de GEO** : parsing hors-ligne de fichiers GEO `series_matrix.txt`, sans accès réseau ni dépendance à `GEOquery`.
 - **QC exploratoire** : filtrage, transformation stabilisant la variance (VST), PCA, scree plots et heatmaps de corrélation entre échantillons.
 - **Expression différentielle** : workflows propulsés par DESeq2, edgeR et limma-voom.
+> DESeq2, edgeR et limma-voom sont fournis comme moteurs distincts. Les comparer aide à explorer la robustesse, mais les résultats doivent être interprétés avec un design, des filtres, des facteurs de normalisation et des contrastes clairement documentés.
 - **Garde-fous de design** : contrôles proactifs des covariables confondues, des valeurs manquantes invalidant le modèle et des covariables ne présentant qu’un seul niveau observé.
 - **Gestion des contrastes** : contrastes standards, définis par l’utilisateur et pairwise, avec comparaison multi-méthodes et exploration par consensus de rangs.
 - **Visualisation et enrichissement** : volcano plots, MA plots, heatmaps, comparaisons Venn/UpSet multi-contrastes et analyse de voies ORA/GSEA.
@@ -60,41 +93,39 @@ TranscriptoShiny fournit des environnements modulaires dédiés à trois domaine
 
 - **Import étendu** : Visium, Visium HD (layouts pris en charge), Xenium, CosMx et Slide-seq, sous réserve de compatibilité avec les layouts de fichiers standards.
 - **Architecture sur disque** : les grands jeux spatiaux utilisent BPCells pour conserver les matrices de comptages sur disque, tandis que des représentations légères de type sketch/métadonnées permettent une analyse interactive en RAM.
-- **Exécution asynchrone** : les opérations lourdes passent par un pool de démons `mirai`, avec vérifications d’état, journaux de tâches, délais d’expiration et cache par jeu de données afin d’éviter le blocage de l’interface.
-- **Analyse spatiale** : QC spatial, analyse de gènes spatialement variables de type Moran et approche légère de clustering spatial tenant compte du voisinage (inspirée de BANKSY).
-- **Déconvolution** : RCTD, transfert de labels depuis une référence et approches de type LDA, avec préparation de référence et garde-fous de validation.
+- **Exécution asynchrone** : les opérations lourdes passent par un pool de démons `mirai` (timeouts, vérifications de santé, cache par jeu de données, bouton de réinitialisation des démons), avec journaux de tâches afin d'éviter le blocage de l'interface.
+> Les tâches asynchrones restent attachées à la session R locale. Ne fermez pas RStudio ni R pendant leur exécution. Les calculs sont volontairement plafonnés pour limiter la saturation RAM et la création excessive de processus sur stations de travail.
+- **Analyse spatiale** : QC spatial, analyse de gènes spatialement variables de type Moran et clustering spatial léger tenant compte du voisinage. Cette approche s'inspire des principes de BANKSY mais n'est pas une implémentation complète ni interchangeable du paquet BANKSY original.
+- **Déconvolution** : RCTD, transfert de labels depuis une référence et approches de type LDA. La référence est **partagée** (préparée une fois dans Import > Spatial, réutilisée par RCTD et Label Transfer), avec garde-fous de validation.
 - **Multi-échantillons et niches** : intégration par sketch respectueuse de la mémoire, avec correction de batch Harmony optionnelle, et analyse de niches fondée sur la composition des voisinages locaux.
+- **Backend disque** : BPCells est le backend sur disque ; seul le sketch RAM est garanti portable dans une session sauvegardée.
 - **Visualisations avancées** : superpositions histologiques, vues spatiales/embeddings liées, sélection ROI au lasso, exploration de marqueurs de ROI et export de sous-ensembles.
 - *Note scientifique* : la précision de la déconvolution dépend fortement de la qualité de la référence, de la compatibilité entre plateformes et du contexte tissulaire. Ces méthodes sont destinées à l’exploration scientifique et ne sont pas validées pour la décision clinique.
 
 ## Architecture
 
-TranscriptoShiny repose sur une architecture Shiny modulaire, séparant les responsabilités afin d’améliorer la maintenabilité et la testabilité.
-
-- `app.R` : point d’entrée principal, assemblant l’interface et la logique serveur.
-- `global.R` : initialise les packages et les options d’exécution globales.
-- `helpers_*.R` : fonctions utilitaires par domaine (I/O, single-cell, bulk, voies), sans réactivité Shiny, donc plus faciles à tester et à réutiliser.
-- `modules/` : modules Shiny organisés par domaine (`import/`, `sc/`, `bulk/`, `spatial/`).
-- `R/` : utilitaires spécifiques au spatial, implémentant les I/O sur disque, l’exécution asynchrone, la préparation des références, l’intégration multi-échantillons et les niches.
-- **Gestion d’état** : les modules de domaine communiquent via des objets `reactiveValues` partagés. Les rapports sont générés à partir de modèles R Markdown paramétrés.
+TranscriptoShiny repose sur une architecture Shiny modulaire. La logique analytique réutilisable est séparée de l'interface, les modules orchestrent les workflows, et les résultats exportables conservent la provenance nécessaire à leur interprétation.
+Le développement suit une approche testée et orientée reproductibilité : les résultats analytiques clés sont validés par des tests automatisés avant d'être exposés dans l'interface.
 
 ```text
 TranscriptoShiny/
-├── app.R                   # Point d’entrée de l’application
-├── global.R                # Chargement des packages et options globales
-├── helpers_bulk.R          # Moteurs DE bulk, graphiques et validation
-├── helpers_io.R            # I/O multi-format et mapping d’identifiants
-├── helpers_pathway.R       # Utilitaires ORA/GSEA
-├── helpers_sc.R            # Helpers Seurat de visualisation et d’analyse
-├── helpers_sc_bpcells.R    # Support de pipeline sur disque (BPCells)
-├── R/                      # Utilitaires spatiaux (async, I/O, multi-échantillons, niches)
-├── modules/
-│   ├── import/             # Modules d’import (sc, bulk, spatial, GEO)
-│   ├── sc/                 # Modules d’analyse single-cell
-│   ├── bulk/               # Modules d’analyse bulk RNA-seq
-│   └── spatial/            # Modules de transcriptomique spatiale
-└── www/                    # Ressources statiques (CSS, JS)
+├── app.R / global.R
+├── config/          # defaults.R, thresholds.R (single source of truth)
+├── i18n/            # translation.json (fr/en)
+├── R/
+│   ├── core/        # state, validation, provenance, jobs, caching, io/pathway helpers
+│   ├── sc/          # velocity, communication, abundance (Milo/scCODA/design/cross), trajectory, pipeline, plotting, bpcells, export
+│   ├── bulk/        # import engine, report engine, helpers
+│   ├── spatial/     # async (mirai), io, deconv prep/tasks, multi, niche, plotting, report, reference, stats, export
+│   ├── reports/     # collector, validator, render, bundle
+│   └── plotting/    # shared palettes
+├── modules/         # import/, sc/, bulk/, bulk_de/, spatial/ (+ deconv sub-modules)
+├── reports/         # Rmd templates (sc, bulk, spatial + child)
+├── scripts/         # renv bootstrap and development/benchmark scripts
+└── renv/            # lock + activate
 ```
+
+L'état inter-modules passe par le `reactiveValues` partagé (`global_data`) ; les calculs lourds spatiaux/async passent par le pool de démons `mirai`. Les modules lisent leurs paramètres dans `config/` et les seuils déclarés — aucune valeur magique en dur.
 
 ## Installation
 
@@ -105,27 +136,52 @@ git clone https://github.com/Bio-MG/ShinyApp---TranscriptoShiny.git
 cd ShinyApp---TranscriptoShiny
 ```
 
-### 2. Installer les dépendances
+### 2. Installer les dépendances (recommandé : renv)
 
-Ouvrez R ou RStudio dans le répertoire du projet cloné. Installez les packages CRAN et Bioconductor nécessaires. L’ensemble exact des dépendances varie selon les workflows utilisés, en particulier pour la déconvolution spatiale et le rendu des rapports.
+Le projet utilise **renv** pour restaurer un environnement R reproductible. Travaillez depuis la racine du dépôt cloné afin que `.Rprofile` puisse activer `renv`.
+Dans R ou RStudio :
+```r
+setwd("path/to/ShinyApp---TranscriptoShiny")
+if (!requireNamespace("renv", quietly = TRUE)) install.packages("renv")
+renv::restore()
+```
+Si la restauration échoue ou sur une nouvelle machine, lancez le script bootstrap depuis la racine du dépôt :
+```r
+source("scripts/renv_bootstrap.R")
+```
+> Important : lancez toujours l'application depuis la racine du projet. `app.R` vérifie explicitement que la librairie `renv` du projet est active et échoue avec une erreur claire sinon.
+
+*Installation manuelle (déconseillée, développeurs uniquement) : ce n'est pas la voie supportée pour reproduire l'environnement de référence — préférez `renv::restore()`.*
 
 ```r
-# Installer BiocManager s’il n’est pas déjà présent
-if (!requireNamespace("BiocManager", quietly = TRUE)) {
-  install.packages("BiocManager")
-}
+# Noyau CRAN minimal
+install.packages(c("shiny", "bslib", "shinyjs", "shinyWidgets", "shinycssloaders",
+                   "shiny.i18n", "bsicons", "DT", "plotly", "ggplot2", "dplyr",
+                   "patchwork", "viridis", "future", "mirai", "igraph", "Matrix",
+                   "RANN", "circlize", "rmarkdown", "zip", "fs", "scattermore"))
 
-# Installer les dépendances principales (ajoutez celles requises par vos workflows)
-install.packages(c("shiny", "bslib", "bsicons", "plotly", "DT", "future",
-                   "ggplot2", "dplyr", "patchwork", "viridis", "igraph"))
-
-# Installer les dépendances Bioconductor
-BiocManager::install(c("Seurat", "SingleR", "celldex", "SingleCellExperiment",
-                       "DESeq2", "edgeR", "limma", "ComplexHeatmap",
-                       "clusterProfiler", "org.Hs.eg.db", "org.Mm.eg.db"))
+# Bioconductor
+if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+BiocManager::install(c("Seurat", "SeuratObject", "SingleR", "celldex",
+                       "SingleCellExperiment", "DESeq2", "edgeR", "limma",
+                       "ComplexHeatmap", "slingshot"))
 ```
 
-*Note : les workflows spatiaux peuvent exiger des packages supplémentaires tels que `BPCells`, `mirai`, `RANN` et `spacexr`. Consultez les messages de démarrage de l’application ou les en-têtes des modules pour connaître les dépendances précises.*
+*Note : les dépendances spatiales, AnnData, RCTD et de déconvolution s'installent séparément ; `renv::restore()` reste l'installation complète supportée.*
+
+### Dépendances optionnelles par fonctionnalité
+
+| Fonctionnalité | Dépendance principale | Si absente |
+| :--- | :--- | :--- |
+| Matrices spatiales sur disque | BPCells | Pas de backend disque (tout en RAM) |
+| Déconvolution RCTD | spacexr | RCTD indisponible |
+| Lecture `.h5ad` robuste | schard | Repli vers SeuratDisk ou échec |
+| Visium HD (parquet) | arrow | Import HD incomplet (alternative légère : nanoparquet) |
+| Inférence de lignées | slingshot | Trajectoire limitée au pseudotemps graphe |
+| scCODA | Environnement Python + dépendances scCODA | scCODA indisponible (erreur guidée) |
+| Vues spatiales WebGL | leafgl | Rendu de grands nuages de points dégradé |
+
+*Note : les workflows spatiaux peuvent exiger des packages supplémentaires tels que `BPCells`, `mirai`, `RANN` et `spacexr`. scCODA requiert un environnement **Python 3.13** dédié (`python_env_sccoda/` ou variable `TS_SCCODA_PYTHON`) — sans lui, une erreur classée avec guidance est levée, sans repli silencieux. Le PDF par domaine requiert TinyTeX ; le rapport consolidé 4F génère un HTML autonome sans pandoc.*
 
 ### 3. Lancer l’application
 
@@ -139,8 +195,8 @@ Vous pouvez aussi ouvrir `app.R` dans RStudio puis cliquer sur **Run App**.
 
 | Composant | Recommandation |
 | :--- | :--- |
-| **Version de R** | >= 4.2 |
-| **IDE** | RStudio (recommandé pour le développement et le débogage) |
+| **Version de R** | 4.4.2 (version unique supportée) |
+| **IDE** | RStudio (recommandé pour le développement et le débogage) — ouvrir `SHINYAPP test.Rproj` pour activer renv |
 | **RAM (usage courant)** | 16 Go minimum |
 | **RAM (grands jeux de données)** | 32 Go recommandés pour les grands jeux single-cell ou spatiaux |
 | **Calcul** | L’exécution CPU-only est entièrement prise en charge ; aucun GPU n’est requis |
@@ -152,7 +208,7 @@ Vous pouvez aussi ouvrir `app.R` dans RStudio puis cliquer sur **Run App**.
 
 1. Importez des données compatibles (dossiers 10x, `.rds`, `.h5`, `.h5ad` ou `.loom`).
 2. Mappez facultativement les identifiants géniques vers des symboles standards.
-3. Lancez le pipeline guidé : QC, normalisation, PCA, clustering et UMAP/t-SNE.
+3. Lancez le pipeline (automatique 1 clic ou guidé) : QC, normalisation, PCA, clustering et UMAP/t-SNE.
 4. Annotez les types cellulaires avec SingleR.
 5. Explorez les marqueurs, les corrélations géniques et les enrichissements de voies.
 6. Exportez un rapport paramétré ou un script R reproductible.
@@ -188,9 +244,29 @@ TranscriptoShiny intègre des garde-fous spécifiques pour gérer les limites de
 - **Échelonnez les opérations lourdes** : sur une station avec 32 Go de RAM, exécutez une seule analyse lourde à la fois, par exemple une déconvolution spatiale ou une recherche de marqueurs à grande échelle.
 - **Utilisez un stockage local rapide** : conservez les données brutes, les rapports générés et les répertoires BPCells sur des disques locaux rapides, par exemple NVMe SSD, plutôt que sur des volumes réseau.
 
+### Barre latérale système
+
+- Afficher l'usage mémoire et l'état des objets chargés.
+- Déclencher un nettoyage mémoire explicite.
+- Ajuster la limite mémoire par tâche parallèle.
+- Ajuster la taille maximale d'upload.
+- Vérifier si les objets SC/Bulk/Spatial sont chargés et si le pipeline principal a tourné.
+- Sauvegarder/restaurer une session de travail.
+- Changer la langue de l'interface entre français et anglais.
+
+> Sur une machine 32 Go, n'allouez pas toute la RAM physique à une seule tâche.
+
+### Sauvegarde et restauration de session
+
+La barre latérale permet de sauvegarder/charger une session `.rds`. Les objets SC, Bulk et le sketch spatial sont sérialisés. Pour les données spatiales adossées à BPCells, les matrices complètes restent liées aux artefacts sur disque. Après restauration sur une autre machine ou après déplacement/nettoyage des fichiers, le sketch spatial peut rester visualisable mais le clustering/la déconvolution peuvent exiger une ré-importation. La référence scRNA-seq partagée (RCTD/transfert de labels) peut aussi nécessiter une ré-importation si son artefact local est manquant. Une session `.rds` n'est ni une archive universelle des données brutes ni un substitut à un stockage organisé des fichiers sources.
+
 ## Reproductibilité et utilisation scientifique
 
 TranscriptoShiny favorise la recherche reproductible grâce à l’export de rapports HTML/PDF paramétrés et de scripts R spécifiques à chaque domaine, qui récapitulent les étapes analytiques effectuées dans l’interface.
+
+Le **rapport consolidé (4F)** va plus loin : les rapports sont des **compilateurs d'état + provenance**, jamais des ré-exécuteurs d'analyses. Le compilateur agrège les résultats des domaines **sans ré-exécution**, produit un HTML autonome et un bundle d'export (manifeste, tables de résultats fidèles, script R reproductible, sessionInfo). Aucune donnée brute n'est embarquée par défaut. La provenance est obligatoire pour toute section du rapport consolidé — le validateur rejette la provenance incomplète. Le contrat consolidé couvre **11 domaines de résultats** (dont pseudobulk et corrélation génique) ; le rapport de domaine Single-Cell restitue en option les tables canoniques vitesse ARN, communication cellulaire et abondance différentielle (tables pures, aucun recalcul).
+
+**Environnement gelé :** `renv` est la voie supportée pour figer l'environnement (voir `RENV_SETUP.md` + `scripts/renv_bootstrap.R`). Les paquets GitHub-only (BPCells, spacexr, schard, …) s'installent via `renv::install()`.
 
 La reproductibilité et la validité scientifique dépendent également :
 
@@ -202,18 +278,39 @@ La reproductibilité et la validité scientifique dépendent également :
 **Bonnes pratiques :**
 
 - Enregistrez votre `sessionInfo()` lors du partage ou de la publication de résultats.
-- Envisagez un fichier de verrouillage des dépendances au niveau du projet, par exemple `renv`, lors du déploiement ou du partage d’un environnement d’analyse.
+- Conservez et partagez le fichier `renv.lock` fourni avec vos fichiers sources, métadonnées, paramètres et exports de provenance pour reconstruire l'environnement d'analyse.
 - Considérez l’application comme une aide analytique. Tous les résultats nécessitent une revue biologique et statistique indépendante ; TranscriptoShiny ne remplace ni un design d’étude rigoureux, ni le jugement en contrôle qualité, ni l’expertise du domaine.
+
+### Types d'exports
+
+| Export | Finalité |
+| :--- | :--- |
+| Rapport de domaine | Résumer l'analyse Bulk/Single-Cell/Spatial effectuée dans ce module. |
+| Rapport Single-Cell consolidé | Compiler les résultats et la provenance disponibles sans relancer les calculs. |
+| Script R reproductible | Documenter les paramètres et les étapes exécutées dans l'interface. |
+| Tables de résultats | Exporter les résultats filtrés ou complets par module. |
+| Bundle d'export | Regrouper manifeste, tables, script et session info là où proposé. |
+
+> Un rapport exporté documente l'état et les résultats au moment de sa génération ; il ne remplace ni la conservation des données sources, de `renv.lock`, des métadonnées et des artefacts sur disque nécessaires aux grands jeux spatiaux.
+
+## Qualité logicielle
+
+- **Tests** : suite `testthat` + `shinytest2` e2e (référence V1.1.0-rc : **1873 PASS / 0 FAIL / 0 ERROR**, e2e 13 PASS, ~14 min ; inclut un test fonctionnel du pipeline auto SC sur fixture minima).
+- **Garde anti-duplication** : `tools/check_duplication.R` (0 erreur).
+- **Contrats figés** : chaque contrat de résultat est couvert par un test de gel — toute modification = code + test + doc simultanément.
+- **Gates release** : `scripts/verify_release_gates.R` (lock valide, i18n sans doublon, aucun chemin local dans les fichiers suivis).
+- **Docs release** : `docs/release/` (matrice de durcissement 14 catégories, limitations connues, compatibilité, baseline de performance).
 
 ## Feuille de route
 
-Les développements à venir visent à étendre l’accessibilité, la robustesse et la profondeur analytique :
-
-- [ ] Localisation de l’interface en anglais et support de l’internationalisation.
-- [ ] Choix élargis d’intégration single-cell au-delà de Harmony.
+- [x] Localisation de l'interface en anglais et support de l'internationalisation (bilingue fr/en live).
+- [x] RNA Velocity, communication cellule-cellule (import CellChat/CellPhoneDB), abondance différentielle (Milo + scCODA + vues croisées), rapport consolidé SC + provenance.
+- [x] Option Slingshot pour l'inférence de lignées (quand le paquet est installé).
+- [x] Gates de release, suite de tests, renv, packaging V1.0.0.
+- [x] Refonte UX/UI V1.1 : pipeline auto 1 clic mutualisé (panneau 0 dans les trois domaines), SC en 5 sections parent avec DA nidifiée, conteneur Spatial (accordéon d'étapes + résultats à droite), étapes Bulk numérotées, saut « Aller au mapping des IDs », GEO « Source publique (GEO) » — zéro changement de comportement scientifique.
+- [ ] Choix élargis d'intégration single-cell au-delà de Harmony.
 - [ ] Détection dédiée des doublets au sein du pipeline de QC.
-- [ ] Intégration d’outils dédiés à l’inférence de lignage et de trajectoire.
-- [ ] Tests automatisés et outils de reproductibilité plus étendus.
+- [ ] Génération native de communication cellule-cellule à partir des données brutes (actuellement import-only).
 - [ ] Extension continue des workflows spatiaux et des analyses fondées sur des références.
 
 ## Contribuer
@@ -243,6 +340,9 @@ Ce projet est distribué sous licence MIT. Consultez le fichier `LICENSE` du dé
 
 # English
 
+**Status:** `V1.1.0-rc` — local transcriptomics platform covering single-cell RNA-seq, bulk RNA-seq, and spatial transcriptomics, with advanced analyses available depending on installed dependencies (RNA velocity, imported cell–cell communication, Milo/scCODA differential abundance, spatial deconvolution, reproducible reports). V1.1 is a UX/UI wave (mutualized 1-click auto pipeline, panel grouping, Spatial container) — **zero scientific behavior change**.
+> Some advanced analyses rely on optional dependencies, GitHub packages, or a dedicated Python environment. Check the Installation section before running a workflow.
+
 ## Why TranscriptoShiny?
 
 TranscriptoShiny is designed for iterative transcriptomic data exploration by biologists and bioinformaticians. It combines guided user interfaces, proactive validation messages, interactive visualizations, and reproducible reporting, all while maintaining strict user control over local data.
@@ -252,33 +352,63 @@ The application prioritizes:
 - **Progressive guidance**: Intuitive workflows for non-experts, without hiding critical analytical parameters from advanced users.
 - **Scalability**: Memory-aware strategies (e.g., Seurat v5 sketching, BPCells disk-backed matrices) to handle large single-cell and spatial datasets on standard hardware.
 - **Scientific rigor**: Built-in experimental-design safeguards for bulk differential expression and transparent, exportable analytical steps.
+- **Traceability**: Provenance produced at each analysis step and compiled at report time (never reconstructed after the fact), with frozen result contracts covered by freeze tests.
 
-*Note on language*: The primary interface language is currently French for now,  English translation is actively planned for a future release.
+*Language*: Fully bilingual French / English interface (sidebar switch). Live switching via shiny.i18n; French strings are the translation keys.
 
 ## Supported workflows
 
 TranscriptoShiny provides dedicated, modular environments for three primary transcriptomic domains:
-1. **Single-cell RNA-seq**: From raw 10x or matrix imports to clustering, annotation, marker discovery, and pathway analysis.
+1. **Single-cell RNA-seq**: From raw 10x or matrix imports to clustering, annotation, marker discovery, and pathway analysis — plus RNA velocity, cell-cell communication, differential abundance (Milo/scCODA), and the consolidated report.
 2. **Bulk RNA-seq**: From raw count matrices and metadata to differential expression, multi-contrast comparison, and functional enrichment.
 3. **Spatial transcriptomics**: From Visium/Xenium/CosMx/Slide-seq imports to spatial clustering, deconvolution, multi-sample integration, and niche analysis.
+
+## Application navigation
+
+| Tab / area | Role |
+| :--- | :--- |
+| Import Data | Load Single-Cell, Bulk RNA, or Spatial files, or from the **public source (GEO)** (last entry of the menu). ID-mapping reminder + native "Go to ID mapping" jump button in the Single-Cell/Bulk/GEO imports. |
+| Analyse Single-Cell | Five parent sections: **Preparation** (mapping, pipelines), **Analysis** (annotation, visualization, markers, correlation, pathways), **Dynamics** (trajectory, pseudobulk, RNA velocity), **Cell abundance** (inner tabs: A. design — B. Milo/scCODA — C. cross-views), **Deliverables** (reports/exports). |
+| Analyse Bulk RNA | Numbered steps 1→4: QC & filtering pipeline (with a compact "Bulk Pipeline Summary" view), ID mapping, differential expression & pathways, then "4. Deliverables — Report & R Script". |
+| Analyse Spatial | Sidebar container: numbered accordion steps on the left (one step open at a time), results on the right; dataset and daemon status always visible in the sidebar. Spatial pipeline, QC, clustering, deconvolution, visualization, multi-sample integration, niches, report/export. |
+| System sidebar | Language switch, memory usage, RAM cleanup, memory/upload limits, loaded objects status, session save/load, built-in help. |
+
+**Mutualized pipeline paradigm:** in all three domains, the **1-click automatic pipeline** is the first accordion panel (0.), announced by a paradigm badge at the top of each sidebar ("auto available" / "guided mode" / "async auto"). The step-by-step guided mode remains fully available; both paradigms share the same computations and the same state.
+
+> Note: the **"Public source (GEO)"** entry is a data source, not a fourth modality. It accepts compatible `series_matrix.txt` files as local import as well as accession-based fetching; it is not an offline-only viewer.
 
 ## Key capabilities
 
 ### Single-cell RNA-seq
 - **Flexible import**: Supports 10x directories, `.rds`, `.h5`, `.h5ad`, and `.loom` formats, preserving `orig.ident` for multi-sample workflows.
 - **Gene identifier mapping**: Optional, robust conversion of Ensembl/Entrez IDs to gene symbols prior to analysis.
-- **Standard pipeline**: QC, normalization, highly variable feature selection, PCA, neighbor graph construction, clustering, UMAP, and optional t-SNE.
+> Gene ID mapping depends on species, annotation version, and input ID quality. Unresolved, ambiguous, or duplicated IDs must be checked before biological interpretation; always keep original IDs in your exports.
+- **Standard pipeline**: QC, normalization, highly variable feature selection, PCA, neighbor graph construction, clustering, UMAP, and optional t-SNE. Available as a **1-click automatic pipeline** (panel 0: optional ID mapping, QC, normalization/PCA/clustering/UMAP, t-SNE, then optional steps SingleR annotation, markers, gene correlation, ORA on top markers, trajectory) or panel-by-panel in guided mode.
+> The Single-Cell interface groups its panels into five parent sections (Preparation / Analysis / Dynamics / Cell abundance / Deliverables). RNA velocity, cell–cell communication, and differential abundance require specific prerequisites and remain outside the automatic pipeline.
 - **Batch correction**: Harmony-based integration when multiple samples or batches are present.
 - **Memory-aware scaling**: Seurat v5 sketch workflows (`SketchData` with LeverageScore, `ProjectData`), BPCells-aware handling, targeted feature scaling, and stratified subsampling for costly exploratory tasks.
 - **Annotation & exploration**: Automatic cell-type annotation via SingleR (celldex references), marker discovery (`FindAllMarkers`), gene correlation, pathway analysis, and diverse visualizations (embeddings, feature plots, violins, dot plots, heatmaps, ridge/stacked views).
-- **Reproducibility**: Parameterized HTML/PDF reports and reusable R-script export.
-- *Scientific note*: The included trajectory module provides **exploratory graph-based pseudotime**. It is not a replacement for dedicated lineage-inference tools (e.g., Slingshot), and built-in doublet detection or cell-cycle regression is not currently provided.
+- **RNA velocity**: strict import of pre-prepared velocity data (spliced/unspliced matrices and compatible results/vectors) aligned to the Seurat object. The app performs multi-state consistency checks, provides phase-portrait and vector visualizations, and exports PNG/PDF/CSV. It visualizes validated results without silently re-computing a velocity model.
+- **Cell–cell communication (panel 8b)**: import-only of external results (CellChat table / object, CellPhoneDB means+p-values). Canonical 12-field table, exact identity matching, QC, exploratory views (dotplot, pathway heatmap, circular network), descriptive centrality, filters with provenance. No de-novo generation from raw counts (remains a future parking item).
+- **Differential abundance (panels 8c–8f)**:
+> Prerequisite: differential abundance analyses require metadata identifying the biological replication unit (e.g. sample_id, donor_id, patient_id) and an experimental condition. A cell cluster alone is not a biological replicate.
+  - Experimental-design validation that **blocks pseudoreplication** (cells are never treated as biological replicates; hard floors on replicates per condition, cells per sample, etc.).
+  - Milo (neighbourhood DA, seed recorded, graphSpatialFDR).
+  - scCODA (sample-level compositional DA via explicit Python environment; pure-R convergence diagnostics on ESS / R-hat / divergences).
+  - Cross-views (descriptive concordance categories between Milo & scCODA; no composite p-value).
+- **Trajectory**: exploratory kNN-graph pseudotime **plus optional Slingshot lineage inference** (when the package is available). Hard cell-count ceiling.
+- **Pseudobulk** utilities and a **consolidated Single-Cell report** (compiler of canonical state + provenance only — never re-executes analyses; HTML autonomous, export bundle with manifest, faithful tables, reproducible R script, sessionInfo).
+- Provenance is recorded for every analysis step that feeds a report; sections lacking provenance are rejected by the validator.
+- *Scientific note*: the default trajectory remains the lightweight graph pseudotime; Slingshot is offered as an optional engine when installed. Built-in doublet detection and cell-cycle regression are not yet integrated.
 
 ### Bulk RNA-seq
+> For DESeq2, edgeR, and limma-voom, provide raw gene-level counts, ideally integer or integer-like, from a quantification tool compatible with count-based analysis. Do not use TPM, FPKM, CPM, log-counts, or batch-corrected matrices as input for differential expression.
+
 - **Smart import**: Handles merged raw count matrices or per-sample count files, with automated metadata alignment and gene duplicate resolution.
 - **GEO support**: Offline parsing of GEO `series_matrix.txt` files without requiring network access or `GEOquery`.
 - **Exploratory QC**: Filtering, variance-stabilizing transformation (VST), PCA, scree plots, and sample-correlation heatmaps.
 - **Differential expression**: Workflows powered by DESeq2, edgeR, and limma-voom.
+> DESeq2, edgeR, and limma-voom are provided as distinct engines. Comparing them is useful for exploring robustness, but results must be interpreted with a clearly documented design, filters, normalization factors, and contrasts.
 - **Design safeguards**: Proactive checks for confounding covariates, missing covariate values that invalidate the model, and covariates with only one observed level.
 - **Contrast management**: Standard, user-defined, and pairwise contrasts, alongside multi-method comparison and rank-consensus exploration.
 - **Visualization & enrichment**: Volcano plots, MA plots, heatmaps, multi-contrast Venn/UpSet comparisons, and ORA/GSEA pathway analysis.
@@ -287,41 +417,39 @@ TranscriptoShiny provides dedicated, modular environments for three primary tran
 ### Spatial transcriptomics
 - **Broad import support**: Visium, Visium HD (supported layouts), Xenium, CosMx, and Slide-seq, subject to standard file-layout compatibility.
 - **Disk-backed architecture**: Large spatial assays utilize BPCells to store count matrices on disk, while lightweight sketch/metadata representations support interactive analysis in RAM.
-- **Asynchronous execution**: Heavy operations run via a `mirai` daemon pool with health checks, task logs, timeouts, and per-dataset caching to prevent UI blocking.
-- **Spatial analysis**: Spatial QC, Moran-style spatially variable feature analysis, and a lightweight, neighborhood-aware spatial clustering approach (BANKSY-inspired).
-- **Deconvolution**: RCTD, reference label transfer, and LDA-style approaches, featuring a prepared-reference workflow with validation safeguards.
+- **Asynchronous execution**: Heavy operations run via a `mirai` daemon pool (timeouts, health checks, per-dataset cache, daemon reset button), with task logs to prevent UI blocking.
+> Asynchronous tasks remain attached to the local R session. Do not close RStudio or R while they are running. Computations are intentionally capped to limit RAM saturation and excessive process creation on workstations.
+- **Spatial analysis**: Spatial QC, Moran-style spatially variable feature analysis, and lightweight neighborhood-aware spatial clustering. This approach is inspired by BANKSY principles but is not a full or interchangeable implementation of the original BANKSY package.
+- **Deconvolution**: RCTD, reference label transfer, and LDA-style approaches. The reference is **shared** (prepared once in Import > Spatial, reused by RCTD and Label Transfer), with validation safeguards.
 - **Multi-sample & niches**: Memory-aware sketch integration (with optional Harmony batch correction) and niche analysis based on local neighborhood composition.
+- **Disk backend**: BPCells is the on-disk backend; only the RAM sketch is guaranteed portable in a saved session.
 - **Advanced visualization**: Histology overlays, linked spatial/embedding views, lasso ROI selection, ROI marker exploration, and subset export.
 - *Scientific note*: Deconvolution accuracy depends heavily on reference quality, platform compatibility, and tissue context. These methods are for research exploration and are not validated for clinical decision-making.
 
 ## Architecture
 
-TranscriptoShiny is built on a modular Shiny architecture, separating concerns to improve maintainability and testability.
-
-- `app.R`: The main application entry point, assembling the UI and server logic.
-- `global.R`: Initializes packages and global runtime options.
-- `helpers_*.R`: Domain-specific utility functions (I/O, single-cell, bulk, pathway) that contain no Shiny reactivity, making them easier to test and reuse.
-- `modules/`: Shiny modules organized by domain (`import/`, `sc/`, `bulk/`, `spatial/`).
-- `R/`: Spatial-specific utilities implementing disk-backed I/O, asynchronous execution, reference preparation, multi-sample integration, and niche analysis.
-- **State management**: Domain modules communicate via shared `reactiveValues` objects. Reports are generated from parameterized R Markdown templates.
+TranscriptoShiny uses a modular Shiny architecture. Reusable analytical logic is separated from the interface, modules orchestrate workflows, and exportable results retain the provenance needed for interpretation.
+Development follows a tested, reproducibility-oriented approach: key analytical results are validated by automated tests before being exposed in the UI.
 
 ```text
 TranscriptoShiny/
-├── app.R                   # Application entry point
-├── global.R                # Package loading and global options
-├── helpers_bulk.R          # Bulk DE engines, plots, and validation
-├── helpers_io.R            # Multi-format I/O and ID mapping
-├── helpers_pathway.R       # ORA/GSEA utilities
-├── helpers_sc.R            # Seurat plotting and analysis helpers
-├── helpers_sc_bpcells.R    # Disk-backed (BPCells) pipeline support
-├── R/                      # Spatial utilities (async, I/O, multi-sample, niches)
-├── modules/
-│   ├── import/             # Data import modules (sc, bulk, spatial, GEO)
-│   ├── sc/                 # Single-cell analysis modules
-│   ├── bulk/               # Bulk RNA-seq analysis modules
-│   └── spatial/            # Spatial transcriptomics modules
-└── www/                    # Static assets (CSS, JS)
+├── app.R / global.R
+├── config/          # defaults.R, thresholds.R (single source of truth)
+├── i18n/            # translation.json (fr/en)
+├── R/
+│   ├── core/        # state, validation, provenance, jobs, caching, io/pathway helpers
+│   ├── sc/          # velocity, communication, abundance (Milo/scCODA/design/cross), trajectory, pipeline, plotting, bpcells, export
+│   ├── bulk/        # import engine, report engine, helpers
+│   ├── spatial/     # async (mirai), io, deconv prep/tasks, multi, niche, plotting, report, reference, stats, export
+│   ├── reports/     # collector, validator, render, bundle
+│   └── plotting/    # shared palettes
+├── modules/         # import/, sc/, bulk/, bulk_de/, spatial/ (+ deconv sub-modules)
+├── reports/         # Rmd templates (sc, bulk, spatial + child)
+├── scripts/         # renv bootstrap and development/benchmark scripts
+└── renv/            # lock + activate
 ```
+
+Cross-module state flows through the shared `reactiveValues` (`global_data`); heavy spatial/async work runs on the `mirai` daemon pool. Modules read their parameters from `config/` and the declared thresholds — no hard-coded magic numbers.
 
 ## Installation
 
@@ -331,25 +459,50 @@ git clone https://github.com/Bio-MG/ShinyApp---TranscriptoShiny.git
 cd ShinyApp---TranscriptoShiny
 ```
 
-### 2. Install dependencies
-Open R or RStudio in the cloned project directory. Install the required CRAN and Bioconductor packages. The exact dependency footprint varies depending on the workflows you plan to use (especially spatial deconvolution and report rendering).
+### 2. Install dependencies (recommended: renv)
+The project uses **renv** to restore a reproducible R environment. Work from the cloned repository root so that `.Rprofile` can activate `renv`.
+In R or RStudio:
+```r
+setwd("path/to/ShinyApp---TranscriptoShiny")
+if (!requireNamespace("renv", quietly = TRUE)) install.packages("renv")
+renv::restore()
+```
+If restore fails or on a new machine, run the bootstrap script from the repository root:
+```r
+source("scripts/renv_bootstrap.R")
+```
+> Important: always launch the app from the project root. `app.R` explicitly checks that the project `renv` library is active and fails with a clear error otherwise.
+
+*Manual install (discouraged, developers only): this is not the supported way to reproduce the reference environment — prefer `renv::restore()`.*
 
 ```r
-# Install BiocManager if not already present
-if (!requireNamespace("BiocManager", quietly = TRUE)) {
-  install.packages("BiocManager")
-}
+# Minimal CRAN core
+install.packages(c("shiny", "bslib", "shinyjs", "shinyWidgets", "shinycssloaders",
+                   "shiny.i18n", "bsicons", "DT", "plotly", "ggplot2", "dplyr",
+                   "patchwork", "viridis", "future", "mirai", "igraph", "Matrix",
+                   "RANN", "circlize", "rmarkdown", "zip", "fs", "scattermore"))
 
-# Install core dependencies (add others as needed for your specific workflows)
-install.packages(c("shiny", "bslib", "bsicons", "plotly", "DT", "future", 
-                   "ggplot2", "dplyr", "patchwork", "viridis", "igraph"))
-
-# Install Bioconductor dependencies
-BiocManager::install(c("Seurat", "SingleR", "celldex", "SingleCellExperiment",
-                       "DESeq2", "edgeR", "limma", "ComplexHeatmap", 
-                       "clusterProfiler", "org.Hs.eg.db", "org.Mm.eg.db"))
+# Bioconductor
+if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+BiocManager::install(c("Seurat", "SeuratObject", "SingleR", "celldex",
+                       "SingleCellExperiment", "DESeq2", "edgeR", "limma",
+                       "ComplexHeatmap", "slingshot"))
 ```
-*Note: Spatial workflows may require additional packages such as `BPCells`, `mirai`, `RANN`, and `spacexr`. Consult the application startup messages or module headers for specific requirements.*
+
+*Note: spatial, AnnData, RCTD and deconvolution dependencies must be installed separately; `renv::restore()` remains the supported full install.*
+
+### Optional dependencies by feature
+
+| Feature | Main dependency | Consequence if missing |
+| :--- | :--- | :--- |
+| Disk-backed spatial matrices | BPCells | No on-disk backend (everything in RAM) |
+| RCTD deconvolution | spacexr | RCTD unavailable |
+| Robust `.h5ad` reading | schard | Fallback to SeuratDisk or failure |
+| Visium HD (parquet) | arrow | Incomplete HD import (lightweight alternative: nanoparquet) |
+| Lineage inference | slingshot | Trajectory limited to graph pseudotime |
+| scCODA | Python env + scCODA deps | scCODA unavailable (guided error) |
+| Spatial WebGL views | leafgl | Degraded large point-cloud rendering |
+*Note: Spatial workflows may require additional packages such as `BPCells`, `mirai`, `RANN`, and `spacexr`. scCODA requires a dedicated **Python 3.13** environment (`python_env_sccoda/` or the `TS_SCCODA_PYTHON` variable) — without it, a classed error with guidance is raised, with no silent fallback. Per-domain PDF requires TinyTeX; the consolidated 4F report produces standalone HTML without pandoc.*
 
 ### 3. Launch the application
 ```r
@@ -360,8 +513,8 @@ Alternatively, open `app.R` in RStudio and click **Run App**.
 ### Recommended environment
 | Component | Recommendation |
 | :--- | :--- |
-| **R Version** | >= 4.2 |
-| **IDE** | RStudio (recommended for development and debugging) |
+| **R Version** | 4.4.2 (single supported version) |
+| **IDE** | RStudio (recommended for development and debugging) — open `SHINYAPP test.Rproj` to activate renv |
 | **RAM (Routine)** | 16 GB minimum |
 | **RAM (Large Data)** | 32 GB recommended for large single-cell or spatial datasets |
 | **Compute** | CPU-only execution is fully supported; GPU is not required |
@@ -372,7 +525,7 @@ Alternatively, open `app.R` in RStudio and click **Run App**.
 ### Single-cell RNA-seq
 1. Import compatible data (10x directories, `.rds`, `.h5`, `.h5ad`, or `.loom`).
 2. (Optional) Map gene identifiers to standard symbols.
-3. Run the guided pipeline: QC, normalization, PCA, clustering, and UMAP/t-SNE.
+3. Run the pipeline (1-click automatic or guided): QC, normalization, PCA, clustering, and UMAP/t-SNE.
 4. Annotate cell types using SingleR.
 5. Explore markers, gene correlations, and pathway enrichments.
 6. Export a parameterized report or a reproducible R script.
@@ -405,9 +558,29 @@ TranscriptoShiny includes specific safeguards to manage memory and compute limit
 - **Pace heavy operations**: On a 32 GB workstation, run one heavy asynchronous analysis (e.g., spatial deconvolution or large-scale marker discovery) at a time.
 - **Use fast local storage**: Keep raw input data, generated reports, and BPCells directories on fast local drives (e.g., NVMe SSD) rather than network-mounted volumes.
 
+### System sidebar
+
+- Display memory usage and loaded object status.
+- Trigger explicit memory cleanup.
+- Adjust memory limit per parallel task.
+- Adjust maximum upload size.
+- Check whether SC/Bulk/Spatial objects are loaded and whether the main pipeline has run.
+- Save/restore a working session.
+- Switch interface language between French and English.
+
+> On a 32 GB machine, do not allocate all physical RAM to a single task.
+
+### Session save and restore
+
+The sidebar allows saving/loading a `.rds` session. SC, Bulk, and the spatial sketch are serialized. For BPCells-backed spatial data, full matrices remain linked to on-disk artifacts. After restoring on another machine or after moving/cleaning files, the spatial sketch may remain viewable but clustering/deconvolution may require re-import. The shared scRNA-seq reference (RCTD/label transfer) may also need re-import if its local artifact is missing. A `.rds` session is neither a universal archive of raw data nor a substitute for organized source file storage.
+
 ## Reproducibility and scientific use
 
 TranscriptoShiny supports reproducible research by exporting parameterized HTML/PDF reports and domain-specific R scripts that recapitulate the analytical steps performed in the UI.
+
+The **consolidated report (4F)** goes further: reports are **compilers of state + provenance**, never re-runners of analyses. The compiler aggregates cross-domain results **without re-execution**, producing standalone HTML and an export bundle (manifest, faithful result tables, reproducible R script, sessionInfo). No raw data is embedded by default. Provenance is mandatory for any section that appears in a consolidated report — the validator rejects incomplete provenance. The consolidated contract covers **11 result domains** (including pseudobulk and gene correlation); the Single-Cell domain report optionally renders the canonical RNA velocity, cell–cell communication, and differential abundance tables (pure tables, no recomputation).
+
+**Frozen environment:** `renv` is the supported way to freeze the environment (see `RENV_SETUP.md` + `scripts/renv_bootstrap.R`). GitHub-only packages (BPCells, spacexr, schard, …) must be installed via `renv::install()`.
 
 However, true reproducibility and scientific validity also depend on:
 - The exact input files and their formatting.
@@ -417,17 +590,39 @@ However, true reproducibility and scientific validity also depend on:
 
 **Best practices**:
 - Record your `sessionInfo()` when sharing or publishing results.
-- Consider using a project-level dependency lockfile (e.g., `renv`) when deploying or sharing an analysis environment.
+- Keep and share the provided `renv.lock` file together with your source files, metadata, parameters, and provenance exports to reconstruct the analytical environment.
 - Treat the application as an analytical aid. All results require independent biological and statistical review; TranscriptoShiny does not replace rigorous study design, quality control judgment, or domain expertise.
+
+### Export types
+
+| Export | Purpose |
+| :--- | :--- |
+| Domain report | Summarize Bulk/Single-Cell/Spatial analysis performed in that module. |
+| Consolidated Single-Cell report | Compile available results and provenance without re-running computations. |
+| Reproducible R script | Document parameters and steps executed in the UI. |
+| Result tables | Export filtered or complete results per module. |
+| Export bundle | Group manifest, tables, script, and session info where offered. |
+
+> An exported report documents the state and results at generation time; it does not replace conservation of source data, `renv.lock`, metadata, and on-disk artifacts needed for large spatial datasets.
+
+## Software quality
+
+- **Tests**: `testthat` suite + `shinytest2` e2e (V1.1.0-rc baseline: **1873 PASS / 0 FAIL / 0 ERROR**, e2e 13 PASS, ~14 min; includes a functional test of the SC auto pipeline on a minimal fixture).
+- **Duplication gate**: `tools/check_duplication.R` (0 errors).
+- **Frozen contracts**: each result contract is covered by a freeze test — any change = code + test + doc simultaneously.
+- **Release gates**: `scripts/verify_release_gates.R` (valid lockfile, duplicate-free i18n, no local paths in tracked files).
+- **Release docs**: `docs/release/` (14-category hardening matrix, known limitations, compatibility, performance baseline).
 
 ## Roadmap
 
-Future development is focused on expanding accessibility, robustness, and analytical depth:
-- [ ] English UI localization and internationalization support.
+- [x] English UI localization and internationalization support (live fr/en bilingual).
+- [x] RNA velocity, cell-cell communication (CellChat/CellPhoneDB import), differential abundance (Milo + scCODA + cross-views), consolidated SC report + provenance.
+- [x] Slingshot option for lineage inference (when the package is installed).
+- [x] Release gates, test suite, renv, V1.0.0 packaging.
+- [x] V1.1 UX/UI overhaul: mutualized 1-click auto pipeline (panel 0 in all three domains), SC grouped into 5 parent sections with nested DA, Spatial container (step accordion + results on the right), numbered Bulk steps, "Go to ID mapping" jump, GEO as "Public source (GEO)" — zero scientific behavior change.
 - [ ] Expanded single-cell integration choices beyond Harmony.
 - [ ] Dedicated doublet-detection support within the QC pipeline.
-- [ ] Integration of dedicated lineage and trajectory inference tools.
-- [ ] Broader automated testing and reproducibility tooling.
+- [ ] Native cell-cell communication generation from raw data (currently import-only).
 - [ ] Continued expansion of spatial workflows and reference-based analyses.
 
 ## Contributing

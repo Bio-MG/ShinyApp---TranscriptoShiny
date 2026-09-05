@@ -1569,12 +1569,12 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     
     selected_event_ids <- function(source_id) {
       ev <- tryCatch(
-        plotly::event_data(
+        suppressWarnings(plotly::event_data(
           event = "plotly_selected",
           source = source_id,
           session = session,
           priority = "event"
-        ),
+        )),
         error = function(e) NULL
       )
       
@@ -1586,12 +1586,12 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     }
     
     observeEvent(
-      plotly::event_data(
+      suppressWarnings(plotly::event_data(
         event = "plotly_selected",
         source = ns("combined_spatial_src"),
         session = session,
         priority = "event"
-      ),
+      )),
       {
         req(output$combined_spatial_plot)
 
@@ -1602,12 +1602,12 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
     )
     
     observeEvent(
-      plotly::event_data(
+      suppressWarnings(plotly::event_data(
         event = "plotly_selected",
         source = ns("combined_umap_src"),
         session = session,
         priority = "event"
-      ),
+      )),
       {
         req(output$combined_umap_plot)
 
