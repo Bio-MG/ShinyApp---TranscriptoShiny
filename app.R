@@ -293,39 +293,43 @@ ui <- page_navbar(
   
   
   # === ONGLETS D'IMPORT ===
-  
+
   nav_menu(
-    
+
     tagList("📥 ", i18n$t("Import Données")),
-    
+
     icon = icon("upload"),
-    
-    
-    
-    nav_panel(i18n$t("Single-Cell"), 
-              
+
+    # LOT 6A (V1.x UX): GEO is a public DATA SOURCE (feeds Bulk/SC), not a
+    # 4th modality — renamed and placed FIRST in the Import menu.
+    nav_panel(i18n$t("Source publique (GEO)"),
+
+              icon = icon("database"),
+
+              mod_geo_ui("geo")), ##ajout verif
+
+    nav_panel(i18n$t("Single-Cell"),
+
               icon = icon("braille"),
-              
+
               mod_import_sc_ui("import_sc")),
-    
-    
-    
-    nav_panel(i18n$t("RNA Bulk"), 
-              
+
+
+
+    nav_panel(i18n$t("RNA Bulk"),
+
               icon = icon("table"),
-              
+
               mod_import_bulk_ui("import_bulk")),
-    
-    
-    
-    nav_panel(i18n$t("Spatial"), 
-              
+
+
+
+    nav_panel(i18n$t("Spatial"),
+
               icon = icon("map"),
-              
-              mod_import_spatial_ui("import_spatial")),
-    
-    nav_panel("GEO", mod_geo_ui("geo")) ##ajout verif
-    
+
+              mod_import_spatial_ui("import_spatial"))
+
   ),
   
   

@@ -14,7 +14,13 @@
 mod_geo_ui <- function(id) {
   ns <- NS(id)
   tagList(
-    h4(i18n$t("Importer depuis GEO"), class = "mt-0 mb-3"),
+    h4(i18n$t("Source publique (GEO)"), class = "mt-0 mb-3"),
+
+    # LOT 6A (V1.x UX): orientation — GEO is a data SOURCE for Bulk/SC, not a
+    # 4th analysis modality.
+    div(class = "alert alert-info", style = "font-size:0.8rem;",
+        bsicons::bs_icon("info-circle"), " ",
+        i18n$t("GEO est une source de données publique (Bulk ou Single-Cell), pas une modalité d'analyse : importez ici, puis traitez vos données dans les onglets Analyse Bulk RNA ou Analyse Single-Cell.")),
 
     # LOT 4A (V1.x UX): GEO feeds the Bulk analysis — mapping stays there;
     # remind + native jump to the existing Bulk "0. Mapping IDs" panel.
