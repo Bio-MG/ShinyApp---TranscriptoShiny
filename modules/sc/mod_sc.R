@@ -29,10 +29,8 @@ mod_sc_ui <- function(id) {
           icon("bolt"), " ", i18n$t("Auto-pipeline disponible — les étapes manuelles restent optionnelles")),
       div(class = "alert alert-info", style = "font-size:0.8rem;padding:5px;",
           bsicons::bs_icon("info-circle"), " ", i18n$t("Étapes séquentielles recommandées.")),
-      actionButton(ns("btn_auto_pipeline_sc"), i18n$t("▶ Lancer Pipeline Complet (SC)"),
-                   icon = icon("play-circle"), class = "btn-outline-success w-100 mb-1"),
-      verbatimTextOutput(ns("sc_auto_log")),
-      uiOutput(ns("sc_pipeline_status_bar")),
+      # Mutualized auto-pipeline paradigm (V1.x UX): in EVERY domain the 1-click
+      # auto pipeline is the FIRST accordion panel (0.), manual steps follow.
       accordion(
         id = ns("acc_workflow"), open = "grp_prep",
         # ── LOT 2 (V1.x UX): 5 parent sections replace the flat 17-panel list.
@@ -41,6 +39,14 @@ mod_sc_ui <- function(id) {
         # ── 1. Préparation ────────────────────────────────────────────────
         accordion_panel(i18n$t("Préparation"), icon = icon("layer-group"), value = "grp_prep",
           accordion(id = ns("acc_prep"), open = "1_pipeline",
+            # Mutualized paradigm (V1.x UX): auto pipeline first, same panel
+            # title/position as Bulk and Spatial (ids unchanged).
+            accordion_panel(i18n$t("Pipeline auto (1 clic)"), icon = icon("bolt"),
+                            value = "0_autopipeline",
+                            actionButton(ns("btn_auto_pipeline_sc"), i18n$t("▶ Lancer Pipeline Complet (SC)"),
+                                         icon = icon("play-circle"), class = "btn-outline-success w-100 mb-1"),
+                            verbatimTextOutput(ns("sc_auto_log")),
+                            uiOutput(ns("sc_pipeline_status_bar"))),
             accordion_panel(i18n$t("0. Mapping IDs (Optionnel)"), icon = icon("arrows-rotate"),
                             value = "0_mapping",
                             mod_sc_mapping_ui(ns("mapping"))),

@@ -17,13 +17,17 @@ mod_bulk_ui <- function(id) {
         div(class = "alert alert-info", style = "font-size:0.8rem;padding:5px;",
             bsicons::bs_icon("info-circle"),
             " ", i18n$t("Importez d'abord vos donn\u00e9es dans l'onglet 'Import Donn\u00e9es > RNA Bulk'.")),
-        uiOutput(ns("pipeline_status_bar")),
-        actionButton(ns("btn_auto_pipeline"),
-                     tagList(icon("play-circle"), i18n$t("Lancer Pipeline Complet")),
-                     class = "btn-outline-success w-100 mb-1"),
-        verbatimTextOutput(ns("auto_pipeline_log")),
+        # Mutualized auto-pipeline paradigm (V1.x UX): in EVERY domain the
+        # 1-click auto pipeline is the FIRST accordion panel (0.).
         accordion(
           id = ns("acc_bulk"), open = "panel_filter",
+          accordion_panel(i18n$t("Pipeline auto (1 clic)"), value = "0_autopipeline",
+                          icon = icon("bolt"),
+                          actionButton(ns("btn_auto_pipeline"),
+                                       tagList(icon("play-circle"), i18n$t("Lancer Pipeline Complet")),
+                                       class = "btn-outline-success w-100 mb-1"),
+                          verbatimTextOutput(ns("auto_pipeline_log")),
+                          uiOutput(ns("pipeline_status_bar"))),
           accordion_panel(i18n$t("0. Mapping IDs (Optionnel)"), value = "panel_mapping",
                           icon = icon("arrows-rotate"), mod_bulk_mapping_ui(ns("mapping"))),
           accordion_panel(i18n$t("1. Pipeline Bulk — Contrôle qualité & filtrage"), value = "panel_filter",

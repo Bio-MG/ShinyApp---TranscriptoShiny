@@ -8104,6 +8104,10 @@
     {
       "fr": "Autocorrélation spatiale (Moran) — gènes spatialement variables",
       "en": "Spatial autocorrelation (Moran) — spatially variable genes"
+    },
+    {
+      "fr": "Pipeline auto (1 clic)",
+      "en": "Auto pipeline (1 click)"
     }
   ]
 }
