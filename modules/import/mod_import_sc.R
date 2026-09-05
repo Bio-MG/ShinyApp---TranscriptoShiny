@@ -154,7 +154,7 @@ mod_import_sc_ui <- function(id) {
                 bsicons::bs_icon("hdd"),
                 " ", i18n$t("Fichiers volumineux (> quelques Go) : vérifiez l'espace disque disponible sur le disque où pointe le dossier temporaire de R (TMPDIR), pas seulement celui de l'app.")),
             fileInput(ns("file_upload"), i18n$t("Ajouter Fichier(s)"),
-                      accept = c(".rds", ".h5", ".h5ad", ".loom"), multiple = TRUE),
+                      accept = c(".rds", ".h5", ".h5ad", ".loom", ".rda", ".RData"), multiple = TRUE),
             uiOutput(ns("file_list_display")),
             actionButton(ns("btn_load_file"), i18n$t("🚀 Charger"), class = "btn-primary w-100", icon = icon("play"))
           ),
@@ -162,9 +162,12 @@ mod_import_sc_ui <- function(id) {
             i18n$t("Option C: Fichier Unique (Classique)"),
             value = "opt_c",
             fileInput(ns("single_file_upload"), i18n$t("Charger un seul fichier"),
-                      accept = c(".rds", ".h5", ".h5ad", ".loom")),
+                      accept = c(".rds", ".h5", ".h5ad", ".loom", ".rda", ".RData")),
             helpText(i18n$t("Pour un seul échantillon.")),
-            actionButton(ns("btn_load_single"), i18n$t("Charger"), class = "btn-warning w-100")
+            actionButton(ns("btn_load_single"), i18n$t("Charger"), class = "btn-warning w-100"),
+            # .rda/.RData "Inspect & Select" — carte conditionnelle mutualisée
+            # (contrat docs/contracts/RDATA_IMPORT_CONTRACT.md)
+            rdata_picker_ui(ns("rdata_picker_sc"))
           )
         )
       ),
@@ -203,6 +206,50 @@ mod_import_sc_server <- function(id, global_data) {
     add_log <- function(msg) {
       logs(paste0("[", format(Sys.time(),"%H:%M:%S"), "] ", msg, "\n", logs()))
     }
+
+    # ── .rda/.RData "Inspect & Select" (composant mutualisé) ───────────────
+    # Contrat docs/contracts/RDATA_IMPORT_CONTRACT.md : le workspace est
+    # inspecté dans un env isolé ; la classe est validée AVANT le commit.
+    # L'hôte garde le commit : normalisation prepare_seurat_object puis
+    # global_data$sc_obj (précédent des imports existants).
+    .RDA_SC_EXPECTED <- c("Seurat", "SingleCellExperiment", "matrix",
+                          "dgCMatrix", "dgTMatrix", "data.frame")
+    rdata_file_rv <- reactiveVal(NULL)
+    rdata_picker_server(
+      "rdata_picker_sc",
+      file_rv   = rdata_file_rv,
+      commit_fn = function(obj, obj_name) {
+        if (is.data.frame(obj)) obj <- as.matrix(obj)
+        prepared <- prepare_seurat_object(obj, "SingleSample")
+        global_data$sc_obj <- prepared
+        add_log(paste(.tr("✅ Import réussi:"), ncol(prepared), .tr("cellules"), "—", obj_name))
+        showNotification(paste(.tr("✅ Import réussi:"), ncol(prepared), .tr("cellules")),
+                         type = "message", duration = 5)
+      },
+      expected  = .RDA_SC_EXPECTED,
+      context   = "import single-cell (.RData)",
+      tr        = .tr,
+      log_fn    = add_log
+    )
+
+    # Dépôt d'un fichier .rda/.RData en Option C : contrôle d'intégrité puis
+    # transfert au composant (aperçu + auto-import si objet unique compatible)
+    observeEvent(input$single_file_upload, {
+      f <- input$single_file_upload
+      req(f)
+      if (!rdata_is_supported_file(f$datapath)) {
+        rdata_file_rv(NULL)
+        return()
+      }
+      integrity <- .verify_upload_integrity(f$datapath, f$size)
+      if (!integrity$ok) {
+        add_log(paste("❌", integrity$msg))
+        showNotification(integrity$msg, type = "error", duration = 10)
+        return()
+      }
+      rdata_file_rv(list(datapath = f$datapath, name = f$name, size = f$size))
+    })
+
 
     # ── LOT 4A (V1.x UX): native jump to the EXISTING SC mapping panel ──────
     # No UI duplication: select the analysis page (top-level page_navbar via
@@ -350,6 +397,12 @@ mod_import_sc_server <- function(id, global_data) {
     # ── Option C ────────────────────────────────────────────────────────────
     observeEvent(input$btn_load_single, {
       req(input$single_file_upload)
+      if (rdata_is_supported_file(input$single_file_upload$datapath)) {
+        # Le contenu .RData est inspecté/importé dès le dépôt du fichier
+        # (observeEvent single_file_upload -> composant mutualisé).
+        add_log(.tr("Le contenu .RData est inspecté automatiquement dès le dépôt du fichier (carte ci-dessous)."))
+        return()
+      }
       add_log(paste(.tr("Import fichier unique...")))
       withProgress(message = .tr("Chargement..."), {
         tryCatch({
@@ -421,6 +474,24 @@ mod_import_sc_server <- function(id, global_data) {
 
       # 2. .rds
       if (ext == "rds") return(readRDS(path))
+
+      # 2bis. .rda/.RData — inspecté par le composant mutualisé ; en flux
+      # direct (Option B : fusion multi-fichiers), seul un workspace à objet
+      # unique est importable ici (sinon message orientant vers l'Option C).
+      if (rdata_is_supported_file(path)) {
+        env <- rdata_load_env(path)
+        on.exit(rdata_free(env), add = TRUE)
+        nms <- ls(envir = env)
+        if (length(nms) > 1L) {
+          stop(paste0(
+            "Ce fichier .RData contient ", length(nms),
+            " objets. Utilisez l'Option C (Fichier Unique) pour sélectionner ",
+            "l'objet à importer, ou exportez les objets souhaités depuis l'aperçu."),
+            call. = FALSE)
+        }
+        log(paste("  ℹ Objet unique détecté :", nms[1]))
+        return(rdata_extract_object(env, nms[1]))
+      }
 
       # 3. .h5 — BPCells for large files
       if (ext == "h5") {

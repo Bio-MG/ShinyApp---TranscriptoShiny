@@ -48,6 +48,7 @@ source("config/thresholds.R")
 # config/* -> R/core/state.R -> autres R/core/* -> domaines -> modules).
 source("R/core/state.R")        # contrat d'etat + fabriques d'etat partagees
 source("R/core/io_helpers.R")
+source("R/core/rdata_io.R")     # import .rda/.RData "Inspect & Select" (contrat RDATA_IMPORT_CONTRACT)
 source("R/core/validation.R")   # <-- NEW
 source("R/core/provenance.R")   # <-- CHRYSALIS 2C : manifeste de provenance
 source("R/core/jobs.R")         # <-- CHRYSALIS 2D : wrapper fin sync/async
@@ -101,6 +102,7 @@ source("R/reports/report_bundle.R")
 
 # 5. SHINY MODULES (UI + Reactive Glue)
 # 5a. Import
+source("modules/import/mod_rdata_picker.R")  # composant mutualise .rda/.RData
 source("modules/import/mod_import_sc.R")
 source("modules/import/mod_import_bulk.R")
 source("modules/import/mod_import_spatial.R")

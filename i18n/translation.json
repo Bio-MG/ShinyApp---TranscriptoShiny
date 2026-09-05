@@ -8192,6 +8192,10 @@
     {
       "fr": "Fichier volumineux : l'inspection charge le workspace entier en mémoire.",
       "en": "Large file: inspection loads the whole workspace into memory."
+    },
+    {
+      "fr": "Le contenu .RData est inspecté automatiquement dès le dépôt du fichier (carte ci-dessous).",
+      "en": ".RData contents are inspected automatically when the file is uploaded (card below)."
     }
   ]
 }
