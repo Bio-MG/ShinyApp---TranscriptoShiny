@@ -102,7 +102,11 @@ patterns <- c(
 )
 hits_total <- 0L
 for (nm in names(patterns)) {
-  hits <- system2("git", c("grep", "-lE", patterns[[nm]], "--"),
+  # Exclude this script itself from the search: it must embed its own regex
+  # patterns as literals, which otherwise self-match and turn G4 permanently
+  # red (false positive observed at the pre-release pass, 2026-09-05).
+  hits <- system2("git", c("grep", "-lE", patterns[[nm]], "--",
+                           ":(exclude)scripts/verify_release_gates.R"),
                   stdout = TRUE, stderr = FALSE)
   hits <- hits[nchar(hits) > 0 & !startsWith(hits, "fatal")]
   if (length(hits) > 0L) {
