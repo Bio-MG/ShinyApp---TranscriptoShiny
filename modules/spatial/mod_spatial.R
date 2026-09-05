@@ -126,7 +126,11 @@ mod_spatial_ui <- function(id) {
                         value = "panel_pipeline",
                         mod_spatial_pipeline_ui(ns("pipeline"))),
 
-        accordion_panel(i18n$t("1. QC & Autocorrelation"), icon = icon("filter"),
+        # LOT 5 (V1.x UX): tooltip demystifies "Moran" on the QC step.
+        accordion_panel(tagList(i18n$t("1. QC & Autocorrelation"), " ",
+                                bslib::tooltip(icon("circle-info"),
+                                               i18n$t("Autocorrélation spatiale (Moran) — gènes spatialement variables"))),
+                        icon = icon("filter"),
                         value = "panel_qc",
                         p(class = "small text-muted mb-0",
                           i18n$t("Les contrôles et les résultats de cette étape s'affichent dans le panneau de droite."))),
@@ -151,7 +155,8 @@ mod_spatial_ui <- function(id) {
                         p(class = "small text-muted mb-0",
                           i18n$t("Les contrôles et les résultats de cette étape s'affichent dans le panneau de droite."))),
 
-        accordion_panel(i18n$t("6. Niches spatiales"), icon = icon("diagram-project"),
+        # LOT 5 (V1.x UX glossary): dual label — what "spatial niches" means.
+        accordion_panel(i18n$t("Niches spatiales — micro-environnements cellulaires"), icon = icon("diagram-project"),
                         value = "panel_niche",
                         p(class = "small text-muted mb-0",
                           i18n$t("Les contrôles et les résultats de cette étape s'affichent dans le panneau de droite."))),
@@ -190,7 +195,7 @@ mod_spatial_ui <- function(id) {
                 value = "results_multi",
                 mod_spatial_multi_ui(ns("multi"))),
 
-      nav_panel(i18n$t("6. Niches spatiales"), icon = icon("diagram-project"),
+      nav_panel(i18n$t("Niches spatiales — micro-environnements cellulaires"), icon = icon("diagram-project"),
                 value = "results_niche",
                 mod_spatial_niche_ui(ns("niche"))),
 

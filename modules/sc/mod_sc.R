@@ -73,7 +73,8 @@ mod_sc_ui <- function(id) {
             accordion_panel(i18n$t("7. Trajectory Analysis"), icon = icon("route"),
                             value = "7_trajectory",
                             mod_sc_trajectory_ui(ns("trajectory"))),
-            accordion_panel(i18n$t("8. RNA Velocity"), icon = icon("wind"),
+            # LOT 5 (V1.x UX glossary): dual label — what RNA velocity means.
+            accordion_panel(i18n$t("Vélocité ARN — orientation des trajectoires"), icon = icon("wind"),
                             value = "8_velocity",
                             mod_sc_velocity_ui(ns("velocity"))),
             accordion_panel(i18n$t("8b. Communication (import)"), icon = icon("satellite-dish"),
@@ -83,7 +84,8 @@ mod_sc_ui <- function(id) {
         # ── 4. Abondance cellulaire ───────────────────────────────────────
         accordion_panel(i18n$t("Abondance cellulaire"), icon = icon("balance-scale"), value = "grp_abondance",
           accordion(id = ns("acc_abondance"),
-            accordion_panel(i18n$t("4b. Pseudobulk DE (Conditions)"), icon = icon("layer-group"),
+            # LOT 5 (V1.x UX glossary): dual label — what "pseudobulk" means.
+            accordion_panel(i18n$t("Pseudobulk — agrégation des cellules par échantillon"), icon = icon("layer-group"),
                             value = "4b_pseudobulk",
                             mod_sc_pseudobulk_ui(ns("pseudobulk"))),
             # LOT 2 (mandatory DA nesting): the four flat panels 8c/8d/8e/8f
@@ -101,9 +103,12 @@ mod_sc_ui <- function(id) {
                               nav_panel(i18n$t("B. Méthodes (Milo / scCODA)"), value = "da_methods",
                                         navset_pill(
                                           id = ns("da_methods_tabs"),
-                                          nav_panel(i18n$t("Milo"), value = "da_milo",
+                                          # LOT 5 (V1.x UX): tooltips demystify the method names.
+                                          nav_panel(tagList("Milo ", bslib::tooltip(icon("circle-info"), i18n$t("Milo — abondance par voisinages de cellules"))),
+                                                    value = "da_milo",
                                                     mod_sc_da_milo_ui(ns("da_milo"))),
-                                          nav_panel(i18n$t("scCODA"), value = "da_sccoda",
+                                          nav_panel(tagList("scCODA ", bslib::tooltip(icon("circle-info"), i18n$t("scCODA — composition cellulaire (modèle bayésien)"))),
+                                                    value = "da_sccoda",
                                                     mod_sc_da_sccoda_ui(ns("da_sccoda")))
                                         )),
                               nav_panel(i18n$t("C. Vues croisées"), value = "da_cross",
