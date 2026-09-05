@@ -370,6 +370,20 @@ mod_sc_pseudobulk_server <- function(id, global_data, shared_rv) {
 
         n_sig <- sum(!is.na(res_df$padj) & res_df$padj < (input$padj_thresh %||% 0.05) &
                       abs(res_df$log2FoldChange) > (input$lfc_thresh %||% 1))
+
+        # Post-V1.0 (mandat utilisateur) : exposition additive du resultat DE
+        # pseudobulk au rapport consolide (lecture seule ; pb$ reste la
+        # reference du panel 4b — aucun changement de comportement du panneau).
+        shared_rv$pseudobulk_result <- list(
+          type = "sc_pseudobulk_de",
+          engine = input$engine,
+          target = input$group_target,
+          reference = input$group_ref,
+          n_genes = nrow(res_df),
+          n_significant = n_sig,
+          de_table = res_df
+        )
+
         de_status_rv(sprintf("OK [%s] -- %d/%d genes significatifs (%s vs %s).",
                              toupper(input$engine), n_sig, nrow(res_df),
                              input$group_target, input$group_ref))

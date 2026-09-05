@@ -26,8 +26,10 @@
 # =============================================================================
 
 # Domaines suivis par le rapport — liste FIGEE (ordre d'affichage du rapport).
+# Post-V1.0 (mandat utilisateur) : pseudobulk + correlation ajoutes (sections
+# tables pures, meme esprit compilateur).
 .report_analysis_domains <- c(
-  "markers", "pathways", "trajectory",
+  "markers", "pseudobulk", "correlation", "pathways", "trajectory",
   "velocity", "communication",
   "da_design", "da_milo", "da_sccoda", "da_cross"
 )
@@ -41,7 +43,7 @@
 # Domaines "legacy" : resultats pre-contra (data.frames de l'etat partage),
 # traces par la provenance partagee — jamais bloques, jamais drapeautes
 # "valides" au sens contrat.
-.report_legacy_domains <- c("markers", "pathways", "trajectory")
+.report_legacy_domains <- c("markers", "pseudobulk", "correlation", "pathways", "trajectory")
 
 # Constantes TS_* photographiees dans le rapport (snapshot de configuration —
 # consommees, jamais redefinies ici).
@@ -104,6 +106,40 @@
           error = function(e) NA_integer_)
       ))
       out$extras$table <- md
+    }
+    return(out)
+  }
+  if (domain == "correlation") {
+    cg <- state_get(shared_rv, "correlated_genes")
+    tgt <- state_get(shared_rv, "corr_target_gene")
+    if (is.data.frame(cg) && nrow(cg) > 0L) {
+      out$present <- TRUE
+      cor_max <- tryCatch({
+        v <- cg$correlation
+        if (is.null(v) || !is.numeric(v)) NA_real_ else round(max(abs(v), na.rm = TRUE), 3)
+      }, error = function(e) NA_real_)
+      out$summary <- .report_kv_df(c(
+        gene_cible = tgt,
+        n_lignes = nrow(cg),
+        correlation_abs_max = cor_max
+      ))
+      out$extras$table <- cg
+    }
+    return(out)
+  }
+  if (domain == "pseudobulk") {
+    pr <- state_get(shared_rv, "pseudobulk_result")
+    if (is.list(pr) && identical(pr$type, "sc_pseudobulk_de") &&
+        is.data.frame(pr$de_table) && nrow(pr$de_table) > 0L) {
+      out$present <- TRUE
+      out$summary <- .report_kv_df(c(
+        moteur = pr$engine,
+        groupe_cible = pr$target,
+        groupe_reference = pr$reference,
+        n_genes_testes = pr$n_genes,
+        n_significatifs = pr$n_significant
+      ))
+      out$extras$de_table <- pr$de_table
     }
     return(out)
   }

@@ -24,6 +24,11 @@ params:
   traj_method: NULL
   traj_genes: NULL
   qc_snapshot: NULL
+  velocity_result: NULL
+  communication_result: NULL
+  da_design_result: NULL
+  da_milo_result: NULL
+  da_sccoda_result: NULL
   fig_width: 9
   fig_height: 6
   saved_viz_list: NULL
@@ -374,6 +379,101 @@ tryCatch(
                                        manual_colors = params$sc_manual_colors)),
   error = function(e) cat("Plot non disponible :", conditionMessage(e))
 )
+```
+
+---
+
+```{r velocity_section, eval="velocity" %in% sections && !is.null(params$velocity_result), results='asis'}
+cat(paste0("# ", tr("Vitesse ARN (import validé)"), "\n\n"))
+```
+```{r velocity_summary, eval="velocity" %in% sections && !is.null(params$velocity_result), results='asis'}
+vr <- params$velocity_result
+dims_v <- vr$dimensions %||% NULL
+cat(sprintf("- **Statut (technique) :** %s\n", vr$status %||% "inconnu"))
+cat(sprintf("- **Cellules alignées :** %s | **Gènes :** %s\n",
+            if (!is.null(dims_v)) format(dims_v[1], big.mark=",") else "—",
+            if (!is.null(dims_v)) format(dims_v[2], big.mark=",") else "—"))
+cat(sprintf("- **analysis_id :** %s\n", paste(vr$analysis_id %||% "—", collapse = ", ")))
+cat("\n\n*Aucune re-exécution dans ce rapport : les flèches et visualisations de vitesse restent dans l'onglet Velocity (résultat canonique restitué tel quel).*\n\n")
+```
+
+---
+
+```{r communication_section, eval="communication" %in% sections && !is.null(params$communication_result), results='asis'}
+cat(paste0("# ", tr("Communication cellulaire"), "\n\n"))
+```
+```{r communication_summary, eval="communication" %in% sections && !is.null(params$communication_result), results='asis'}
+cr <- params$communication_result
+inp <- cr$input_summary %||% list()
+cat(sprintf("- **Méthode source :** %s (un seul résultat = une seule méthode — jamais de comparaison inter-sources)\n",
+            cr$source_method %||% "inconnue"))
+cat(sprintf("- **Lignes d'entrée :** %s | **Lignes canoniques :** %s\n",
+            inp$n_rows_input %||% "—", inp$n_rows_canonical %||% "—"))
+cat(sprintf("- **Colonne d'identité :** %s | **analysis_id :** %s\n",
+            cr$identity_column %||% "—", paste(cr$analysis_id %||% "—", collapse = ", ")))
+```
+```{r communication_table_html, eval="communication" %in% sections && !is.null(params$communication_result) && is.data.frame(params$communication_result$canonical_table) && knitr::is_html_output(), results='asis'}
+cat(paste0("\n\n## ", tr("Table canonique (extrait)"), "\n\n"))
+DT::datatable(utils::head(params$communication_result$canonical_table, 100),
+              rownames = FALSE, options = list(pageLength = 10, scrollX = TRUE, dom = "t"))
+```
+```{r communication_table_pdf, eval="communication" %in% sections && !is.null(params$communication_result) && is.data.frame(params$communication_result$canonical_table) && !knitr::is_html_output(), results='asis'}
+cat(paste0("\n\n## ", tr("Table canonique (extrait)"), "\n\n"))
+knitr::kable(utils::head(params$communication_result$canonical_table, 20))
+```
+
+---
+
+```{r da_section, eval="da" %in% sections && (!is.null(params$da_design_result) || !is.null(params$da_milo_result) || !is.null(params$da_sccoda_result)), results='asis'}
+cat(paste0("# ", tr("Abondance différentielle"), "\n\n"))
+```
+```{r da_design_summary, eval="da" %in% sections && !is.null(params$da_design_result), results='asis'}
+dd <- params$da_design_result
+cat(paste0("\n\n## ", tr("Design expérimental"), "\n\n"))
+cat(sprintf("- **Statut :** %s | **Unité de composition :** %s\n",
+            dd$status %||% "inconnu", dd$composition_unit %||% "—"))
+cat(sprintf("- **Conditions :** %s | **Échantillons :** %s\n",
+            if (is.data.frame(dd$condition_summary)) nrow(dd$condition_summary) else "—",
+            if (is.data.frame(dd$sample_summary)) nrow(dd$sample_summary) else "—"))
+cat(sprintf("- **Éligibilité Milo :** %s | **scCODA :** %s\n",
+            isTRUE(dd$milo_eligibility$eligible), isTRUE(dd$sccoda_eligibility$eligible)))
+cat(sprintf("- **analysis_id :** %s\n", paste(dd$analysis_id %||% "—", collapse = ", ")))
+```
+```{r da_milo_summary, eval="da" %in% sections && !is.null(params$da_milo_result), results='asis'}
+dm <- params$da_milo_result
+tc <- dm$tested_contrast %||% list()
+cat(paste0("\n\n## ", tr("Milo — voisinages"), "\n\n"))
+cat(sprintf("- **Contraste testé :** %s vs %s (logFC > 0 = enrichi dans la cible)\n",
+            tc$target %||% "—", tc$reference %||% "—"))
+cat(sprintf("- **Voisinages testés :** %s | **analysis_id :** %s\n",
+            if (is.data.frame(dm$DA_table)) nrow(dm$DA_table) else "—",
+            paste(dm$analysis_id %||% "—", collapse = ", ")))
+cat(paste0("\n\n*", tr("Niveau voisinage — pas une annotation par type cellulaire."), "*\n"))
+```
+```{r da_milo_table_html, eval="da" %in% sections && !is.null(params$da_milo_result) && is.data.frame(params$da_milo_result$DA_table) && knitr::is_html_output()}
+DT::datatable(utils::head(params$da_milo_result$DA_table, 100), rownames = FALSE,
+              options = list(pageLength = 10, scrollX = TRUE, dom = "t"))
+```
+```{r da_milo_table_pdf, eval="da" %in% sections && !is.null(params$da_milo_result) && is.data.frame(params$da_milo_result$DA_table) && !knitr::is_html_output()}
+knitr::kable(utils::head(params$da_milo_result$DA_table, 20))
+```
+```{r da_sccoda_summary, eval="da" %in% sections && !is.null(params$da_sccoda_result), results='asis'}
+ds <- params$da_sccoda_result
+cat(paste0("\n\n## ", tr("scCODA — composition par échantillon"), "\n\n"))
+cat(sprintf("- **Identité de référence :** %s\n", ds$reference_identity %||% "—"))
+cat(sprintf("- **Effets crédibles (condition) :** %s\n",
+            if (length(ds$credible_effects)) paste(ds$credible_effects, collapse = ", ") else "aucun"))
+cat(sprintf("- **ESS min :** %s | **analysis_id :** %s\n",
+            ds$convergence_diagnostics$ess_min %||% "—",
+            paste(ds$analysis_id %||% "—", collapse = ", ")))
+cat(paste0("\n\n*", tr("Effets crédibles (bayésiens, pas des p-values)."), "*\n"))
+```
+```{r da_sccoda_table_html, eval="da" %in% sections && !is.null(params$da_sccoda_result) && is.data.frame(params$da_sccoda_result$effect_table) && knitr::is_html_output()}
+DT::datatable(utils::head(params$da_sccoda_result$effect_table, 50), rownames = FALSE,
+              options = list(pageLength = 10, scrollX = TRUE, dom = "t"))
+```
+```{r da_sccoda_table_pdf, eval="da" %in% sections && !is.null(params$da_sccoda_result) && is.data.frame(params$da_sccoda_result$effect_table) && !knitr::is_html_output()}
+knitr::kable(utils::head(params$da_sccoda_result$effect_table, 20))
 ```
 
 ---

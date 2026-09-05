@@ -88,10 +88,11 @@ mod_sc_ui <- function(id) {
           textAreaInput(ns("report_notes"), i18n$t("Notes"), rows = 3),
           checkboxGroupInput(ns("report_sections"), i18n$t("Sections"),
             choices = setNames(
-              c("qc", "dim", "annotation", "markers", "correlation", "pathway", "trajectory", "custom_viz"),
+              c("qc", "dim", "annotation", "markers", "correlation", "pathway", "trajectory", "velocity", "communication", "da", "custom_viz"),
               c(.tr_plain("QC"), .tr_plain("Réduction Dimensionnelle"), .tr_plain("Annotation"),
                 .tr_plain("Marqueurs"), .tr_plain("Réseau Corrélation"), .tr_plain("Pathway Enrichment"),
-                .tr_plain("Trajectoire"), .tr_plain("Visualisations Sauvegardées"))),
+                .tr_plain("Trajectoire"), .tr_plain("Vitesse ARN"), .tr_plain("Communication cellulaire"),
+                .tr_plain("Abondance différentielle"), .tr_plain("Visualisations Sauvegardées"))),
             selected = c("qc", "dim", "annotation", "markers", "pathway")),
           div(class = "border rounded p-2 mb-2", style = "background:#f8f9fa;",
               h6(i18n$t("📌 Visualisations sauvegardées"), style = "font-size:0.85em;font-weight:bold;"),
@@ -162,10 +163,11 @@ mod_sc_server <- function(id, global_data) {
       updateCheckboxGroupInput(session, "report_sections",
         label = .tr("Sections"),
         choices = stats::setNames(
-          c("qc", "dim", "annotation", "markers", "correlation", "pathway", "trajectory", "custom_viz"),
+          c("qc", "dim", "annotation", "markers", "correlation", "pathway", "trajectory", "velocity", "communication", "da", "custom_viz"),
           c(.tr("QC"), .tr("Réduction Dimensionnelle"), .tr("Annotation"),
             .tr("Marqueurs"), .tr("Réseau Corrélation"), .tr("Pathway Enrichment"),
-            .tr("Trajectoire"), .tr("Visualisations Sauvegardées"))))
+            .tr("Trajectoire"), .tr("Vitesse ARN"), .tr("Communication cellulaire"),
+            .tr("Abondance différentielle"), .tr("Visualisations Sauvegardées"))))
 
       updateRadioButtons(session, "report_format",
         label = .tr("Format"),
@@ -510,6 +512,13 @@ mod_sc_server <- function(id, global_data) {
           traj_reduction   = state_get(shared_rv, "traj_reduction") %||% "umap",
           traj_method      = state_get(shared_rv, "traj_method"),   # transient fallback; obj@meta.data provenance wins in the report
           traj_genes       = state_get(shared_rv, "traj_genes") %||% character(0),  # Step-3.7
+          # Post-V1.0 (mandat utilisateur) : resultats canoniques exposes au
+          # rapport Rmd — restitues TELS QUELS (tables, aucune re-execution).
+          velocity_result      = state_get(shared_rv, "velocity_result"),
+          communication_result = state_get(shared_rv, "communication_result"),
+          da_design_result     = state_get(shared_rv, "da_design_result"),
+          da_milo_result       = state_get(shared_rv, "da_milo_result"),
+          da_sccoda_result     = state_get(shared_rv, "da_sccoda_result"),
           saved_viz_list   = if (length(state_get(shared_rv, "report_viz_list"))) state_get(shared_rv, "report_viz_list") else NULL,
           group_by         = "seurat_clusters",
           sc_palette         = state_get(shared_rv, "sc_palette") %||% "default",

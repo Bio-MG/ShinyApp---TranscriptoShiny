@@ -31,6 +31,8 @@
 # collecteur).
 .report_domain_labels <- c(
   markers       = "Marqueurs",
+  pseudobulk    = "Pseudobulk DE (conditions)",
+  correlation   = "Réseau de corrélation (gène cible)",
   pathways      = "Enrichissement de pathways",
   trajectory    = "Trajectoire / pseudotemps",
   velocity      = "RNA velocity",

@@ -132,10 +132,15 @@ test_that("report/export consumers do not reimplement DA design validation", {
                                           "R/sc/sc_export.R")),
                       collapse = "\n")
   expect_false(grepl("da_design|abundance_design", export_src, ignore.case = TRUE))
+  # Post-V1.0 : le rapport Rmd AFFICHE le resultat canonique (tables
+  # pures, sections velocity/communication/DA) - il n a jamais le droit
+  # de REIMPLEMENTER l analyse. Garde ciblee : aucun appel de
+  # calcul/validation/empreinte du domaine.
+  compute_ban <- "validate_da_design\\(|finalize_da_design_result\\(|assert_da_design_result\\("
   for (tpl in list.files(file.path(ts_project_root(), "reports"),
                          full.names = TRUE)) {
     tpl_src <- paste(readLines(tpl), collapse = "\n")
-    expect_false(grepl("da_design|abundance_design", tpl_src, ignore.case = TRUE),
+    expect_false(grepl(compute_ban, tpl_src, ignore.case = TRUE),
                  info = basename(tpl))
   }
 })

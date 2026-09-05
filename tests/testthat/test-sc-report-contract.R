@@ -107,6 +107,14 @@ source_project_file("R/reports/report_bundle.R")
   shared_rv <- create_sc_shared_state()
   shared_rv$markers_data <- data.frame(
     gene = c("g1", "g2"), cluster = c("1", "2"), avg_log2FC = c(1.1, 0.8))
+  shared_rv$correlated_genes <- data.frame(
+    gene = c("g3", "g4"), correlation = c(0.91, -0.72), p_adj = c(0.01, 0.03))
+  shared_rv$corr_target_gene <- "g1"
+  shared_rv$pseudobulk_result <- list(
+    type = "sc_pseudobulk_de", engine = "deseq2", target = "B",
+    reference = "A", n_genes = 2L, n_significant = 1L,
+    de_table = data.frame(gene = c("g1", "g2"), baseMean = c(10, 20),
+                          log2FoldChange = c(2.1, -0.3), padj = c(0.01, 0.4)))
   shared_rv$pathway_results <- data.frame(
     pathway = c("PATH1", "PATH2"), pval = c(0.01, 0.04))
   shared_rv$pathway_db <- "GOBP"
@@ -165,7 +173,7 @@ test_that("empty project renders every section as gracefully absent", {
   expect_true(val$ok_overall)
   expect_identical(nrow(val$counts), 1L)
   expect_identical(val$counts$etat, "absent")
-  expect_identical(val$counts$n_sections, 9L)
+  expect_identical(val$counts$n_sections, 11L)
 
   html_path <- file.path(tempdir(), "rep_empty.html")
   write_consolidated_report_html(ri, val, html_path)
@@ -184,8 +192,10 @@ test_that("full project collects valid verdicts with traceable analysis ids", {
   val <- validate_consolidated_report_input(ri)
 
   states <- vapply(val$verdicts, function(v) v$state, character(1))
-  # Legacy presents
+  # Legacy presents (incl. pseudobulk + correlation, post-V1.0)
   expect_identical(states[["markers"]], "valid_legacy")
+  expect_identical(states[["pseudobulk"]], "valid_legacy")
+  expect_identical(states[["correlation"]], "valid_legacy")
   expect_identical(states[["pathways"]], "valid_legacy")
   expect_identical(states[["trajectory"]], "valid_legacy")
   # Domaines a contrat, empreinte fraiche
@@ -284,6 +294,8 @@ test_that("bundle writes report, manifest, provenance, tables and README", {
   expect_true(file.exists(file.path(bundle_dir, "provenance.csv")))
   expect_true(file.exists(file.path(bundle_dir, "README.txt")))
   expect_true(file.exists(file.path(bundle_dir, "tables", "marqueurs.csv")))
+  expect_true(file.exists(file.path(bundle_dir, "tables", "correlation.csv")))
+  expect_true(file.exists(file.path(bundle_dir, "tables", "pseudobulk_de.csv")))
   expect_true(file.exists(file.path(bundle_dir, "tables",
                                     "communication_canonical.csv")))
   expect_true(file.exists(file.path(bundle_dir, "tables", "milo_da_table.csv")))

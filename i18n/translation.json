@@ -7904,6 +7904,66 @@
     {
       "fr": "Bundle d'export généré.",
       "en": "Export bundle generated."
+    },
+    {
+      "fr": "Colonne 'echantillon' (replicat biologique)",
+      "en": "Sample column (biological replicate)"
+    },
+    {
+      "fr": "Colonne 'condition' a comparer",
+      "en": "Condition column to compare"
+    },
+    {
+      "fr": "Regrouper aussi par (optionnel, ex: type cellulaire)",
+      "en": "Also group by (optional, e.g. cell type)"
+    },
+    {
+      "fr": "Min cellules par groupe",
+      "en": "Minimum cells per group"
+    },
+    {
+      "fr": "Agreger en pseudobulk",
+      "en": "Aggregate into pseudobulk"
+    },
+    {
+      "fr": "Vitesse ARN",
+      "en": "RNA velocity"
+    },
+    {
+      "fr": "Vitesse ARN (import validé)",
+      "en": "RNA velocity (validated import)"
+    },
+    {
+      "fr": "Communication cellulaire",
+      "en": "Cell-cell communication"
+    },
+    {
+      "fr": "Abondance différentielle",
+      "en": "Differential abundance"
+    },
+    {
+      "fr": "Table canonique (extrait)",
+      "en": "Canonical table (excerpt)"
+    },
+    {
+      "fr": "Design expérimental",
+      "en": "Experimental design"
+    },
+    {
+      "fr": "Milo — voisinages",
+      "en": "Milo — neighbourhoods"
+    },
+    {
+      "fr": "scCODA — composition par échantillon",
+      "en": "scCODA — sample composition"
+    },
+    {
+      "fr": "Niveau voisinage — pas une annotation par type cellulaire.",
+      "en": "Neighbourhood level — not a per-cell-type annotation."
+    },
+    {
+      "fr": "Effets crédibles (bayésiens, pas des p-values).",
+      "en": "Credible effects (Bayesian, not p-values)."
     }
   ]
 }

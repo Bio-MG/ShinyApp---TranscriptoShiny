@@ -4,6 +4,36 @@ Tous les changements notables de TranscriptoShiny (« Cerberus ») sont document
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ;
 versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur `main`.
 
+## [Post-V1.0] — 2026-09-04 (polish mandat utilisateur — revue des manquants)
+
+Revue des fonctionnalités manquantes demandée après la V1.0 : les rapports ne
+restitution pas les domaines ajoutés depuis leur création.
+
+### Rapport Rmd Single-Cell (panneau 9)
+- **Nouvelles sections** (tables pures, restituées du résultat canonique tel
+  quel — aucune re-exécution, aucun recalcul de figure) : **Vitesse ARN**
+  (statut, dimensions alignées, analysis_id), **Communication cellulaire**
+  (méthode source, compteurs d'import, table canonique en extrait), **DA**
+  (design expérimental + éligibilités, Milo — voisinages avec disclaimer
+  « niveau voisinage », scCODA — effets crédibles avec disclaimer « pas des
+  p-values »). Opt-in via les cases « Sections » du panneau 9 (aucun changement
+  des rapports par défaut) ; paramètres canoniques exposés depuis
+  `shared_rv` (expositions Stage 17 + pseudobulk).
+
+### Rapport consolidé 4F (panneau 9b)
+- **Domaines ajoutés au contrat (9 → 11)** : `pseudobulk` (exposition additive
+  `shared_rv$pseudobulk_result` du panneau 4b — moteur, contraste, table DE)
+  et `correlation` (gène cible + table de corrélations, déjà dans l'état
+  partagé). Bundle : `tables/correlation.csv`, `tables/pseudobulk_de.csv`.
+  Contrat + test de freeze + tests fonctionnels mis à jour simultanément.
+- i18n : 10 clés FR/EN ajoutées (libellés de sections + disclaimers
+  scientifiques).
+
+### Restants (parking V1.x, décision requise)
+- Rapports Rmd Bulk/Spatial : périmètre déjà complet par domaine (contrôlé).
+- Compilation 4F des états Bulk/Spatial : proposition (extension contrat).
+- 4D-3 / 4E-4 : inchangés (voir `UPGRADE_AND_COMPATIBILITY.md` §3).
+
 ## [V1.0.0] — 2026-09-04 (Stage 20)
 
 Déclaration V1.0 : toutes les exigences de la roadmap vérifiées et prouvées

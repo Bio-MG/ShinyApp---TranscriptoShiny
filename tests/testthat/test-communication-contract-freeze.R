@@ -171,16 +171,21 @@ test_that("report/export consumers do not reimplement communication import", {
   expect_false(grepl("finalize_communication_result|parse_cellchat_import|harmonize_communication_identities",
                      mod_sc_src))
 
-  # Le script reproducible et les templates de rapport ignorent encore la
+  # Le script reproducible et les templates n appellent aucune fonction de calcul encore la
   # communication (branche rapport reservee au Stage 17).
   export_src <- paste(readLines(file.path(ts_project_root(),
                                           "R/sc/sc_export.R")),
                       collapse = "\n")
   expect_false(grepl("communication", export_src, ignore.case = TRUE))
+  # Post-V1.0 : le rapport Rmd AFFICHE le resultat canonique (tables
+  # pures, sections velocity/communication/DA) - il n a jamais le droit
+  # de REIMPLEMENTER l analyse. Garde ciblee : aucun appel de
+  # calcul/validation/empreinte du domaine.
+  compute_ban <- "parse_cellchat_|parse_cellphonedb_|harmonize_communication_identities\\(|communication_import_qc\\(|finalize_communication_result\\("
   for (tpl in list.files(file.path(ts_project_root(), "reports"),
                          full.names = TRUE)) {
     tpl_src <- paste(readLines(tpl), collapse = "\n")
-    expect_false(grepl("communication", tpl_src, ignore.case = TRUE),
+    expect_false(grepl(compute_ban, tpl_src, ignore.case = TRUE),
                  info = basename(tpl))
   }
 })

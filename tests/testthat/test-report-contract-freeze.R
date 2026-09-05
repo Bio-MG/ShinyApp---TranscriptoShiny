@@ -72,7 +72,8 @@ test_that("the four R/reports files define exactly their frozen symbols", {
 
 test_that("the frozen domain list and validation states are stable", {
   expect_setequal(consolidated_report_analyses(), c(
-    "markers", "pathways", "trajectory", "velocity", "communication",
+    "markers", "pseudobulk", "correlation", "pathways", "trajectory",
+    "velocity", "communication",
     "da_design", "da_milo", "da_sccoda", "da_cross"))
   expect_setequal(consolidated_report_validation_states(), c(
     "absent", "valid", "valid_legacy", "stale", "invalid", "unknown",

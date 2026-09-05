@@ -121,10 +121,15 @@ test_that("report/export consumers do not reimplement scCODA yet (Stage 17 scope
                                           "R/sc/sc_export.R")),
                       collapse = "\n")
   expect_false(grepl("sccoda", export_src, ignore.case = TRUE))
+  # Post-V1.0 : le rapport Rmd AFFICHE le resultat canonique (tables
+  # pures, sections velocity/communication/DA) - il n a jamais le droit
+  # de REIMPLEMENTER l analyse. Garde ciblee : aucun appel de
+  # calcul/validation/empreinte du domaine.
+  compute_ban <- "run_sccoda_da\\(|reticulate::|sccoda_available\\("
   for (tpl in list.files(file.path(ts_project_root(), "reports"),
                          full.names = TRUE)) {
     tpl_src <- paste(readLines(tpl), collapse = "\n")
-    expect_false(grepl("sccoda", tpl_src, ignore.case = TRUE),
+    expect_false(grepl(compute_ban, tpl_src, ignore.case = TRUE),
                  info = basename(tpl))
   }
 })

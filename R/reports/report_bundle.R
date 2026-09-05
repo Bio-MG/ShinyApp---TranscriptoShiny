@@ -60,6 +60,12 @@ consolidated_report_export_filename <- function(kind, ext) {
   # Domaines legacy : tables completes capturees par le collecteur (extras).
   if (state_of("markers") != "absent")
     add("marqueurs.csv", A$markers$extras$table, "markers", "table des marqueurs")
+  if (state_of("correlation") != "absent")
+    add("correlation.csv", A$correlation$extras$table, "correlation",
+        "table de correlation (gene cible)")
+  if (state_of("pseudobulk") != "absent")
+    add("pseudobulk_de.csv", A$pseudobulk$extras$de_table, "pseudobulk",
+        "resultats DE pseudobulk")
   if (state_of("pathways") != "absent")
     add("pathways.csv", A$pathways$extras$table, "pathways", "table pathways")
   add("communication_canonical.csv",
