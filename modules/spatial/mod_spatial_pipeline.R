@@ -69,9 +69,13 @@
 
 mod_spatial_pipeline_ui <- function(id) {
   ns <- NS(id)
-  layout_sidebar(
-    sidebar = sidebar(
-      title = i18n$t("Pipeline automatique (1 clic)"), width = 400,
+  # ── V1.x UX (spatial container): CONTROLS ONLY. ──────────────────────────
+  # This module used to ship a full page (layout_sidebar + results card).
+  # The parent container (mod_spatial.R) now owns the layout: these controls
+  # are rendered inside the "0. Pipeline auto" accordion panel, and the
+  # results card moved to mod_spatial_pipeline_summary_ui() below (right
+  # navset). Same namespace/ids => mod_spatial_pipeline_server() unchanged.
+  tagList(
 
       div(class = "alert alert-light", style = "font-size:0.8rem;",
           bsicons::bs_icon("magic"),
@@ -163,16 +167,23 @@ mod_spatial_pipeline_ui <- function(id) {
       div(class = "bg-light border rounded p-2 mt-2",
           style = "max-height:220px; overflow-y:auto; white-space:pre-wrap; font-family:monospace; font-size:0.72rem;",
           verbatimTextOutput(ns("pipeline_log_text"), placeholder = TRUE))
-    ),
+  )
+}
 
-    card(
-      full_screen = TRUE,
-      card_header(i18n$t("Resultats du pipeline")),
-      uiOutput(ns("pipeline_summary_ui")),
-      div(class = "alert alert-light small mt-2",
-          bsicons::bs_icon("compass"),
-          i18n$t(" Consultez les onglets numerotes (1 a 6) pour explorer/affiner chaque resultat en detail, ou les onglets \"7. Export\" / \"8. Rapport\" pour tout regrouper dans un paquet .zip / script R reproductible / rapport HTML-PDF."))
-    )
+# ── Summary card (V1.x UX spatial container) ─────────────────────────────────
+# Rendered in the parent container's right navset ("Résumé Pipeline"). Uses the
+# SAME namespace as mod_spatial_pipeline_ui() (call with ns("pipeline")), so the
+# existing output$pipeline_summary_ui binding in mod_spatial_pipeline_server()
+# drives it without any server change.
+mod_spatial_pipeline_summary_ui <- function(id) {
+  ns <- NS(id)
+  card(
+    full_screen = TRUE,
+    card_header(i18n$t("Resultats du pipeline")),
+    uiOutput(ns("pipeline_summary_ui")),
+    div(class = "alert alert-light small mt-2",
+        bsicons::bs_icon("compass"),
+        i18n$t(" Consultez les onglets numerotes (1 a 6) pour explorer/affiner chaque resultat en detail, ou les onglets \"7. Export\" / \"8. Rapport\" pour tout regrouper dans un paquet .zip / script R reproductible / rapport HTML-PDF."))
   )
 }
 

@@ -93,55 +93,115 @@
 
 mod_spatial_ui <- function(id) {
   ns <- NS(id)
-  tagList(
-    navset_card_underline(
-      id = ns("spatial_nav"),
+  # ── V1.x UX: standard container (LEFT = workflow steps, RIGHT = results) ──
+  # The old top-level horizontal navset_card_underline of peer stages is
+  # replaced by the project-wide skeleton: layout_sidebar(sidebar = numbered
+  # accordion, navset_card_underline = results).
+  #
+  # FOLLOW-UP (known leftover, zero regression): QC / Cluster / Deconv /
+  # Visualisation / Multi-echantillons / Niches child UIs still ship their own
+  # layout_sidebar (controls + results together). They are reparented AS-IS
+  # into the right navset (like the previous horizontal tabs) — their internals
+  # are out of scope for this lot. Only the pipeline module is split: controls
+  # in the accordion panel, summary in the right navset.
+  layout_sidebar(
+    sidebar = sidebar(
+      width = 340,
+      title = i18n$t("Workflow Spatial"),
+      # LOT 1 (V1.x UX): paradigm badge — async auto-pipeline (mirai).
+      div(class = "alert alert-success", style = "font-size:0.78rem;padding:5px;margin-bottom:5px;",
+          icon("bolt"), " ", i18n$t("Pipeline automatique asynchrone (mirai) — le statut reste visible ci-dessous")),
+      # Status placement (v4 status row relocated from the tab strip): dataset
+      # selector + daemon status stay ALWAYS VISIBLE in the sidebar header.
+      uiOutput(ns("active_dataset_ui")),
+      uiOutput(ns("daemon_status_ui")),
+      actionButton(ns("btn_reset_daemons"), i18n$t("Reinitialiser les daemons"),
+                   class = "btn-outline-warning btn-sm w-100 mt-1", icon = icon("rotate")),
+      hr(),
+      accordion(
+        id = ns("steps"),
+        open = "panel_pipeline",
 
-      nav_panel(i18n$t("\U0001F680 Pipeline auto"), icon = icon("bolt"),
-                value = "pipeline",
-                mod_spatial_pipeline_ui(ns("pipeline"))),
+        accordion_panel(i18n$t("0. Pipeline auto"), icon = icon("bolt"),
+                        value = "panel_pipeline",
+                        mod_spatial_pipeline_ui(ns("pipeline"))),
+
+        accordion_panel(i18n$t("1. QC & Autocorrelation"), icon = icon("filter"),
+                        value = "panel_qc",
+                        p(class = "small text-muted mb-0",
+                          i18n$t("Les contrôles et les résultats de cette étape s'affichent dans le panneau de droite."))),
+
+        accordion_panel(i18n$t("2. Clustering (BANKSY-lite)"), icon = icon("shapes"),
+                        value = "panel_cluster",
+                        p(class = "small text-muted mb-0",
+                          i18n$t("Les contrôles et les résultats de cette étape s'affichent dans le panneau de droite."))),
+
+        accordion_panel(i18n$t("3. Deconvolution"), icon = icon("puzzle-piece"),
+                        value = "panel_deconv",
+                        p(class = "small text-muted mb-0",
+                          i18n$t("Les contrôles et les résultats de cette étape s'affichent dans le panneau de droite."))),
+
+        accordion_panel(i18n$t("4. Visualisation"), icon = icon("eye"),
+                        value = "panel_viz",
+                        p(class = "small text-muted mb-0",
+                          i18n$t("Les contrôles et les résultats de cette étape s'affichent dans le panneau de droite."))),
+
+        accordion_panel(i18n$t("5. Multi-echantillons"), icon = icon("layer-group"),
+                        value = "panel_multi",
+                        p(class = "small text-muted mb-0",
+                          i18n$t("Les contrôles et les résultats de cette étape s'affichent dans le panneau de droite."))),
+
+        accordion_panel(i18n$t("6. Niches spatiales"), icon = icon("diagram-project"),
+                        value = "panel_niche",
+                        p(class = "small text-muted mb-0",
+                          i18n$t("Les contrôles et les résultats de cette étape s'affichent dans le panneau de droite."))),
+
+        accordion_panel(i18n$t("7. Export & Rapport"), icon = icon("file-export"),
+                        value = "panel_export",
+                        p(class = "small text-muted mb-0",
+                          i18n$t("Les contrôles et les résultats de cette étape s'affichent dans le panneau de droite.")))
+      )
+    ),
+    navset_card_underline(
+      id = ns("results"), title = i18n$t("Résultats"),
+
+      # Pipeline step: results/summary on the right (controls live in the
+      # accordion). Same "spatial-pipeline" namespace => server untouched.
+      nav_panel(i18n$t("Résumé Pipeline"), value = "results_pipeline",
+                mod_spatial_pipeline_summary_ui(ns("pipeline"))),
 
       nav_panel(i18n$t("1. QC & Autocorrelation"), icon = icon("filter"),
-                value = "qc",
+                value = "results_qc",
                 mod_spatial_qc_ui(ns("qc"))),
 
       nav_panel(i18n$t("2. Clustering (BANKSY-lite)"), icon = icon("shapes"),
-                value = "cluster",
+                value = "results_cluster",
                 mod_spatial_cluster_ui(ns("cluster"))),
 
       nav_panel(i18n$t("3. Deconvolution"), icon = icon("puzzle-piece"),
-                value = "deconv",
+                value = "results_deconv",
                 mod_spatial_deconv_ui(ns("deconv"))),
 
       nav_panel(i18n$t("4. Visualisation"), icon = icon("eye"),
-                value = "viz",
+                value = "results_viz",
                 mod_spatial_viz_ui(ns("viz"))),
 
       nav_panel(i18n$t("5. Multi-echantillons"), icon = icon("layer-group"),
-                value = "multi",
+                value = "results_multi",
                 mod_spatial_multi_ui(ns("multi"))),
 
       nav_panel(i18n$t("6. Niches spatiales"), icon = icon("diagram-project"),
-                value = "niche",
+                value = "results_niche",
                 mod_spatial_niche_ui(ns("niche"))),
 
       nav_panel(i18n$t("7. Export & Rapport"), icon = icon("file-export"),
-                value = "export_report",
+                value = "results_export_report",
                 navset_pill(
                   nav_panel(i18n$t("Paquet & Script"), value = "export",
                             mod_spatial_export_ui(ns("export"))),
                   nav_panel(i18n$t("Rapport HTML/PDF"), value = "report",
                             mod_spatial_report_ui(ns("report")))
-                )),
-
-      nav_spacer(),
-      nav_item(uiOutput(ns("active_dataset_ui"))),
-      bslib::nav_menu(
-        title = tagList(icon("gear"), i18n$t("Session")), align = "right",
-        nav_item(uiOutput(ns("daemon_status_ui"))),
-        nav_item(actionButton(ns("btn_reset_daemons"), i18n$t("Reinitialiser les daemons"),
-                              class = "btn-outline-warning btn-sm w-100 mt-1", icon = icon("rotate")))
-      )
+                ))
     )
   )
 }
@@ -364,6 +424,27 @@ mod_spatial_server <- function(id, global_data) {
     mod_spatial_export_server("export", global_data, shared_rv)
     mod_spatial_report_server("report", global_data, shared_rv)
 
-    observeEvent(input$spatial_nav, { shared_rv$active_tab <- input$spatial_nav })
+    # ── V1.x UX container: accordion steps ↔ right results navset sync ──────
+    # The old horizontal nav (input$spatial_nav) is gone. Opening an accordion
+    # step selects the matching right panel; shared_rv$active_tab keeps its
+    # historical values ("pipeline", "qc", ..., "export_report") so any
+    # existing reader sees the same semantics.
+    .step_results <- c(
+      panel_pipeline = "results_pipeline", panel_qc      = "results_qc",
+      panel_cluster  = "results_cluster",  panel_deconv  = "results_deconv",
+      panel_viz      = "results_viz",      panel_multi   = "results_multi",
+      panel_niche    = "results_niche",    panel_export  = "results_export_report"
+    )
+    .step_tab <- c(
+      panel_pipeline = "pipeline", panel_qc = "qc",       panel_cluster = "cluster",
+      panel_deconv   = "deconv",   panel_viz = "viz",     panel_multi   = "multi",
+      panel_niche    = "niche",    panel_export = "export_report"
+    )
+    observeEvent(input$steps, {
+      req(input$steps)
+      sel <- .step_results[[input$steps]]
+      if (!is.null(sel)) nav_select(id = "results", selected = sel, session = session)
+      shared_rv$active_tab <- .step_tab[[input$steps]] %||% input$steps
+    }, ignoreNULL = TRUE)
   })
 }
