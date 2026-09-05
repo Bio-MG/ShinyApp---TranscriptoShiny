@@ -7964,6 +7964,146 @@
     {
       "fr": "Effets crédibles (bayésiens, pas des p-values).",
       "en": "Credible effects (Bayesian, not p-values)."
+    },
+    {
+      "fr": "Auto-pipeline disponible — les étapes manuelles restent optionnelles",
+      "en": "Auto-pipeline available — manual steps remain optional"
+    },
+    {
+      "fr": "Mode guidé — suivez les étapes numérotées dans l'ordre",
+      "en": "Guided mode — follow the numbered steps in order"
+    },
+    {
+      "fr": "Pipeline automatique asynchrone (mirai) — le statut reste visible ci-dessous",
+      "en": "Asynchronous auto-pipeline (mirai) — status stays visible below"
+    },
+    {
+      "fr": "Workflow Spatial",
+      "en": "Spatial workflow"
+    },
+    {
+      "fr": "0. Pipeline auto",
+      "en": "0. Auto pipeline"
+    },
+    {
+      "fr": "Les contrôles et les résultats de cette étape s'affichent dans le panneau de droite.",
+      "en": "This step's controls and results are shown in the right-hand panel."
+    },
+    {
+      "fr": "Préparation",
+      "en": "Preparation"
+    },
+    {
+      "fr": "Analyse",
+      "en": "Analysis"
+    },
+    {
+      "fr": "Dynamique",
+      "en": "Dynamics"
+    },
+    {
+      "fr": "Abondance cellulaire",
+      "en": "Cellular abundance"
+    },
+    {
+      "fr": "Livrables",
+      "en": "Deliverables"
+    },
+    {
+      "fr": "Abondance différentielle — design, méthodes & vues croisées",
+      "en": "Differential abundance — design, methods & cross views"
+    },
+    {
+      "fr": "A. Plan expérimental (design)",
+      "en": "A. Experimental design"
+    },
+    {
+      "fr": "B. Méthodes (Milo / scCODA)",
+      "en": "B. Methods (Milo / scCODA)"
+    },
+    {
+      "fr": "C. Vues croisées",
+      "en": "C. Cross views"
+    },
+    {
+      "fr": "1. Pipeline Bulk — Contrôle qualité & filtrage",
+      "en": "1. Bulk pipeline — quality control & filtering"
+    },
+    {
+      "fr": "4. Livrables — Rapport & Script R",
+      "en": "4. Deliverables — Report & R script"
+    },
+    {
+      "fr": "Résumé Pipeline Bulk",
+      "en": "Bulk pipeline summary"
+    },
+    {
+      "fr": "Statut pipeline",
+      "en": "Pipeline status"
+    },
+    {
+      "fr": "Gènes après filtrage",
+      "en": "Genes after filtering"
+    },
+    {
+      "fr": "Contraste actif",
+      "en": "Active contrast"
+    },
+    {
+      "fr": "Seuils (|Log2FC| / P-adj)",
+      "en": "Thresholds (|Log2FC| / P-adj)"
+    },
+    {
+      "fr": "aucun",
+      "en": "none"
+    },
+    {
+      "fr": "Mapping IDs appliqué",
+      "en": "ID mapping applied"
+    },
+    {
+      "fr": "Identifiants non-symboles (Ensembl, Entrez, sondes Affymetrix) ? Le mapping d'IDs est disponible à l'étape 0 de l'analyse.",
+      "en": "Non-symbol identifiers (Ensembl, Entrez, Affymetrix probes)? ID mapping is available in step 0 of the analysis."
+    },
+    {
+      "fr": "Aller au mapping des IDs",
+      "en": "Go to ID mapping"
+    },
+    {
+      "fr": "Source publique (GEO)",
+      "en": "Public source (GEO)"
+    },
+    {
+      "fr": "GEO est une source de données publique (Bulk ou Single-Cell), pas une modalité d'analyse : importez ici, puis traitez vos données dans les onglets Analyse Bulk RNA ou Analyse Single-Cell.",
+      "en": "GEO is a public data source (Bulk or Single-Cell), not an analysis modality: import here, then process your data in the Analyse Bulk RNA or Analyse Single-Cell tabs."
+    },
+    {
+      "fr": "Pseudobulk — agrégation des cellules par échantillon",
+      "en": "Pseudobulk — cell aggregation per sample"
+    },
+    {
+      "fr": "Vélocité ARN — orientation des trajectoires",
+      "en": "RNA velocity — trajectory orientation"
+    },
+    {
+      "fr": "Niches spatiales — micro-environnements cellulaires",
+      "en": "Spatial niches — cellular micro-environments"
+    },
+    {
+      "fr": "Abondance différentielle — composition des populations entre conditions",
+      "en": "Differential abundance — population composition across conditions"
+    },
+    {
+      "fr": "Milo — abondance par voisinages de cellules",
+      "en": "Milo — abundance by cell neighbourhoods"
+    },
+    {
+      "fr": "scCODA — composition cellulaire (modèle bayésien)",
+      "en": "scCODA — cellular composition (Bayesian model)"
+    },
+    {
+      "fr": "Autocorrélation spatiale (Moran) — gènes spatialement variables",
+      "en": "Spatial autocorrelation (Moran) — spatially variable genes"
     }
   ]
 }
