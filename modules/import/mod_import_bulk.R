@@ -415,25 +415,6 @@ mod_import_bulk_server <- function(id, global_data) {
       log_fn       = add_log
     )
 
-    observeEvent(input$counts_file, {
-      f <- input$counts_file
-      if (is.null(f) || !rdata_is_supported_file(f$datapath)) {
-        rdata_counts_rv(NULL); counts_rda_obj(NULL)
-        return()
-      }
-      counts_rda_obj(NULL)
-      rdata_counts_rv(list(datapath = f$datapath, name = f$name, size = f$size))
-    })
-    observeEvent(input$metadata_file, {
-      f <- input$metadata_file
-      if (is.null(f) || !rdata_is_supported_file(f$datapath)) {
-        rdata_meta_rv(NULL); metadata_rda_obj(NULL)
-        return()
-      }
-      metadata_rda_obj(NULL)
-      rdata_meta_rv(list(datapath = f$datapath, name = f$name, size = f$size))
-    })
-
     counts_reactive <- reactive({
       req(input$counts_file)
       tryCatch({
@@ -578,8 +559,26 @@ mod_import_bulk_server <- function(id, global_data) {
     
     observeEvent(input$counts_file, {
       infer_preview_rv(NULL); inferred_metadata(NULL); temp_data$is_loaded <- FALSE
+      # .rda/.RData : transfert au composant "Inspect & Select" (ou reset)
+      f <- input$counts_file
+      if (is.null(f) || !rdata_is_supported_file(f$datapath)) {
+        rdata_counts_rv(NULL); counts_rda_obj(NULL)
+      } else {
+        counts_rda_obj(NULL)
+        rdata_counts_rv(list(datapath = f$datapath, name = f$name, size = f$size))
+      }
     })
-    observeEvent(input$metadata_file, { temp_data$is_loaded <- FALSE })
+    observeEvent(input$metadata_file, {
+      temp_data$is_loaded <- FALSE
+      # .rda/.RData : transfert au composant "Inspect & Select" (ou reset)
+      f <- input$metadata_file
+      if (is.null(f) || !rdata_is_supported_file(f$datapath)) {
+        rdata_meta_rv(NULL); metadata_rda_obj(NULL)
+      } else {
+        metadata_rda_obj(NULL)
+        rdata_meta_rv(list(datapath = f$datapath, name = f$name, size = f$size))
+      }
+    })
     
     output$detected_gene_id_banner <- renderUI({
       df <- counts_reactive(); req(df)

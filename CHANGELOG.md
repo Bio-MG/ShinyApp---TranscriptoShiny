@@ -4,6 +4,45 @@ Tous les changements notables de TranscriptoShiny (« Cerberus ») sont document
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ;
 versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur `main`.
 
+## [V1.1.0-rc] — 2026-09-05 — Import .rda/.RData « Inspect & Select »
+
+Support des fichiers `.rda`/`.RData` (workspaces `save.image()`, listes
+mixtes) selon le paradigme **« Inspecter d'abord, importer ensuite »** :
+contrat `docs/contracts/RDATA_IMPORT_CONTRACT.md` (gel :
+`test-rdata-contract-freeze.R`). Zéro changement sur les chemins `.rds`,
+`.h5`, `.h5ad`, `.loom` existants.
+
+### Ajouté
+- **Noyau pur** `R/core/rdata_io.R` : `rdata_load_env()` (environnement
+  isolé `parent = emptyenv()`, jamais globalenv), `rdata_describe_objects()`
+  (Nom / Classe / Dimensions / Taille / Type), `rdata_classify_object()`
+  (codes gelés, AFFICHAGE UNIQUEMENT — jamais d'auto-guess),
+  `rdata_extract_object()`, `rdata_assert_class()` (validation AVANT écriture
+  dans `global_data`), `rdata_export_selection()`, `rdata_free()`.
+- **Composant Shiny mutualisé** `modules/import/mod_rdata_picker.R` :
+  carte de preview (DT multi-sélection) avec « Importer l'objet sélectionné »
+  (exactement 1 ligne) et « Exporter la sélection (.RData) » — bundle .RData
+  téléchargé via le navigateur, SANS écriture dans `global_data`.
+- **Import Single-Cell** : Options B/C acceptent `.rda`/`.RData` ; objet
+  unique compatible → auto-import via `prepare_seurat_object()` ; workspace
+  multi-objets → carte de preview (choisir 1 objet à importer, ou en exporter
+  plusieurs vers un .RData).
+- **Import Bulk** : `.rda` accepté pour les slots comptages ET métadonnées
+  (2 instances du composant, libellés « Utiliser comme matrice de
+  comptages » / « Utiliser comme métadonnées » ; transposition gérée) ;
+  un même workspace peut alimenter les deux slots.
+- **Référence spatiale** (`read_reference_scrna`) : `.rda` objet unique
+  (Seurat / liste counts+meta / matrice) ; multi-objets → erreur orientante.
+- **Communication / Vélocité** : `parse_cellchat_object()` et
+  `read_velocity_rds()` acceptent un workspace `.rda` à objet unique
+  (multi-objets → erreur orientante vers l'aperçu SC).
+- **Snapshot de session** (app.R) : `.rda` accepté (objet unique = snapshot).
+- **Config** : `TS_IMPORT_RDA_EXTENSIONS`, `TS_IMPORT_RDA_WARN_MB` (500 —
+  avertissement mémoire, jamais un blocage). **i18n** : 24 clés FR/EN.
+- **Tests** : `test-core-rdata.R`, `test-rdata-contract-freeze.R`,
+  `test-rdata-picker-module.R` (testServer), `test-rda-spatial-bulk.R`,
+  `test-rda-comm-velocity.R`.
+
 ## [V1.1.0-rc] — 2026-09-05 (vague UX/UI, mandat utilisateur — candidat pré-release)
 
 Refonte UX/UI fondée sur l'audit utilisateur (6 frictions, see

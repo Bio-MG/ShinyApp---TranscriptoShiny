@@ -137,7 +137,10 @@ rdata_describe_objects <- function(env) {
   if (length(nms) == 0L) return(empty_df)
   info <- lapply(nms, function(nm) {
     obj <- tryCatch(get(nm, envir = env), error = function(e) NULL)
-    d <- if (is.null(obj)) NULL else dim(obj)
+    # dim() peut echouer sur un objet incomplet/invalide sauvegarde par une
+    # autre session (classes S4/S3 sans slots attendus) — l'inspection ne
+    # doit JAMAIS echouer : dimensions "-" dans ce cas.
+    d <- tryCatch(if (is.null(obj)) NULL else dim(obj), error = function(e) NULL)
     data.frame(
       name = nm,
       class = if (is.null(obj)) "?" else paste(class(obj), collapse = "/"),
