@@ -8108,6 +8108,90 @@
     {
       "fr": "Pipeline auto (1 clic)",
       "en": "Auto pipeline (1 click)"
+    },
+    {
+      "fr": "Aperçu du contenu .RData",
+      "en": ".RData contents preview"
+    },
+    {
+      "fr": "Plusieurs objets détectés. Sélectionnez-en un à importer, ou exportez-en plusieurs vers un fichier .RData.",
+      "en": "Multiple objects detected. Select one to import, or export several to a .RData file."
+    },
+    {
+      "fr": "Importer l'objet sélectionné",
+      "en": "Import the selected object"
+    },
+    {
+      "fr": "Exporter la sélection (.RData)",
+      "en": "Export selection (.RData)"
+    },
+    {
+      "fr": "Sélectionnez exactement un objet à importer.",
+      "en": "Select exactly one object to import."
+    },
+    {
+      "fr": "Sélectionnez au moins un objet à exporter.",
+      "en": "Select at least one object to export."
+    },
+    {
+      "fr": "Nom",
+      "en": "Name"
+    },
+    {
+      "fr": "Classe",
+      "en": "Class"
+    },
+    {
+      "fr": "Dimensions",
+      "en": "Dimensions"
+    },
+    {
+      "fr": "Taille (Mo)",
+      "en": "Size (MB)"
+    },
+    {
+      "fr": "Objet Seurat",
+      "en": "Seurat object"
+    },
+    {
+      "fr": "SingleCellExperiment",
+      "en": "SingleCellExperiment"
+    },
+    {
+      "fr": "Objet CellChat",
+      "en": "CellChat object"
+    },
+    {
+      "fr": "Données de vélocité",
+      "en": "Velocity data"
+    },
+    {
+      "fr": "Matrice (comptages ?)",
+      "en": "Matrix (counts?)"
+    },
+    {
+      "fr": "Table de données (métadonnées ?)",
+      "en": "Data table (metadata?)"
+    },
+    {
+      "fr": "Image / graphique",
+      "en": "Image / plot"
+    },
+    {
+      "fr": "Autre",
+      "en": "Other"
+    },
+    {
+      "fr": "Contenu .RData — choisissez les objets à importer ou à sauvegarder",
+      "en": ".RData contents — choose objects to import or save"
+    },
+    {
+      "fr": "Export .RData réussi : %d objet(s) sauvegardé(s) hors de l'application.",
+      "en": ".RData export successful: %d object(s) saved outside the application."
+    },
+    {
+      "fr": "Fichier volumineux : l'inspection charge le workspace entier en mémoire.",
+      "en": "Large file: inspection loads the whole workspace into memory."
     }
   ]
 }

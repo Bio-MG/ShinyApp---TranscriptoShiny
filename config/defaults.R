@@ -85,6 +85,15 @@ TS_DA_SCCODA_SEED           <- 15L     # graine tensorflow enregistree
 # TS_DA_MILO_DISPLAY_ALPHA).
 TS_DA_CROSS_SIGNIF_FRACTION <- 0.5    # plancher de voisinages significatifs (Milo)
 
+# --- Import .rda/.RData (Inspect & Select) -------------------------------------
+# Extensions acceptees par les modules d'import pour le mode "Inspecter
+# d'abord, importer ensuite" (R/core/rdata_io.R, contrat
+# docs/contracts/RDATA_IMPORT_CONTRACT.md). Le seuil ci-dessous ne declenche
+# qu'un AVERTISSEMENT (le workspace entier est charge en memoire pour la
+# preview) — jamais un blocage.
+TS_IMPORT_RDA_EXTENSIONS <- c("rda", "rdata")
+TS_IMPORT_RDA_WARN_MB    <- 500
+
 # --- Rapport consolide (4F / Stage 17) -----------------------------------------
 # Le rapport est un COMPILATEUR d'etat + de provenance : aucune re-execution
 # d'analyse. Les plafonds ci-dessous ne concernent que l'AFFICHAGE (tables
