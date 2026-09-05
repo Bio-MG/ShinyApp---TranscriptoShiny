@@ -169,4 +169,31 @@ test_that("hôte SC: .rda multi-objets en Option C -> preview, pas de commit dir
   })
 })
 
+# ── Intégration hôte Bulk (mod_import_bulk_server) ───────────────────────────
+# Dépôt .rda (objet unique = matrice) dans le slot counts -> auto-commit ->
+# counts_reactive produit la matrice gènes × échantillons (aperçu rendu).
+source_project_file("modules/import/mod_import_bulk.R")
+
+test_that("hôte Bulk: .rda matrice unique slot counts -> aperçu counts rendu", {
+  gd <- new.env(parent = emptyenv())
+  gd$i18n <- NULL
+
+  testServer(mod_import_bulk_server, args = list(global_data = gd), expr = {
+    # Simuler les inputs a valeur par defaut du vrai app (radio/checkbox/numeric)
+    session$setInputs(bulk_import_mode = "merged_matrix", counts_format = "rows",
+                      counts_has_header = TRUE, counts_has_rownames = TRUE,
+                      min_counts = 10, project_name = "BulkRNA_Project")
+    session$setInputs(counts_file = list(
+      name = "single_mat.rda", size = as.integer(file.info(single_path)$size),
+      datapath = single_path
+    ))
+    session$flushReact()
+    # flux .rda : counts_reactive expose la matrice depuis l'objet auto-commité
+    df <- shiny::isolate(counts_reactive())
+    expect_false(is.null(df))
+    expect_equal(dim(df), c(3L, 4L))
+    expect_match(logs(), "Matrice de counts .RData", fixed = TRUE)
+  })
+})
+
 unlink(.tmpdir, recursive = TRUE)

@@ -59,10 +59,13 @@ rdata_picker_ui <- function(id) {
 #' @param expected Classes acceptées pour rdata_assert_class (NULL = tout
 #'   objet accepté, l'hôte assume alors sa propre validation).
 #' @param context Contexte pour les messages de validation de classe.
+#' @param import_label Libellé du bouton d'import (ex. « Utiliser comme
+#'   métadonnées » pour le slot métadonnées de Bulk).
 #' @param tr Fonction de traduction de l'hôte (défaut : identité).
 #' @param log_fn Fonction de log optionnelle (console de l'hôte).
 rdata_picker_server <- function(id, file_rv, commit_fn, expected = NULL,
                                 context = "import .RData",
+                                import_label = "Importer l'objet sélectionné",
                                 tr = function(key) key, log_fn = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
@@ -169,7 +172,7 @@ rdata_picker_server <- function(id, file_rv, commit_fn, expected = NULL,
         layout_columns(
           col_widths = c(6, 6),
           actionButton(ns("import_btn"),
-                       tr("Importer l'objet sélectionné"),
+                       tr(import_label),
                        class = "btn-primary btn-sm w-100"),
           downloadButton(ns("export_btn"),
                          tr("Exporter la sélection (.RData)"),

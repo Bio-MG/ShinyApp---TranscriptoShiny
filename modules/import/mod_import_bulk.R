@@ -100,7 +100,7 @@ mod_import_bulk_ui <- function(id) {
               condition = sprintf("input['%s'] === 'merged_matrix'", ns("bulk_import_mode")),
               
               fileInput(ns("counts_file"), "Fichier de Counts (CSV/TSV/TXT)",
-                        accept = c(".csv", ".tsv", ".txt", ".xlsx")),
+                        accept = c(".csv", ".tsv", ".txt", ".xlsx", ".rda", ".RData")),
               
               helpText("Format attendu : Lignes = Gènes, Colonnes = Échantillons. ",
                        "Un filtrage fin (par réplicat) est disponible à l'étape 1 du module d'analyse — ",
@@ -118,7 +118,10 @@ mod_import_bulk_ui <- function(id) {
               div(style = "max-height: 200px; overflow: auto; border: 1px solid #ddd; padding: 5px;",
                   tableOutput(ns("counts_preview"))),
               
-              uiOutput(ns("detected_gene_id_banner"))
+              uiOutput(ns("detected_gene_id_banner")),
+
+              # .rda/.RData "Inspect & Select" — objet = matrice de comptages
+              rdata_picker_ui(ns("rdata_picker_bulk_counts"))
             )
           ),
           
@@ -131,7 +134,7 @@ mod_import_bulk_ui <- function(id) {
               condition = sprintf("input['%s'] === 'merged_matrix'", ns("bulk_import_mode")),
               
               fileInput(ns("metadata_file"), "Fichier de Métadonnées (CSV/TSV/TXT)",
-                        accept = c(".csv", ".tsv", ".txt", ".xlsx")),
+                        accept = c(".csv", ".tsv", ".txt", ".xlsx", ".rda", ".RData")),
               
               helpText("Format : Lignes = Échantillons, Colonnes = Variables (condition, batch, etc.)."),
               
@@ -141,7 +144,10 @@ mod_import_bulk_ui <- function(id) {
               h6("Aperçu des métadonnées actives:", style = "font-weight: bold; margin-top: 10px;"),
               div(style = "max-height: 200px; overflow: auto; border: 1px solid #ddd; padding: 5px;",
                   tableOutput(ns("metadata_preview"))),
-              
+
+              # .rda/.RData "Inspect & Select" — objet = métadonnées
+              rdata_picker_ui(ns("rdata_picker_bulk_meta")),
+
               hr(),
               
               div(
@@ -370,10 +376,79 @@ mod_import_bulk_server <- function(id, global_data) {
     # =========================================================================
     # MODE MERGED_MATRIX — inchangé
     # =========================================================================
-    
+
+    # ── .rda/.RData "Inspect & Select" (composant mutualisé) ───────────────
+    # Deux instances du composant : l'une désigne la matrice de comptages,
+    # l'autre les métadonnées (un .rda peut alimenter les deux slots —
+    # déposer le même fichier dans les deux panneaux, sélectionner 1 objet
+    # par instance). Contrat docs/contracts/RDATA_IMPORT_CONTRACT.md.
+    rdata_counts_rv <- reactiveVal(NULL)
+    rdata_meta_rv   <- reactiveVal(NULL)
+    counts_rda_obj  <- reactiveVal(NULL)  # objet validé (comptages)
+    metadata_rda_obj <- reactiveVal(NULL) # objet validé (métadonnées)
+
+    rdata_picker_server(
+      "rdata_picker_bulk_counts",
+      file_rv      = rdata_counts_rv,
+      commit_fn    = function(obj, obj_name) {
+        if (is.data.frame(obj)) obj <- as.matrix(obj)
+        counts_rda_obj(obj)
+        add_log(paste("✓ Objet .RData sélectionné comme comptages :", obj_name))
+      },
+      expected     = c("matrix", "dgCMatrix", "dgTMatrix", "data.frame"),
+      context      = "import bulk counts (.RData)",
+      import_label = "Utiliser comme matrice de comptages",
+      tr           = .tr,
+      log_fn       = add_log
+    )
+    rdata_picker_server(
+      "rdata_picker_bulk_meta",
+      file_rv      = rdata_meta_rv,
+      commit_fn    = function(obj, obj_name) {
+        metadata_rda_obj(obj)
+        add_log(paste("✓ Objet .RData sélectionné comme métadonnées :", obj_name))
+      },
+      expected     = c("data.frame", "matrix", "dgCMatrix", "dgTMatrix"),
+      context      = "import bulk metadata (.RData)",
+      import_label = "Utiliser comme métadonnées",
+      tr           = .tr,
+      log_fn       = add_log
+    )
+
+    observeEvent(input$counts_file, {
+      f <- input$counts_file
+      if (is.null(f) || !rdata_is_supported_file(f$datapath)) {
+        rdata_counts_rv(NULL); counts_rda_obj(NULL)
+        return()
+      }
+      counts_rda_obj(NULL)
+      rdata_counts_rv(list(datapath = f$datapath, name = f$name, size = f$size))
+    })
+    observeEvent(input$metadata_file, {
+      f <- input$metadata_file
+      if (is.null(f) || !rdata_is_supported_file(f$datapath)) {
+        rdata_meta_rv(NULL); metadata_rda_obj(NULL)
+        return()
+      }
+      metadata_rda_obj(NULL)
+      rdata_meta_rv(list(datapath = f$datapath, name = f$name, size = f$size))
+    })
+
     counts_reactive <- reactive({
       req(input$counts_file)
       tryCatch({
+        # Flux .rda/.RData : l'objet est déjà extrait/validé par le composant
+        if (rdata_is_supported_file(input$counts_file$datapath)) {
+          obj <- counts_rda_obj()
+          if (is.null(obj)) {
+            add_log("ℹ Aperçu .RData actif : sélectionnez l'objet à utiliser comme comptages.")
+            return(NULL)
+          }
+          if (input$counts_format == "cols") obj <- t(obj)
+          df <- as.data.frame(obj)
+          add_log(paste("✓ Matrice de counts .RData chargée:", nrow(df), "gènes ×", ncol(df), "échantillons"))
+          return(df)
+        }
         add_log("📂 Lecture du fichier de counts...")
         df <- smart_read(input$counts_file$datapath,
                          input$counts_has_header, input$counts_has_rownames)
@@ -398,6 +473,17 @@ mod_import_bulk_server <- function(id, global_data) {
     metadata_file_reactive <- reactive({
       if (is.null(input$metadata_file)) return(NULL)
       tryCatch({
+        # Flux .rda/.RData : objet extrait/validé par le composant
+        if (rdata_is_supported_file(input$metadata_file$datapath)) {
+          obj <- metadata_rda_obj()
+          if (is.null(obj)) {
+            add_log("ℹ Aperçu .RData actif : sélectionnez l'objet à utiliser comme métadonnées.")
+            return(NULL)
+          }
+          df <- as.data.frame(obj)
+          add_log(paste("✓ Métadonnées .RData chargées:", nrow(df), "échantillons ×", ncol(df), "variables"))
+          return(df)
+        }
         add_log("📂 Lecture du fichier de métadonnées...")
         df <- smart_read(input$metadata_file$datapath,
                          input$metadata_has_header, input$metadata_has_rownames)

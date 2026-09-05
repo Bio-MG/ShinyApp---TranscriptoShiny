@@ -48,6 +48,33 @@ read_reference_scrna <- function(path) {
     stop(".rds ne contient ni objet Seurat, ni liste counts/meta, ni matrice exploitable.")
   }
 
+  # .rda/.RData — "Inspecter d'abord, importer ensuite" (contrat
+  # docs/contracts/RDATA_IMPORT_CONTRACT.md) : env isolé, objet unique
+  # extrait et validé ici ; workspace multi-objets -> message orientant vers
+  # l'aperçu d'import single-cell (export d'un objet -> .RData/.rds dédié).
+  if (rdata_is_supported_file(path)) {
+    env <- rdata_load_env(path)
+    on.exit(rdata_free(env), add = TRUE)
+    nms <- ls(envir = env)
+    if (length(nms) > 1L) {
+      stop(paste0(
+        "Ce fichier .RData contient ", length(nms),
+        " objets. Exportez la reference seule (objet unique) vers un .rds ",
+        "ou un .RData dedie — par exemple depuis l'aperçu d'import Single-Cell ",
+        "(« Exporter la sélection ») — puis reimportez-la."),
+        call. = FALSE)
+    }
+    obj <- rdata_extract_object(env, nms[1])
+    if (inherits(obj, "Seurat")) return(obj)
+    if (is.list(obj) && !is.null(obj$counts)) {
+      return(list(counts = obj$counts, meta = obj$meta %||% obj$metadata %||% NULL))
+    }
+    if (methods::is(obj, "Matrix") || is.matrix(obj)) {
+      return(list(counts = obj, meta = NULL))
+    }
+    stop(".RData ne contient ni objet Seurat, ni liste counts/meta, ni matrice exploitable.")
+  }
+
   if (identical(ext, "h5ad")) {
     if (requireNamespace("schard", quietly = TRUE)) {
       return(schard::h5ad2seurat(path))

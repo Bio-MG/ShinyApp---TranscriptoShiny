@@ -8196,6 +8196,14 @@
     {
       "fr": "Le contenu .RData est inspecté automatiquement dès le dépôt du fichier (carte ci-dessous).",
       "en": ".RData contents are inspected automatically when the file is uploaded (card below)."
+    },
+    {
+      "fr": "Utiliser comme matrice de comptages",
+      "en": "Use as counts matrix"
+    },
+    {
+      "fr": "Utiliser comme métadonnées",
+      "en": "Use as metadata"
     }
   ]
 }
