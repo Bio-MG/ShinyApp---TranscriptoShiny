@@ -114,6 +114,13 @@ mod_import_sc_ui <- function(id) {
     layout_sidebar(
       sidebar = sidebar(
         width = 400, title = i18n$t("Import Single-Cell"),
+        # LOT 4A (V1.x UX): mapping stays in the analysis module (no UI move);
+        # remind + native jump to the existing SC "0. Mapping IDs" panel.
+        div(class = "alert alert-light", style = "font-size:0.78rem;",
+            bsicons::bs_icon("info-circle"), " ",
+            i18n$t("Identifiants non-symboles (Ensembl, Entrez, sondes Affymetrix) ? Le mapping d'IDs est disponible à l'étape 0 de l'analyse.")),
+        actionButton(ns("goto_mapping"), i18n$t("Aller au mapping des IDs"),
+                     class = "btn-outline-secondary btn-sm w-100 mb-2", icon = icon("arrow-right")),
         accordion(
           accordion_panel(
             i18n$t("Option A: Dossiers Multiples (10X)"),
@@ -196,6 +203,18 @@ mod_import_sc_server <- function(id, global_data) {
     add_log <- function(msg) {
       logs(paste0("[", format(Sys.time(),"%H:%M:%S"), "] ", msg, "\n", logs()))
     }
+
+    # ── LOT 4A (V1.x UX): native jump to the EXISTING SC mapping panel ──────
+    # No UI duplication: select the analysis page (top-level page_navbar via
+    # the root session handle) and open the nested accordions hosting the
+    # "0. Mapping IDs" panel. Silent no-op if the handles are missing.
+    observeEvent(input$goto_mapping, {
+      sess <- global_data$session
+      req(!is.null(sess))
+      nav_select(id = "main_nav", selected = "Analyse Single-Cell", session = sess)
+      try(accordion_panel_open(id = "sc-acc_workflow", values = "grp_prep", session = sess), silent = TRUE)
+      try(accordion_panel_open(id = "sc-acc_prep", values = "0_mapping", session = sess), silent = TRUE)
+    })
 
     # Re-push translated labels on language switch
     observeEvent(global_data$language, {

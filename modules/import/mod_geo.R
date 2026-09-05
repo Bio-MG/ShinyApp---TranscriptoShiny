@@ -16,6 +16,14 @@ mod_geo_ui <- function(id) {
   tagList(
     h4(i18n$t("Importer depuis GEO"), class = "mt-0 mb-3"),
 
+    # LOT 4A (V1.x UX): GEO feeds the Bulk analysis — mapping stays there;
+    # remind + native jump to the existing Bulk "0. Mapping IDs" panel.
+    div(class = "alert alert-light", style = "font-size:0.78rem;",
+        bsicons::bs_icon("info-circle"), " ",
+        i18n$t("Identifiants non-symboles (Ensembl, Entrez, sondes Affymetrix) ? Le mapping d'IDs est disponible à l'étape 0 de l'analyse.")),
+    actionButton(ns("goto_mapping"), i18n$t("Aller au mapping des IDs"),
+                 class = "btn-outline-secondary btn-sm w-100 mb-2", icon = icon("arrow-right")),
+
     radioButtons(
       ns("mode"), label = i18n$t("Mode d'import"),
       choices = stats::setNames(c("online", "offline"),
@@ -72,6 +80,15 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
       if (is.null(tr)) return(key)
       tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
     }
+
+    # ── LOT 4A (V1.x UX): native jump to the EXISTING Bulk mapping panel ────
+    # GEO produces a bulk_obj; its ID mapping lives in the Bulk analysis module.
+    observeEvent(input$goto_mapping, {
+      sess <- global_data$session
+      req(!is.null(sess))
+      nav_select(id = "main_nav", selected = "Analyse Bulk RNA", session = sess)
+      try(accordion_panel_open(id = "bulk-acc_bulk", values = "panel_mapping", session = sess), silent = TRUE)
+    })
 
     observeEvent(global_data$language, {
       updateRadioButtons(session, "mode", label = .tr("Mode d'import"),

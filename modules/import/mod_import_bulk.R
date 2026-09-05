@@ -71,6 +71,14 @@ mod_import_bulk_ui <- function(id) {
         div(class = "alert alert-info", style = "font-size: 0.85rem;",
             bsicons::bs_icon("info-circle"),
             " Importez des données RNA-Seq en Bulk (matrice de counts + métadonnées)."),
+
+        # LOT 4A (V1.x UX): mapping stays in the analysis module (no UI move);
+        # remind + native jump to the existing Bulk "0. Mapping IDs" panel.
+        div(class = "alert alert-light", style = "font-size:0.78rem;",
+            bsicons::bs_icon("info-circle"), " ",
+            i18n$t("Identifiants non-symboles (Ensembl, Entrez, sondes Affymetrix) ? Le mapping d'IDs est disponible à l'étape 0 de l'analyse.")),
+        actionButton(ns("goto_mapping"), i18n$t("Aller au mapping des IDs"),
+                     class = "btn-outline-secondary btn-sm w-100 mb-2", icon = icon("arrow-right")),
         
         # ── Mode selector ──────────────────────────────────────────────────
         radioButtons(
@@ -275,6 +283,17 @@ mod_import_bulk_server <- function(id, global_data) {
       if (is.null(tr)) return(key)
       tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
     }
+
+    # ── LOT 4A (V1.x UX): native jump to the EXISTING Bulk mapping panel ────
+    # No UI duplication: select the analysis page (top-level page_navbar via
+    # the root session handle) and open the "0. Mapping IDs" accordion panel.
+    # Silent no-op if the handles are missing.
+    observeEvent(input$goto_mapping, {
+      sess <- global_data$session
+      req(!is.null(sess))
+      nav_select(id = "main_nav", selected = "Analyse Bulk RNA", session = sess)
+      try(accordion_panel_open(id = "bulk-acc_bulk", values = "panel_mapping", session = sess), silent = TRUE)
+    })
 
     observeEvent(global_data$language, {
       updateRadioButtons(session, "bulk_import_mode",

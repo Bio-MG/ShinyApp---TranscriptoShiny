@@ -158,7 +158,11 @@ source("modules/spatial/mod_spatial.R")
 # --- UI ---
 
 ui <- page_navbar(
-  
+
+  # LOT 4A (V1.x UX): explicit id so import modules can jump natively
+  # (nav_select) to the analysis tabs that host the ID-mapping panels.
+  id = "main_nav",
+
   title = "TranscriptoShiny v2 - Multi-Omics Platform",
   
   theme = my_theme,
@@ -411,8 +415,14 @@ server <- function(input, output, session) {
     #            The global \`i18n\` is never mutated here (multi-user safety).
     language = I18N_DEFAULT_LANG,
     i18n     = .new_session_i18n()
-    
+
   )
+
+  # LOT 4A (V1.x UX): root (un-namespaced) session handle, read by the import
+  # modules' "Go to ID mapping" buttons so they can nav_select() the top-level
+  # page_navbar and open the analysis accordion panels. Write-once, never
+  # mutated afterwards — no reactive side effects.
+  global_data$session <- session
   
   # ── i18n (Phase 1): language switch ───────────────────────────────────────
   # Three coordinated effects:
