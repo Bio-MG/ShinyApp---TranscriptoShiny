@@ -30,7 +30,7 @@ mod_sc_velocity_ui <- function(id) {
     conditionalPanel(
       condition = "input.velocity_import_mode == 'rds'", ns = ns,
       fileInput(ns("velocity_rds_file"), i18n$t("Fichier RDS velocity (liste spliced/unspliced)"),
-                accept = c(".rds", ".RDS"), width = "100%"),
+                accept = c(".rds", ".RDS", ".rda", ".RData"), width = "100%"),
       div(class = "small text-muted mb-2",
            i18n$t("Le RDS doit être une liste nommée avec spliced et unspliced. Noms inattendus bloqués."))
     ),

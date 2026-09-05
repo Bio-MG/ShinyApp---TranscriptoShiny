@@ -267,16 +267,38 @@ parse_cellchat_object <- function(obj, source_file = NA_character_) {
         sprintf("Import objet CellChat : fichier introuvable : %s.", obj)
       )
     }
-    obj <- tryCatch(readRDS(obj), error = function(e) {
-      .communication_stop(
-        "invalid_input",
-        sprintf(
-          paste0("Import objet CellChat : lecture RDS impossible (%s). ",
-                 "L'objet requiert peut-etre un package non installe : %s."),
-          basename(obj), conditionMessage(e)
+    # .rda/.RData — workspace inspecté (contrat RDATA_IMPORT_CONTRACT.md) :
+    # seul un fichier à objet unique est importable ici ; pour un workspace
+    # multi-objets, utiliser l'aperçu d'import Single-Cell (« Exporter la
+    # sélection ») pour isoler l'objet CellChat, puis réimporter.
+    if (rdata_is_supported_file(obj)) {
+      env <- rdata_load_env(obj)
+      on.exit(rdata_free(env), add = TRUE)
+      nms <- ls(envir = env)
+      if (length(nms) > 1L) {
+        .communication_stop(
+          "invalid_input",
+          sprintf(paste0(
+            "Import objet CellChat : le fichier .RData contient %d objets. ",
+            "Utilisez l'aperçu d'import Single-Cell (« Exporter la sélection ») ",
+            "pour isoler l'objet CellChat dans un fichier dédié, puis réimportez-le."),
+            length(nms)
+          )
         )
-      )
-    })
+      }
+      obj <- rdata_extract_object(env, nms[1])
+    } else {
+      obj <- tryCatch(readRDS(obj), error = function(e) {
+        .communication_stop(
+          "invalid_input",
+          sprintf(
+            paste0("Import objet CellChat : lecture RDS impossible (%s). ",
+                   "L'objet requiert peut-etre un package non installe : %s."),
+            basename(obj), conditionMessage(e)
+          )
+        )
+      })
+    }
   }
 
   net <- NULL

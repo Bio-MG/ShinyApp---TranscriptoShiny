@@ -265,8 +265,8 @@ ui <- page_navbar(
                    class = "btn-sm btn-outline-primary w-100"),
     
     fileInput("load_session_file", i18n$t("📂 Charger Session (.rds)"),
-              
-              accept = ".rds", width = "100%"),
+
+              accept = c(".rds", ".rda", ".RData"), width = "100%"),
     
     div(class = "small text-muted", style = "font-size:0.75rem;",
         
@@ -663,8 +663,25 @@ server <- function(input, output, session) {
     
     
     tryCatch({
-      
-      snapshot <- readRDS(input$load_session_file$datapath)
+
+      # .rda/.RData accepté (contrat RDATA_IMPORT_CONTRACT.md) : workspace à
+      # objet unique = snapshot ; multi-objets -> message orientant.
+      if (rdata_is_supported_file(input$load_session_file$datapath)) {
+        rda_env <- rdata_load_env(input$load_session_file$datapath)
+        rda_names <- ls(envir = rda_env)
+        if (length(rda_names) > 1L) {
+          showNotification(
+            "❌ Le fichier .RData contient plusieurs objets — sauvegardez le snapshot de session seul (un objet unique) puis rechargez-le.",
+            type = "error", duration = 10
+          )
+          rdata_free(rda_env)
+          return()
+        }
+        snapshot <- rdata_extract_object(rda_env, rda_names[1])
+        rdata_free(rda_env)
+      } else {
+        snapshot <- readRDS(input$load_session_file$datapath)
+      }
       
       
       

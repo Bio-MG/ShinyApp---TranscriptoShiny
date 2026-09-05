@@ -982,7 +982,29 @@ validate_velocity_matrices <- function(
 #' @return Named velocity input list.
 #' @export
 read_velocity_rds <- function(path) {
-    object <- readRDS(path)
+    # .rda/.RData — workspace inspecté (contrat RDATA_IMPORT_CONTRACT.md) :
+    # seul un fichier à objet unique est importable ici ; pour un workspace
+    # multi-objets, utiliser l'aperçu d'import Single-Cell (« Exporter la
+    # sélection ») pour isoler la liste velocity, puis réimporter.
+    if (rdata_is_supported_file(path)) {
+        env <- rdata_load_env(path)
+        on.exit(rdata_free(env), add = TRUE)
+        rda_names <- ls(envir = env)
+        if (length(rda_names) > 1L) {
+            .velocity_stop(
+                "invalid_input",
+                sprintf(paste0(
+                    "Le fichier .RData contient %d objets. Utilisez l'aperçu ",
+                    "d'import Single-Cell (« Exporter la sélection ») pour ",
+                    "isoler la liste velocity dans un fichier dédié, puis réimportez-le."),
+                    length(rda_names)
+                )
+            )
+        }
+        object <- rdata_extract_object(env, rda_names[1])
+    } else {
+        object <- readRDS(path)
+    }
 
     allowed_names <- c(
         "spliced",

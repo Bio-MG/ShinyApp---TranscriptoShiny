@@ -41,7 +41,7 @@ mod_sc_communication_ui <- function(id) {
     conditionalPanel(
       condition = "input.comm_source == 'cellchat_object'", ns = ns,
       fileInput(ns("comm_cellchat_obj"), i18n$t("Objet CellChat sauvegarde (.rds)"),
-                accept = c(".rds", ".RDS"), width = "100%"),
+                accept = c(".rds", ".RDS", ".rda", ".RData"), width = "100%"),
       div(class = "small text-muted mb-2",
           i18n$t("Extraction des resultats deja calcules (net$prob) — aucune methode CellChat n'est relancee. La colonne pathway reste vide pour cette route."))
     ),
