@@ -26,13 +26,15 @@ mod_bulk_ui <- function(id) {
           id = ns("acc_bulk"), open = "panel_filter",
           accordion_panel(i18n$t("0. Mapping IDs (Optionnel)"), value = "panel_mapping",
                           icon = icon("arrows-rotate"), mod_bulk_mapping_ui(ns("mapping"))),
-          accordion_panel(i18n$t("1. Filtrage & VST"), value = "panel_filter",
+          accordion_panel(i18n$t("1. Pipeline Bulk — Contrôle qualité & filtrage"), value = "panel_filter",
                           icon = icon("filter"), mod_bulk_filter_ui(ns("filter"))),
           accordion_panel(i18n$t("2. Design & Contrastes"), value = "panel_de",
                           icon = icon("sliders"), mod_bulk_de_ui(ns("de"))),
           accordion_panel(i18n$t("3. Pathway Enrichment"), value = "panel_pathways",
                           icon = icon("dna"), mod_bulk_pathways_ui(ns("pathways"))),
-          accordion_panel(i18n$t("4. Rapport Complet"), value = "panel_report",
+          # LOT 3A (V1.x UX): last panel = deliverables (report + reproducible
+          # R script already live together in mod_bulk_report.R — renamed only).
+          accordion_panel(i18n$t("4. Livrables — Rapport & Script R"), value = "panel_report",
                           icon = icon("file-export"), mod_bulk_report_ui(ns("report")))
         )
       ),
@@ -47,7 +49,12 @@ mod_bulk_ui <- function(id) {
         nav_panel(i18n$t("R\u00e9sum\u00e9 Up/Down"), value = "tab_updown", mod_bulk_de_summary_ui(ns("de"))),
         nav_panel(i18n$t("Multi-m\u00e9thodes"), value = "tab_multimethod", mod_bulk_de_multimethod_ui(ns("de"))),
         nav_panel("Venn / UpSet",    value = "tab_venn",        mod_bulk_de_venn_ui(ns("de"))),
-        nav_panel("Pathway",         value = "tab_pathway",     mod_bulk_pathways_output_ui(ns("pathways")))
+        nav_panel("Pathway",         value = "tab_pathway",     mod_bulk_pathways_output_ui(ns("pathways"))),
+        # LOT 3A (V1.x UX): compact pipeline summary — reads EXISTING shared_rv
+        # fields only (no new computation, no new QC).
+        nav_panel(i18n$t("Résumé Pipeline Bulk"), value = "tab_resume",
+                  card(card_header(i18n$t("Résumé Pipeline Bulk")),
+                       uiOutput(ns("bulk_resume_panel"))))
       )
     )
   )
@@ -103,6 +110,39 @@ mod_bulk_server <- function(id, global_data) {
           tags$span(style="padding:2px 4px;", s2, " ", .tr("DE")),
           tags$span(style="padding:2px 4px;", s3, " ", .tr("Pathway")),
           tags$span(style="padding:2px 4px;", s4, " ", .tr("Rapport")))
+    })
+
+    # ── LOT 3A (V1.x UX): compact pipeline summary (right navset). ───────────
+    # Reads EXISTING shared_rv fields only — zero new computation.
+    output$bulk_resume_panel <- renderUI({
+      global_data$language  # re-render on language switch
+      obj    <- global_data$bulk_obj
+      counts <- shared_rv$counts_mapped %||% obj$counts
+      status <- if (!is.null(shared_rv$pathway_results)) "✅"
+                else if (length(shared_rv$contrasts) > 0) "🟡"
+                else if (!is.null(shared_rv$filtered_counts)) "🟡"
+                else "⚪"
+      row <- function(label, value) tags$tr(tags$td(strong(label)), tags$td(value))
+      tags$table(class = "table table-sm table-striped m-3",
+        row(.tr("Statut pipeline"), status),
+        row(.tr("Échantillons"), if (!is.null(obj)) as.character(ncol(counts)) else .tr("aucun")),
+        row(.tr("Mapping IDs appliqué"),
+            if (isTRUE(shared_rv$mapping_applied)) paste("✅", shared_rv$mapping_summary %||% "") else "⚪"),
+        row(.tr("Gènes après filtrage"),
+            if (!is.null(shared_rv$filtered_counts)) format(nrow(shared_rv$filtered_counts), big.mark = ",") else .tr("aucun")),
+        row(.tr("Normalisation (VST)"),
+            if (!is.null(shared_rv$vst_mat)) "✅ VST" else "⚪"),
+        row(.tr("Contraste actif"),
+            if (!is.null(shared_rv$active_contrast))
+              paste0(shared_rv$active_contrast, " (", length(shared_rv$contrasts), ")")
+            else .tr("aucun")),
+        row(.tr("Seuils (|Log2FC| / P-adj)"),
+            paste0(shared_rv$lfc_thresh, " / ", shared_rv$padj_thresh)),
+        row(.tr("Pathway Enrichment"),
+            if (!is.null(shared_rv$pathway_results))
+              paste0(nrow(shared_rv$pathway_results), " (", shared_rv$pathway_mode %||% "ora", ")")
+            else .tr("aucun"))
+      )
     })
 
     # ── Auto-pipeline modal ──────────────────────────────────────────────
