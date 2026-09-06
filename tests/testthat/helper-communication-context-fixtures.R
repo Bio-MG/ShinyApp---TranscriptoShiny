@@ -29,6 +29,8 @@ source_project_file("R/core/provenance.R")
 source_project_file("R/sc/sc_velocity.R")
 source_project_file("R/sc/sc_communication.R")
 source_project_file("R/sc/sc_communication_views.R")
+source_project_file("R/sc/sc_communication_spatial.R")      # V1.x-A
+source_project_file("R/sc/sc_communication_trajectory.R")   # V1.x-B
 
 # Extracteur de fonctions top-level (implémentation propre aux contextes,
 # volontairement distincte de .comm_top_level_assignments du test de freeze
@@ -75,10 +77,11 @@ source_project_file("R/sc/sc_communication_views.R")
              seq(0.40, 0.50, length.out = 4)), .ccx_cells)
 }
 
-# Lignees slingshot-like : L1 = A + C (branche A->C), L2 = B + C (C point de
-# branchement rattache a L1 par convention premier-colonne).
+# Lignées slingshot-like : L1 = A + C1,C2 ; L2 = B + C3,C4 (C = point de
+# branchement réparti sur les deux lignées — jamais collapsées par le moteur).
 .ccx_lineage <- function() {
-  setNames(c(rep("L1", 4), rep("L2", 4), rep("L1", 4)), .ccx_cells)
+  setNames(c(rep("L1", 4), rep("L2", 4), c("L1", "L1", "L2", "L2")),
+           .ccx_cells)
 }
 
 # Matrice d'expression genes x cells (base matrix) — A exprime L1/L2, B
