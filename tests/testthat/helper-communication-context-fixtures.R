@@ -33,6 +33,7 @@ source_project_file("R/sc/sc_communication_views.R")
 source_project_file("R/sc/sc_communication_spatial.R")      # V1.x-A
 source_project_file("R/sc/sc_communication_trajectory.R")   # V1.x-B
 source_project_file("R/sc/sc_communication_velocity.R")     # V1.x-C
+source_project_file("R/sc/sc_communication_perturbation.R") # V1.x-D
 
 # Extracteur de fonctions top-level (implémentation propre aux contextes,
 # volontairement distincte de .comm_top_level_assignments du test de freeze
