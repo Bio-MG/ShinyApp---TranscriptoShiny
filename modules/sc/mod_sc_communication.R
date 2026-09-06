@@ -131,6 +131,8 @@ mod_sc_communication_output_ui <- function(id) {
                 mod_sc_communication_spatial_ui(ns("spatial"))),
       nav_panel(i18n$t("Contexte trajectoire"),
                 mod_sc_communication_trajectory_ui(ns("trajectory"))),
+      nav_panel(i18n$t("Contexte vélocité"),
+                mod_sc_communication_velocity_ui(ns("velocity_ctx"))),
       nav_panel(i18n$t("Schema source"),
                 DT::dataTableOutput(ns("comm_schema"), height = "380px"),
                 div(class = "small text-muted mt-2", textOutput(ns("comm_schema_note")))),
@@ -631,6 +633,7 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
     # latéral (friction UX n°2). ────────────────────────────────────────────
     mod_sc_communication_spatial_server("spatial", comm_state, global_data, shared_rv)
     mod_sc_communication_trajectory_server("trajectory", comm_state, global_data, shared_rv)
+    mod_sc_communication_velocity_server("velocity_ctx", comm_state, global_data, shared_rv)
 
     # Expose state for tests (optional)
     return(comm_state)
