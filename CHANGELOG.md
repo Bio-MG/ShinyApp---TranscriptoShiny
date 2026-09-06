@@ -4,6 +4,56 @@ Tous les changements notables de TranscriptoShiny (« Cerberus ») sont document
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ;
 versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur `main`.
 
+## [V1.x-A/B/C] — 2026-09-06 — Contextes CCC (roadmap CCC avancée, Phases 1-3)
+
+Extension de la Communication cellule-cellule par trois **contextes dérivés**
+(consommateurs purs du résultat canonique Stage 11/12 — table gelée intacte,
+aucun score recalculé, aucune inférence) : roadmap `docs/ROADMAP_CCC_ADVANCED.md`,
+mandat utilisateur « go on, implement phases ». Trois onglets DANS le panneau
+Communication existant (aucun nouveau panneau latéral) ; erreurs classées
+`communication_context_error` ; provenance PRODUITE au calcul avec
+`parent_analysis_id` (chaîne CCC → contexte traçable) ; WIP utilisateur
+préservé (staging partiel de app.R).
+
+### Ajouté
+- **Contexte spatial (V1.x-A, `1d5d0ab`)** : `R/sc/sc_communication_spatial.R`
+  — distances de centroïdes + NN croisées (chunks mémoire bornés) par paire,
+  fractions à portée d'un rayon EXPLICITE (jamais inféré), enrichissement par
+  permutation OPT-IN (seed fixée, null = permutation des étiquettes) ;
+  source de coordonnées DÉCLARÉE (bundle spatial courant ou réduction 2D —
+  « distances de projection, NON physiques ») ; la distance = CONTRAINTE
+  spatiale, jamais une preuve de communication. Contrat
+  `COMMUNICATION_SPATIAL_CONTRACT.md` + freeze test dédié.
+- **Contexte trajectoire (V1.x-B, `da84e28`)** :
+  `R/sc/sc_communication_trajectory.R` — composition des populations et
+  expression ligands/récepteurs le long du pseudo-temps par bins quantiles
+  (dégradation comptabilisée, jamais forcée) ; mode PAR LIGNÉE slingshot
+  (jamais de collapse) ; gènes absents / cellules sans pseudo-temps comptés
+  jamais imputés ; score importé CONSTANT par paire, jamais décliné par bin ;
+  `communication_fetch_expression_matrix()` (extraction « data » bornée aux
+  gènes, branche layer/slot explicite). Contrat
+  `COMMUNICATION_TRAJECTORY_CONTRACT.md` + freeze test dédié.
+- **Contexte vélocité (V1.x-C, `4903829`)** :
+  `R/sc/sc_communication_velocity.R` — magnitude L2 des vecteurs de vitesse
+  PRÉCALCULÉS importés (contrat Stage 10 consommé, jamais ré-inféré) par
+  population et paire ; états gracieux `unavailable_no_vectors` /
+  `insufficient_overlap` (aucun vecteur substitué, aucune fabrication) ;
+  seuil `TS_VELOCITY_OVERLAP_MIN` consommé du config/thresholds.R.
+  Contrat `COMMUNICATION_VELOCITY_CONTRACT.md` + freeze test dédié.
+- **Modules d'orchestration** : `mod_sc_communication_{spatial,trajectory,
+  velocity}.R` montés par le module Communication — calcul sur bouton
+  explicite, péremption vérifiée avant rendu/export, CSV/PNG/PDF tracés
+  (`analysis_id` + `parent_analysis_id` + timestamp par ligne).
+- Tests : `test-sc-communication-{spatial,trajectory,velocity}.R` +
+  3 freeze tests + fixtures partagées
+  (`helper-communication-context-fixtures.R`).
+
+### Parking (Phases 4-10 de la roadmap)
+Perturbation in silico, Ligand→receptor→target, NicheNet-like, OmniPath,
+LIANA, rare-cell, gallery — requièrent 4D-3 (contrat d'entrée app upstream
+non gelé), des dépendances nouvelles (renv.lock justifié) ou une proposition
+scientifique dédiée ; voir `docs/ROADMAP_CCC_ADVANCED.md` §4.
+
 ## [V1.1.0-rc] — 2026-09-05 — Import .rda/.RData « Inspect & Select »
 
 Support des fichiers `.rda`/`.RData` (workspaces `save.image()`, listes
