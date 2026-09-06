@@ -4,6 +4,60 @@ Tous les changements notables de TranscriptoShiny (« Cerberus ») sont document
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ;
 versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur `main`.
 
+## [V1.x-D] — 2026-09-06 — Perturbation IN SILICO (roadmap CCC avancée, Phase 4)
+
+Simulation de perturbation sur le **réseau INFÉRÉ** importé (suppression /
+atténuation d'un ligand, récepteur, interaction ligand->récepteur ou
+population) avec quantification des effets de **premier ordre** sur les
+paires et les nœuds, à partir des scores IMPORTÉS — jamais recalculés, aucune
+propagation réseau modélisée (anti-feature-creep). Contrat
+`docs/contracts/COMMUNICATION_PERTURBATION_CONTRACT.md` (freeze :
+`test-communication-perturbation-contract-freeze.R`).
+
+### Ajouté
+- **Noyau pur** `R/sc/sc_communication_perturbation.R` :
+  `build_communication_perturbation()` (cibles
+  `communication_perturbation_targets()` = ligand / receptor / interaction /
+  sender / receiver ; valeur EXACTE issue de la table — absente = erreur FR
+  classée avec liste des valeurs disponibles ; mode `remove` ou `attenuate`
+  avec facteur strictement (0,1)) ; deltas par paire (score_total,
+  delta_fraction, affected) et par nœud (sortant + entrant) ; résumés
+  baseline/perturbé (NA sans scores — jamais 0 fabriqué) ; la table
+  canonique n'est JAMAIS modifiée (copie d'affichage).
+- **GARDE ABSOLU** : étiquette « IN SILICO PERTURBATION » portée par le
+  résultat (`params$label`, provenance `label = "in_silico_not_ko"`), les
+  avertissements, le sous-titre de chaque figure et une colonne de chaque
+  export — jamais « KO », « effet biologique » ni « causal ». Effets de
+  PREMIER ORDRE explicitement énoncés (NETWORK PERTURBATION ≠ DOWNSTREAM
+  TRANSCRIPTIONAL SIMULATION, jamais conflation).
+- **Vues** : `plot_communication_perturbation_delta()` (barres divergentes
+  top N), `plot_communication_perturbation_nodes()` (baseline vs perturbé
+  par nœud) ; `build_communication_perturbation_export()` (traçabilité +
+  étiquette par ligne).
+- **Module** `modules/sc/mod_sc_communication_perturbation.R` — onglet
+  « Perturbation (in silico) » dans le panneau Communication existant,
+  bandeau permanent, choix de valeur synchronisé avec la table (filtres du
+  panneau honorés), calcul sur bouton explicite, péremption vérifiée,
+  CSV/PNG/PDF tracés.
+- Tests : `test-sc-communication-perturbation.R` (72 assertions) + freeze
+  test dédié.
+
+### Corrigé
+- `app.R` : lignes `source()` V1.x-A..D réparées (des insertions par
+  sous-chaîne avaient concaténé le commentaire de la ligne précédente sur
+  chaque nouvelle ligne et dupliqué trajectory/velocity ; commentaires un
+  par ligne, doublons supprimés, lignes perturbation restaurées — commit
+  `62510b9`).
+
+### Parking (reste de la roadmap CCC avancée)
+Phases 5-6 (ligand→target / NicheNet-like — exigent un réseau prior et une
+proposition 4D-3 avec le contrat d'entrée de l'app upstream), Phase 7-8
+(OmniPath / LIANA — packages nouveaux, renv.lock justifié ; import de
+RÉSULTATS LIANA externes possible en extension du contrat Stage 11 avec
+ajout simultané code+freeze+doc), Phase 9 (rare-cell — auditer le
+chevauchement Milo), Phase 10 (gallery — règle « aucune dépendance graph
+nouvelle ») — voir `docs/ROADMAP_CCC_ADVANCED.md`.
+
 ## [V1.x-A/B/C] — 2026-09-06 — Contextes CCC (roadmap CCC avancée, Phases 1-3)
 
 Extension de la Communication cellule-cellule par trois **contextes dérivés**
