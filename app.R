@@ -68,10 +68,10 @@ source("R/sc/sc_trajectory.R")
 source("R/sc/sc_velocity.R")
 source("R/sc/sc_communication.R")  # Stage 11 (4D-1) : APRES sc_velocity.R (reutilise velocity_object_fingerprint)
 source("R/sc/sc_communication_views.R")  # Stage 12 (4D-2) : vues exploratoires, APRES sc_communication.R
-source("R/sc/sc_communication_spatial.R")
-source("R/sc/sc_communication_trajectory.R")
-source("R/sc/sc_communication_velocity.R")
-source("R/sc/sc_communication_perturbation.R")  # V1.x-D (CCC avancée Phase 4) : perturbation IN SILICO du réseau importé, APRES sc_communication_velocity.R  # V1.x-C (CCC avancée Phase 2) : contexte vélocité, APRES sc_communication_trajectory.R  # V1.x-B (CCC avancée Phase 3) : contexte trajectoire/pseudo-temps, APRES sc_communication_spatial.R  # V1.x-A (CCC avancée Phase 1) : contexte spatial, APRES sc_communication_views.R
+source("R/sc/sc_communication_spatial.R")  # V1.x-A (CCC avancée Phase 1) : contexte spatial, APRES sc_communication_views.R
+source("R/sc/sc_communication_trajectory.R")  # V1.x-B (CCC avancée Phase 3) : contexte trajectoire/pseudo-temps, APRES sc_communication_spatial.R
+source("R/sc/sc_communication_velocity.R")  # V1.x-C (CCC avancée Phase 2) : contexte vélocité, APRES sc_communication_trajectory.R
+source("R/sc/sc_communication_perturbation.R")  # V1.x-D (CCC avancée Phase 4) : perturbation IN SILICO du réseau importé, APRES sc_communication_velocity.R
 source("R/sc/sc_abundance_design.R")  # Stage 13 (4E-0) : validation du design DA (reutilise check_design_confounding)
 source("R/sc/sc_abundance_milo.R")  # Stage 14 (4E-1) : Milo, GATED sur le design Stage 13
 source("R/sc/sc_abundance_milo_views.R")  # Stage 14 : vues pures du resultat Milo
@@ -123,10 +123,10 @@ source("modules/sc/mod_sc_pathways.R")
 source("modules/sc/mod_sc_trajectory.R")
 source("modules/sc/mod_sc_velocity.R")
 source("modules/sc/mod_sc_communication.R")
-source("modules/sc/mod_sc_communication_spatial.R")
-source("modules/sc/mod_sc_communication_trajectory.R")
-source("modules/sc/mod_sc_communication_velocity.R")
-source("modules/sc/mod_sc_communication_perturbation.R")  # V1.x-D : onglet « Perturbation (in silico) » du panneau Communication  # V1.x-C : onglet « Contexte vélocité » du panneau Communication  # V1.x-B : onglet « Contexte trajectoire » du panneau Communication  # V1.x-A : onglet « Contexte spatial » du panneau Communication
+source("modules/sc/mod_sc_communication_spatial.R")  # V1.x-A : onglet « Contexte spatial » du panneau Communication
+source("modules/sc/mod_sc_communication_trajectory.R")  # V1.x-B : onglet « Contexte trajectoire » du panneau Communication
+source("modules/sc/mod_sc_communication_velocity.R")  # V1.x-C : onglet « Contexte vélocité » du panneau Communication
+source("modules/sc/mod_sc_communication_perturbation.R")  # V1.x-D : onglet « Perturbation (in silico) » du panneau Communication
 source("modules/sc/mod_sc_da_design.R")
 source("modules/sc/mod_sc_da_milo.R")  # Stage 14 (4E-1) : orchestration Milo (consomme le design 8c)
 source("modules/sc/mod_sc_da_sccoda.R")  # Stage 15 (4E-2) : orchestration scCODA (consomme le design 8c)
