@@ -125,6 +125,10 @@ mod_sc_communication_output_ui <- function(id) {
                 div(class = "small text-muted m-2",
                     i18n$t("Centralité dérivée du réseau, descriptive — ce n'est pas un contrôle biologique.")),
                 DT::dataTableOutput(ns("comm_centrality"), height = "420px")),
+      # ── Contextes V1.x (roadmap CCC avancée : contrainte/ordre/contexte —
+      # consommateurs purs, aucun recalcul ; docs/ROADMAP_CCC_ADVANCED.md) ──
+      nav_panel(i18n$t("Contexte spatial"),
+                mod_sc_communication_spatial_ui(ns("spatial"))),
       nav_panel(i18n$t("Schema source"),
                 DT::dataTableOutput(ns("comm_schema"), height = "380px"),
                 div(class = "small text-muted mt-2", textOutput(ns("comm_schema_note")))),
@@ -618,6 +622,12 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
         saveRDS(comm_state$result, file)
       }
     )
+
+    # ── Contextes V1.x (roadmap CCC avancée) : sous-modules montés dans le
+    # panneau existant — consommateurs du résultat canonique (comm_state est
+    # partagé par référence), aucun recalcul de score, aucun nouveau panneau
+    # latéral (friction UX n°2). ────────────────────────────────────────────
+    mod_sc_communication_spatial_server("spatial", comm_state, global_data, shared_rv)
 
     # Expose state for tests (optional)
     return(comm_state)
