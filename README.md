@@ -60,6 +60,15 @@ TranscriptoShiny fournit des environnements modulaires dédiés à trois domaine
 - **Pipeline standard** : contrôle qualité, normalisation, sélection de gènes hautement variables, PCA, construction du graphe de voisins, clustering, UMAP et t-SNE optionnel. Disponible en **pipeline automatique 1 clic** (panneau 0 : mapping d'IDs optionnel, QC, normalisation/PCA/clustering/UMAP, t-SNE, puis étapes optionnelles annotation SingleR, marqueurs, corrélation génique, ORA sur top marqueurs, trajectoire) ou en mode guidé panneau par panneau.
 > L'interface Single-Cell regroupe ses panneaux en cinq sections parent (Préparation / Analyse / Dynamique / Abondance cellulaire / Livrables). Vitesse ARN, communication cellule-cellule et abondance différentielle exigent des prérequis spécifiques et restent hors du pipeline automatique.
 - **Correction de batch** : intégration avec Harmony lorsque plusieurs échantillons ou batchs sont présents.
+
+#### Multi-échantillons single-cell
+
+Le workflow Single-Cell est nativement multi-échantillons (ex: Contrôle vs Traitement, Jour 0 vs Jour 10 — chaque échantillon est analysé comme une entité distincte, comme dans le module Spatial) :
+
+- **Import groupé** : plusieurs dossiers 10x, `.rds` ou `.h5` peuvent être importés dans une même session (Options A et B de l'import Single-Cell). Chaque import devient un échantillon distinct (`orig.ident`) ; dès que ≥ 2 échantillons sont chargés, un aperçu récapitulatif (échantillon, cellules, gènes, condition/batch si détectables) confirme visuellement la reconnaissance des entités.
+- **Correction de batch** : Harmony est appliquée automatiquement sur l'identité d'échantillon (`orig.ident`) dès que ≥ 2 échantillons sont détectés — choisir « Harmony » comme méthode de réduction du pipeline.
+- **Compatibilité aval** : pseudobulk, Milo et scCODA exploitent l'identité d'échantillon pour éviter la pseudo-réplication (l'unité de réplication est l'échantillon, jamais la cellule — voir la validation du plan expérimental dans « Abondance cellulaire »).
+
 - **Scalabilité consciente de la mémoire** : workflows de sketch Seurat v5 (`SketchData` avec LeverageScore, `ProjectData`), gestion compatible BPCells, mise à l’échelle ciblée des variables et sous-échantillonnage stratifié pour les explorations coûteuses.
 - **Annotation et exploration** : annotation automatique des types cellulaires via SingleR (références celldex), recherche de marqueurs (`FindAllMarkers`), corrélation génique, analyse de voies et visualisations variées (embeddings, FeaturePlots, violons, DotPlots, heatmaps, vues ridge/empilées).
 - **Vitesse ARN** : import strict de données de vélocité pré-préparées (matrices spliced/unspliced et résultats/vecteurs compatibles) alignées sur l'objet Seurat. L'application effectue des contrôles de cohérence multi-états, fournit des visualisations phase-portrait et vectorielles, et exporte PNG/PDF/CSV. Elle visualise des résultats validés sans recalculer silencieusement un modèle de vélocité.
@@ -386,6 +395,15 @@ TranscriptoShiny provides dedicated, modular environments for three primary tran
 - **Standard pipeline**: QC, normalization, highly variable feature selection, PCA, neighbor graph construction, clustering, UMAP, and optional t-SNE. Available as a **1-click automatic pipeline** (panel 0: optional ID mapping, QC, normalization/PCA/clustering/UMAP, t-SNE, then optional steps SingleR annotation, markers, gene correlation, ORA on top markers, trajectory) or panel-by-panel in guided mode.
 > The Single-Cell interface groups its panels into five parent sections (Preparation / Analysis / Dynamics / Cell abundance / Deliverables). RNA velocity, cell–cell communication, and differential abundance require specific prerequisites and remain outside the automatic pipeline.
 - **Batch correction**: Harmony-based integration when multiple samples or batches are present.
+
+#### Multi-sample single-cell
+
+The Single-Cell workflow is natively multi-sample (e.g. Control vs Treatment, Day 0 vs Day 10 — each sample is handled as a distinct entity, like the Spatial module):
+
+- **Batched import**: multiple 10x folders, `.rds`, or `.h5` files can be imported in one session (Options A and B of the Single-Cell import). Each import becomes a distinct sample (`orig.ident`); as soon as ≥ 2 samples are loaded, a summary overview (sample, cells, genes, condition/batch when detectable) provides immediate visual confirmation that samples are recognized as distinct entities.
+- **Batch correction**: Harmony is automatically applied on sample identity (`orig.ident`) as soon as ≥ 2 samples are detected — select "Harmony" as the pipeline reduction method.
+- **Downstream compatibility**: pseudobulk, Milo, and scCODA leverage sample identity to avoid pseudoreplication (the replication unit is the sample, never the cell — see the experimental-design validation in "Cell abundance").
+
 - **Memory-aware scaling**: Seurat v5 sketch workflows (`SketchData` with LeverageScore, `ProjectData`), BPCells-aware handling, targeted feature scaling, and stratified subsampling for costly exploratory tasks.
 - **Annotation & exploration**: Automatic cell-type annotation via SingleR (celldex references), marker discovery (`FindAllMarkers`), gene correlation, pathway analysis, and diverse visualizations (embeddings, feature plots, violins, dot plots, heatmaps, ridge/stacked views).
 - **RNA velocity**: strict import of pre-prepared velocity data (spliced/unspliced matrices and compatible results/vectors) aligned to the Seurat object. The app performs multi-state consistency checks, provides phase-portrait and vector visualizations, and exports PNG/PDF/CSV. It visualizes validated results without silently re-computing a velocity model.
