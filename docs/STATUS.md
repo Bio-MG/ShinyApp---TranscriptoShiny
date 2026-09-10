@@ -1,5 +1,8 @@
 # STATUS.md — Source de vérité unique de l'état des chantiers
 
+> **Point d'entrée / navigation** : `docs/ROADMAP.md` (orchestrateur) — il dit
+> quoi lire et dans quel ordre. Ce fichier-ci ne décrit que l'**état**.
+>
 > **Ce fichier fait foi.** Les roadmaps décrivent l'*intention* ; ce fichier
 > décrit l'*état réel* (ce qui est commité, ce qui est ouvert, ce qui est
 > bloqué). En cas de contradiction entre une roadmap et ce fichier, **ce
@@ -10,8 +13,11 @@
 > Mis à jour à la fin de chaque session, dans le même commit que le travail.
 
 **Branche** : `main` (travail direct sur main, décision utilisateur).
-**Dernier commit de référence** : `4dee553` — feat(plots): ggrepel volcano,
-300dpi, pdf export, stat subtitles (PLOT-Q1..Q5).
+**Dernier commit fonctionnel de référence** : `4dee553` — feat(plots): ggrepel
+volcano, 300dpi, pdf export, stat subtitles (PLOT-Q1..Q5).
+**Dernière consolidation documentaire** : commit `docs(status):` — création de
+`docs/STATUS.md` et `docs/ROADMAP.md` (index + état), dé-obsolescence des
+roadmaps (voir `git log --oneline -- docs/`).
 
 ---
 
@@ -93,7 +99,20 @@ Lots 0/1/2/3A/4A/6A/5 **exécutés** (preuve §1). Restent :
 - **Libellés techniques des modules enfants Spatial** (Moran, niches…) —
   volontairement intouchés lors des passes UX.
 
-### 2g. Bulk V2 / batch-QC — ⚠️ sans roadmap
+### 2g. Single-Cell — « double jeu de données » (direction produit, non démarré)
+
+Intention utilisateur : deux fichiers chargés, avec **trois relations
+déclarées** — analyses séparées à paramètres **partagés**, analyses séparées à
+paramètres **distincts**, ou **fusion** quand ce sont des réplicats.
+Détail dans `docs/ROADMAP.md` §4 (« Principe double jeu de données »).
+
+*État réel* : l'app **fusionne toujours** les imports multiples
+(`merge()` + `add.cell.ids` dans `mod_import_sc.R`, chaque import devenant un
+`orig.ident` ; Harmony automatique dès ≥ 2 échantillons). Les modes
+« séparés » n'existent pas. C'est une **évolution**, pas un correctif — donc
+proposition explicite avant exécution (règle du dépôt).
+
+### 2h. Bulk V2 / batch-QC — ⚠️ sans roadmap
 
 Travail en cours **non commité** dans l'arbre (voir §5). Il n'appartient à
 aucune des quatre roadmaps : c'est un chantier sans document de pilotage.
@@ -116,6 +135,13 @@ de gènes < 20 % après strip des suffixes Ensembl `.1/.2`.
 
 ## 3. 4D-3 — décision et contrat d'entrée upstream
 
+> **Analyse de faisabilité détaillée** :
+> `docs/proposals/CCC_DATA_PATH_ASSESSMENT.md` — conclusion : le format 10X
+> n'est **pas** le blocage (c'est déjà l'entrée naturelle de CellChat, et
+> l'app sait déjà lire 10X). Pas besoin de fastq pour tester. Les vrais
+> blocages sont : étiquettes de population, contrat upstream, dépendance
+> CellChat absente de `renv.lock`.
+
 **Décision (2026-09-10)** : l'application upstream (fasta/fastq bruts → données
 pour Cerberus) est **en cours de développement par l'utilisateur**. Décision
 retenue : **ne pas démarrer les phases CCC 5–6 ni 4D-3 maintenant.**
@@ -124,6 +150,12 @@ retenue : **ne pas démarrer les phases CCC 5–6 ni 4D-3 maintenant.**
 son **contrat d'entrée n'est pas gelé**. Construire contre une cible mouvante
 produirait du code à jeter — et la règle du dépôt (« ne PAS démarrer avant que
 le contrat d'entrée upstream soit connu ») l'interdit explicitement.
+
+**Piste pour avancer sans attendre** (détail dans l'assessment §5) : importer
+des **résultats CCC produits à l'extérieur** (CellChat/CellPhoneDB tournés hors
+app) = extension du contrat Stage 11, sans fastq, sans contrat upstream, sans
+dépendance nouvelle. Permet de valider toute la chaîne d'analyse/visualisation
+CCC sur des données réelles dès maintenant.
 
 **Ce qu'il faut obtenir de l'app upstream pour débloquer** (à figer côté
 upstream, puis recopier ici) :
@@ -161,7 +193,7 @@ supplémentaire). Milo est le candidat réaliste.
 
 ## 5. État de l'arbre de travail (WIP à ne pas committer sans accord)
 
-Non commité au 2026-09-10 (chantier Bulk V2 / batch-QC, cf. §2g) :
+Non commité au 2026-09-10 (chantier Bulk V2 / batch-QC, cf. §2h) :
 
 ```
  M app.R, config/thresholds.R, i18n/translation.json,
@@ -202,4 +234,24 @@ Contradictions relevées le 2026-09-10 et leur résolution :
 5. **`kanban_roadmap.html` sans statut persistant** — la carte s'annonçait
    « statuts en mémoire, pas de stockage persistant », donc PLOT-Q livré
    réapparaissait en « backlog » à chaque rechargement. Corrigé : statuts
-   initiaux semés depuis ce fichier + persistance `localStorage`.
+   initiaux semés depuis ce fichier (`DEFAULT_STATUS`, PLOT-Q1..Q5 = done).
+   **Pas de persistance des clics** (décision) : le kanban est un miroir
+   *visuel* en lecture seule de ce fichier — s'il mémorisait les clics, un clic
+   périmé pourrait masquer une mise à jour de `STATUS.md`. « Réinitialiser »
+   restaure l'état du dépôt.
+
+## 7. Structure documentaire — point à trancher
+
+`docs/` est **volontairement gitignoré** (décision utilisateur) : roadmaps et
+instructions d'agents restent locales et non suivies. C'est défendable pour la
+documentation de pilotage.
+
+**Exception à considérer** : `docs/contracts/*.md` (13 contrats gelés). La
+règle du dépôt (`AGENTS.md`) impose qu'un changement de contrat soit livré
+**code + freeze test + doc simultanément**. Si le contrat n'est pas versionné,
+cette règle est mécaniquement inapplicable. C'est le seul endroit où le
+`.gitignore` contredit une règle écrite du dépôt. Décision en attente.
+
+Note : `docs/STATUS.md` et `docs/ROADMAP.md` ont été **forcés** dans le suivi
+git (`git add -f`) car ils constituent l'index et l'état — mais tout le reste
+de `docs/` reste ignoré. `docs/kanban_roadmap.html` reste **non suivi**.
