@@ -19,6 +19,11 @@ volcano, 300dpi, pdf export, stat subtitles (PLOT-Q1..Q5).
 `docs/STATUS.md` et `docs/ROADMAP.md` (index + état), dé-obsolescence des
 roadmaps (voir `git log --oneline -- docs/`).
 
+> **▶ PROCHAINE ÉTAPE** : **STAT-Q1 → STAT-Q4** (padj configurable, `lfcSE`,
+> note Cook, Excel pathways). Périmètre détaillé, ancres vérifiées dans le
+> dépôt, décisions à trancher et prompt prêt à coller :
+> **`docs/ROADMAP_HANDOFF_NEXT.md`**. Rien à fournir côté données.
+
 ---
 
 ## 1. Chantiers livrés (ne pas refaire)
