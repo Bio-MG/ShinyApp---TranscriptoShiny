@@ -1081,6 +1081,79 @@ plot_sample_correlation_heatmap <- function(vst_matrix, metadata = NULL,
 
 
 
+#' Compte les genes exclus du test differentiel (STAT-Q3)
+
+#'
+
+#' DESeq2 exclut des genes du test sans que l'utilisateur le voie : `pvalue`
+
+#' mise a NA pour les outliers de distance de Cook (un echantillon aberrant
+
+#' domine l'ajustement) et pour les genes non exprimes (`baseMean` nul) ; `padj`
+
+#' mise a NA par le filtrage independant (genes de trop faible expression pour
+
+#' que le test ait une chance d'etre significatif APRES correction).
+
+#'
+
+#' L'information est deja presente dans l'objet DESeqResults — cette fonction ne
+
+#' fait que la rendre lisible. Volontairement PURE (aucune dependance a
+
+#' DESeq2 ni a Shiny) : elle travaille sur le data.frame de resultats deja
+
+#' stocke dans `shared_rv$contrasts`, donc utilisable aussi bien par l'UI que par
+
+#' le rapport.
+
+#'
+
+#' Distinction Cook / non exprime : un gene dont `baseMean > 0` et dont la
+
+#' `pvalue` est NA a ete ecarte PAR le filtrage Cook ; un gene de `baseMean` nul
+
+#' n'est pas un outlier, il n'etait simplement pas testable. Confondre les deux
+
+#' ferait afficher « outliers Cook » pour des genes jamais exprimes.
+
+#'
+
+#' @param res_df data.frame de resultats DE (colonnes `pvalue`, `padj` ;
+
+#'   `baseMean` optionnelle).
+
+#' @return liste de compteurs entiers : `n_total`, `n_tested`, `n_excluded`
+
+#'   (= `n_cooks` + `n_zero`), `n_cooks`, `n_zero`, `n_filtered`.
+
+de_exclusion_counts <- function(res_df) {
+  if (is.null(res_df) || nrow(res_df) == 0) {
+    return(list(n_total = 0L, n_tested = 0L, n_excluded = 0L,
+                n_cooks = 0L, n_zero = 0L, n_filtered = 0L))
+  }
+
+  pv <- res_df$pvalue
+  bm <- if ("baseMean" %in% colnames(res_df)) res_df$baseMean else rep(NA_real_, nrow(res_df))
+  pa <- if ("padj"     %in% colnames(res_df)) res_df$padj     else rep(NA_real_, nrow(res_df))
+
+  na_p <- is.na(pv)
+
+  # Cook : pvalue NA alors que le gene EST exprime.
+  n_cooks <- sum(na_p & !is.na(bm) & bm > 0)
+  # Non exprime : baseMean nul ou absent => hors test, pas un outlier.
+  n_zero  <- sum(na_p & (is.na(bm) | bm == 0))
+  # Filtrage independant : pvalue calculee mais padj retiree.
+  n_filtered <- sum(!na_p & is.na(pa))
+
+  list(n_total    = nrow(res_df),
+       n_tested   = sum(!na_p),
+       n_excluded = sum(na_p),
+       n_cooks    = as.integer(n_cooks),
+       n_zero     = as.integer(n_zero),
+       n_filtered = as.integer(n_filtered))
+}
+
 #' Standardized DE results DT table (shared by mod_bulk.R Shiny render AND the
 
 #' bulk HTML/PDF report). Centralizing this fixes a real bug: the report's

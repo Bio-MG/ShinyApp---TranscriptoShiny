@@ -23,6 +23,9 @@ source_project_file("R/bulk/bulk_report_engine.R")
 # logique de domaine). On source le fichier uniquement pour définir la fonction
 # pure : il n'a aucun effet de bord au chargement (que des définitions).
 source_project_file("modules/bulk_de/mod_bulk_de_viz.R")
+# STAT-Q3 : .de_exclusion_clauses() est du libelle d'interface (clés i18n), donc
+# dans le module — on le source pour le tester sans monter de session Shiny.
+source_project_file("modules/bulk_de/mod_bulk_de_engine.R")
 
 #' Jeu jouet : 120 gènes × 6 échantillons, effet biologique réel sur 30 gènes.
 #' Sans effet, tous les padj valent 1 et « BH vs bonferroni » ne se distingue pas.
@@ -47,6 +50,29 @@ source_project_file("modules/bulk_de/mod_bulk_de_viz.R")
   d <- .toy_bulk(...)
   suppressWarnings(
     build_dds(d$counts, d$meta, design_formula = "~ condition", run_deseq = TRUE)
+  )
+}
+
+# Même jeu, plus un échantillon ABERRANT (un seul gène à 100000 dans un seul
+# échantillon KO) : DESeq2 écarte alors ce gène du test via la distance de Cook
+# (pvalue NA). Sert à prouver STAT-Q3 bout en bout, sur un vrai ajustement.
+.toy_dds_with_outlier <- function(seed = 7L, n_genes = 300L, n_per_group = 4L) {
+  skip_if_not_installed("DESeq2")
+  set.seed(seed)
+  n_samp <- 2L * n_per_group
+  counts <- matrix(stats::rpois(n_genes * n_samp, lambda = 80),
+                   nrow = n_genes, ncol = n_samp)
+  rownames(counts) <- paste0("gene", seq_len(n_genes))
+  colnames(counts) <- paste0("s", seq_len(n_samp))
+  counts[seq_len(30), seq_len(n_per_group)] <-
+    counts[seq_len(30), seq_len(n_per_group)] * 4L
+  counts[31, n_per_group + 1L] <- 100000L   # outlier Cook sur un gène KO
+  meta <- data.frame(
+    condition = factor(rep(c("WT", "KO"), each = n_per_group), levels = c("WT", "KO")),
+    row.names = colnames(counts)
+  )
+  suppressWarnings(
+    build_dds(counts, meta, design_formula = "~ condition", run_deseq = TRUE)
   )
 }
 
@@ -277,4 +303,90 @@ test_that(".de_volcano_hover appends 'SE:' only when lfcSE is available", {
   expect_false(grepl("SE:", na_se$hover[1], fixed = TRUE))
   expect_true(grepl("SE: 0.5", na_se$hover[2], fixed = TRUE))
   expect_true(grepl("Statut: Up", na_se$hover[1], fixed = TRUE))
+})
+
+# =============================================================================
+# STAT-Q3 — note « outliers Cook's distance / filtrage automatique »
+# =============================================================================
+
+test_that("de_exclusion_counts separates Cook outliers, non-expressed genes and filtering", {
+  # g2/g5 : baseMean 0            -> non exprimés, PAS des outliers Cook
+  # g4     : pvalue NA, baseMean>0 -> outlier Cook
+  # g3     : pvalue présente, padj NA -> filtrage indépendant
+  df <- data.frame(
+    gene     = paste0("g", 1:6),
+    baseMean = c(100, 0, 50, 80, 0, 120),
+    pvalue   = c(0.01, NA, 0.04, NA, NA, 0.5),
+    padj     = c(0.05, NA, NA, NA, NA, 0.6),
+    stringsAsFactors = FALSE
+  )
+  cts <- de_exclusion_counts(df)
+  expect_identical(cts$n_total,    6L)
+  expect_identical(cts$n_tested,   3L)   # g1, g3, g6
+  expect_identical(cts$n_excluded, 3L)   # g2, g4, g5
+  expect_identical(cts$n_cooks,    1L)
+  expect_identical(cts$n_zero,     2L)
+  expect_identical(cts$n_filtered, 1L)
+  # Invariant : ce qui est exclu du test = Cook + non exprimés.
+  expect_identical(cts$n_excluded, cts$n_cooks + cts$n_zero)
+  expect_identical(cts$n_tested, cts$n_total - cts$n_excluded)
+})
+
+test_that("de_exclusion_counts never calls a gene an outlier without a baseMean", {
+  # edgeR/limma : pas de colonne baseMean. On ne peut donc PAS distinguer un
+  # outlier d'un gène non exprimé — dans le doute on ne prétend pas « Cook ».
+  df <- data.frame(pvalue = c(0.01, NA, 0.2), padj = c(0.03, NA, NA))
+  cts <- de_exclusion_counts(df)
+  expect_identical(cts$n_total,    3L)
+  expect_identical(cts$n_cooks,    0L)
+  expect_identical(cts$n_zero,     1L)
+  expect_identical(cts$n_filtered, 1L)
+})
+
+test_that("de_exclusion_counts is safe on NULL / empty / all-NA results", {
+  for (x in list(NULL,
+                 data.frame(gene = character(0), pvalue = numeric(0), padj = numeric(0)),
+                 data.frame(pvalue = NA_real_, padj = NA_real_))) {
+    cts <- de_exclusion_counts(x)
+    expect_type(cts, "list")
+    expect_true(all(c("n_total", "n_tested", "n_excluded", "n_cooks",
+                      "n_zero", "n_filtered") %in% names(cts)))
+    expect_identical(cts$n_cooks, 0L)
+  }
+  expect_identical(de_exclusion_counts(NULL)$n_total, 0L)
+  expect_identical(de_exclusion_counts(NULL)$n_excluded, 0L)
+})
+
+test_that("de_exclusion_counts surfaces a REAL DESeq2 Cook's-distance exclusion", {
+  # Bout en bout : on injecte un échantillon aberrant (count 100000 sur un seul
+  # gène d'un seul échantillon KO) et on vérifie que DESeq2 l'écarte bien du test
+  # (pvalue NA) — c'est la donnée que STAT-Q3 rend visible à l'utilisateur.
+  dds <- .toy_dds_with_outlier()
+  res <- extract_deseq2_contrast(dds, "condition", "KO", "WT")
+  cts <- de_exclusion_counts(res)
+  expect_gt(cts$n_cooks, 0L)
+  expect_identical(cts$n_excluded, cts$n_cooks + cts$n_zero)
+  expect_gt(cts$n_tested, 0L)
+})
+
+test_that(".de_exclusion_clauses omits zero clauses and carries the counts", {
+  expect_length(.de_exclusion_clauses(list(n_cooks = 0L, n_zero = 0L, n_filtered = 0L)), 0)
+
+  cl <- .de_exclusion_clauses(list(n_cooks = 3L, n_zero = 0L, n_filtered = 7L))
+  expect_length(cl, 2)
+  expect_identical(cl[[1]]$n, 3L)
+  expect_true(grepl("Cook", cl[[1]]$key, fixed = TRUE))
+  expect_identical(cl[[2]]$n, 7L)
+  expect_true(grepl("filtrage ind", cl[[2]]$key, fixed = TRUE))
+  # Convention i18n du projet : la clé EST le texte français, et le compteur
+  # passe par un placeholder {n} que .t_fmt() remplit au rendu.
+  expect_true(all(vapply(cl, function(x) grepl("{n}", x$key, fixed = TRUE), logical(1))))
+})
+
+test_that(".de_exclusion_clauses is safe on NULL / partial counts", {
+  expect_length(.de_exclusion_clauses(NULL), 0)
+  expect_length(.de_exclusion_clauses(list()), 0)
+  # Un compteur à 0 ne produit pas de clause, même entouré de compteurs absents.
+  expect_length(.de_exclusion_clauses(list(n_zero = 0L)), 0)
+  expect_length(.de_exclusion_clauses(list(n_zero = 2L)), 1)
 })

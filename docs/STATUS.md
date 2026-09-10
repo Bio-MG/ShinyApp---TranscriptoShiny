@@ -60,7 +60,7 @@ Aucun blocage. Séquençables indépendamment du reste.
 |---|---|---|
 | ✅ STAT-Q1 | Choix méthode correction multiple (BH/BY/bonferroni/holm) | S |
 | ✅ STAT-Q2 | Afficher `lfcSE` (déjà calculé par DESeq2) | S |
-| STAT-Q3 | Note outliers Cook's distance | S |
+| ✅ STAT-Q3 | Note outliers Cook's distance | S |
 | STAT-Q4 | Export Excel pour les pathways | S |
 | STAT-S1 | ComBat-seq (dépendance `sva`) dans Filtrage | L |
 | STAT-S2 | Réseau d'enrichissement (`emapplot`/`cnetplot`) | M |
