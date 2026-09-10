@@ -1098,6 +1098,8 @@ plot_sample_correlation_heatmap <- function(vst_matrix, metadata = NULL,
 #'
 
 #' @param df DE results data.frame (must have gene, baseMean, log2FoldChange, pvalue, padj).
+#'   An optional `lfcSE` column is surfaced as-is when present (DESeq2 only —
+#'   STAT-Q2); edgeR/limma results simply render without it.
 
 #' @return A DT::datatable object.
 
@@ -1111,13 +1113,20 @@ build_de_results_dt <- function(df) {
 
     Log2FC   = round(df$log2FoldChange, 3),
 
-    PValue   = format(df$pvalue, scientific = TRUE, digits = 3),
-
-    Padj     = format(df$padj,   scientific = TRUE, digits = 3),
-
     stringsAsFactors = FALSE
 
   )
+
+  # STAT-Q2 : lfcSE (erreur standard du log2FC) est fourni par DESeq2 — par
+  # results() ET par lfcShrink() — mais il est ABSENT des sorties edgeR
+  # (topTags) et limma (topTable). On ne l'affiche donc que lorsque la colonne
+  # existe réellement : dégradation gracieuse, jamais une colonne entièrement
+  # NA qui laisserait croire à un échec du calcul.
+  if ("lfcSE" %in% colnames(df)) df_display[["lfcSE"]] <- round(df$lfcSE, 3)
+
+  df_display[["PValue"]] <- format(df$pvalue, scientific = TRUE, digits = 3)
+
+  df_display[["Padj"]]   <- format(df$padj,   scientific = TRUE, digits = 3)
 
   DT::datatable(df_display, filter = "top", rownames = FALSE,
 

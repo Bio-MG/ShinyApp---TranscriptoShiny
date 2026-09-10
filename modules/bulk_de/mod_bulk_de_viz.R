@@ -20,6 +20,29 @@
 #   manual_color_picker_ui(), .default_manual_colors().
 # =============================================================================
 
+#' Texte de survol du volcano (STAT-Q2)
+#'
+#' Construit la colonne `hover` consommée par plotly. Isolé du serveur pour
+#' deux raisons : (1) la logique de dégradation — `lfcSE` n'existe que pour
+#' DESeq2 — mérite d'être testée explicitement, hors session Shiny ; (2) une
+#' référence à une colonne absente DANS la formule plotly ferait échouer le
+#' rendu, alors qu'ici le texte est construit en R avant l'appel.
+#'
+#' @param res data.frame de résultats DE (colonnes gene, log2FoldChange, padj,
+#'   status ; `lfcSE` optionnel).
+#' @return `res` avec une colonne `hover` (character) ajoutée.
+.de_volcano_hover <- function(res) {
+  se_txt <- if ("lfcSE" %in% names(res)) {
+    se_val <- round(res$lfcSE, 3)
+    ifelse(is.na(se_val), "", paste0("<br>SE: ", se_val))
+  } else rep("", nrow(res))
+  res$hover <- paste0("<b>", res$gene, "</b><br>Log2FC: ", round(res$log2FoldChange, 3),
+                      se_txt,
+                      "<br>-log10(padj): ", round(-log10(res$padj + 1e-300), 2),
+                      "<br>Statut: ", res$status)
+  res
+}
+
 .de_viz_server <- function(input, output, session, ns, global_data, shared_rv) {
 
   .tr <- function(key) {
@@ -160,13 +183,15 @@
     )
     color_map <- volcano_role_colors()
 
+    # STAT-Q2 : texte de survol (ajoute SE: <lfcSE> quand DESeq2 l'a fourni —
+    # jamais pour edgeR/limma). Voir .de_volcano_hover() en tête de fichier.
+    res <- .de_volcano_hover(res)
+
     plot_ly(
       data = res, x = ~log2FoldChange, y = ~-log10(padj + 1e-300),
       type = "scatter", mode = "markers",
       marker = list(color = ~color_map[status], size = 6, opacity = 0.75, line = list(width = 0)),
-      hovertext = ~paste0("<b>", gene, "</b><br>Log2FC: ", round(log2FoldChange, 3),
-                          "<br>-log10(padj): ", round(-log10(padj + 1e-300), 2),
-                          "<br>Statut: ", status),
+      hovertext = ~hover,
       hoverinfo = "text"
     ) |>
       layout(
