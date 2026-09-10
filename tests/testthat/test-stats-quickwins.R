@@ -390,3 +390,55 @@ test_that(".de_exclusion_clauses is safe on NULL / partial counts", {
   expect_length(.de_exclusion_clauses(list(n_zero = 0L)), 0)
   expect_length(.de_exclusion_clauses(list(n_zero = 2L)), 1)
 })
+
+# =============================================================================
+# STAT-Q4 — export Excel (avec repli CSV) partagé
+# =============================================================================
+
+test_that("write_table_excel_or_csv writes a real table that can be re-read", {
+  skip_if_not_installed("openxlsx")
+  df <- data.frame(gene = c("g1", "g2"), log2FoldChange = c(1.5, -2),
+                   padj = c(0.001, 0.4), stringsAsFactors = FALSE)
+  f  <- tempfile(fileext = ".xlsx")
+  on.exit(unlink(f), add = TRUE)
+
+  ret <- write_table_excel_or_csv(df, f)
+  expect_identical(ret, f)                 # renvoie le chemin, invisiblement
+  expect_true(file.exists(f))
+  expect_gt(file.size(f), 0)
+
+  back <- openxlsx::read.xlsx(f)
+  expect_equal(back$gene, df$gene)
+  expect_equal(back$log2FoldChange, df$log2FoldChange)
+  expect_equal(back$padj, df$padj)
+})
+
+test_that("write_table_excel_or_csv survives a 0-row table (no crash on empty result)", {
+  skip_if_not_installed("openxlsx")
+  f <- tempfile(fileext = ".xlsx")
+  on.exit(unlink(f), add = TRUE)
+  expect_silent(write_table_excel_or_csv(
+    data.frame(gene = character(0), padj = numeric(0)), f))
+  expect_true(file.exists(f))
+})
+
+test_that("write_table_excel_or_csv refuses NULL (nothing to export)", {
+  f <- tempfile(fileext = ".xlsx")
+  on.exit(unlink(f), add = TRUE)
+  expect_error(write_table_excel_or_csv(NULL, f), "Aucune table")
+})
+
+test_that("the pathway Excel export and the DE Excel export share one writer", {
+  # Garantit qu'on n'a PAS reintroduit deux implementations divergentes : les
+  # deux downloadHandler doivent passer par le helper commun.
+  for (f in c("modules/bulk/mod_bulk_pathways.R", "modules/bulk_de/mod_bulk_de_viz.R")) {
+    src <- readLines(file.path(ts_project_root(), f), warn = FALSE)
+    expect_true(any(grepl("write_table_excel_or_csv", src, fixed = TRUE)),
+                info = f)
+  }
+  # Le nom de fichier annonce le format réellement écrit dans les deux cas.
+  for (f in c("modules/bulk/mod_bulk_pathways.R", "modules/bulk_de/mod_bulk_de_viz.R")) {
+    src <- paste(readLines(file.path(ts_project_root(), f), warn = FALSE), collapse = "\n")
+    expect_true(grepl('.xlsx" else ".csv"', src, fixed = TRUE), info = f)
+  }
+})

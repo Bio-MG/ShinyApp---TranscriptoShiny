@@ -417,14 +417,14 @@
     content  = function(file) { req(active_de_results()); write.csv(active_de_results(), file, row.names = FALSE) }
   )
   output$dl_de_excel <- downloadHandler(
-    filename = function() paste0("DE_", shared_rv$active_contrast, "_", Sys.Date(), ".xlsx"),
+    # STAT-Q4 : l'extension suit le format REELLEMENT ecrit par le helper
+    # partage (openxlsx si dispo, sinon CSV) — avant, un CSV pouvait se
+    # retrouver nomme .xlsx quand openxlsx manquait.
+    filename = function() paste0("DE_", shared_rv$active_contrast, "_", Sys.Date(),
+                                 if (requireNamespace("openxlsx", quietly = TRUE)) ".xlsx" else ".csv"),
     content  = function(file) {
       req(active_de_results())
-      if (requireNamespace("openxlsx", quietly = TRUE)) {
-        openxlsx::write.xlsx(active_de_results(), file)
-      } else {
-        write.csv(active_de_results(), file, row.names = FALSE)
-      }
+      write_table_excel_or_csv(active_de_results(), file)
     }
   )
 }

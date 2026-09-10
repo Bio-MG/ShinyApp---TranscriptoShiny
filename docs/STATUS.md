@@ -19,10 +19,12 @@ volcano, 300dpi, pdf export, stat subtitles (PLOT-Q1..Q5).
 `docs/STATUS.md` et `docs/ROADMAP.md` (index + état), dé-obsolescence des
 roadmaps (voir `git log --oneline -- docs/`).
 
-> **▶ PROCHAINE ÉTAPE** : **STAT-Q1 → STAT-Q4** (padj configurable, `lfcSE`,
-> note Cook, Excel pathways). Périmètre détaillé, ancres vérifiées dans le
-> dépôt, décisions à trancher et prompt prêt à coller :
-> **`docs/ROADMAP_HANDOFF_NEXT.md`**. Rien à fournir côté données.
+> **▶ PROCHAINE ÉTAPE** : **STAT-Q1 → STAT-Q4 : ✅ TERMINÉ** (padj configurable,
+> `lfcSE`, note Cook, Excel pathways) — voir
+> **`docs/ROADMAP_HANDOFF_STAGE_STAT_Q.md`** (rapport de stage 6 sections) et
+> `docs/ROADMAP_HANDOFF_NEXT.md` (handoff). Suite possible : `PLOT-S*`
+> (`stat-quickwins` est fait, `plot-shared-helpers` peut démarrer). Rien à
+> fournir côté données.
 
 ---
 
@@ -61,7 +63,7 @@ Aucun blocage. Séquençables indépendamment du reste.
 | ✅ STAT-Q1 | Choix méthode correction multiple (BH/BY/bonferroni/holm) | S |
 | ✅ STAT-Q2 | Afficher `lfcSE` (déjà calculé par DESeq2) | S |
 | ✅ STAT-Q3 | Note outliers Cook's distance | S |
-| STAT-Q4 | Export Excel pour les pathways | S |
+| ✅ STAT-Q4 | Export Excel pour les pathways | S |
 | STAT-S1 | ComBat-seq (dépendance `sva`) dans Filtrage | L |
 | STAT-S2 | Réseau d'enrichissement (`emapplot`/`cnetplot`) | M |
 | STAT-S3 | Pattern/profile clustering (kmeans MVP, Mfuzz en v2) | L |
