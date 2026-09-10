@@ -54,11 +54,11 @@ Aucun blocage. Séquençables indépendamment du reste.
 | PLOT-S5 | Export SVG (`svglite`) | PLOT-S2 | S |
 | PLOT-S6 | Toggle plotly étendu à SC/Spatial | — | M |
 
-### 2b. Prêts à démarrer — statistiques (`ROADMAP_presentation_stats.md` §4)
+### 2b. Statistiques (`ROADMAP_presentation_stats.md` §4)
 
 | ID | Contenu | Effort |
 |---|---|---|
-| STAT-Q1 | Choix méthode correction multiple (BH/BY/bonferroni/holm) | S |
+| ✅ STAT-Q1 | Choix méthode correction multiple (BH/BY/bonferroni/holm) | S |
 | STAT-Q2 | Afficher `lfcSE` (déjà calculé par DESeq2) | S |
 | STAT-Q3 | Note outliers Cook's distance | S |
 | STAT-Q4 | Export Excel pour les pathways | S |

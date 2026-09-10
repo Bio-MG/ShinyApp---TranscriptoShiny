@@ -192,15 +192,27 @@ if (!exists("check_design_confounding", envir = .GlobalEnv) ||
 
 #' @param alpha Significance threshold passed to results().
 
+#' @param p_adjust_method Méthode de correction pour tests multiples ("BH",
+#'   "BY", "bonferroni", "holm", ... — voir stats::p.adjust.methods).
+#'   Défaut "BH" : comportement historique strictement inchangé.
+
 #' @return data.frame: gene, baseMean, log2FoldChange, pvalue, padj, ...
 
 extract_deseq2_contrast <- function(dds, condition_col, group_target, group_ref,
 
-                                     shrink = TRUE, alpha = 0.05) {
+                                     shrink = TRUE, alpha = 0.05,
+                                     p_adjust_method = "BH") {
+
+  # STAT-Q1 : la correction pour tests multiples est appliquée ICI, par
+  # results(). Conséquence voulue : re-appeler cette fonction sur un dds DÉJÀ
+  # ajusté suffit à recalculer padj avec une autre méthode SANS relancer
+  # DESeq() — c'est le mécanisme du recalcul « live » de l'onglet DE.
+  p_adjust_method <- match.arg(p_adjust_method, stats::p.adjust.methods)
 
   contrast_vec <- c(condition_col, group_target, group_ref)
 
-  res <- DESeq2::results(dds, contrast = contrast_vec, alpha = alpha)
+  res <- DESeq2::results(dds, contrast = contrast_vec, alpha = alpha,
+                         pAdjustMethod = p_adjust_method)
 
 
 
@@ -245,7 +257,9 @@ extract_deseq2_contrast <- function(dds, condition_col, group_target, group_ref,
 #' edgeR fallback differential expression (2-group comparison)
 
 run_edger_de <- function(counts_matrix, metadata, condition_col, group_target, group_ref,
-                         covariates = character(0)) {
+                         covariates = character(0), p_adjust_method = "BH") {
+
+  p_adjust_method <- match.arg(p_adjust_method, stats::p.adjust.methods)
 
   if (!requireNamespace("edgeR", quietly = TRUE)) stop("Package 'edgeR' requis.")
 
@@ -295,7 +309,7 @@ run_edger_de <- function(counts_matrix, metadata, condition_col, group_target, g
 
 
 
-  res <- edgeR::topTags(qlf, n = Inf)$table
+  res <- edgeR::topTags(qlf, n = Inf, adjust.method = p_adjust_method)$table
 
   res$gene <- rownames(res)
 
@@ -303,7 +317,14 @@ run_edger_de <- function(counts_matrix, metadata, condition_col, group_target, g
 
   colnames(res)[colnames(res) == "PValue"] <- "pvalue"
 
+  # edgeR nomme la colonne ajustée "FDR" pour BH/BY mais "FWER" pour
+  # bonferroni/holm/hochberg/hommel (vérifié empiriquement le 2026-09-10).
+  # Les deux doivent être ramenées à "padj" : sinon .normalize_de_cols()
+  # ajouterait une colonne padj entièrement NA et le résultat non-BH
+  # paraîtrait silencieusement « non testé ».
   colnames(res)[colnames(res) == "FDR"]    <- "padj"
+
+  colnames(res)[colnames(res) == "FWER"]   <- "padj"
 
   res[order(res$padj), ]
 
@@ -314,7 +335,12 @@ run_edger_de <- function(counts_matrix, metadata, condition_col, group_target, g
 #' limma-voom fallback differential expression (2-group comparison)
 
 run_limma_voom_de <- function(counts_matrix, metadata, condition_col, group_target, group_ref,
-                              covariates = character(0)) {
+                              covariates = character(0), p_adjust_method = "BH") {
+
+  # STAT-Q1 : limma::topTable(adjust.method=) accepte toute valeur de
+  # stats::p.adjust.methods ; la colonne ajustée reste "adj.P.Val" quel que
+  # soit le choix (contrairement à edgeR, voir run_edger_de()).
+  p_adjust_method <- match.arg(p_adjust_method, stats::p.adjust.methods)
 
   missing_pkgs <- c(
 
@@ -376,7 +402,8 @@ run_limma_voom_de <- function(counts_matrix, metadata, condition_col, group_targ
 
 
 
-  res <- limma::topTable(fit, coef = 2, number = Inf, sort.by = "P")
+  res <- limma::topTable(fit, coef = 2, number = Inf, sort.by = "P",
+                         adjust.method = p_adjust_method)
 
   res$gene <- rownames(res)
 
@@ -398,7 +425,7 @@ run_bulk_de_dispatch <- function(engine, counts_matrix, metadata, condition_col,
 
                                   group_target, group_ref, dds = NULL, shrink = TRUE,
 
-                                  covariates = character(0)) {
+                                  covariates = character(0), p_adjust_method = "BH") {
 
   switch(engine,
 
@@ -406,13 +433,14 @@ run_bulk_de_dispatch <- function(engine, counts_matrix, metadata, condition_col,
 
       if (is.null(dds)) stop("DESeqDataSet manquant pour le moteur DESeq2.")
 
-      extract_deseq2_contrast(dds, condition_col, group_target, group_ref, shrink = shrink)
+      extract_deseq2_contrast(dds, condition_col, group_target, group_ref, shrink = shrink,
+                              p_adjust_method = p_adjust_method)
 
     },
 
-    edger = run_edger_de(counts_matrix, metadata, condition_col, group_target, group_ref, covariates = covariates),
+    edger = run_edger_de(counts_matrix, metadata, condition_col, group_target, group_ref, covariates = covariates, p_adjust_method = p_adjust_method),
 
-    limma = run_limma_voom_de(counts_matrix, metadata, condition_col, group_target, group_ref, covariates = covariates),
+    limma = run_limma_voom_de(counts_matrix, metadata, condition_col, group_target, group_ref, covariates = covariates, p_adjust_method = p_adjust_method),
 
     stop("Moteur DE non supporté : ", engine)
 
@@ -471,29 +499,36 @@ run_bulk_de_dispatch <- function(engine, counts_matrix, metadata, condition_col,
 #' @param group_target,group_ref Levels of `condition_col` being compared.
 #' @param dds_full Pre-built DESeqDataSet (real design) — reused as-is.
 #' @param shrink Passed to the DESeq2 engine only (apeglm LFC shrinkage).
+#' @param p_adjust_method Multiple-testing correction passed to EVERY engine
+#'   (DESeq2 results(), edgeR topTags(), limma topTable()). Default "BH" —
+#'   behaviour strictly unchanged for existing callers.
 #' @return Named list of normalized data.frames: any of `deseq2`/`edger`/
 #'   `limma` that succeeded (length >= 1; methods that errored are omitted,
 #'   with a `warning()` raised for each — caller decides whether to surface it).
 getAllDE <- function(counts_matrix, metadata, condition_col, group_target, group_ref,
-                     dds_full, shrink = TRUE, covariates = character(0)) {
+                     dds_full, shrink = TRUE, covariates = character(0),
+                     p_adjust_method = "BH") {
   out <- list()
 
   out$deseq2 <- tryCatch({
     res <- run_bulk_de_dispatch("deseq2", counts_matrix, metadata, condition_col,
-                                group_target, group_ref, dds = dds_full, shrink = shrink)
+                                group_target, group_ref, dds = dds_full, shrink = shrink,
+                                p_adjust_method = p_adjust_method)
     .normalize_de_cols(res, counts_for_basemean = counts_matrix)
   }, error = function(e) { warning("DESeq2 a échoué : ", conditionMessage(e)); NULL })
 
   out$edger <- tryCatch({
     res <- run_bulk_de_dispatch("edger", counts_matrix, metadata, condition_col,
-                                group_target, group_ref, covariates = covariates)
+                                group_target, group_ref, covariates = covariates,
+                                p_adjust_method = p_adjust_method)
     .normalize_de_cols(res, counts_for_basemean = counts_matrix)
   }, error = function(e) { warning("edgeR a échoué : ", conditionMessage(e)); NULL })
 
   if (isTRUE(has_limma)) {
     out$limma <- tryCatch({
       res <- run_bulk_de_dispatch("limma", counts_matrix, metadata, condition_col,
-                                  group_target, group_ref, covariates = covariates)
+                                  group_target, group_ref, covariates = covariates,
+                                  p_adjust_method = p_adjust_method)
       .normalize_de_cols(res, counts_for_basemean = counts_matrix)
     }, error = function(e) { warning("limma-voom a échoué : ", conditionMessage(e)); NULL })
   }

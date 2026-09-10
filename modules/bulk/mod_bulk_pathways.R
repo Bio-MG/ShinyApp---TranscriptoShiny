@@ -34,6 +34,13 @@ mod_bulk_pathways_ui <- function(id) {
     ),
     numericInput(ns("pathway_pval"), i18n$t("P-value cutoff"), value = 0.05, min = 0.001, max = 0.1, step = 0.01),
 
+    # STAT-Q1 — correction pour tests multiples de l'enrichissement. Choix
+    # déclarés dans config/defaults.R (TS_PADJ_METHODS) ; "fdr" est
+    # volontairement absent (alias de BH dans stats::p.adjust.methods).
+    selectInput(ns("pathway_padj_method"), i18n$t("M\u00e9thode de correction (p-adj)"),
+                choices  = stats::setNames(TS_PADJ_METHODS, TS_PADJ_METHODS),
+                selected = TS_PADJ_METHOD_DEFAULT),
+
     actionButton(ns("run_pathway"), i18n$t("Lancer Enrichissement"),
                  class = "btn-warning w-100", icon = icon("dna")),
 
@@ -81,6 +88,7 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
       updateSelectInput(session, "pathway_org", label = .tr("Organisme"),
         choices = stats::setNames(c("human","mouse"), c(.tr("Humain"), .tr("Souris"))))
       updateNumericInput(session, "pathway_pval", label = .tr("P-value cutoff"))
+      updateSelectInput(session, "pathway_padj_method", label = .tr("M\u00e9thode de correction (p-adj)"))
       updateActionButton(session, "run_pathway", label = .tr("Lancer Enrichissement"))
     }, ignoreInit = TRUE)
 
@@ -93,6 +101,8 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
     observe({
       shared_rv$pathway_db   <- input$pathway_db
       shared_rv$pathway_mode <- input$enrich_mode
+      # STAT-Q1 : reprise dans le script R reproductible exporté
+      shared_rv$pathway_padj_method <- input$pathway_padj_method %||% TS_PADJ_METHOD_DEFAULT
     })
 
     .active_de_results <- function() {
@@ -117,7 +127,8 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
         p$set(message = .tr("GSEA en cours..."), value = 0.3)
         tryCatch({
           res <- run_gsea_enrichment(res_de, organism = input$pathway_org,
-                                     database = input$pathway_db, pval_cutoff = input$pathway_pval)
+                                     database = input$pathway_db, pval_cutoff = input$pathway_pval,
+                                     p_adjust_method = input$pathway_padj_method %||% TS_PADJ_METHOD_DEFAULT)
           if (nrow(res) == 0) {
             showNotification(.tr("\u2139\ufe0f Aucun pathway enrichi trouv\u00e9 (GSEA)."), type = "warning")
             shared_rv$pathway_results <- NULL; return()
@@ -158,7 +169,8 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
       p$set(message = .tr("Enrichissement..."), value = 0.3)
       tryCatch({
         res <- run_pathway_enrichment(genes = genes_to_test, organism = input$pathway_org,
-                                      database = input$pathway_db, pval_cutoff = input$pathway_pval)
+                                      database = input$pathway_db, pval_cutoff = input$pathway_pval,
+                                      p_adjust_method = input$pathway_padj_method %||% TS_PADJ_METHOD_DEFAULT)
         if (nrow(res) == 0) {
           showNotification(.tr("\u2139\ufe0f Aucun pathway enrichi trouv\u00e9."), type = "warning")
           shared_rv$pathway_results <- NULL; return()

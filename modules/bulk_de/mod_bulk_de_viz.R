@@ -32,9 +32,30 @@
   # Reactive accessor for the currently displayed DE result (local to this
   # function — sibling functions read shared_rv$contrasts[[shared_rv$active_contrast]]
   # directly since they don't need req()-based reactive semantics here)
+  #
+  # STAT-Q1 — recalcul « live » de padj. Le résultat stocké a été calculé avec
+  # une méthode de correction donnée ; si l'utilisateur en choisit une autre
+  # dans le panneau Step 2, on rappelle simplement DESeq2::results() sur le dds
+  # DÉJÀ ajusté (contexte mémorisé par helpers$remember_padj_ctx()) : aucun
+  # DESeq() relancé, donc c'est immédiat. Seuls les contrastes DESeq2 possèdent
+  # un tel contexte — pour edgeR/limma la méthode est appliquée au moment du run
+  # (pas de modèle en cache à ré-interroger), on renvoie donc le résultat tel quel.
   active_de_results <- reactive({
-    req(shared_rv$active_contrast, shared_rv$contrasts[[shared_rv$active_contrast]])
-    shared_rv$contrasts[[shared_rv$active_contrast]]
+    ac <- shared_rv$active_contrast
+    req(ac, shared_rv$contrasts[[ac]])
+    base_res <- shared_rv$contrasts[[ac]]
+
+    method <- input$padj_method %||% TS_PADJ_METHOD_DEFAULT
+    ctx    <- (shared_rv$de_padj_ctx %||% list())[[ac]]
+    if (is.null(ctx) || identical(ctx$method, method)) return(base_res)
+
+    tryCatch(
+      extract_deseq2_contrast(ctx$dds, ctx$condition_col, ctx$group_target, ctx$group_ref,
+                              shrink = ctx$shrink, p_adjust_method = method),
+      # Repli silencieux : un échec de recalcul ne doit JAMAIS effacer un
+      # résultat déjà affiché (l'utilisateur garde la version précédente).
+      error = function(e) base_res
+    )
   })
 
   # =========================================================================

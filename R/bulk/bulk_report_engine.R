@@ -42,7 +42,16 @@
 bulk_r_script_text <- function(n_genes, n_samp, lfc, padj,
                                  contrast_name, condition_col,
                                  group_target, group_ref, palette_colors,
-                                 all_contrast_names = NULL, pathway_mode = "ora") {
+                                 all_contrast_names = NULL, pathway_mode = "ora",
+                                 padj_method = "BH", pathway_padj_method = NULL) {
+  # STAT-Q1 : padj_method est INTERPOLÉE dans le script R généré (voir
+  # PADJ_METHOD ci-dessous) — on la valide AVANT interpolation pour qu'aucune
+  # valeur inattendue ne puisse atterrir dans du code exécutable.
+  padj_method <- match.arg(padj_method, stats::p.adjust.methods)
+  # Le panneau Pathways a son propre sélecteur (STAT-Q1) ; à défaut on retombe
+  # sur la méthode DE, pour ne jamais produire un script incohérent.
+  pathway_padj_method <- pathway_padj_method %||% padj_method
+  pathway_padj_method <- match.arg(pathway_padj_method, stats::p.adjust.methods)
   rc   <- palette_colors %||% c(Up = "#E74C3C", Down = "#2980B9", NS = "#BDC3C7")
   date <- format(Sys.Date(), "%Y-%m-%d")
   cond <- condition_col %||% "condition"
@@ -70,13 +79,13 @@ all_de[[paste0(GROUP_TARGET, "_vs_", GROUP_REF)]] <- res_df
 for (pr in other_pairs) {
   coef_p <- paste0(CONDITION_COL, "_", pr$target, "_vs_", pr$ref)
   res_p <- tryCatch({
-    r0 <- DESeq2::results(dds, contrast = c(CONDITION_COL, pr$target, pr$ref))
+    r0 <- DESeq2::results(dds, contrast = c(CONDITION_COL, pr$target, pr$ref), pAdjustMethod = PADJ_METHOD)
     if (coef_p %in% DESeq2::resultsNames(dds)) {
       DESeq2::lfcShrink(dds, coef = coef_p, res = r0, type = "apeglm", quiet = TRUE)
     } else {
       DESeq2::lfcShrink(dds, contrast = c(CONDITION_COL, pr$target, pr$ref), res = r0, type = "normal", quiet = TRUE)
     }
-  }, error = function(e) DESeq2::results(dds, contrast = c(CONDITION_COL, pr$target, pr$ref)))
+  }, error = function(e) DESeq2::results(dds, contrast = c(CONDITION_COL, pr$target, pr$ref), pAdjustMethod = PADJ_METHOD))
   df_p <- as.data.frame(res_p); df_p$gene <- rownames(df_p); df_p <- df_p[order(df_p$padj), ]
   all_de[[paste0(pr$target, "_vs_", pr$ref)]] <- df_p
   write.csv(df_p, paste0("DE_", pr$target, "_vs_", pr$ref, "_", Sys.Date(), ".csv"), row.names = FALSE)
@@ -114,7 +123,7 @@ if (requireNamespace("clusterProfiler",quietly=TRUE) && requireNamespace("org.Hs
     ranked <- sort(setNames(de_m$rank_metric, de_m$ENTREZID), decreasing=TRUE)
     if (length(ranked) >= 10) {
       gsea_res <- gseGO(geneList=ranked, OrgDb=org.Hs.eg.db, ont="BP",
-                        pvalueCutoff=0.05, pAdjustMethod="BH", verbose=FALSE)
+                        pvalueCutoff=0.05, pAdjustMethod=PADJ_METHOD_PW, verbose=FALSE)
       if (!is.null(gsea_res) && nrow(as.data.frame(gsea_res)) > 0) {
         write.csv(as.data.frame(gsea_res), paste0("pathways_GSEA_GOBP_",Sys.Date(),".csv"), row.names=FALSE)
         if (requireNamespace("enrichplot", quietly=TRUE))
@@ -135,7 +144,7 @@ if (requireNamespace("clusterProfiler",quietly=TRUE) && requireNamespace("org.Hs
                      error=function(e) NULL)
   if (!is.null(entrez) && nrow(entrez) >= 10) {
     ora <- enrichGO(gene=entrez$ENTREZID, OrgDb=org.Hs.eg.db, ont="BP",
-                    pAdjustMethod="BH", pvalueCutoff=0.05, readable=TRUE)
+                    pAdjustMethod=PADJ_METHOD_PW, pvalueCutoff=0.05, readable=TRUE)
     if (!is.null(ora) && nrow(as.data.frame(ora)) > 0) {
       barplot(ora, showCategory=15, title="GO BP (ORA)")
       write.csv(as.data.frame(ora), paste0("pathways_GOBP_",Sys.Date(),".csv"), row.names=FALSE)
@@ -152,6 +161,7 @@ if (requireNamespace("clusterProfiler",quietly=TRUE) && requireNamespace("org.Hs
 # Contraste  : ', contrast_name, ' (', group_target, ' vs ', group_ref, ')
 # Dataset    : ', n_genes, ' g\u00e8nes \u00d7 ', n_samp, ' \u00e9chantillons
 # Condition  : ', cond, '
+# Correction : ', padj_method, ' (tests multiples, DE + enrichissement)
 # =============================================================================
 
 library(DESeq2); library(ggplot2); library(dplyr)
@@ -190,14 +200,21 @@ GROUP_TARGET  <- "', group_target, '"
 GROUP_REF     <- "', group_ref, '"
 LFC_THRESH    <- ', sprintf("%.3f", lfc), '
 PADJ_THRESH   <- ', sprintf("%.4f", padj), '
+PADJ_METHOD   <- "', padj_method, '"   # correction tests multiples choisie dans l app
+PADJ_METHOD_PW <- "', pathway_padj_method, '"   # idem pour l enrichissement (section 7)
 
 metadata[[CONDITION_COL]] <- relevel(factor(metadata[[CONDITION_COL]]), ref=GROUP_REF)
 dds <- DESeq2::DESeqDataSetFromMatrix(filtered, metadata, design=as.formula(paste("~", CONDITION_COL)))
 dds <- DESeq2::DESeq(dds, quiet=TRUE)
 coef_name <- paste0(CONDITION_COL, "_", GROUP_TARGET, "_vs_", GROUP_REF)
+# results() porte la correction PADJ_METHOD ; lfcShrink() re\u00e7oit CE r\u00e9sultat
+# via res= au lieu de recalculer ses propres p-values en BH \u2014 sans quoi le
+# script ne reproduirait pas la m\u00e9thode choisie dans l\'application.
+res0 <- DESeq2::results(dds, contrast=c(CONDITION_COL, GROUP_TARGET, GROUP_REF),
+                        pAdjustMethod=PADJ_METHOD)
 res <- tryCatch(
-  DESeq2::lfcShrink(dds, coef=coef_name, type="apeglm", quiet=TRUE),
-  error=function(e) DESeq2::results(dds, contrast=c(CONDITION_COL, GROUP_TARGET, GROUP_REF))
+  DESeq2::lfcShrink(dds, coef=coef_name, res=res0, type="apeglm", quiet=TRUE),
+  error=function(e) res0
 )
 res_df       <- as.data.frame(res); res_df$gene <- rownames(res_df)
 res_df       <- res_df[order(res_df$padj), ]
@@ -259,7 +276,7 @@ if (length(top_genes) >= 2 && requireNamespace("pheatmap", quietly=TRUE)) {
 #   y      <- edgeR::estimateDisp(y, design)
 #   fit    <- edgeR::glmQLFit(y, design)
 #   qlf    <- edgeR::glmQLFTest(fit, coef=2)
-#   res_edger <- edgeR::topTags(qlf, n=Inf)$table
+#   res_edger <- edgeR::topTags(qlf, n=Inf, adjust.method=PADJ_METHOD)$table
 #   res_edger$gene <- rownames(res_edger)
 #   write.csv(res_edger, paste0("DE_edgeR_", CONDITION_COL, "_", Sys.Date(), ".csv"), row.names=FALSE)
 # }
@@ -269,7 +286,7 @@ if (length(top_genes) >= 2 && requireNamespace("pheatmap", quietly=TRUE)) {
 #   design2 <- stats::model.matrix(~grp2)
 #   v       <- limma::voom(y2, design2)
 #   fit2    <- limma::eBayes(limma::lmFit(v, design2))
-#   res_limma <- limma::topTable(fit2, coef=2, number=Inf, sort.by="P")
+#   res_limma <- limma::topTable(fit2, coef=2, number=Inf, sort.by="P", adjust.method=PADJ_METHOD)
 #   res_limma$gene <- rownames(res_limma)
 #   write.csv(res_limma, paste0("DE_limma_", CONDITION_COL, "_", Sys.Date(), ".csv"), row.names=FALSE)
 # }

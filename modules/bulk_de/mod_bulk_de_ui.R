@@ -44,6 +44,15 @@ mod_bulk_de_ui <- function(id) {
       column(6, numericInput(ns("padj_thresh"), i18n$t("Seuil p-adj"),    value = 0.05, min = 0, max = 1, step = 0.01))
     ),
 
+    # STAT-Q1 — correction pour tests multiples. Choix déclarés dans
+    # config/defaults.R (TS_PADJ_METHODS) : jamais de liste en dur ici.
+    # "fdr" est volontairement absent (alias de BH dans p.adjust.methods).
+    selectInput(ns("padj_method"), i18n$t("M\u00e9thode de correction (p-adj)"),
+                choices  = stats::setNames(TS_PADJ_METHODS, TS_PADJ_METHODS),
+                selected = TS_PADJ_METHOD_DEFAULT),
+    helpText(style = "font-size:0.78em;",
+             i18n$t("S'applique aux tests DE (DESeq2/edgeR/limma) et \u00e0 l'enrichissement. Pour DESeq2, changer la m\u00e9thode recalcule p-adj \u00e0 partir du mod\u00e8le d\u00e9j\u00e0 ajust\u00e9 \u2014 sans r\u00e9ajustement.")),
+
     textInput(ns("contrast_name"), i18n$t("Nom du contraste (auto si vide)"), placeholder = "Ex: KO_vs_WT"),
 
     actionButton(ns("run_de"), tagList(icon("play"), i18n$t("Lancer l'Analyse Diff\u00e9rentielle")),

@@ -100,3 +100,15 @@ TS_IMPORT_RDA_WARN_MB    <- 500
 # HTML inline) — les exports du bundle ne sont jamais plafonnes.
 TS_REPORT_MAX_TABLE_ROWS       <- 200L   # lignes max par table HTML inline
 TS_REPORT_MAX_PROVENANCE_ROWS  <- 500L   # lignes max de la table de provenance inline
+
+# --- Correction pour tests multiples (STAT-Q1) ---------------------------------
+# Methodes de correction proposees dans l'interface, pour les tests DE
+# (DESeq2/edgeR/limma) ET l'enrichissement de pathways (ORA/GSEA).
+# Volontairement SANS "fdr" : dans stats::p.adjust.methods, "fdr" est un ALIAS
+# de "BH" — exposer les deux serait redondant et preterait a confusion pour un
+# biologiste. Le defaut reste BH => zero changement de comportement sur les
+# resultats existants.
+# Note : place ici (defaults) et non dans thresholds.R — c'est un jeu de
+# valeurs par defaut, pas un seuil scientifique.
+TS_PADJ_METHODS        <- c("BH", "BY", "bonferroni", "holm")
+TS_PADJ_METHOD_DEFAULT <- "BH"

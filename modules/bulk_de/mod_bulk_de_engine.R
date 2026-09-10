@@ -34,7 +34,8 @@
 #'
 #' @param input Shiny `input` object for the "de" module namespace.
 #' @param shared_rv reactiveValues shared across bulk sibling modules.
-#' @return list(design_str = function(), register_contrast = function(name, res))
+#' @return list(design_str = function(), register_contrast = function(name, res),
+#'   remember_padj_ctx = function(...))
 .de_make_helpers <- function(input, shared_rv) {
   design_str <- function() {
     terms <- unique(c(input$covariates, input$condition_col))
@@ -45,7 +46,22 @@
     current[[name]] <- res
     shared_rv$contrasts <- current
   }
-  list(design_str = design_str, register_contrast = register_contrast)
+  # STAT-Q1 — enregistre de quoi RECALCULER padj à partir du dds DÉJÀ ajusté
+  # (DESeq2::results() seul, jamais de DESeq() relancé) quand l'utilisateur
+  # change la méthode de correction. Stocké PAR CONTRASTE, sinon le recalcul
+  # « live » casserait dès qu'on bascule sur un autre contraste. Seuls les
+  # contrastes DESeq2 en ont un : edgeR/limma n'ont pas de modèle en cache à
+  # ré-interroger, leur méthode est figée au moment du run.
+  remember_padj_ctx <- function(name, dds, condition_col, group_target, group_ref,
+                                shrink, method) {
+    ctx <- shared_rv$de_padj_ctx %||% list()
+    ctx[[name]] <- list(dds = dds, condition_col = condition_col,
+                        group_target = group_target, group_ref = group_ref,
+                        shrink = isTRUE(shrink), method = method)
+    shared_rv$de_padj_ctx <- ctx
+  }
+  list(design_str = design_str, register_contrast = register_contrast,
+       remember_padj_ctx = remember_padj_ctx)
 }
 
 #' Control-plane server logic (see file header for scope)
@@ -93,6 +109,7 @@
     updateCheckboxInput(session, "shrink_lfc",  label = .trl("Shrinkage LFC (apeglm) \u2014 DESeq2 uniquement"))
     updateNumericInput(session, "lfc_thresh",   label = .trl("Seuil |Log2FC|"))
     updateNumericInput(session, "padj_thresh",  label = .trl("Seuil p-adj"))
+    updateSelectInput(session, "padj_method",   label = .trl("M\u00e9thode de correction (p-adj)"))
     updateTextInput(session, "contrast_name",    label = .trl("Nom du contraste (auto si vide)"))
     updateTextInput(session, "adhoc_contrast_name", label = .trl("Nom du contraste"))
     updateCheckboxGroupInput(session, "adhoc_group_a", label = .trl("Groupe A"))
@@ -146,6 +163,7 @@
   observe({
     shared_rv$lfc_thresh           <- input$lfc_thresh
     shared_rv$padj_thresh          <- input$padj_thresh
+    shared_rv$padj_method          <- input$padj_method %||% TS_PADJ_METHOD_DEFAULT
     shared_rv$heatmap_top_n        <- input$heatmap_top_n
     shared_rv$heatmap_annot        <- input$heatmap_annot
     shared_rv$active_condition_col <- input$condition_col  # Step-3.0: used by R script export

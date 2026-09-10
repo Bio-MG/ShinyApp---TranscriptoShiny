@@ -27,15 +27,26 @@
 
 #' @param pval_cutoff Seuil p-value
 
+#' @param p_adjust_method Méthode de correction pour tests multiples ("BH",
+#'   "BY", "bonferroni", "holm", ... — voir stats::p.adjust.methods).
+#'   Défaut "BH" : comportement historique strictement inchangé.
+
 #' @return data.frame avec pathways enrichis
 
 run_pathway_enrichment <- function(genes, organism = "human",
 
                                    database = "GOBP",
 
-                                   pval_cutoff = 0.05, universe = NULL) {
+                                   pval_cutoff = 0.05, universe = NULL,
+                                   p_adjust_method = "BH") {
 
   
+
+  # STAT-Q1 : méthode de correction exposée à l'utilisateur. Validation contre
+  # stats::p.adjust.methods (liste de référence de R) plutôt que contre
+  # TS_PADJ_METHODS, qui n'est que le sous-ensemble offert dans l'UI — un
+  # appelant programmatique reste libre d'utiliser "none" ou "hommel".
+  p_adjust_method <- match.arg(p_adjust_method, stats::p.adjust.methods)
 
   # 1. Check Core Dependencies
 
@@ -173,7 +184,7 @@ run_pathway_enrichment <- function(genes, organism = "human",
 
       ont           = "BP",
 
-      pAdjustMethod = "BH",
+      pAdjustMethod = p_adjust_method,
 
       pvalueCutoff  = pval_cutoff,
 
@@ -211,7 +222,7 @@ run_pathway_enrichment <- function(genes, organism = "human",
 
       organism      = org_code,
 
-      pAdjustMethod = "BH",
+      pAdjustMethod = p_adjust_method,
 
       pvalueCutoff  = pval_cutoff,
 
@@ -243,7 +254,7 @@ run_pathway_enrichment <- function(genes, organism = "human",
 
       organism      = organism, 
 
-      pAdjustMethod = "BH",
+      pAdjustMethod = p_adjust_method,
 
       pvalueCutoff  = pval_cutoff,
 
@@ -313,11 +324,19 @@ run_pathway_enrichment <- function(genes, organism = "human",
 
 #' @param pval_cutoff p-value cutoff passed to the GSEA call.
 
+#' @param p_adjust_method Méthode de correction pour tests multiples ("BH",
+#'   "BY", "bonferroni", "holm", ... — voir stats::p.adjust.methods).
+#'   Défaut "BH" : comportement historique strictement inchangé.
+
 #' @return data.frame: ID, Description, setSize, enrichmentScore, NES, pvalue, p.adjust, ...
 
 run_gsea_enrichment <- function(de_results, organism = "human",
 
-                                 database = "GOBP", pval_cutoff = 0.05) {
+                                 database = "GOBP", pval_cutoff = 0.05,
+                                 p_adjust_method = "BH") {
+
+  # STAT-Q1 : cf. run_pathway_enrichment() — même validation, même défaut.
+  p_adjust_method <- match.arg(p_adjust_method, stats::p.adjust.methods)
 
 
 
@@ -425,7 +444,7 @@ run_gsea_enrichment <- function(de_results, organism = "human",
 
     clusterProfiler::gseGO(geneList = ranked, OrgDb = orgdb, ont = "BP",
 
-                           pvalueCutoff = pval_cutoff, pAdjustMethod = "BH", verbose = FALSE)
+                           pvalueCutoff = pval_cutoff, pAdjustMethod = p_adjust_method, verbose = FALSE)
 
   } else if (database == "KEGG") {
 
@@ -433,7 +452,7 @@ run_gsea_enrichment <- function(de_results, organism = "human",
 
     clusterProfiler::gseKEGG(geneList = ranked, organism = org_code,
 
-                             pvalueCutoff = pval_cutoff, pAdjustMethod = "BH", verbose = FALSE)
+                             pvalueCutoff = pval_cutoff, pAdjustMethod = p_adjust_method, verbose = FALSE)
 
   } else if (database == "Reactome") {
 
@@ -445,7 +464,7 @@ run_gsea_enrichment <- function(de_results, organism = "human",
 
     ReactomePA::gsePathway(geneList = ranked, organism = organism,
 
-                          pvalueCutoff = pval_cutoff, pAdjustMethod = "BH", verbose = FALSE)
+                          pvalueCutoff = pval_cutoff, pAdjustMethod = p_adjust_method, verbose = FALSE)
 
   } else {
 
