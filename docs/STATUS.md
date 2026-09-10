@@ -140,6 +140,29 @@ de gènes < 20 % après strip des suffixes Ensembl `.1/.2`.
 
 ---
 
+### 2i. Dette i18n héritée de STAT-Q — 6 clés manquantes
+
+**Ouverte le 2026-09-10.** `i18n/translation.json` est verrouillé par le WIP
+Bulk V2 (§5), donc les clés introduites par STAT-Q n'ont pas pu y être ajoutées.
+En attendant elles retombent sur le texte FR (convention « clé = texte FR ») :
+**l'UI française est correcte, l'UI anglaise affichera du français pour ces
+6 chaînes.**
+
+```
+"Méthode de correction (p-adj)"
+"S'applique aux tests DE (DESeq2/edgeR/limma) et à l'enrichissement. Pour DESeq2, changer la méthode recalcule p-adj à partir du modèle déjà ajusté — sans réajustement."
+"Export Excel"
+"{n} gène(s) exclu(s) du test (outlier Cook's distance)"
+"{n} gène(s) non exprimé(s)"
+"{n} gène(s) écarté(s) par le filtrage indépendant (faible expression)"
+```
+
+**Correctif** : les ajouter dans le même commit que le WIP Bulk V2 (ce fichier
+est déjà ouvert). Aucun changement de code n'est requis — le code les appelle
+déjà. Détail : `docs/ROADMAP_HANDOFF_STAGE_STAT_Q.md` §1ter et §4.
+
+---
+
 ## 3. 4D-3 — décision et contrat d'entrée upstream
 
 > **Analyse de faisabilité détaillée** :

@@ -27,8 +27,9 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 | `docs/ROADMAP_presentation_stats.md` | Plots & stats : PLOT-Q/S, STAT-Q/S, NEW-1..3 | Pour tout travail présentation/statistique |
 | `docs/ROADMAP_CCC_ADVANCED.md` | CCC avancée, phases 1–10 + conditions de déblocage | Pour tout travail communication |
 | `docs/ROADMAP_HANDOFF_STAGE_11_20.md` | Stages 8–20 (V1.0, livré) + **HANDOFF V1.x** | Historique V1.0 ; entrées V1.x |
-| `docs/ROADMAP_HANDOFF_NEXT.md` | **Prochaine session** : périmètre STAT-Q1..Q4, ancres vérifiées, décisions à prendre, prompt à coller | **Au démarrage de la prochaine session** |
+| `docs/ROADMAP_HANDOFF_NEXT.md` | **Prochaine session** : périmètre PLOT-S1, ancres vérifiées, décisions à prendre, prompt à coller | **Au démarrage de la prochaine session** |
 | `docs/ROADMAP_HANDOFF_STAGE_PLOT_Q.md` | Rapport de stage PLOT-Q (6 sections) | Exemple du format de rapport attendu |
+| `docs/ROADMAP_HANDOFF_STAGE_STAT_Q.md` | Rapport de stage STAT-Q (6 sections) | Dernier rapport livré (2026-09-10) |
 | `docs/proposals/V1X_UX_REFACTOR_PROPOSAL.md` | Conception des lots UX (⚠️ état corrigé en tête) | Avant toute reprise UX |
 | `docs/proposals/CCC_DATA_PATH_ASSESSMENT.md` | 10X → CellChat : faisabilité et chemins | Avant 4D-3 / phases 5–6 |
 | `docs/release/UPGRADE_AND_COMPATIBILITY.md` | §3 = parking officiel V1.x (4D-3, 4E-4, 4F) | Pour les propositions V1.x |
@@ -40,9 +41,11 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 
 ## 2. Les quatre flux de travail
 
-> **▶ Prochaine étape recommandée : STAT-Q1 → STAT-Q4** (flux A). Justification :
-> `ROADMAP_presentation_stats.md` §8 ordonne `stat-quickwins` **avant**
-> `plot-shared-helpers` (PLOT-S1..S3). Périmètre, ancres vérifiées, décisions à
+> **▶ Prochaine étape recommandée : PLOT-S1** (`ts_theme()` partagé +
+> propagation, flux A). Justification : `ROADMAP_presentation_stats.md` §8
+> ordonne `stat-quickwins` **avant** `plot-shared-helpers` — les deux lots
+> « quick wins » (PLOT-Q1..Q5, STAT-Q1..Q4) sont désormais **livrés**, donc
+> `plot-shared-helpers` est débloqué. Périmètre, ancres vérifiées, décisions à
 > prendre et prompt prêt à coller : **`docs/ROADMAP_HANDOFF_NEXT.md`**.
 
 Chaque flux a sa roadmap et son avancement dans `STATUS.md`. Ils sont
@@ -50,12 +53,12 @@ Chaque flux a sa roadmap et son avancement dans `STATUS.md`. Ils sont
 mais rien n'oblige à les séquencer entre eux.
 
 ### Flux A — Présentation & statistiques · `ROADMAP_presentation_stats.md`
-Quick wins livrés (PLOT-Q1..Q5). Restent **PLOT-S1..S6**, **STAT-Q1..Q4**,
-**STAT-S1..S3**, **NEW-1..3**.
+Quick wins **tous livrés** : PLOT-Q1..Q5 (`4dee553`) et STAT-Q1..Q4
+(`fda5a81`..`5f3c9f0`). Restent **PLOT-S1..S6**, **STAT-S1..S3**, **NEW-1..3**.
 
 Ordre conseillé (fondations d'abord) :
 `PLOT-S1 → PLOT-S2 → PLOT-S3 → PLOT-S4`, puis `PLOT-S5`, `PLOT-S6`.
-`STAT-Q1..Q4` sont indépendants et parallélisables.
+`STAT-S1..S3` sont indépendants et parallélisables.
 `NEW-2` dépend de `STAT-S1`.
 
 ### Flux B — CCC avancée · `ROADMAP_CCC_ADVANCED.md`
