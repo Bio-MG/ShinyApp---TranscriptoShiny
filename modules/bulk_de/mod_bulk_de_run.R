@@ -93,19 +93,25 @@
     tryCatch({
       design_str <- helpers$design_str()
 
+      # STAT-Q1 : méthode de correction choisie dans le panneau Step 2.
+      padj_method <- input$padj_method %||% TS_PADJ_METHOD_DEFAULT
+
       res <- NULL
+      dds_full <- NULL
       if (input$de_engine == "deseq2") {
         p$set(0.4, .tr("Ajustement DESeq2..."))
         dds_full <- build_dds(shared_rv$filtered_counts, meta, design_formula = design_str, run_deseq = TRUE)
         shared_rv$dds_full <- dds_full
         res <- run_bulk_de_dispatch("deseq2", shared_rv$filtered_counts, meta, input$condition_col,
                                     input$group_target, input$group_ref,
-                                    dds = dds_full, shrink = input$shrink_lfc)
+                                    dds = dds_full, shrink = input$shrink_lfc,
+                                    p_adjust_method = padj_method)
       } else {
         p$set(0.5, .t_fmt(.tr("Ajustement {engine} ..."), engine = input$de_engine))
         res <- run_bulk_de_dispatch(input$de_engine, shared_rv$filtered_counts, meta,
                                     input$condition_col, input$group_target, input$group_ref,
-                                    covariates = input$covariates %||% character(0))
+                                    covariates = input$covariates %||% character(0),
+                                    p_adjust_method = padj_method)
       }
 
       res <- .normalize_de_cols(res, counts_for_basemean = shared_rv$filtered_counts)
@@ -118,6 +124,15 @@
 
       helpers$register_contrast(contrast_name, res)
       shared_rv$active_contrast <- contrast_name
+
+      # STAT-Q1 : mémorise le contexte de recalcul de padj. Non-NULL uniquement
+      # quand le moteur est DESeq2 (dds_full non NULL) — c'est ce qui autorise
+      # le recalcul « live » depuis l'onglet DE, sans réajuster le modèle.
+      if (!is.null(dds_full)) {
+        helpers$remember_padj_ctx(contrast_name, dds_full, input$condition_col,
+                                  input$group_target, input$group_ref,
+                                  input$shrink_lfc, padj_method)
+      }
 
       updateSelectInput(session, "active_contrast_view",
                         choices = names(shared_rv$contrasts), selected = contrast_name)
@@ -170,16 +185,25 @@
         condition = factor(c(rep("GroupA", length(a)), rep("GroupB", length(b))), levels = c("GroupB", "GroupA")),
         row.names = c(a, b)
       )
+      padj_method <- input$padj_method %||% TS_PADJ_METHOD_DEFAULT
+      dds_a <- NULL
       res <- if (input$de_engine == "deseq2") {
         dds_a <- build_dds(counts_sub, meta_adhoc, "~condition", run_deseq = TRUE)
-        run_bulk_de_dispatch("deseq2", counts_sub, meta_adhoc, "condition", "GroupA", "GroupB", dds = dds_a, shrink = input$shrink_lfc)
+        run_bulk_de_dispatch("deseq2", counts_sub, meta_adhoc, "condition", "GroupA", "GroupB", dds = dds_a, shrink = input$shrink_lfc,
+                             p_adjust_method = padj_method)
       } else {
-        run_bulk_de_dispatch(input$de_engine, counts_sub, meta_adhoc, "condition", "GroupA", "GroupB")
+        run_bulk_de_dispatch(input$de_engine, counts_sub, meta_adhoc, "condition", "GroupA", "GroupB",
+                             p_adjust_method = padj_method)
       }
       res <- .normalize_de_cols(res, counts_for_basemean = counts_sub)
       cname <- if (nchar(trimws(input$adhoc_contrast_name %||% "")) > 0) trimws(input$adhoc_contrast_name) else "GroupA_vs_GroupB_adhoc"
       helpers$register_contrast(cname, res)
       shared_rv$active_contrast <- cname
+      # STAT-Q1 : contexte de recalcul padj (DESeq2 ad-hoc uniquement)
+      if (!is.null(dds_a)) {
+        helpers$remember_padj_ctx(cname, dds_a, "condition", "GroupA", "GroupB",
+                                  input$shrink_lfc, padj_method)
+      }
       updateSelectInput(session, "active_contrast_view", choices = names(shared_rv$contrasts), selected = cname)
       n_sig <- sum(res$padj < input$padj_thresh & abs(res$log2FoldChange) > input$lfc_thresh, na.rm = TRUE)
       showNotification(.t_fmt(.tr("\u2713 Ad-hoc '{c}': {n} g\u00e8nes sig."), c = cname, n = n_sig),

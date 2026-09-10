@@ -47,6 +47,8 @@
 
   .run_pairwise_now <- function(pairs, meta) {
     n_pairs <- length(pairs)
+    # STAT-Q1 : méthode de correction choisie dans le panneau Step 2
+    padj_method <- input$padj_method %||% TS_PADJ_METHOD_DEFAULT
     withProgress(message = .tr("Calcul des contrastes pairwise..."), value = 0, {
       dds_full <- NULL
       if (input$de_engine == "deseq2") {
@@ -70,16 +72,27 @@
         res <- tryCatch({
           r <- if (input$de_engine == "deseq2") {
             run_bulk_de_dispatch("deseq2", shared_rv$filtered_counts, meta, input$condition_col,
-                                 target, ref, dds = dds_full, shrink = input$shrink_lfc)
+                                 target, ref, dds = dds_full, shrink = input$shrink_lfc,
+                                 p_adjust_method = padj_method)
           } else {
             run_bulk_de_dispatch(input$de_engine, shared_rv$filtered_counts, meta,
                                  input$condition_col, target, ref,
-                                 covariates = input$covariates %||% character(0))
+                                 covariates = input$covariates %||% character(0),
+                                 p_adjust_method = padj_method)
           }
           .normalize_de_cols(r, counts_for_basemean = shared_rv$filtered_counts)
         }, error = function(e) { failed <<- c(failed, name); NULL })
 
-        if (!is.null(res)) { helpers$register_contrast(name, res); ok <- ok + 1 }
+        if (!is.null(res)) {
+          helpers$register_contrast(name, res)
+          # STAT-Q1 : un dds partagé est réutilisé pour TOUTES les paires, mais
+          # chaque contraste conserve son propre contexte de recalcul de padj.
+          if (!is.null(dds_full)) {
+            helpers$remember_padj_ctx(name, dds_full, input$condition_col, target, ref,
+                                      input$shrink_lfc, padj_method)
+          }
+          ok <- ok + 1
+        }
       }
 
       if (ok > 0 && is.null(shared_rv$active_contrast)) {

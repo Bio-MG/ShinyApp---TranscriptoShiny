@@ -249,7 +249,14 @@ mod_bulk_report_server <- function(id, global_data, shared_rv) {
           group_ref     = ref,
           palette_colors = shared_rv$volcano_role_colors,
           all_contrast_names = names(shared_rv$contrasts),
-          pathway_mode  = shared_rv$pathway_mode %||% "ora"
+          pathway_mode  = shared_rv$pathway_mode %||% "ora",
+          # STAT-Q1 : la méthode de correction choisie (Step 2) est reprise
+          # dans le script généré, pour que le .zip soit réellement
+          # reproductible — pas seulement « reproductible en BH ».
+          padj_method   = shared_rv$padj_method %||% "BH",
+          # STAT-Q1 : le panneau Pathways a son propre sélecteur ; on retombe
+          # sur la méthode DE s'il n'a pas encore été initialisé.
+          pathway_padj_method = shared_rv$pathway_padj_method %||% shared_rv$padj_method %||% "BH"
         )
 
         # ── Bundle companion data (Step-3.5 fix) ──────────────────────────

@@ -88,7 +88,11 @@
       de_list <- getAllDE(shared_rv$filtered_counts, meta, input$condition_col,
                           input$group_target, input$group_ref,
                           dds_full = dds_full, shrink = input$shrink_lfc,
-                          covariates = input$covariates %||% character(0))
+                          covariates = input$covariates %||% character(0),
+                          # STAT-Q1 : la MÊME méthode est appliquée aux 3 moteurs,
+                          # sinon le consensus de rang comparerait des padj
+                          # corrigés différemment selon la méthode.
+                          p_adjust_method = input$padj_method %||% TS_PADJ_METHOD_DEFAULT)
 
       if (length(de_list) < 2) {
         stop(.t_fmt(.tr("Au moins 2 m\u00e9thodes doivent r\u00e9ussir pour comparer ({n} r\u00e9ussies). V\u00e9rifiez que edgeR/limma sont install\u00e9s."),
