@@ -101,12 +101,23 @@
     shared_rv$volcano_role_colors <- tryCatch(volcano_role_colors(), error = function(e) NULL)
   })
 
+  # Human-readable DE engine label for the statistical subtitles (PLOT-Q3).
+  # Reads the SAME input$de_engine the run step dispatched on — never a
+  # hardcoded name, so the subtitle cannot lie about which engine produced
+  # the displayed contrast.
+  .engine_label <- function() {
+    switch(input$de_engine %||% "",
+           deseq2 = "DESeq2", edger = "edgeR", limma = "limma-voom",
+           toupper(input$de_engine %||% ""))
+  }
+
   volcano_plot <- reactive({
     global_data$language                     # i18n trigger
     req(active_de_results())
     rc <- volcano_role_colors()
     plot_volcano_bulk(active_de_results(), lfc_thresh = input$lfc_thresh, padj_thresh = input$padj_thresh,
                       up_color = rc[["Up"]], down_color = rc[["Down"]], ns_color = rc[["NS"]],
+                      engine = .engine_label(),
                       tr = .tr_fn(global_data))
   })
   output$plot_volcano <- renderPlot({ volcano_plot() })
@@ -171,7 +182,8 @@
     req(active_de_results())
     rc <- volcano_role_colors()
     plot_ma_bulk(active_de_results(), lfc_thresh = input$lfc_thresh, padj_thresh = input$padj_thresh,
-                sig_color = rc[["Up"]], ns_color = rc[["NS"]], tr = .tr_fn(global_data))
+                sig_color = rc[["Up"]], ns_color = rc[["NS"]],
+                engine = .engine_label(), tr = .tr_fn(global_data))
   })
   output$plot_ma <- renderPlot({ ma_plot() })
 
@@ -207,8 +219,15 @@
   })
 
   output$dl_ma_png <- downloadHandler(
-    filename = function() paste0("ma_plot_", shared_rv$active_contrast, "_", Sys.Date(), ".png"),
-    content  = function(file) ggsave(file, plot = ma_plot(), width = 8, height = 6, dpi = 300)
+    filename = function() paste0("ma_plot_", shared_rv$active_contrast, "_", Sys.Date(),
+                                 ".", input$ma_export_fmt %||% "png"),
+    content  = function(file) {
+      if (identical(input$ma_export_fmt, "pdf")) {
+        ggsave(file, plot = ma_plot(), width = 8, height = 6, device = "pdf")
+      } else {
+        ggsave(file, plot = ma_plot(), width = 8, height = 6, dpi = 300)
+      }
+    }
   )
 
   # =========================================================================
@@ -297,6 +316,22 @@
     setNames(vals, lvls)
   })
 
+  # Statistical subtitle for the heatmap (PLOT-Q3) — same Up/Down/tested +
+  # thresholds contract as Volcano/MA, computed from the SAME active contrast
+  # and the SAME live input thresholds, so all three panels of a contrast
+  # always agree.
+  .heatmap_stat_subtitle <- function() {
+    res <- tryCatch(active_de_results(), error = function(e) NULL)
+    if (is.null(res) || !all(c("padj", "log2FoldChange") %in% names(res))) return(NULL)
+    lfc <- input$lfc_thresh %||% 1
+    pv  <- input$padj_thresh %||% 0.05
+    ok  <- !is.na(res$padj)
+    n_up   <- sum(ok & res$padj < pv & res$log2FoldChange >  lfc)
+    n_down <- sum(ok & res$padj < pv & res$log2FoldChange < -lfc)
+    sprintf("%d Up · %d Down · %d testés — %s (padj<%.2g, |log2FC|>%.2g)",
+            n_up, n_down, sum(ok), .engine_label(), pv, lfc)
+  }
+
   .heatmap_obj <- function() {
     global_data$language                     # i18n trigger
     annot <- if (nzchar(input$heatmap_annot %||% "")) input$heatmap_annot else NULL
@@ -304,6 +339,7 @@
     plot_heatmap_bulk(shared_rv$vst_mat, heatmap_genes(), global_data$bulk_obj$metadata,
                       annotation_col = annot, palette = pal,
                       manual_colors = if (identical(pal, "manual")) heatmap_manual_colors() else NULL,
+                      subtitle = .heatmap_stat_subtitle(),
                       tr = .tr_fn(global_data))
   }
 

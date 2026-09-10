@@ -277,7 +277,7 @@ mod_sc_da_milo_server <- function(id, global_data, shared_rv = NULL) {
     # ── Exports (traces par analysis_id ; figures = vues pures) ────────────
     .export_figure <- function(plot_fn, file) {
       .check_fingerprint()
-      ggplot2::ggsave(file, plot_fn(), width = 8, height = 6.5, dpi = 150)
+      ggplot2::ggsave(file, plot_fn(), width = 8, height = 6.5, dpi = 300)
     }
 
     output$dl_milo_embed_png <- downloadHandler(

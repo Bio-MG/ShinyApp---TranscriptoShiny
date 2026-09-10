@@ -168,7 +168,7 @@ mod_sc_communication_velocity_server <- function(id, comm_state, global_data, sh
           req(ctx)
           .guard_stale()
           ggplot2::ggsave(file, plot_communication_velocity_context(ctx),
-                          width = 8, height = 6, dpi = 150)
+                          width = 8, height = 6, dpi = 300)
         }
       )
     }

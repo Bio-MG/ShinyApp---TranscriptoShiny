@@ -742,9 +742,12 @@ plot_bulk_pca <- function(vst_matrix, metadata, color_by = NULL, shape_by = NULL
 
 
 #' Volcano plot for bulk DE results
-
+#'
+#' @param engine Optional DE engine name (e.g. "DESeq2", "edgeR") surfaced in
+#'   the statistical subtitle. NULL omits the engine from the subtitle.
 plot_volcano_bulk <- function(res_df, lfc_thresh = 1, padj_thresh = 0.05, top_label = 10,
-                              up_color = "#E74C3C", down_color = "#2980B9", ns_color = "#BDC3C7", tr = NULL) {
+                              up_color = "#E74C3C", down_color = "#2980B9", ns_color = "#BDC3C7",
+                              engine = NULL, tr = NULL) {
 
   tr <- tr %||% function(x) x
 
@@ -768,42 +771,71 @@ plot_volcano_bulk <- function(res_df, lfc_thresh = 1, padj_thresh = 0.05, top_la
 
   res_df$label <- ifelse(res_df$gene %in% c(up_lbl, down_lbl), res_df$gene, NA)
 
+  # Statistical subtitle (PLOT-Q3) — counts reflect the LIVE thresholds passed
+  # by the caller (reactive), so the subtitle doubles as the "which cutoffs?"
+  # answer in a meeting. `engine` is optional: callers that know the DE engine
+  # pass it; otherwise the subtitle simply omits it.
+  n_up    <- sum(res_df$status == "Up")
+  n_down  <- sum(res_df$status == "Down")
+  n_tot   <- nrow(res_df)
+  eng_fmt <- if (is.null(engine) || !nzchar(engine %||% "")) "%d Up · %d Down · %d testés"
+             else sprintf("%%d Up · %%d Down · %%d testés — %s", engine)
+  stat_subtitle <- sprintf(paste0(eng_fmt, " (padj<%.2g, |log2FC|>%.2g)"),
+                           n_up, n_down, n_tot, padj_thresh, lfc_thresh)
 
-
-  ggplot(res_df, aes(x = log2FoldChange, y = -log10(padj), color = status)) +
-
+  p <- ggplot(res_df, aes(x = log2FoldChange, y = -log10(padj), color = status)) +
     geom_point(alpha = 0.7, size = 1.6) +
-
     scale_color_manual(values = c(Up = up_color, Down = down_color, NS = ns_color)) +
-
     geom_vline(xintercept = c(-lfc_thresh, lfc_thresh), linetype = "dashed", color = "grey40") +
+    geom_hline(yintercept = -log10(padj_thresh), linetype = "dashed", color = "grey40")
 
-    geom_hline(yintercept = -log10(padj_thresh), linetype = "dashed", color = "grey40") +
+  # PLOT-Q1 — repel gene labels instead of overlapping geom_text(); the
+  # >15-labelled-genes acceptance case is exactly the one geom_text() failed.
+  if (requireNamespace("ggrepel", quietly = TRUE)) {
+    p <- p + ggrepel::geom_text_repel(aes(label = label), size = 2.8, na.rm = TRUE,
+                                      max.overlaps = 20, box.padding = 0.4,
+                                      segment.size = 0.3, show.legend = FALSE,
+                                      min.segment.length = 0)
+  } else {
+    # Graceful degradation — ggrepel is declared in global.R required_packages;
+    # if it is somehow absent the volcano must still render (no hard stop).
+    p <- p + geom_text(aes(label = label), size = 2.8, na.rm = TRUE,
+                       vjust = -0.6, show.legend = FALSE)
+  }
 
-    geom_text(aes(label = label), size = 2.8, na.rm = TRUE, vjust = -0.6, show.legend = FALSE) +
-
+  p +
     labs(title = tr("Volcano Plot — Analyse Différentielle"),
-
+         subtitle = tr(stat_subtitle),
          x = tr("Log2 Fold Change"), y = tr("-Log10(P-adj)"), color = tr("Statut")) +
-
     theme_minimal() +
-
-    theme(plot.title = element_text(face = "bold", size = 14))
+    theme(plot.title = element_text(face = "bold", size = 14),
+          plot.subtitle = element_text(size = 10, color = "grey35"))
 
 }
 
 
 
 #' MA-plot for bulk DE results
-
+#'
+#' @param engine Optional DE engine name surfaced in the statistical subtitle.
 plot_ma_bulk <- function(res_df, lfc_thresh = 1, padj_thresh = 0.05,
-                         sig_color = "#E74C3C", ns_color = "#BDC3C7", tr = NULL) {
+                         sig_color = "#E74C3C", ns_color = "#BDC3C7",
+                         engine = NULL, tr = NULL) {
 
   tr <- tr %||% function(x) x
 
   res_df <- res_df[!is.na(res_df$padj) & !is.na(res_df$baseMean), ]
 
   res_df$sig <- res_df$padj < padj_thresh & abs(res_df$log2FoldChange) > lfc_thresh
+
+  # Statistical subtitle (PLOT-Q3) — same Up/Down/tested + thresholds contract
+  # as the volcano, so the two panels of the same contrast cannot disagree.
+  n_sig   <- sum(res_df$sig)
+  n_tot   <- nrow(res_df)
+  eng_fmt <- if (is.null(engine) || !nzchar(engine %||% "")) "%d significatifs · %d testés"
+             else sprintf("%%d significatifs · %%d testés — %s", engine)
+  stat_subtitle <- sprintf(paste0(eng_fmt, " (padj<%.2g, |log2FC|>%.2g)"),
+                           n_sig, n_tot, padj_thresh, lfc_thresh)
 
   ggplot(res_df, aes(x = log10(baseMean + 1), y = log2FoldChange, color = sig)) +
 
@@ -813,21 +845,25 @@ plot_ma_bulk <- function(res_df, lfc_thresh = 1, padj_thresh = 0.05,
 
     geom_hline(yintercept = 0, color = "grey30") +
 
-    labs(title = tr("MA-Plot"), x = tr("Log10(Expression Moyenne + 1)"), y = tr("Log2 Fold Change")) +
+    labs(title = tr("MA-Plot"), subtitle = tr(stat_subtitle),
+         x = tr("Log10(Expression Moyenne + 1)"), y = tr("Log2 Fold Change")) +
 
     theme_minimal() +
 
-    theme(plot.title = element_text(face = "bold", size = 14))
+    theme(plot.title = element_text(face = "bold", size = 14),
+          plot.subtitle = element_text(size = 10, color = "grey35"))
 
 }
 
 
 
 #' Heatmap of selected genes (ComplexHeatmap if available, ggplot fallback otherwise)
-
+#'
+#' @param subtitle Optional statistical subtitle (PLOT-Q3) shown as a second
+#'   column title line. Ignored by the ggplot fallback path.
 plot_heatmap_bulk <- function(vst_matrix, genes, metadata, annotation_col = NULL, scale_rows = TRUE,
 
-                              palette = "default", manual_colors = NULL, tr = NULL) {
+                              palette = "default", manual_colors = NULL, subtitle = NULL, tr = NULL) {
 
   tr <- tr %||% function(x) x
 

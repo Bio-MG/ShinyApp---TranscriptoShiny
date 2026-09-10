@@ -45,7 +45,7 @@ options(shiny.maxRequestSize = 5000 * 1024^2)
 
 required_packages <- c(
   "shiny", "bslib", "Seurat", "SeuratObject",
-  "ggplot2", "dplyr", "DT", "patchwork", "viridis",
+  "ggplot2", "dplyr", "DT", "patchwork", "viridis", "ggrepel",
   "plotly", "bsicons", "future", "shinyFiles",
   "SingleR", "celldex", "SingleCellExperiment",
   "harmony", "destiny", "fs", "igraph", "Matrix", "reshape2",

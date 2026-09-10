@@ -212,13 +212,17 @@ res_v$status <- dplyr::case_when(
   TRUE ~ "NS")
 lbl <- c(head(res_v$gene[res_v$status=="Up"],10), head(res_v$gene[res_v$status=="Down"],10))
 res_v$label <- ifelse(res_v$gene %in% lbl, res_v$gene, NA_character_)
+n_up_v <- sum(res_v$status=="Up"); n_down_v <- sum(res_v$status=="Down")
 ggplot(res_v, aes(log2FoldChange, -log10(padj+1e-300), color=status)) +
   geom_point(alpha=0.7, size=1.6) +
   scale_color_manual(values=c(Up="', rc["Up"], '", Down="', rc["Down"], '", NS="', rc["NS"], '")) +
-  geom_text(aes(label=label), size=2.8, vjust=-0.6, na.rm=TRUE, show.legend=FALSE) +
+  ggrepel::geom_text_repel(aes(label=label), size=2.8, na.rm=TRUE, show.legend=FALSE,
+                           max.overlaps=20, box.padding=0.4, segment.size=0.3, min.segment.length=0) +
   geom_vline(xintercept=c(-LFC_THRESH,LFC_THRESH), linetype="dashed", color="grey40") +
   geom_hline(yintercept=-log10(PADJ_THRESH), linetype="dashed", color="grey40") +
-  labs(title="Volcano", subtitle=paste(GROUP_TARGET,"vs",GROUP_REF),
+  labs(title="Volcano",
+       subtitle=sprintf("%d Up | %d Down | %d testes (padj<%.2g, |log2FC|>%.2g)",
+                        n_up_v, n_down_v, nrow(res_v), PADJ_THRESH, LFC_THRESH),
        x="Log2FC", y="-log10(padj)", color="Status") + theme_minimal(base_size=13)
 
 # \u2500\u2500 5. MA-Plot \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500

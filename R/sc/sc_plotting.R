@@ -229,8 +229,17 @@ build_sc_viz_plot <- function(obj, cfg, sc_palette = "default", manual_colors = 
          labs(title = vtitle, x = "Log2 Fold Change",
               y = "-log10(P.adj)", color = i18n$t("Statut")) + theme_fn
     if (show_lbl)
-      p <- p + geom_text(aes(label = label), size = 2.8, na.rm = TRUE,
-                         vjust = -0.6, show.legend = FALSE)
+      # PLOT-Q1 — repel marker labels (same rationale as plot_volcano_bulk);
+      # graceful fallback if ggrepel is unavailable.
+      if (requireNamespace("ggrepel", quietly = TRUE)) {
+        p <- p + ggrepel::geom_text_repel(aes(label = label), size = 2.8, na.rm = TRUE,
+                                          max.overlaps = 20, box.padding = 0.4,
+                                          segment.size = 0.3, show.legend = FALSE,
+                                          min.segment.length = 0)
+      } else {
+        p <- p + geom_text(aes(label = label), size = 2.8, na.rm = TRUE,
+                           vjust = -0.6, show.legend = FALSE)
+      }
 
     # Attach markers + title as attributes so the caller can build native plotly
     # without re-running FindMarkers.

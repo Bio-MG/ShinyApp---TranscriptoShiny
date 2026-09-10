@@ -200,7 +200,7 @@ mod_sc_communication_perturbation_server <- function(id, comm_state, global_data
           ctx <- pert_ctx()
           req(ctx)
           .guard_stale()
-          ggplot2::ggsave(file, plot_fn(), width = 8, height = 6.5, dpi = 150)
+          ggplot2::ggsave(file, plot_fn(), width = 8, height = 6.5, dpi = 300)
         }
       )
     }

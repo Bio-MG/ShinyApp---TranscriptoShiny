@@ -98,7 +98,13 @@ mod_bulk_de_volcano_ui <- function(id) {
     checkboxInput(ns("volcano_interactive"), i18n$t("Interactif (Plotly \u2014 survol pour d\u00e9tails g\u00e8ne)"), value = FALSE),
     uiOutput(ns("volcano_manual_palette_ui")),
     uiOutput(ns("volcano_container")),
-    downloadButton(ns("dl_volcano_png"), i18n$t("Export PNG (statique)"), class = "btn-sm btn-secondary mt-2")
+    fluidRow(
+      column(6, selectInput(ns("volcano_export_fmt"), i18n$t("Format export"),
+                            choices = c("PNG" = "png", "PDF (vectoriel)" = "pdf"))),
+      column(6, div(style = "margin-top:25px;",
+                    downloadButton(ns("dl_volcano_png"), i18n$t("Export Volcano (statique)"),
+                                   class = "btn-sm btn-secondary w-100")))
+    )
   )
 }
 
@@ -115,7 +121,13 @@ mod_bulk_de_ma_ui <- function(id) {
     helpText(style = "font-size:0.8em;",
             i18n$t("Couleurs (Significatif / Non-sig.) r\u00e9glables depuis l'onglet Volcano Plot (palette \"Manuel\" dans la barre lat\u00e9rale \u00c9tape 1).")),
     uiOutput(ns("ma_container")),
-    downloadButton(ns("dl_ma_png"), i18n$t("Export PNG (statique)"), class = "btn-sm btn-secondary mt-2")
+    fluidRow(
+      column(6, selectInput(ns("ma_export_fmt"), i18n$t("Format export"),
+                            choices = c("PNG" = "png", "PDF (vectoriel)" = "pdf"))),
+      column(6, div(style = "margin-top:25px;",
+                    downloadButton(ns("dl_ma_png"), i18n$t("Export MA-Plot (statique)"),
+                                   class = "btn-sm btn-secondary w-100")))
+    )
   )
 }
 

@@ -533,7 +533,7 @@ for (nm in names(params$saved_viz_list)) {
       # (pandoc renders `![]()` correctly in both html_document and pdf_document).
       tmp_png <- tempfile(fileext = ".png")
       ggsave(tmp_png, plot = p, width = params$fig_width %||% 9, height = params$fig_height %||% 6,
-             dpi = 150, bg = "white")
+             dpi = 300, bg = "white")
       cat(sprintf("\n\n![%s](%s)\n\n", nm, tmp_png))
     }
   }
