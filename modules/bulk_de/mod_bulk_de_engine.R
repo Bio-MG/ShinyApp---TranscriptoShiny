@@ -30,6 +30,35 @@
 # Depends on global.R: has_limma, .strip_i18n_html, .tr_plain, .t_fmt.
 # =============================================================================
 
+#' Clauses i18n-safe decrivant les genes exclus du test (STAT-Q3)
+#'
+#' Retourne des CLES de traduction + un compteur, jamais une phrase : la phrase
+#' est composee au rendu, dans la langue courante (meme patron que
+#' multimethod_status_rv / mapping_summary_data, voir plus bas). Les clauses a 0
+#' sont OMISES — l'utilisateur ne voit que ce qui concerne le contraste affiche.
+#'
+#' Vit ici (et non dans R/) parce que ce sont des libelles d'interface ; le
+#' COMPTAGE, lui, est du domaine et vit dans de_exclusion_counts().
+#'
+#' @param counts liste renvoyee par de_exclusion_counts().
+#' @return liste de list(key = <texte FR>, n = <entier>), eventuellement vide.
+.de_exclusion_clauses <- function(counts) {
+  out <- list()
+  if (isTRUE(counts$n_cooks > 0))
+    out[[length(out) + 1]] <- list(
+      key = "{n} g\u00e8ne(s) exclu(s) du test (outlier Cook's distance)",
+      n   = counts$n_cooks)
+  if (isTRUE(counts$n_zero > 0))
+    out[[length(out) + 1]] <- list(
+      key = "{n} g\u00e8ne(s) non exprim\u00e9(s)",
+      n   = counts$n_zero)
+  if (isTRUE(counts$n_filtered > 0))
+    out[[length(out) + 1]] <- list(
+      key = "{n} g\u00e8ne(s) \u00e9cart\u00e9(s) par le filtrage ind\u00e9pendant (faible expression)",
+      n   = counts$n_filtered)
+  out
+}
+
 #' Build the two small closures shared across the DE sub-modules
 #'
 #' @param input Shiny `input` object for the "de" module namespace.
@@ -220,7 +249,26 @@
     global_data$language
     .trl <- function(key) { tr <- global_data$i18n; if (is.null(tr)) return(key)
                             tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key) }
-    if (length(shared_rv$contrasts) == 0) .trl("Aucun contraste calcul\u00e9.")
-    else paste(.trl("Contraste actif:"), shared_rv$active_contrast %||% "-")
+    if (length(shared_rv$contrasts) == 0) return(.trl("Aucun contraste calcul\u00e9."))
+
+    ac   <- shared_rv$active_contrast %||% names(shared_rv$contrasts)[1]
+    base <- paste(.trl("Contraste actif:"), ac %||% "-")
+    res  <- if (is.null(ac)) NULL else shared_rv$contrasts[[ac]]
+
+    # STAT-Q3 : note d'exclusion (Cook's distance / filtrage independant). Ces
+    # deux mecanismes sont propres a DESeq2 — edgeR/limma ne les appliquent pas.
+    # `lfcSE` est le marqueur fiable qui distingue une sortie DESeq2 (verifie en
+    # STAT-Q2 : edgeR/limma n'en produisent jamais), donc la note ne s'affiche
+    # que sur un contraste DESeq2, et seulement si quelque chose a ete exclu.
+    note <- ""
+    if (!is.null(res) && "lfcSE" %in% colnames(res)) {
+      clauses <- .de_exclusion_clauses(de_exclusion_counts(res))
+      if (length(clauses) > 0) {
+        note <- paste0(" \u2014 ", paste(
+          vapply(clauses, function(cl) .t_fmt(.trl(cl$key), n = cl$n), character(1)),
+          collapse = " \u00b7 "))
+      }
+    }
+    paste0(base, note)
   })
 }
