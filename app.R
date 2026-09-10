@@ -58,6 +58,7 @@ source("R/core/pathway_helpers.R")
 # 4. DOMAIN PURE LOGIC (No Shiny reactivity)
 # 4a. Plotting & Palettes
 source("R/plotting/palettes.R")
+source("R/plotting/theme.R")   # PLOT-S1 : resolveur de theme partage (ts_theme)
 source("R/sc/sc_plotting.R")
 source("R/spatial/spatial_plotting.R")
 

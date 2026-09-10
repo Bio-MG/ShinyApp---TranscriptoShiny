@@ -112,3 +112,13 @@ TS_REPORT_MAX_PROVENANCE_ROWS  <- 500L   # lignes max de la table de provenance 
 # valeurs par defaut, pas un seuil scientifique.
 TS_PADJ_METHODS        <- c("BH", "BY", "bonferroni", "holm")
 TS_PADJ_METHOD_DEFAULT <- "BH"
+
+# --- Theme ggplot partage (PLOT-S1) -------------------------------------------
+# Choix de theme + base_size exposes par ts_theme() (R/plotting/theme.R).
+# Le defaut base_size = 11 est celui de ggplot2 lui-meme (verifie sur ggplot2
+# 4.0.3 : theme_minimal()$text$size == 11) => ts_theme("minimal") rend
+# EXACTEMENT comme theme_minimal(). Les sites historiquement codes en 12/13/15
+# conservent leur valeur explicitement (zero changement visuel).
+TS_THEME_CHOICES      <- c("minimal", "classic", "bw", "void")
+TS_THEME_DEFAULT      <- "minimal"
+TS_BASE_SIZE_DEFAULT  <- 11
