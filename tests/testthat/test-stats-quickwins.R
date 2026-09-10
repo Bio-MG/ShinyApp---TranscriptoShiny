@@ -18,6 +18,11 @@ source_project_file("R/core/io_helpers.R")     # %||%
 source_project_file("R/core/validation.R")     # guards canoniques (avant bulk_helpers)
 source_project_file("R/bulk/bulk_helpers.R")
 source_project_file("R/bulk/bulk_report_engine.R")
+# STAT-Q2 : .de_volcano_hover() vit dans le module de visualisation (c'est du
+# formatage de texte de survol plotly, donc de la présentation — pas de la
+# logique de domaine). On source le fichier uniquement pour définir la fonction
+# pure : il n'a aucun effet de bord au chargement (que des définitions).
+source_project_file("modules/bulk_de/mod_bulk_de_viz.R")
 
 #' Jeu jouet : 120 gènes × 6 échantillons, effet biologique réel sur 30 gènes.
 #' Sans effet, tous les padj valent 1 et « BH vs bonferroni » ne se distingue pas.
@@ -189,4 +194,87 @@ test_that("bulk_r_script_text defaults to BH and rejects an injected/unknown met
                        c(args, list(padj_method = 'BH"); system("echo pwned"); #'))))
   expect_error(do.call(bulk_r_script_text,
                        c(args, list(pathway_padj_method = "pas-une-methode"))))
+})
+
+# =============================================================================
+# STAT-Q2 — lfcSE : présent pour DESeq2, absent (et non-affiché) pour edgeR/limma
+# =============================================================================
+
+test_that("extract_deseq2_contrast really carries a finite lfcSE (not a NULL no-op)", {
+  dds <- .toy_dds()
+  res <- extract_deseq2_contrast(dds, "condition", "KO", "WT")
+  # Sans cette assertion, le expect_equal(bh$lfcSE, bo$lfcSE) du test Q1
+  # ci-dessus passerait trivialement sur deux NULL.
+  expect_true("lfcSE" %in% colnames(res))
+  expect_false(is.null(res$lfcSE))
+  expect_gt(sum(is.finite(res$lfcSE)), 0)
+})
+
+test_that("build_de_results_dt shows lfcSE between Log2FC and PValue when present", {
+  skip_if_not_installed("DESeq2")
+  skip_if_not_installed("DT")
+  dds <- .toy_dds()
+  res <- extract_deseq2_contrast(dds, "condition", "KO", "WT")
+  dt  <- build_de_results_dt(res)
+  expect_identical(colnames(dt$x$data),
+                   c("Gene", "BaseMean", "Log2FC", "lfcSE", "PValue", "Padj"))
+  # Arrondi à 3 décimales, aligné sur Log2FC (sinon 0.1234567 s'affiche).
+  expect_equal(dt$x$data$lfcSE, round(res$lfcSE, 3))
+})
+
+test_that("build_de_results_dt drops lfcSE gracefully when the engine never produced it", {
+  skip_if_not_installed("DT")
+  # edgeR::topTags() et limma::topTable() n'ont PAS de colonne lfcSE : la table
+  # doit rester valide, sans colonne entièrement NA (qui laisserait croire à un
+  # échec de calcul).
+  df <- data.frame(
+    gene = c("g1", "g2"), baseMean = c(10, 20),
+    log2FoldChange = c(1.5, -2), pvalue = c(1e-4, 0.02), padj = c(5e-4, 0.04),
+    stringsAsFactors = FALSE
+  )
+  dt <- build_de_results_dt(df)
+  expect_identical(colnames(dt$x$data),
+                   c("Gene", "BaseMean", "Log2FC", "PValue", "Padj"))
+})
+
+test_that("a real edgeR result renders without an lfcSE column", {
+  skip_if_not_installed("edgeR")
+  skip_if_not_installed("DT")
+  d <- .toy_bulk()
+  # On reproduit le VRAI chemin de l'application : run_edger_de() rend une table
+  # edgeR brute (logCPM/F, pas de baseMean), puis .normalize_de_cols() ajoute
+  # baseMean depuis la matrice de comptages — c'est l'appel fait par
+  # mod_bulk_de_run.R. Aucune des deux étapes ne crée de lfcSE.
+  res <- run_edger_de(d$counts, d$meta, "condition", "KO", "WT")
+  expect_false("lfcSE" %in% colnames(res))
+  res <- .normalize_de_cols(res, counts_for_basemean = d$counts)
+  expect_true("baseMean" %in% colnames(res))
+  expect_false("lfcSE" %in% colnames(res))
+  expect_false("lfcSE" %in% colnames(build_de_results_dt(res)$x$data))
+  expect_identical(colnames(build_de_results_dt(res)$x$data),
+                   c("Gene", "BaseMean", "Log2FC", "PValue", "Padj"))
+})
+
+test_that(".de_volcano_hover appends 'SE:' only when lfcSE is available", {
+  base <- data.frame(
+    gene = c("g1", "g2"), log2FoldChange = c(1.5, -2),
+    padj = c(5e-4, 0.04), status = c("Up", "Down"),
+    stringsAsFactors = FALSE
+  )
+
+  without <- .de_volcano_hover(base)
+  expect_true("hover" %in% colnames(without))
+  expect_false(any(grepl("SE:", without$hover, fixed = TRUE)))
+  # Le reste du survol est inchangé (pas de régression sur l'existant).
+  expect_true(all(grepl("Log2FC: 1.5", without$hover[1], fixed = TRUE)))
+
+  with_se <- .de_volcano_hover(cbind(base, lfcSE = c(0.25, 0.5)))
+  expect_true(grepl("SE: 0.25", with_se$hover[1], fixed = TRUE))
+  expect_true(grepl("SE: 0.5",  with_se$hover[2], fixed = TRUE))
+
+  # NA (gène filtré) => pas de ligne "SE:" pour cette ligne, sans casser le reste.
+  na_se <- .de_volcano_hover(cbind(base, lfcSE = c(NA_real_, 0.5)))
+  expect_false(grepl("SE:", na_se$hover[1], fixed = TRUE))
+  expect_true(grepl("SE: 0.5", na_se$hover[2], fixed = TRUE))
+  expect_true(grepl("Statut: Up", na_se$hover[1], fixed = TRUE))
 })
