@@ -56,6 +56,14 @@ Aucun blocage. Séquençables indépendamment du reste.
 | PLOT-S5 | Export SVG (`svglite`) | PLOT-S2 | S |
 | PLOT-S6 | Toggle plotly étendu à SC/Spatial | — | M |
 
+> ⚠️ **PLOT-S1 — piège vérifié le 2026-09-10** : la roadmap propose
+> `ts_theme(..., base_size = 12)`, mais **le défaut de ggplot2 est 11** et
+> `base_size` est **déjà codé en dur à 20 endroits avec des valeurs divergentes**
+> (15×12, 1×13, 1×11, 1×15 ; le reste — dont le switch SC et les 5 thèmes Bulk —
+> hérite de 11). Il n'existe donc **aucun défaut neutre** : chaque site migré doit
+> **conserver sa valeur actuelle**. Détail et stratégies (A) / (B) :
+> `docs/ROADMAP_HANDOFF_NEXT.md` §3 et §5 décision 1.
+
 ### 2b. Statistiques (`ROADMAP_presentation_stats.md` §4)
 
 | ID | Contenu | Effort |
