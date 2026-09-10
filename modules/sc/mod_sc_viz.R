@@ -238,8 +238,10 @@ mod_sc_viz_output_ui <- function(id) {
                                    class="btn-sm btn-outline-primary"),
             title = "Export",
             selectInput(ns("plot_theme"), i18n$t("Thème"),
-                        choices = c("Minimal"="minimal","Classique"="classic",
-                                    "BW"="bw","Vide"="void")),
+                        choices = stats::setNames(
+                          TS_THEME_CHOICES,
+                          c(.tr_plain("Minimal"), .tr_plain("Classique"),
+                            .tr_plain("BW"), .tr_plain("Vide")))),
             numericInput(ns("plot_width"),  i18n$t("Largeur"), 800, min=400, max=2000),
             numericInput(ns("plot_height"), i18n$t("Hauteur"), 600, min=300, max=1500),
             selectInput(ns("export_format"), i18n$t("Format"),

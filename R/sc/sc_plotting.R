@@ -34,9 +34,12 @@ build_sc_viz_plot <- function(obj, cfg, sc_palette = "default", manual_colors = 
   pt_size <- as.numeric(cfg$pt_size %||% 0.5)
   grp     <- cfg$group_by %||% "seurat_clusters"
 
-  theme_fn <- switch(cfg$plot_theme %||% "minimal",
-    classic = theme_classic(), bw = theme_bw(), void = theme_void(),
-    theme_minimal())
+  # PLOT-S1 — shared resolver (R/plotting/theme.R). The default base_size (11)
+  # is ggplot2's own default, i.e. EXACTLY what the bare theme_*() calls this
+  # switch used before, so the rendering is unchanged. SC does not expose
+  # base_size yet -> defensive fallback to the declared default.
+  theme_fn <- ts_theme(cfg$plot_theme %||% TS_THEME_DEFAULT,
+                       cfg$base_size %||% TS_BASE_SIZE_DEFAULT)
 
   pal_disc <- sc_discrete_scale(sc_palette, manual_colors, "color")
   pal_fill <- sc_discrete_scale(sc_palette, manual_colors, "fill")
