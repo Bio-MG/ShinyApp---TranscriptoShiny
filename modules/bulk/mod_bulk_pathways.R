@@ -46,6 +46,10 @@ mod_bulk_pathways_ui <- function(id) {
 
     downloadButton(ns("dl_pathway"), i18n$t("Export CSV"), class = "btn-sm btn-info w-100 mt-2"),
 
+    # STAT-Q4 — meme table, en Excel. Le CSV ci-dessus reste inchange ; le repli
+    # CSV du helper n'est utilise que si openxlsx est absent.
+    downloadButton(ns("dl_pathway_excel"), i18n$t("Export Excel"), class = "btn-sm btn-success w-100 mt-2"),
+
     div(class = "small text-muted mt-1", textOutput(ns("pathway_status")))
   )
 }
@@ -214,6 +218,17 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
     output$dl_pathway <- downloadHandler(
       filename = function() paste0("pathways_bulk_", input$pathway_db, "_", Sys.Date(), ".csv"),
       content  = function(file) { req(shared_rv$pathway_results); write.csv(shared_rv$pathway_results, file, row.names = FALSE) }
+    )
+    # STAT-Q4 — export Excel de la MEME table. Meme source de verite, donc pas de
+    # divergence possible entre le CSV et le classeur. L'extension annonce le
+    # format reellement ecrit (CSV si openxlsx manque).
+    output$dl_pathway_excel <- downloadHandler(
+      filename = function() paste0("pathways_bulk_", input$pathway_db, "_", Sys.Date(),
+                                   if (requireNamespace("openxlsx", quietly = TRUE)) ".xlsx" else ".csv"),
+      content  = function(file) {
+        req(shared_rv$pathway_results)
+        write_table_excel_or_csv(shared_rv$pathway_results, file)
+      }
     )
 
     # ── GSEA curve (strings translated) ──────────────────────────────────

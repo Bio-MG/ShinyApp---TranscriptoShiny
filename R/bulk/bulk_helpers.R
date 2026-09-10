@@ -1154,6 +1154,46 @@ de_exclusion_counts <- function(res_df) {
        n_filtered = as.integer(n_filtered))
 }
 
+#' Ecrit une table en Excel si possible, sinon en CSV (STAT-Q4)
+
+#'
+
+#' Export partage. `openxlsx` est OPTIONNEL : un downloadHandler ne doit jamais
+
+#' echouer en silence, et un CSV s'ouvre parfaitement dans Excel. Mieux vaut donc
+
+#' livrer un CSV qu'une erreur — c'est le comportement historique de l'export DE,
+
+#' factorise ici pour etre reutilise par l'export pathways.
+
+#'
+
+#' L'EXTENSION du fichier n'est PAS geree ici : c'est l'appelant qui la choisit
+
+#' dans son `filename =`, en testant `requireNamespace("openxlsx")` de la meme
+
+#' facon. Ainsi le nom du fichier annonce toujours le format reellement ecrit.
+
+#'
+
+#' @param df data.frame a exporter. `NULL` est refuse (rien a ecrire) ; une table
+
+#'   de 0 ligne est acceptee et produit un fichier vide mais valide.
+
+#' @param file chemin de destination fourni par `downloadHandler`.
+
+#' @return `file`, invisiblement.
+
+write_table_excel_or_csv <- function(df, file) {
+  if (is.null(df)) stop("Aucune table \u00e0 exporter.", call. = FALSE)
+  if (requireNamespace("openxlsx", quietly = TRUE)) {
+    openxlsx::write.xlsx(df, file)
+  } else {
+    utils::write.csv(df, file, row.names = FALSE)
+  }
+  invisible(file)
+}
+
 #' Standardized DE results DT table (shared by mod_bulk.R Shiny render AND the
 
 #' bulk HTML/PDF report). Centralizing this fixes a real bug: the report's
