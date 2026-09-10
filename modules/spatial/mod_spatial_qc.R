@@ -270,21 +270,21 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
       p1 <- ggplot2::ggplot(df, ggplot2::aes(x = nCount)) +
         ggplot2::geom_histogram(bins = 50, fill = "#2C3E50") +
         ggplot2::geom_vline(xintercept = input$min_count, color = "red", linetype = "dashed") +
-        ggplot2::labs(title = "nCount") + ggplot2::theme_minimal()
+        ggplot2::labs(title = "nCount") + ts_theme("minimal")
       p2 <- ggplot2::ggplot(df, ggplot2::aes(x = nFeature)) +
         ggplot2::geom_histogram(bins = 50, fill = "#18BC9C") +
         ggplot2::geom_vline(xintercept = input$min_features, color = "red", linetype = "dashed") +
-        ggplot2::labs(title = "nFeature") + ggplot2::theme_minimal()
+        ggplot2::labs(title = "nFeature") + ts_theme("minimal")
       p3 <- ggplot2::ggplot(df, ggplot2::aes(x = pct_mt)) +
         ggplot2::geom_histogram(bins = 50, fill = "#E74C3C") +
         ggplot2::geom_vline(xintercept = input$max_pct_mt, color = "red", linetype = "dashed") +
-        ggplot2::labs(title = .tr("% Mitochondrial")) + ggplot2::theme_minimal()
+        ggplot2::labs(title = .tr("% Mitochondrial")) + ts_theme("minimal")
       p4 <- ggplot2::ggplot(df, ggplot2::aes(x = pct_ribo)) +
         ggplot2::geom_histogram(bins = 50, fill = "#8E44AD") +
-        ggplot2::labs(title = .tr("% Ribosomal")) + ggplot2::theme_minimal()
+        ggplot2::labs(title = .tr("% Ribosomal")) + ts_theme("minimal")
       p5 <- ggplot2::ggplot(df, ggplot2::aes(x = log_nCount)) +
         ggplot2::geom_histogram(bins = 50, fill = "#F39C12") +
-        ggplot2::labs(title = "log10(nCount + 1)") + ggplot2::theme_minimal()
+        ggplot2::labs(title = "log10(nCount + 1)") + ts_theme("minimal")
       patchwork::wrap_plots(p1, p2, p3, p4, p5, ncol = 5)
     })
 
@@ -298,7 +298,7 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
         ggplot2::geom_hline(yintercept = input$min_features, color = "red", linetype = "dashed") +
         ggplot2::scale_color_viridis_c(option = "inferno", direction = -1, na.value = "grey70") +
         ggplot2::labs(x = "nCount", y = "nFeature", color = .tr("% MT")) +
-        ggplot2::theme_minimal(base_size = 12)
+        ts_theme("minimal", 12)
     })
 
     observeEvent(input$btn_apply_qc, {
@@ -478,7 +478,7 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
       } else .tr("indice de Moran")
       p + ggplot2::facet_wrap(~gene, ncol = n_facet_col) +
         ggplot2::scale_color_viridis_c(option = "plasma") +
-        ggplot2::coord_fixed() + ggplot2::theme_void(base_size = 15) +
+        ggplot2::coord_fixed() + ts_theme("void", 15) +
         ggplot2::theme(strip.text = ggplot2::element_text(face = "bold", size = 15),
                        legend.text = ggplot2::element_text(size = 12),
                        legend.title = ggplot2::element_text(size = 13),
@@ -564,7 +564,7 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
                                       labels = c("Hotspot (chaud)" = .tr("Hotspot (chaud)"),
                                                  "Coldspot (froid)" = .tr("Coldspot (froid)"),
                                                  "NS" = .tr("NS"))) +
-        ggplot2::coord_fixed() + ggplot2::theme_void(base_size = 12) +
+        ggplot2::coord_fixed() + ts_theme("void", 12) +
         ggplot2::labs(color = NULL, title = .tr("Hotspots locaux (Getis-Ord Gi*)"))
     })
 
@@ -588,7 +588,7 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
                                    labels = c("Hotspot (chaud)" = .tr("Hotspot (chaud)"),
                                               "Coldspot (froid)" = .tr("Coldspot (froid)"),
                                               "NS" = .tr("NS"))) +
-        ggplot2::theme_minimal(base_size = 12) +
+        ts_theme("minimal", 12) +
         ggplot2::labs(
           x = "Gi* (z-score)",
           y = .tr("Effectif"),

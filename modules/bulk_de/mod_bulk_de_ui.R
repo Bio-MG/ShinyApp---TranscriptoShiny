@@ -53,6 +53,19 @@ mod_bulk_de_ui <- function(id) {
     helpText(style = "font-size:0.78em;",
              i18n$t("S'applique aux tests DE (DESeq2/edgeR/limma) et \u00e0 l'enrichissement. Pour DESeq2, changer la m\u00e9thode recalcule p-adj \u00e0 partir du mod\u00e8le d\u00e9j\u00e0 ajust\u00e9 \u2014 sans r\u00e9ajustement.")),
 
+    # PLOT-S1 — apparence des graphiques (thème + base_size). Résolu par
+    # ts_theme() (R/plotting/theme.R) et appliqué à Volcano / MA / Heatmap.
+    # Le défaut (minimal, 11) reproduit EXACTEMENT le rendu antérieur.
+    hr(),
+    h6(i18n$t("Apparence des graphiques"), style = "font-weight:bold;"),
+    selectInput(ns("plot_theme"), i18n$t("Thème"),
+                choices = stats::setNames(
+                  TS_THEME_CHOICES,
+                  c(.tr_plain("Minimal"), .tr_plain("Classique"),
+                    .tr_plain("BW"), .tr_plain("Vide")))),
+    sliderInput(ns("base_size"), i18n$t("Taille de police (base)"),
+                min = 10, max = 20, value = TS_BASE_SIZE_DEFAULT, step = 1),
+
     textInput(ns("contrast_name"), i18n$t("Nom du contraste (auto si vide)"), placeholder = "Ex: KO_vs_WT"),
 
     actionButton(ns("run_de"), tagList(icon("play"), i18n$t("Lancer l'Analyse Diff\u00e9rentielle")),

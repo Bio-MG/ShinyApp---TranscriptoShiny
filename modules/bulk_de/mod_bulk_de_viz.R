@@ -162,6 +162,8 @@
     plot_volcano_bulk(active_de_results(), lfc_thresh = input$lfc_thresh, padj_thresh = input$padj_thresh,
                       up_color = rc[["Up"]], down_color = rc[["Down"]], ns_color = rc[["NS"]],
                       engine = .engine_label(),
+                      theme_choice = input$plot_theme %||% TS_THEME_DEFAULT,
+                      base_size    = input$base_size %||% TS_BASE_SIZE_DEFAULT,
                       tr = .tr_fn(global_data))
   })
   output$plot_volcano <- renderPlot({ volcano_plot() })
@@ -229,7 +231,10 @@
     rc <- volcano_role_colors()
     plot_ma_bulk(active_de_results(), lfc_thresh = input$lfc_thresh, padj_thresh = input$padj_thresh,
                 sig_color = rc[["Up"]], ns_color = rc[["NS"]],
-                engine = .engine_label(), tr = .tr_fn(global_data))
+                engine = .engine_label(),
+                theme_choice = input$plot_theme %||% TS_THEME_DEFAULT,
+                base_size    = input$base_size %||% TS_BASE_SIZE_DEFAULT,
+                tr = .tr_fn(global_data))
   })
   output$plot_ma <- renderPlot({ ma_plot() })
 
@@ -386,6 +391,8 @@
                       annotation_col = annot, palette = pal,
                       manual_colors = if (identical(pal, "manual")) heatmap_manual_colors() else NULL,
                       subtitle = .heatmap_stat_subtitle(),
+                      theme_choice = input$plot_theme %||% TS_THEME_DEFAULT,
+                      base_size    = input$base_size %||% TS_BASE_SIZE_DEFAULT,
                       tr = .tr_fn(global_data))
   }
 

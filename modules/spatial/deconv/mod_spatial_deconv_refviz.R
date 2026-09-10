@@ -138,7 +138,7 @@
       ggplot2::scale_color_manual(values = pal, na.value = "#CCCCCC") +
       ggplot2::geom_text(data = centroids, ggplot2::aes(label = cell_type), color = "black",
                          size = 3.2, fontface = "bold") +
-      ggplot2::theme_minimal() +
+      ts_theme("minimal") +
       ggplot2::labs(x = paste0(toupper(input$ref_viz_reduction), "_1"),
                     y = paste0(toupper(input$ref_viz_reduction), "_2"),
                     title = .tr("Reference scRNA-seq")) +

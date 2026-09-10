@@ -32,7 +32,7 @@
                      ggplot2::aes(x = id, y = proportion, fill = cell_type)) +
       ggplot2::geom_col() +
       ggplot2::scale_fill_manual(values = spatial_discrete_colors(unique(long$cell_type), shared_rv, kind = "celltype")) +
-      ggplot2::theme_minimal() +
+      ts_theme("minimal") +
       ggplot2::theme(axis.text.x = ggplot2::element_blank(),
                      legend.text = ggplot2::element_text(size = 8)) +
       ggplot2::labs(x = .tr("Spots/cellules (echantillon)"), y = .tr("Proportion"), fill = .tr("Type"))
@@ -58,7 +58,7 @@
       ggplot2::geom_tile() +
       ggplot2::geom_text(ggplot2::aes(label = sprintf("%.2f", correlation)), size = 3) +
       spatial_diverging_scale(shared_rv, aesthetic = "fill", limits = c(-1, 1)) +
-      ggplot2::theme_minimal(base_size = 11) +
+      ts_theme("minimal", 11) +
       ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
       ggplot2::labs(x = NULL, y = NULL,
                     fill = .tr("Correlation\n(Pearson)"),

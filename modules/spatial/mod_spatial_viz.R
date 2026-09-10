@@ -1333,7 +1333,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
           ylim = spatial_ranges$y,
           expand = FALSE
         ) +
-        ggplot2::theme_void()
+        ts_theme("void")
       
       if (is.numeric(df$value)) {
         limits <- if (isTRUE(input$fixed_scale) &&

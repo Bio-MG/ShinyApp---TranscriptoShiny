@@ -228,14 +228,14 @@ mod_spatial_lr_server <- function(id, global_data, shared_rv) {
         ggplot2::ggplot(long_df, ggplot2::aes(x = score)) +
           ggplot2::geom_histogram(bins = 30, fill = shared_rv$color_palette %||% "default", color = "white") +
           spatial_continuous_scale(shared_rv, fill) +
-          ggplot2::theme_minimal(base_size = 12) +
+          ts_theme("minimal", 12) +
           ggplot2::labs(title = .tr("Repartition des scores LR moyens par spot"), x = .tr("Moyenne score LR"), y = .tr("Count")) +
           ggplot2::labs(subtitle = sprintf(.tr("k=%d, %d permutations: shared_rv$lr_result$spot_scores"),
                                           input$k_neighbors, input$n_perm))
       } else {
         ggplot2::ggplot() +
           ggplot2::labs(title = .tr("Aucune donnée de scores LR disponible"), subtitle = .tr("Calculez d'abord les scores (onglet gauche)")) +
-          ggplot2::theme_minimal()
+          ts_theme("minimal")
       }
     })
 
@@ -247,7 +247,7 @@ mod_spatial_lr_server <- function(id, global_data, shared_rv) {
       df <- shared_rv$lr_result$pair_scores
       signif_counts <- table(df$signif)
       if (!length(signif_counts)) {
-        return(ggplot2::ggplot() + ggplot2::labs(title = .tr("Aucune donnée")) + ggplot2::theme_minimal())
+        return(ggplot2::ggplot() + ggplot2::labs(title = .tr("Aucune donnée")) + ts_theme("minimal"))
       }
 
       ggplot2::ggplot(as.data.frame(signif_counts), ggplot2::aes(x = reorder(name, count), y = count, fill = name)) +
@@ -257,7 +257,7 @@ mod_spatial_lr_server <- function(id, global_data, shared_rv) {
           names = c("#999999", setNames(shared_rv$manual_gradient[["high"]], ifelse("Hotspot" %in% names(signif_counts), 1L, NA)),
                             setNames(shared_rv$manual_gradient[["low"]], ifelse("Coldspot" %in% names(signif_counts), 1L, NA)))) +
         spatial_continuous_scale(shared_rv, fill) +
-        ggplot2::theme_minimal(base_size = 12) +
+        ts_theme("minimal", 12) +
         ggplot2::coord_flip() +
         ggplot2::labs(title = .tr("Repartition Hotspot/Coldspot/NS des paires LR"), x = .tr("Signification"), y = .tr("Nombre"))
     })

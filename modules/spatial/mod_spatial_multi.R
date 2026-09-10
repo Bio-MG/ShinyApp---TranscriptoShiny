@@ -380,7 +380,7 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
         ggplot2::geom_tile() +
         ggplot2::geom_text(ggplot2::aes(label = sprintf("%.1f", std_resid)), size = 3.2) +
         spatial_diverging_scale(shared_rv, aesthetic = "fill") +
-        ggplot2::theme_minimal(base_size = 12) +
+        ts_theme("minimal", 12) +
         ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
         ggplot2::labs(x = .tr("Cluster"), y = .tr("Echantillon"), fill = .tr("Residu\nstandardise"),
                       title = .tr("Ecarts a l'independance (dataset x cluster)"))
@@ -393,7 +393,7 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
       ggplot2::ggplot(res$proportions, ggplot2::aes(x = dataset, y = proportion, fill = cluster)) +
         ggplot2::geom_col() +
         ggplot2::scale_fill_manual(values = spatial_discrete_colors(lv, shared_rv, kind = "cluster")) +
-        ggplot2::theme_minimal(base_size = 12) +
+        ts_theme("minimal", 12) +
         ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 30, hjust = 1)) +
         ggplot2::labs(x = NULL, y = .tr("Proportion"), fill = .tr("Cluster"),
                       title = .tr("Composition en clusters par echantillon"))

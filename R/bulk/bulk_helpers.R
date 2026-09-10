@@ -679,7 +679,8 @@ get_vst_matrix <- function(dds) {
 #' Bulk PCA plot colored/shaped by metadata
 
 plot_bulk_pca <- function(vst_matrix, metadata, color_by = NULL, shape_by = NULL, ntop = 500,
-                          palette = "default", manual_colors = NULL, tr = NULL) {
+                          palette = "default", manual_colors = NULL,
+                          theme_choice = TS_THEME_DEFAULT, base_size = TS_BASE_SIZE_DEFAULT, tr = NULL) {
 
   tr <- tr %||% function(x) x
 
@@ -768,13 +769,11 @@ plot_bulk_pca <- function(vst_matrix, metadata, color_by = NULL, shape_by = NULL
 
          shape = if (has_shape) shape_by else NULL) +
 
-    theme_minimal() +
+    ts_theme(theme_choice, base_size) +
 
     theme(plot.title = element_text(face = "bold", size = 14))
 
 }
-
-
 
 #' Volcano plot for bulk DE results
 #'
@@ -782,7 +781,8 @@ plot_bulk_pca <- function(vst_matrix, metadata, color_by = NULL, shape_by = NULL
 #'   the statistical subtitle. NULL omits the engine from the subtitle.
 plot_volcano_bulk <- function(res_df, lfc_thresh = 1, padj_thresh = 0.05, top_label = 10,
                               up_color = "#E74C3C", down_color = "#2980B9", ns_color = "#BDC3C7",
-                              engine = NULL, tr = NULL) {
+                              engine = NULL, theme_choice = TS_THEME_DEFAULT,
+                              base_size = TS_BASE_SIZE_DEFAULT, tr = NULL) {
 
   tr <- tr %||% function(x) x
 
@@ -842,7 +842,7 @@ plot_volcano_bulk <- function(res_df, lfc_thresh = 1, padj_thresh = 0.05, top_la
     labs(title = tr("Volcano Plot — Analyse Différentielle"),
          subtitle = tr(stat_subtitle),
          x = tr("Log2 Fold Change"), y = tr("-Log10(P-adj)"), color = tr("Statut")) +
-    theme_minimal() +
+    ts_theme(theme_choice, base_size) +
     theme(plot.title = element_text(face = "bold", size = 14),
           plot.subtitle = element_text(size = 10, color = "grey35"))
 
@@ -855,7 +855,8 @@ plot_volcano_bulk <- function(res_df, lfc_thresh = 1, padj_thresh = 0.05, top_la
 #' @param engine Optional DE engine name surfaced in the statistical subtitle.
 plot_ma_bulk <- function(res_df, lfc_thresh = 1, padj_thresh = 0.05,
                          sig_color = "#E74C3C", ns_color = "#BDC3C7",
-                         engine = NULL, tr = NULL) {
+                         engine = NULL, theme_choice = TS_THEME_DEFAULT,
+                         base_size = TS_BASE_SIZE_DEFAULT, tr = NULL) {
 
   tr <- tr %||% function(x) x
 
@@ -883,7 +884,7 @@ plot_ma_bulk <- function(res_df, lfc_thresh = 1, padj_thresh = 0.05,
     labs(title = tr("MA-Plot"), subtitle = tr(stat_subtitle),
          x = tr("Log10(Expression Moyenne + 1)"), y = tr("Log2 Fold Change")) +
 
-    theme_minimal() +
+    ts_theme(theme_choice, base_size) +
 
     theme(plot.title = element_text(face = "bold", size = 14),
           plot.subtitle = element_text(size = 10, color = "grey35"))
@@ -898,7 +899,8 @@ plot_ma_bulk <- function(res_df, lfc_thresh = 1, padj_thresh = 0.05,
 #'   column title line. Ignored by the ggplot fallback path.
 plot_heatmap_bulk <- function(vst_matrix, genes, metadata, annotation_col = NULL, scale_rows = TRUE,
 
-                              palette = "default", manual_colors = NULL, subtitle = NULL, tr = NULL) {
+                              palette = "default", manual_colors = NULL, subtitle = NULL,
+                              theme_choice = TS_THEME_DEFAULT, base_size = TS_BASE_SIZE_DEFAULT, tr = NULL) {
 
   tr <- tr %||% function(x) x
 
@@ -967,7 +969,7 @@ plot_heatmap_bulk <- function(vst_matrix, genes, metadata, annotation_col = NULL
 
     scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#B2182B", midpoint = 0, name = tr("Z-score")) +
 
-    theme_minimal() + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    ts_theme(theme_choice, base_size) + theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 }
 
@@ -1001,7 +1003,9 @@ plot_sample_correlation_heatmap <- function(vst_matrix, metadata = NULL,
 
                                              annotation_col = NULL, method = "pearson",
 
-                                             palette = "default", manual_colors = NULL, tr = NULL) {
+                                             palette = "default", manual_colors = NULL,
+                                             theme_choice = TS_THEME_DEFAULT,
+                                             base_size = TS_BASE_SIZE_DEFAULT, tr = NULL) {
 
   tr <- tr %||% function(x) x
 
@@ -1071,7 +1075,7 @@ plot_sample_correlation_heatmap <- function(vst_matrix, metadata = NULL,
 
     labs(title = tr("Corrélation Inter-Échantillons (QC)"), x = NULL, y = NULL) +
 
-    theme_minimal() +
+    ts_theme(theme_choice, base_size) +
 
     theme(axis.text.x = element_text(angle = 45, hjust = 1),
 
@@ -1439,7 +1443,8 @@ summarize_contrasts_updown <- function(contrasts, lfc_thresh = 1, padj_thresh = 
 #' Up/Down summary barchart — one or several contrasts side by side
 #' @param summary_df Output of `summarize_contrasts_updown()`.
 #' @return ggplot object (grouped bar chart, counts labelled).
-plot_updown_barchart <- function(summary_df, tr = NULL, palette = "default", manual_colors = NULL) {
+plot_updown_barchart <- function(summary_df, tr = NULL, palette = "default", manual_colors = NULL,
+                                 theme_choice = TS_THEME_DEFAULT, base_size = 12) {
   tr <- tr %||% function(x) x
   if (is.null(summary_df) || nrow(summary_df) == 0) {
     stop("Aucun contraste calculé.")
@@ -1461,7 +1466,7 @@ plot_updown_barchart <- function(summary_df, tr = NULL, palette = "default", man
     scale_fill_manual(values = c(Up = role_cols[["Up"]], Down = role_cols[["Down"]])) +
     labs(title = tr("Gènes significatifs Up / Down par contraste"),
          x = NULL, y = tr("Nombre de gènes"), fill = NULL) +
-    theme_minimal(base_size = 12) +
+    ts_theme(theme_choice, base_size) +
     theme(plot.title = element_text(face = "bold", size = 14),
           axis.text.x = element_text(angle = if (nrow(summary_df) > 4) 30 else 0, hjust = 1))
 }
@@ -1476,7 +1481,8 @@ plot_updown_barchart <- function(summary_df, tr = NULL, palette = "default", man
 #' @param ntop Number of most-variable genes used (must match plot_bulk_pca()).
 #' @param max_pc Maximum number of components to display.
 #' @return ggplot object (bars = % variance per PC, line = cumulative %).
-plot_scree_bulk <- function(vst_matrix, ntop = 500, max_pc = 10, tr = NULL) {
+plot_scree_bulk <- function(vst_matrix, ntop = 500, max_pc = 10,
+                            theme_choice = TS_THEME_DEFAULT, base_size = 12, tr = NULL) {
   tr <- tr %||% function(x) x
   rv   <- apply(vst_matrix, 1, var)
   ntop <- min(ntop, nrow(vst_matrix))
@@ -1495,6 +1501,6 @@ plot_scree_bulk <- function(vst_matrix, ntop = 500, max_pc = 10, tr = NULL) {
     geom_text(aes(y = pct, label = paste0(round(pct, 1), "%")), vjust = -0.6, size = 3) +
     labs(title = tr("Scree Plot — Variance Expliquée"), x = NULL,
          y = tr("% Variance (barres) / % Cumulée (ligne)")) +
-    theme_minimal(base_size = 12) +
+    ts_theme(theme_choice, base_size) +
     theme(plot.title = element_text(face = "bold", size = 13))
 }
