@@ -257,7 +257,7 @@ mod_spatial_niche_server <- function(id, global_data, shared_rv) {
       ggplot2::ggplot(long, ggplot2::aes(x = groupe, y = niche, fill = proportion)) +
         ggplot2::geom_tile() +
         spatial_continuous_scale(shared_rv, aesthetic = "fill", limits = c(0, 1)) +
-        ggplot2::theme_minimal(base_size = 12) +
+        ts_theme("minimal", 12) +
         ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
         ggplot2::labs(x = NULL, y = NULL, fill = .tr("Proportion\nmoyenne"))
     })
@@ -372,7 +372,7 @@ mod_spatial_niche_server <- function(id, global_data, shared_rv) {
         ggplot2::geom_tile() +
         ggplot2::geom_text(ggplot2::aes(label = ifelse(is.na(z_score), "", sprintf("%.1f", z_score))), size = 3) +
         spatial_diverging_scale(shared_rv, aesthetic = "fill", na.value = "grey85") +
-        ggplot2::theme_minimal(base_size = 12) +
+        ts_theme("minimal", 12) +
         ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
         ggplot2::labs(x = .tr("Voisin"), y = .tr("Origine"), fill = "z-score",
                       title = sprintf(.tr("Enrichissement de voisinage (k=%d, %d permutations)"),
@@ -484,7 +484,7 @@ mod_spatial_niche_server <- function(id, global_data, shared_rv) {
         ggplot2::geom_line(ggplot2::aes(y = k_observed), color = "#D55E00", linewidth = 1) +
         ggplot2::geom_point(ggplot2::aes(y = k_observed, color = signif), size = 2.8) +
         ggplot2::scale_color_manual(values = spatial_ripley_colors(shared_rv)) +
-        ggplot2::theme_minimal(base_size = 12) +
+        ts_theme("minimal", 12) +
         ggplot2::labs(x = .tr("Rayon r"), y = "K(r)", color = .tr("Significativite"), title = title_txt,
                       subtitle = .tr("Bande grise = enveloppe 95% (etiquetage aleatoire)"))
     })
