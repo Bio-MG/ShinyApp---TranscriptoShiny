@@ -60,6 +60,7 @@ source("R/core/pathway_helpers.R")
 source("R/plotting/palettes.R")
 source("R/plotting/theme.R")   # PLOT-S1 : resolveur de theme partage (ts_theme)
 source("R/plotting/export.R")  # PLOT-S2 : helper d'export unifie (ts_export_plot)
+source("R/plotting/datatable.R")  # PLOT-S3 : wrapper DT harmonise (ts_datatable)
 source("R/sc/sc_plotting.R")
 source("R/spatial/spatial_plotting.R")
 

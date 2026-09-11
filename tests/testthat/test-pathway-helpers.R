@@ -15,6 +15,7 @@
 # =============================================================================
 
 source_project_file("R/plotting/palettes.R")
+source_project_file("R/plotting/datatable.R")   # PLOT-S3 : build_pathway_dt() -> ts_datatable()
 source_project_file("R/core/pathway_helpers.R")
 # ggplot2 is required for plot builders but not auto-loaded by helper-source.R
 if (requireNamespace("ggplot2", quietly = TRUE)) suppressPackageStartupMessages(library(ggplot2))

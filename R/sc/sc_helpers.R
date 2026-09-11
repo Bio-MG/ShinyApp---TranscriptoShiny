@@ -849,9 +849,7 @@ build_markers_dt <- function(df) {
 
   )
 
-  DT::datatable(df_display, filter = "top", rownames = FALSE,
-
-                options = list(pageLength = 15, scrollX = TRUE)) %>%
+  ts_datatable(df_display, page_length = 15) %>%
 
     DT::formatStyle(
 

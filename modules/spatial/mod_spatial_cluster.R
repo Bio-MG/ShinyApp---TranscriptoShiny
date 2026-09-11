@@ -354,9 +354,7 @@ mod_spatial_cluster_server <- function(id, global_data, shared_rv) {
 
     output$markers_table <- DT::renderDT({
       req(shared_rv$cluster_markers)
-      DT::datatable(shared_rv$cluster_markers,
-                    filter = "top", rownames = FALSE,
-                    options = list(pageLength = 20, scrollX = TRUE)) |>
+      ts_datatable(shared_rv$cluster_markers, page_length = 20) |>
         DT::formatRound(c("avg_log2FC", "pct.1", "pct.2"), 3) |>
         DT::formatSignif(c("p_val", "p_val_adj"), 3)
     })
