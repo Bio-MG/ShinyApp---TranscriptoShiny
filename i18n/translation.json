@@ -8296,6 +8296,34 @@
     {
       "fr": "Les analyses aval (pseudobulk, Milo, scCODA) exploitent l'identité d'échantillon pour éviter la pseudo-réplication.",
       "en": "Downstream analyses (pseudobulk, Milo, scCODA) leverage sample identity to avoid pseudoreplication."
+    },
+    {
+      "fr": "Méthode de correction (p-adj)",
+      "en": "Multiple-testing correction (p-adj)"
+    },
+    {
+      "fr": "S'applique aux tests DE (DESeq2/edgeR/limma) et à l'enrichissement. Pour DESeq2, changer la méthode recalcule p-adj à partir du modèle déjà ajusté — sans réajustement.",
+      "en": "Applies to DE tests (DESeq2/edgeR/limma) and to enrichment. For DESeq2, changing the method recomputes p-adj from the already-fitted model — without refitting."
+    },
+    {
+      "fr": "Export Excel",
+      "en": "Excel export"
+    },
+    {
+      "fr": "{n} gène(s) exclu(s) du test (outlier Cook's distance)",
+      "en": "{n} gene(s) excluded from the test (Cook's distance outlier)"
+    },
+    {
+      "fr": "{n} gène(s) non exprimé(s)",
+      "en": "{n} gene(s) not expressed"
+    },
+    {
+      "fr": "{n} gène(s) écarté(s) par le filtrage indépendant (faible expression)",
+      "en": "{n} gene(s) discarded by independent filtering (low expression)"
+    },
+    {
+      "fr": "Taille de police (base)",
+      "en": "Base font size"
     }
   ]
 }
