@@ -11,6 +11,7 @@
 # =============================================================================
 source_project_file("R/core/io_helpers.R")
 source_project_file("R/core/validation.R")
+source_project_file("R/plotting/theme.R")      # ts_theme() — resolveur de theme partage
 source_project_file("R/bulk/bulk_helpers.R")
 source_project_file("R/bulk/bulk_batch_qc.R")
 
@@ -176,6 +177,25 @@ test_that("mod_bulk_filter consumes the contract (QC Batch tab)", {
   expect_match(mod_src, "bulk_assert_transformed_matrix", fixed = TRUE)
   # Boîte d'alerte collinéarité.
   expect_match(mod_src, "alert-danger", fixed = TRUE)
+})
+
+# ── Autonomie ggplot2 : le fichier doit tourner SANS ggplot2 attache ───────
+# Regression vecue : plot_bulk_varpart() appelait ggplot()/labs()/theme() nus.
+# Ca marche dans l'app (global.R attache ggplot2) mais CASSE dans tout contexte
+# externe — dont le harnais de test — avec "could not find function ggplot".
+test_that("R/bulk/bulk_batch_qc.R prefixes every ggplot2 call", {
+  path <- file.path(ts_project_root(), "R/bulk/bulk_batch_qc.R")
+  code <- readLines(path, warn = FALSE, encoding = "UTF-8")
+  code <- grep("^\\s*#", code, value = TRUE, invert = TRUE)   # on ignore les commentaires
+
+  # appels nus = le mot-cle NON precede de "ggplot2::"
+  bare <- "(^|[^.[:alnum:]_])(ggplot|aes|geom_[a-z_]+|labs|theme|theme_[a-z]+|scale_[a-z_]+|element_[a-z]+|facet_[a-z]+|coord_[a-z]+|guide_[a-z]+)[[:space:]]*\\("
+  hits <- grep(bare, code, perl = TRUE, value = TRUE)
+  # on ne garde que les lignes ou le motif n'est PAS prefixe par ggplot2::
+  real <- hits[!grepl("ggplot2::", hits, fixed = TRUE)]
+  expect(length(real) == 0L,
+         paste("appels ggplot2 non prefixes (le fichier n'est pas autonome) :",
+               paste(trimws(real), collapse = " | ")))
 })
 
 # ── Synchronisation code <-> contrat documentaire ──────────────────────────

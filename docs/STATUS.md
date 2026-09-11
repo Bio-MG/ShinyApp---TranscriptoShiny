@@ -21,13 +21,18 @@ roadmaps (voir `git log --oneline -- docs/`).
 
 > **▶ PROCHAINE ÉTAPE** : **PLOT-S2** (`ts_export_plot()` — helper d'export
 > unifié dpi/format).
-> **Déjà livrés cette session** : **PLOT-S1 ✅** (`ts_theme()` partagé +
-> propagation Bulk/SC/Spatial) et **4D-3 — chemin de données ✅** (10X/Seurat →
-> entrée CellChat, **sans dépendance nouvelle**). Rapports de stage 6 sections :
-> `docs/ROADMAP_HANDOFF_STAGE_PLOT_S1.md` et
+>
+> **Tout est poussé.** `HEAD = aa92f24` (« bulk V2.0, sc compare ») —
+> **0 commit d'avance sur `origin/main`**, arbre de travail **propre**.
+>
+> **Livré :** **PLOT-S1 ✅** (`ts_theme()` partagé + propagation Bulk/SC/Spatial,
+> 44 sites), **4D-3 — chemin de données ✅** (10X/Seurat → entrée CellChat, sans
+> dépendance nouvelle), **Bulk V2 / batch-QC ✅** (commité par l'utilisateur,
+> puis **fini** — erreur de test corrigée, dette i18n soldée, cf. §5bis).
+>
+> Rapports de stage 6 sections : `docs/ROADMAP_HANDOFF_STAGE_PLOT_S1.md` et
 > `docs/ROADMAP_HANDOFF_STAGE_CELLCHAT_INPUT.md`. Handoff :
-> `docs/ROADMAP_HANDOFF_NEXT.md`. **3 commits locaux (`8295fde`, `dcaa1b2`,
-> `6bf18ca`), non poussés.** Rien à fournir côté données.
+> `docs/ROADMAP_HANDOFF_NEXT.md`. Rien à fournir côté données.
 
 ---
 
@@ -45,6 +50,7 @@ roadmaps (voir `git log --oneline -- docs/`).
 | **PLOT-Q1..Q5 — ggrepel, dpi 300, export PDF, sous-titres stats** | **`4dee553`** | **2026-09-10** |
 | **PLOT-S1 — `ts_theme()` partagé + propagation Bulk / SC / Spatial** | **`8295fde`** + **`dcaa1b2`** | **2026-09-10** |
 | **4D-3 — chemin de données 10X/Seurat → entrée CellChat** | **`6bf18ca`** | **2026-09-10** |
+| **Bulk V2 / batch-QC (+ compare SC)** | **`aa92f24`** (commité + poussé par l'utilisateur) | **2026-09-11** |
 
 ## 2. Chantiers ouverts, par ordre d'actionnabilité
 
@@ -132,10 +138,11 @@ Détail dans `docs/ROADMAP.md` §4 (« Principe double jeu de données »).
 « séparés » n'existent pas. C'est une **évolution**, pas un correctif — donc
 proposition explicite avant exécution (règle du dépôt).
 
-### 2h. Bulk V2 / batch-QC — ⚠️ sans roadmap
+### 2h. Bulk V2 / batch-QC — ✅ commité, ⚠️ toujours sans roadmap
 
-Travail en cours **non commité** dans l'arbre (voir §5). Il n'appartient à
-aucune des quatre roadmaps : c'est un chantier sans document de pilotage.
+**Commité et poussé le 2026-09-11** (`aa92f24` — « bulk V2.0, sc compare »),
+puis fini (voir §5bis). Il n'appartient toujours à **aucune des quatre
+roadmaps** : c'est un chantier sans document de pilotage.
 Les seuils associés existent bien dans `config/thresholds.R`
 (`TS_BULK_VARPART_MAX_GENES`, `TS_BULK_GSVA_*`, `TS_BULK_WGCNA_*`,
 `TS_BULK_SURV_MIN_EVENTS`, …) et le contrat
@@ -153,54 +160,64 @@ de gènes < 20 % après strip des suffixes Ensembl `.1/.2`.
 
 ---
 
-### 2i. Dette i18n héritée de STAT-Q — 7 clés manquantes
+### 2i. Dette i18n héritée de STAT-Q — ✅ SOLDÉE (7 clés)
 
-**Ouverte le 2026-09-10.** `i18n/translation.json` est verrouillé par le WIP
-Bulk V2 (§5), donc les clés introduites par STAT-Q n'ont pas pu y être ajoutées.
-En attendant elles retombent sur le texte FR (convention « clé = texte FR ») :
-**l'UI française est correcte, l'UI anglaise affichera du français pour ces
-7 chaînes.**
+**Ouverte le 2026-09-10, fermée le 2026-09-11.** Les 7 clés ont été ajoutées à
+`i18n/translation.json` (entrées `{fr, en}`), avec leurs traductions
+anglaises. JSON toujours valide (2080 entrées). Plus aucune chaîne française
+ne fuit dans l'UI anglaise pour ces libellés.
 
 ```
-"Méthode de correction (p-adj)"
-"S'applique aux tests DE (DESeq2/edgeR/limma) et à l'enrichissement. Pour DESeq2, changer la méthode recalcule p-adj à partir du modèle déjà ajusté — sans réajustement."
-"Export Excel"
-"{n} gène(s) exclu(s) du test (outlier Cook's distance)"
-"{n} gène(s) non exprimé(s)"
-"{n} gène(s) écarté(s) par le filtrage indépendant (faible expression)"
-"Taille de police (base)"
+"Méthode de correction (p-adj)"                    -> "Multiple-testing correction (p-adj)"
+"S'applique aux tests DE (DESeq2/edgeR/limma) …"   -> "Applies to DE tests (DESeq2/edgeR/limma) …"
+"Export Excel"                                     -> "Excel export"
+"{n} gène(s) exclu(s) du test (outlier Cook's …)"  -> "{n} gene(s) excluded from the test (Cook's …)"
+"{n} gène(s) non exprimé(s)"                       -> "{n} gene(s) not expressed"
+"{n} gène(s) écarté(s) par le filtrage indépendant …" -> "{n} gene(s) discarded by independent filtering …"
+"Taille de police (base)"                          -> "Base font size"
 ```
 
-**Correctif** : les ajouter dans le même commit que le WIP Bulk V2 (ce fichier
-est déjà ouvert). Aucun changement de code n'est requis — le code les appelle
-déjà. Détail : `docs/ROADMAP_HANDOFF_STAGE_STAT_Q.md` §1ter et §4.
-
-*Note PLOT-S1* : une seule clé nouvelle a été introduite (le slider
-`base_size` de `mod_bulk_de_ui.R`). Les autres libellés de thème existaient
-déjà (`Thème`, `Minimal`, `Classique`, `BW`, `Vide`).
+*Note* : 6 clés venaient de STAT-Q, la 7ᵉ (`Taille de police (base)`) du slider
+`base_size` ajouté par PLOT-S1. Les autres libellés de thème existaient déjà
+(`Thème`, `Minimal`, `Classique`, `BW`, `Vide`). Aucun changement de code n'était
+requis — le code appelait déjà ces clés.
 
 ---
 
-### 2j. ⚠️ Gouvernance — `docs/` est gitignoré
+### 2j. `docs/` est gitignoré — ✅ DÉCISION ASSUMÉE (avec une réserve)
 
-**Découvert le 2026-09-10.** `.gitignore:36` contient `docs/`. Conséquence
-vérifiée : `git ls-files "*.md"` ne renvoie que **5 fichiers**
-(`CHANGELOG.md`, `README.md`, `RENV_SETUP.md`, `docs/ROADMAP.md`,
-`docs/STATUS.md`). Les **21 autres documents** du dossier — dont **tous les
-contrats gelés** de `docs/contracts/` (velocity, communication, DA design,
-Milo, scCODA, DA cross-views, consolidated report, cellchat input) et **tous
-les rapports de stage** — sont **non suivis**.
+**Découvert le 2026-09-10, tranché par l'utilisateur le 2026-09-11.**
 
-Pourquoi c'est un problème : la règle n°5 du dépôt impose « code + test de gel
-+ doc `docs/contracts/` **simultanément** ». Aujourd'hui le contrat est bien
-produit, mais il n'existe **que sur cette machine** : un clone neuf perd les
-contrats, et `git revert` ne peut pas les restaurer puisqu'ils n'ont aucun
-historique.
+`.gitignore:36` contient `docs/`. Conséquence vérifiée : `git ls-files "*.md"`
+ne renvoie que **5 fichiers** (`CHANGELOG.md`, `README.md`, `RENV_SETUP.md`,
+`docs/ROADMAP.md`, `docs/STATUS.md`). Les **21 autres documents** du dossier —
+tous les contrats gelés de `docs/contracts/` et tous les rapports de stage —
+sont **non suivis**.
 
-**Non traité volontairement** : retirer une règle d'ignore est une décision de
-politique de dépôt, pas une correction technique. À trancher : sortir
-`docs/contracts/` (et `docs/ROADMAP_HANDOFF_*`) du `.gitignore`, ou assumer
-que les documents sont des notes de travail locales.
+**Décision de l'utilisateur : c'est volontaire.** Les documents sont des notes
+de travail **locales**, destinées à l'agent qui travaille sur cette machine.
+La règle d'ignore n'est **pas** modifiée.
+
+**Réserve (avis, non appliqué)** — le choix est défendable pour les *rapports de
+stage* et le *handoff*, qui sont des notes de session. Il l'est moins pour
+`docs/contracts/` : ces fichiers ne sont pas des notes, ce sont des **contrats
+gelés** que les tests de gel vérifient (par ex.
+`test-bulk-batch-qc-contract-freeze.R` échoue si
+`docs/contracts/BULK_BATCH_QC_CONTRACT.md` n'est plus synchronisé). Conséquence
+concrète : sur un clone neuf, **ces tests échouent** faute de fichier, et
+`git revert` ne peut pas restaurer un contrat sans historique.
+
+**Compromis proposé, à valider** : laisser `docs/` ignoré, mais ajouter une
+exception pour les contrats uniquement —
+
+```gitignore
+docs/
+!docs/contracts/
+!docs/contracts/**
+```
+
+Garde les notes locales, rend les contrats traçables. **Non appliqué** —
+décision de l'utilisateur.
 
 ---
 
@@ -293,9 +310,14 @@ supplémentaire). Milo est le candidat réaliste.
 
 ---
 
-## 5. État de l'arbre de travail (WIP à ne pas committer sans accord)
+## 5. État de l'arbre de travail
 
-Non commité au 2026-09-10 (chantier Bulk V2 / batch-QC, cf. §2h) :
+**✅ Arbre PROPRE au 2026-09-11.** Le chantier Bulk V2 / batch-QC listé
+ci-dessous a été **commité et poussé** par l'utilisateur (`aa92f24` —
+« bulk V2.0, sc compare », 14 fichiers, +1488). Il n'y a donc **plus** de WIP
+en attente ; cette section ne décrit plus que l'historique.
+
+Anciennement non commité au 2026-09-10 (chantier Bulk V2 / batch-QC, cf. §2h) :
 
 ```
  M app.R, config/thresholds.R, i18n/translation.json,
@@ -309,6 +331,22 @@ Non commité au 2026-09-10 (chantier Bulk V2 / batch-QC, cf. §2h) :
 
 `docs/kanban_roadmap.html` est **non suivi par git** (nouveau, ajouté par
 l'utilisateur) — à ajouter au suivi quand souhaité.
+
+### 5bis. Pourquoi Bulk V2 était « verrouillé » — et ce qui restait
+
+Question posée le 2026-09-11. Réponse : il y avait **trois** raisons, dont une
+seule était réellement technique.
+
+| # | Raison | Nature | Résolution |
+|---|---|---|---|
+| 1 | **1 erreur de test** — `test-bulk-batch-qc.R` « plots : consommateurs purs ggplot » échouait : `could not find function "ggplot"` | **Technique, bloquante** | `plot_bulk_varpart()` / `plot_bulk_batch_scree()` appelaient `ggplot()`, `labs()`, `theme()` **nus**. Corrigé : appels préfixés `ggplot2::` + garde de gel ajoutée (le fichier doit tourner **sans** ggplot2 attaché) |
+| 2 | **Aucune roadmap** — chantier sans document de pilotage (§2h) | Organisationnelle | Toujours ouvert : lui écrire une roadmap dédiée |
+| 3 | **Dette i18n non soldée** — les 7 clés devaient partir avec le commit Bulk V2 | Dette déclarée | Soldée : les 7 clés ont été ajoutées à `i18n/translation.json` (§2i) |
+
+**Corrections apportées dans le commit de finition :**
+- `R/bulk/bulk_batch_qc.R` — appels ggplot2 préfixés ; `theme_minimal(base_size = 12)` → `ts_theme("minimal", 12)` (site exclu de PLOT-S1 parce que le fichier était alors en WIP — **zéro changement visuel**, 12 conservé explicitement).
+- `tests/testthat/test-bulk-batch-qc.R` — source `R/plotting/theme.R` ; `library(ggplot2)` uniquement pour `plot_scree_bulk()` (fonction **préexistante** qui appelle encore `ggplot()` nu). **38 → 40 assertions, 1 erreur → 0.**
+- `tests/testthat/test-bulk-batch-qc-contract-freeze.R` — nouvelle garde « aucun appel ggplot2 nu » (74 → 75 assertions).
 
 ---
 

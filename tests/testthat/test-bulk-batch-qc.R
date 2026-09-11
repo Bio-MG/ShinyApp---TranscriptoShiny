@@ -7,8 +7,17 @@
 # plafond mémoire de gènes déterministe, plots consommateurs purs.
 # =============================================================================
 source_project_file("R/core/validation.R")
+source_project_file("R/plotting/theme.R")      # ts_theme() — resolveur de theme partage
 source_project_file("R/bulk/bulk_helpers.R")
 source_project_file("R/bulk/bulk_batch_qc.R")
+
+# ggplot2 est attache par global.R dans l'app, mais PAS dans ce harnais.
+# plot_bulk_varpart() prefixe ses propres appels (il doit rester autonome) ;
+# en revanche plot_bulk_batch_scree() delegue a plot_scree_bulk(), fonction
+# PREEXISTANTE qui appelle encore ggplot() nu — d'ou le library() ci-dessous.
+# suppressPackageStartupMessages : evite le warning benigne "built under R
+# 4.4.3" qui polluerait le decompte de la suite complete.
+suppressWarnings(suppressPackageStartupMessages(library(ggplot2)))
 
 .vst_like <- function(genes = 60, samples = 12, seed = 1) {
   set.seed(seed)

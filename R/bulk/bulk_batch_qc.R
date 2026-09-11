@@ -311,20 +311,23 @@ plot_bulk_varpart <- function(varpart, tr = NULL) {
   long <- reshape2::melt(as.matrix(vp), varnames = c("gene", "factor"),
                          value.name = "fraction", na.rm = TRUE)
   long$factor <- factor(long$factor, levels = facet_order)
-  p <- ggplot(long, aes(x = fraction, y = factor, fill = factor)) +
-    geom_boxplot(na.rm = TRUE, outlier.size = 0.6, outlier.alpha = 0.4) +
-    scale_x_continuous(labels = function(x) paste0(round(100 * x), "%"),
-                       limits = c(0, 1), expand = c(0.01, 0)) +
-    scale_fill_brewer(palette = "Set2") +
-    labs(title = tr("Décomposition de la variance (par gène)"),
-         subtitle = tr(paste0("Méthode : ", varpart$method,
-                              " — gènes analysés : ", format(varpart$n_genes_used, big.mark = ","))),
-         x = tr("Fraction de la variance expliquée"), y = NULL, fill = NULL) +
-    theme_minimal(base_size = 12) +
-    theme(plot.title = element_text(face = "bold", size = 13),
-          legend.position = "none")
+  # PLOT-S1 : theme partage ; 12 = valeur historique de ce site, ecrite
+  # explicitement (zero changement visuel). Appels ggplot2 prefixes : ce fichier
+  # doit rester testable hors de l'app, ou ggplot2 n'est pas attache.
+  p <- ggplot2::ggplot(long, ggplot2::aes(x = fraction, y = factor, fill = factor)) +
+    ggplot2::geom_boxplot(na.rm = TRUE, outlier.size = 0.6, outlier.alpha = 0.4) +
+    ggplot2::scale_x_continuous(labels = function(x) paste0(round(100 * x), "%"),
+                                limits = c(0, 1), expand = c(0.01, 0)) +
+    ggplot2::scale_fill_brewer(palette = "Set2") +
+    ggplot2::labs(title = tr("Décomposition de la variance (par gène)"),
+                  subtitle = tr(paste0("Méthode : ", varpart$method,
+                                       " — gènes analysés : ", format(varpart$n_genes_used, big.mark = ","))),
+                  x = tr("Fraction de la variance expliquée"), y = NULL, fill = NULL) +
+    ts_theme("minimal", 12) +
+    ggplot2::theme(plot.title = ggplot2::element_text(face = "bold", size = 13),
+                   legend.position = "none")
   if (length(varpart$warnings) > 0L) {
-    p <- p + labs(caption = paste0("\u26a0\ufe0f ", paste(varpart$warnings, collapse = " ; ")))
+    p <- p + ggplot2::labs(caption = paste0("\u26a0\ufe0f ", paste(varpart$warnings, collapse = " ; ")))
   }
   p
 }
@@ -338,5 +341,5 @@ plot_bulk_varpart <- function(varpart, tr = NULL) {
 plot_bulk_batch_scree <- function(vst_matrix, tr = NULL) {
   tr <- tr %||% function(x) x
   plot_scree_bulk(vst_matrix, tr = function(x) x) +
-    labs(title = tr("Scree Plot — Variance Expliquée (QC Batch)"))
+    ggplot2::labs(title = tr("Scree Plot — Variance Expliquée (QC Batch)"))
 }
