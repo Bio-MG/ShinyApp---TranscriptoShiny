@@ -19,12 +19,15 @@ volcano, 300dpi, pdf export, stat subtitles (PLOT-Q1..Q5).
 `docs/STATUS.md` et `docs/ROADMAP.md` (index + état), dé-obsolescence des
 roadmaps (voir `git log --oneline -- docs/`).
 
-> **▶ PROCHAINE ÉTAPE** : **STAT-Q1 → STAT-Q4 : ✅ TERMINÉ** (padj configurable,
-> `lfcSE`, note Cook, Excel pathways) — voir
-> **`docs/ROADMAP_HANDOFF_STAGE_STAT_Q.md`** (rapport de stage 6 sections) et
-> `docs/ROADMAP_HANDOFF_NEXT.md` (handoff). Suite possible : `PLOT-S*`
-> (`stat-quickwins` est fait, `plot-shared-helpers` peut démarrer). Rien à
-> fournir côté données.
+> **▶ PROCHAINE ÉTAPE** : **PLOT-S2** (`ts_export_plot()` — helper d'export
+> unifié dpi/format).
+> **Déjà livrés cette session** : **PLOT-S1 ✅** (`ts_theme()` partagé +
+> propagation Bulk/SC/Spatial) et **4D-3 — chemin de données ✅** (10X/Seurat →
+> entrée CellChat, **sans dépendance nouvelle**). Rapports de stage 6 sections :
+> `docs/ROADMAP_HANDOFF_STAGE_PLOT_S1.md` et
+> `docs/ROADMAP_HANDOFF_STAGE_CELLCHAT_INPUT.md`. Handoff :
+> `docs/ROADMAP_HANDOFF_NEXT.md`. **3 commits locaux (`8295fde`, `dcaa1b2`,
+> `6bf18ca`), non poussés.** Rien à fournir côté données.
 
 ---
 
@@ -40,6 +43,8 @@ roadmaps (voir `git log --oneline -- docs/`).
 | CCC V1.x-D — perturbation in silico | `c1f1fb1` + `62510b9` | 2026-09-06 |
 | Import RDA/RDS — exploration de listes imbriquées | `38be355` | 2026-09-06 |
 | **PLOT-Q1..Q5 — ggrepel, dpi 300, export PDF, sous-titres stats** | **`4dee553`** | **2026-09-10** |
+| **PLOT-S1 — `ts_theme()` partagé + propagation Bulk / SC / Spatial** | **`8295fde`** + **`dcaa1b2`** | **2026-09-10** |
+| **4D-3 — chemin de données 10X/Seurat → entrée CellChat** | **`6bf18ca`** | **2026-09-10** |
 
 ## 2. Chantiers ouverts, par ordre d'actionnabilité
 
@@ -49,7 +54,7 @@ Aucun blocage. Séquençables indépendamment du reste.
 
 | ID | Contenu | Dépend de | Effort |
 |---|---|---|---|
-| PLOT-S1 | `ts_theme()` — thème + base_size partagés Bulk/SC/Spatial | — | M |
+| ✅ PLOT-S1 | `ts_theme()` — thème + base_size partagés Bulk/SC/Spatial | — | M |
 | PLOT-S2 | `ts_export_plot()` — helper dpi/format unifié | PLOT-S1 (conseillé) | M |
 | PLOT-S3 | `ts_datatable()` — boutons DT harmonisés | — | M |
 | PLOT-S4 | Heatmap unifiée "publication-ready" | PLOT-S1/S2/S3 | L |
@@ -90,7 +95,7 @@ Source : `docs/release/UPGRADE_AND_COMPATIBILITY.md` §3.
 
 | ID | Contenu | État |
 |---|---|---|
-| 4D-3 | CellChat depuis données brutes | ⛔ **BLOQUÉ upstream** — voir §3 |
+| 4D-3 | CellChat depuis données brutes | 🟡 **Chemin de données livré** (`6bf18ca`) — reste le contrat upstream + la dépendance CellChat, voir §3 |
 | 4E-4 | Exécution asynchrone de la DA | ⏸ Décision de pool à prendre (§4) |
 | 4F-ext | Rapport consolidé étendu Bulk/Spatial | Prêt (aucun blocage technique) |
 | Cache | Élargissement du cache | ❌ **Non demandé** — règle 8, ne pas étendre |
@@ -99,8 +104,8 @@ Source : `docs/release/UPGRADE_AND_COMPATIBILITY.md` §3.
 
 | Phase | Contenu | Condition de déblocage |
 |---|---|---|
-| 5 | Ligand→receptor→target | ⛔ Contrat d'entrée upstream (§3) |
-| 6 | NicheNet-like scoring | ⛔ Contrat d'entrée upstream (§3) |
+| 5 | Ligand→receptor→target | ⛔ Contrat d'entrée upstream (§3) — **le format d'entrée, lui, n'est plus une question ouverte** : il est implémenté et testé, cf. §3 |
+| 6 | NicheNet-like scoring | ⛔ Contrat d'entrée upstream (§3) — idem |
 | 7 | OmniPath | Nouvelle dépendance (renv.lock justifié) — **variante sans dépendance** : import de résultats LIANA externes (colonnes `.rank`), extension du contrat Stage 11 |
 | 8 | LIANA | Idem ; comparaison en rangs/recouvrement uniquement, **jamais de score consensus** |
 | 9 | Rare-cell annotator | Auditer d'abord le chevauchement avec Milo (Stage 14) |
@@ -148,13 +153,13 @@ de gènes < 20 % après strip des suffixes Ensembl `.1/.2`.
 
 ---
 
-### 2i. Dette i18n héritée de STAT-Q — 6 clés manquantes
+### 2i. Dette i18n héritée de STAT-Q — 7 clés manquantes
 
 **Ouverte le 2026-09-10.** `i18n/translation.json` est verrouillé par le WIP
 Bulk V2 (§5), donc les clés introduites par STAT-Q n'ont pas pu y être ajoutées.
 En attendant elles retombent sur le texte FR (convention « clé = texte FR ») :
 **l'UI française est correcte, l'UI anglaise affichera du français pour ces
-6 chaînes.**
+7 chaînes.**
 
 ```
 "Méthode de correction (p-adj)"
@@ -163,22 +168,81 @@ En attendant elles retombent sur le texte FR (convention « clé = texte FR ») 
 "{n} gène(s) exclu(s) du test (outlier Cook's distance)"
 "{n} gène(s) non exprimé(s)"
 "{n} gène(s) écarté(s) par le filtrage indépendant (faible expression)"
+"Taille de police (base)"
 ```
 
 **Correctif** : les ajouter dans le même commit que le WIP Bulk V2 (ce fichier
 est déjà ouvert). Aucun changement de code n'est requis — le code les appelle
 déjà. Détail : `docs/ROADMAP_HANDOFF_STAGE_STAT_Q.md` §1ter et §4.
 
+*Note PLOT-S1* : une seule clé nouvelle a été introduite (le slider
+`base_size` de `mod_bulk_de_ui.R`). Les autres libellés de thème existaient
+déjà (`Thème`, `Minimal`, `Classique`, `BW`, `Vide`).
+
+---
+
+### 2j. ⚠️ Gouvernance — `docs/` est gitignoré
+
+**Découvert le 2026-09-10.** `.gitignore:36` contient `docs/`. Conséquence
+vérifiée : `git ls-files "*.md"` ne renvoie que **5 fichiers**
+(`CHANGELOG.md`, `README.md`, `RENV_SETUP.md`, `docs/ROADMAP.md`,
+`docs/STATUS.md`). Les **21 autres documents** du dossier — dont **tous les
+contrats gelés** de `docs/contracts/` (velocity, communication, DA design,
+Milo, scCODA, DA cross-views, consolidated report, cellchat input) et **tous
+les rapports de stage** — sont **non suivis**.
+
+Pourquoi c'est un problème : la règle n°5 du dépôt impose « code + test de gel
++ doc `docs/contracts/` **simultanément** ». Aujourd'hui le contrat est bien
+produit, mais il n'existe **que sur cette machine** : un clone neuf perd les
+contrats, et `git revert` ne peut pas les restaurer puisqu'ils n'ont aucun
+historique.
+
+**Non traité volontairement** : retirer une règle d'ignore est une décision de
+politique de dépôt, pas une correction technique. À trancher : sortir
+`docs/contracts/` (et `docs/ROADMAP_HANDOFF_*`) du `.gitignore`, ou assumer
+que les documents sont des notes de travail locales.
+
 ---
 
 ## 3. 4D-3 — décision et contrat d'entrée upstream
 
-> **Analyse de faisabilité détaillée** :
+> **✅ Question du format : TRANCHÉE DANS LE CODE (2026-09-10, `6bf18ca`).**
+> `R/sc/sc_communication_input.R` convertit 10X/Seurat → objet d'entrée
+> CellChat, **sans aucune dépendance nouvelle** (`createCellChat()` n'est pas
+> appelé). Contrat gelé : `docs/contracts/CELLCHAT_INPUT_CONTRACT.md`.
+> Rapport : `docs/ROADMAP_HANDOFF_STAGE_CELLCHAT_INPUT.md`.
+>
+> **Analyse de faisabilité (historique)** :
 > `docs/proposals/CCC_DATA_PATH_ASSESSMENT.md` — conclusion : le format 10X
 > n'est **pas** le blocage (c'est déjà l'entrée naturelle de CellChat, et
-> l'app sait déjà lire 10X). Pas besoin de fastq pour tester. Les vrais
-> blocages sont : étiquettes de population, contrat upstream, dépendance
-> CellChat absente de `renv.lock`.
+> l'app sait déjà lire 10X). Pas besoin de fastq pour tester.
+
+**Nouveau (2026-09-10).** Ce qui restait une *évaluation* est devenu du code
+exécutable. La question posée — « des données 10X (gènes, matrice, features…)
+peuvent-elles être converties en une entrée que CellChat consomme ? » — a une
+réponse **oui, démontrée** :
+
+- `cellchat_input_from_matrix(data, features, labels, species, …)` →
+  produit `{data (gènes × cellules, normalisée, symboles), labels, species,
+  provenance, fingerprint}` — exactement les 3 vraies exigences de CellChat
+  (expression normalisée, **symboles**, étiquettes de population) + 2 décisions
+  déclarées (espèce, contrat upstream).
+- `build_cellchat_input(obj, group_by, assay, layer, …)` → wrapper Seurat.
+- Détection 10X : table `features.tsv` (1/2/3 colonnes), symboles Ensembl
+  (strip `.1/.2`), doublons de symboles (`sum` | `first`), garde-fou
+  « la matrice ressemble à des comptes bruts » (→ `log_normalize = TRUE`
+  ou erreur explicite).
+- 4 états d'erreur classés : `invalid_input`, `invalid_features`,
+  `invalid_labels`, `invalid_species`.
+
+**Ce qui reste bloquant n'est donc PLUS le format** :
+
+| Blocage | État |
+|---|---|
+| Format 10X → CellChat | ✅ **Résolu dans le code** |
+| Étiquettes de population | ✅ Gérées (garde-fou + `min_cells_per_group`) |
+| Dépendance CellChat dans `renv.lock` | ⛔ Toujours absente — **aucun appel CellChat n'est fait** |
+| Contrat d'entrée de l'app upstream | ⛔ Toujours non gelé — voir ci-dessous |
 
 **Décision (2026-09-10)** : l'application upstream (fasta/fastq bruts → données
 pour Cerberus) est **en cours de développement par l'utilisateur**. Décision
