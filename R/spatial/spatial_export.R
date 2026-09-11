@@ -151,7 +151,7 @@ build_spatial_export_bundle <- function(spatial_obj, results, sections, out_dir,
     if (is.null(p)) return(invisible(NULL))
     dir <- .ensure_plots_dir()
     path <- file.path(dir, sprintf("%s.png", name))
-    ok <- tryCatch({ ggplot2::ggsave(path, p, width = 8, height = 6, dpi = 300, bg = "white"); TRUE }, error = function(e) FALSE)
+    ok <- tryCatch({ ts_export_plot(path, p, width = 8, height = 6, dpi = 300, bg = "white"); TRUE }, error = function(e) FALSE)
     if (isTRUE(ok) && file.exists(path)) add(path)
   }
   
@@ -286,7 +286,7 @@ build_spatial_export_bundle <- function(spatial_obj, results, sections, out_dir,
       png_path <- file.path(maps_dir, sprintf("carte_%s.png", nm))
       p_gg <- tryCatch(render_spatial_static_map(df_map, title = nm), error = function(e) NULL)
       if (!is.null(p_gg)) {
-        tryCatch(ggplot2::ggsave(png_path, p_gg, width = 7, height = 7, dpi = 300, bg = "white"), error = function(e) NULL)
+        tryCatch(ts_export_plot(png_path, p_gg, width = 7, height = 7, dpi = 300, bg = "white"), error = function(e) NULL)
         if (file.exists(png_path)) add(png_path)
       }
     }
@@ -303,7 +303,7 @@ build_spatial_export_bundle <- function(spatial_obj, results, sections, out_dir,
       png_path <- file.path(maps_dir, sprintf("vue_%s.png", gsub("[^A-Za-z0-9_-]+", "_", nm)))
       p_gg <- tryCatch(render_spatial_static_map(df_v, title = nm), error = function(e) NULL)
       if (!is.null(p_gg)) {
-        tryCatch(ggplot2::ggsave(png_path, p_gg, width = 7, height = 7, dpi = 300, bg = "white"), error = function(e) NULL)
+        tryCatch(ts_export_plot(png_path, p_gg, width = 7, height = 7, dpi = 300, bg = "white"), error = function(e) NULL)
         if (file.exists(png_path)) { add(png_path); n_saved <- n_saved + 1L }
       }
     }

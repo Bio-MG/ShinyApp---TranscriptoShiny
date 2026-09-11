@@ -802,7 +802,7 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
                 }
               )
               incProgress(0.6, detail = "Écriture du fichier...")
-              ggsave(file, plot=p,
+              ts_export_plot(file, p,
                      width  = (input$plot_width  %||% 800) / 100,
                      height = (input$plot_height %||% 600) / 100,
                      dpi    = 300)

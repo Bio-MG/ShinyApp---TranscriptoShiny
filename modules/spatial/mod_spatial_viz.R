@@ -1435,7 +1435,7 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
         
         p <- build_raster_plot(df)
         
-        ggplot2::ggsave(
+        ts_export_plot(
           filename = file,
           plot = p,
           width = 8,

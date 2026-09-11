@@ -359,7 +359,7 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
 
     output$dl_pca_png <- downloadHandler(
       filename = function() paste0("pca_bulk_", Sys.Date(), ".png"),
-      content  = function(file) ggsave(file, plot = pca_plot(), width = 8, height = 6, dpi = 300)
+      content  = function(file) ts_export_plot(file, pca_plot(), width = 8, height = 6, dpi = 300)
     )
 
     # =========================================================================
@@ -376,7 +376,7 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
     })
     output$dl_scree_png <- downloadHandler(
       filename = function() paste0("scree_plot_bulk_", Sys.Date(), ".png"),
-      content  = function(file) ggsave(file, plot = scree_plot(), width = 7, height = 5, dpi = 300)
+      content  = function(file) ts_export_plot(file, scree_plot(), width = 7, height = 5, dpi = 300)
     )
 
     # =========================================================================

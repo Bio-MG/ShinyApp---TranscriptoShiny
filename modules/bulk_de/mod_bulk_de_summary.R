@@ -39,7 +39,7 @@
 
   output$dl_updown_png <- downloadHandler(
     filename = function() paste0("updown_summary_", Sys.Date(), ".png"),
-    content  = function(file) ggsave(file, plot = updown_plot(), width = 8, height = 5.5, dpi = 300)
+    content  = function(file) ts_export_plot(file, updown_plot(), width = 8, height = 5.5, dpi = 300)
   )
 
   output$table_updown <- renderDT({

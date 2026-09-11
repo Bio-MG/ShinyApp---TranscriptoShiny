@@ -510,7 +510,7 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
     .export_figure <- function(plot_fn, file) {
       .check_fingerprint()
       p <- plot_fn()
-      ggplot2::ggsave(file, p, width = 8, height = 6.5, dpi = 300)
+      ts_export_plot(file, p, width = 8, height = 6.5, dpi = 300)
     }
 
     # Chaque export filtre PRODUIT une entree de provenance (filtres figes

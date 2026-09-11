@@ -276,7 +276,7 @@ mod_sc_da_sccoda_server <- function(id, global_data, shared_rv = NULL) {
     # ── Exports (traces par analysis_id ; figures = vues pures) ────────────
     .export_figure <- function(plot_fn, file) {
       .check_fingerprint()
-      ggplot2::ggsave(file, plot_fn(), width = 8, height = 6.5, dpi = 300)
+      ts_export_plot(file, plot_fn(), width = 8, height = 6.5, dpi = 300)
     }
 
     output$dl_sccoda_effects_png <- downloadHandler(

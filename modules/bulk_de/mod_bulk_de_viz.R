@@ -216,7 +216,7 @@
 
   output$dl_volcano_png <- downloadHandler(
     filename = function() paste0("volcano_", shared_rv$active_contrast, "_", Sys.Date(), ".png"),
-    content  = function(file) ggsave(file, plot = volcano_plot(), width = 8, height = 6, dpi = 300)
+    content  = function(file) ts_export_plot(file, volcano_plot(), width = 8, height = 6, dpi = 300)
   )
 
   # =========================================================================
@@ -274,9 +274,9 @@
                                  ".", input$ma_export_fmt %||% "png"),
     content  = function(file) {
       if (identical(input$ma_export_fmt, "pdf")) {
-        ggsave(file, plot = ma_plot(), width = 8, height = 6, device = "pdf")
+        ts_export_plot(file, ma_plot(), width = 8, height = 6, format = "pdf")
       } else {
-        ggsave(file, plot = ma_plot(), width = 8, height = 6, dpi = 300)
+        ts_export_plot(file, ma_plot(), width = 8, height = 6, dpi = 300)
       }
     }
   )
