@@ -19,17 +19,20 @@ volcano, 300dpi, pdf export, stat subtitles (PLOT-Q1..Q5).
 `docs/STATUS.md` et `docs/ROADMAP.md` (index + état), dé-obsolescence des
 roadmaps (voir `git log --oneline -- docs/`).
 
-> **▶ PROCHAINE ÉTAPE** : **PLOT-S3** (`ts_datatable()` — boutons DT
-> harmonisés) — ou arbitrage 4E-4 (pool async DA).
+> **▶ PROCHAINE ÉTAPE** : **PLOT-S4** (heatmap unifiée « publication-ready »,
+> effort **L**) — ou arbitrage 4E-4 (pool async DA), moins coûteux.
+> ⚠️ **Décision ouverte** : déployer les boutons d'export DT sur les ~43 tables
+> restantes + normaliser `pageLength` = changement **visible** → jalon dédié
+> (`docs/contracts/PLOT_DATATABLE_CONTRACT.md` §6).
 >
-> **1 commit local non poussé** : `612eddf` (finition Bulk V2).
-> **En cours** : **PLOT-S2** (`ts_export_plot()`, 25 sites migrés).
+> **2 commits locaux non poussés** : `612eddf` (finition Bulk V2),
+> `0912c24` (PLOT-S2). **En cours** : **PLOT-S3** (`ts_datatable()`).
 >
 > **Livré :** **PLOT-S1 ✅** (`ts_theme()` partagé + propagation Bulk/SC/Spatial,
-> 44 sites), **4D-3 — chemin de données ✅** (10X/Seurat → entrée CellChat, sans
-> dépendance nouvelle), **Bulk V2 / batch-QC ✅** (commité par l'utilisateur
-> `aa92f24`, puis **fini** `612eddf` — erreur de test corrigée, dette i18n
-> soldée, cf. §5bis).
+> 44 sites), **PLOT-S2 ✅** (`ts_export_plot()`, 25 sites), **4D-3 — chemin de
+> données ✅** (10X/Seurat → entrée CellChat, sans dépendance nouvelle),
+> **Bulk V2 / batch-QC ✅** (commité par l'utilisateur `aa92f24`, puis **fini**
+> `612eddf` — erreur de test corrigée, dette i18n soldée, cf. §5bis).
 >
 > Rapports de stage 6 sections : `docs/ROADMAP_HANDOFF_STAGE_PLOT_S1.md` et
 > `docs/ROADMAP_HANDOFF_STAGE_CELLCHAT_INPUT.md`. Handoff :
@@ -63,7 +66,7 @@ Aucun blocage. Séquençables indépendamment du reste.
 |---|---|---|---|
 | ✅ PLOT-S1 | `ts_theme()` — thème + base_size partagés Bulk/SC/Spatial | — | M |
 | ✅ PLOT-S2 | `ts_export_plot()` — helper dpi/format unifié (25 sites) | PLOT-S1 | M |
-| PLOT-S3 | `ts_datatable()` — boutons DT harmonisés | — | M |
+| ✅ PLOT-S3 | `ts_datatable()` — wrapper DT harmonisé (6 sites) | — | M |
 | PLOT-S4 | Heatmap unifiée "publication-ready" | PLOT-S1/S2/S3 | L |
 | PLOT-S5 | Export SVG (`svglite`) | PLOT-S2 | S |
 | PLOT-S6 | Toggle plotly étendu à SC/Spatial | — | M |

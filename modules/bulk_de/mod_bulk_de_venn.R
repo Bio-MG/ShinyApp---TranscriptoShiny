@@ -108,8 +108,7 @@
     dt <- tryCatch(build_contrast_intersection_dt(sets), error = function(e) NULL)
     validate(need(!is.null(dt) && nrow(dt) > 0,
                   .tr("Aucun g\u00e8ne dans les intersections avec les seuils actuels.")))
-    datatable(dt, filter = "top", rownames = FALSE,
-             options = list(pageLength = 15, scrollX = TRUE))
+    ts_datatable(dt, page_length = 15)
   })
 
   output$dl_venn_png <- downloadHandler(

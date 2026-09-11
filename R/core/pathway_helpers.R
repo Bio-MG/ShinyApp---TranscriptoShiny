@@ -609,11 +609,7 @@ build_pathway_dt <- function(df, tr = NULL) {
 
   colnames(df_display) <- c("ID", "Description", "P-adj", tr("Nb Gènes"), "Ratio")[seq_along(cols_available)]
 
-  DT::datatable(df_display, filter = "top", rownames = FALSE,
-
-                options = list(pageLength = 10, scrollX = TRUE, dom = "Bfrtip"),
-
-                extensions = "Buttons") %>%
+  ts_datatable(df_display, page_length = 10, buttons = TRUE) %>%
 
     DT::formatStyle("P-adj", color = DT::styleInterval(c(0.001, 0.01, 0.05),
 

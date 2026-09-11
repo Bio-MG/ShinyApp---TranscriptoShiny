@@ -134,3 +134,14 @@ TS_EXPORT_DPI_CHOICES    <- c(150L, 300L, 600L)
 TS_EXPORT_DPI_DEFAULT    <- 300L
 TS_EXPORT_FORMATS        <- c("png", "pdf", "svg")
 TS_EXPORT_FORMAT_DEFAULT <- NULL
+
+# --- PLOT-S3 : tables de resultats (DT) --------------------------------------
+# ATTENTION : il n'y a PAS de taille de page par defaut. L'application utilise
+# aujourd'hui 10 (x22), 15 (x15), 8 (x5), 20 (x3) et 6 (x1) : aucune valeur
+# n'est neutre (meme situation que base_size en PLOT-S1). C'est pourquoi
+# ts_datatable() exige `page_length` explicitement.
+# TS_DT_BUTTONS_DEFAULT = FALSE : 48 des 49 tables n'ont aucun bouton
+# d'export aujourd'hui — les activer est un choix explicite, pas un effet de
+# bord de la migration.
+TS_DT_PAGE_LENGTHS       <- c(6L, 8L, 10L, 15L, 20L)
+TS_DT_BUTTONS_DEFAULT    <- FALSE
