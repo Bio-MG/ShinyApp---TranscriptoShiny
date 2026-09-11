@@ -839,8 +839,8 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
           }
         }, error = function(e) NULL)
         req(p)
-        ggsave(file, plot = p, width = 8, height = 6, dpi = 300,
-               device = if ((input$traj_export_fmt %||% "png") == "pdf") "pdf" else "png")
+        ts_export_plot(file, p, width = 8, height = 6, dpi = 300,
+               format = if ((input$traj_export_fmt %||% "png") == "pdf") "pdf" else "png")
       }
     )
     output$dl_dist_png <- downloadHandler(
@@ -852,8 +852,8 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
                                                    manual_colors = state_get(shared_rv, "sc_manual_colors")),
                       error = function(e) NULL)
         req(p)
-        ggsave(file, plot = p, width = 7, height = 5, dpi = 300,
-               device = if ((input$traj_export_fmt %||% "png") == "pdf") "pdf" else "png")
+        ts_export_plot(file, p, width = 7, height = 5, dpi = 300,
+               format = if ((input$traj_export_fmt %||% "png") == "pdf") "pdf" else "png")
       }
     )
     output$dl_genes_png <- downloadHandler(
@@ -866,8 +866,8 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
                                                manual_colors = state_get(shared_rv, "sc_manual_colors")),
                       error = function(e) NULL)
         req(p)
-        ggsave(file, plot = p, width = 8, height = 6, dpi = 300,
-               device = if ((input$traj_export_fmt %||% "png") == "pdf") "pdf" else "png")
+        ts_export_plot(file, p, width = 8, height = 6, dpi = 300,
+               format = if ((input$traj_export_fmt %||% "png") == "pdf") "pdf" else "png")
       }
     )
   }) # /moduleServer

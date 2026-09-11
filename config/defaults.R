@@ -122,3 +122,15 @@ TS_PADJ_METHOD_DEFAULT <- "BH"
 TS_THEME_CHOICES      <- c("minimal", "classic", "bw", "void")
 TS_THEME_DEFAULT      <- "minimal"
 TS_BASE_SIZE_DEFAULT  <- 11
+
+# --- PLOT-S2 : export des graphiques ----------------------------------------
+# TS_EXPORT_DPI_DEFAULT = 300 est A LA FOIS le defaut de ggplot2::ggsave() et
+# la valeur explicite de 23 des 24 sites existants => defaut neutre, migration
+# sans changement de comportement. (Contrairement a base_size en PLOT-S1, il
+# n'y a donc PAS de piege de valeur par defaut ici.)
+# TS_EXPORT_FORMAT_DEFAULT = NULL signifie "deviner depuis l'extension du
+# fichier" — c'est le comportement de ggsave(device = NULL), a ne pas changer.
+TS_EXPORT_DPI_CHOICES    <- c(150L, 300L, 600L)
+TS_EXPORT_DPI_DEFAULT    <- 300L
+TS_EXPORT_FORMATS        <- c("png", "pdf", "svg")
+TS_EXPORT_FORMAT_DEFAULT <- NULL

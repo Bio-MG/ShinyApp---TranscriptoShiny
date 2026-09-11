@@ -59,6 +59,7 @@ source("R/core/pathway_helpers.R")
 # 4a. Plotting & Palettes
 source("R/plotting/palettes.R")
 source("R/plotting/theme.R")   # PLOT-S1 : resolveur de theme partage (ts_theme)
+source("R/plotting/export.R")  # PLOT-S2 : helper d'export unifie (ts_export_plot)
 source("R/sc/sc_plotting.R")
 source("R/spatial/spatial_plotting.R")
 

@@ -19,16 +19,17 @@ volcano, 300dpi, pdf export, stat subtitles (PLOT-Q1..Q5).
 `docs/STATUS.md` et `docs/ROADMAP.md` (index + état), dé-obsolescence des
 roadmaps (voir `git log --oneline -- docs/`).
 
-> **▶ PROCHAINE ÉTAPE** : **PLOT-S2** (`ts_export_plot()` — helper d'export
-> unifié dpi/format).
+> **▶ PROCHAINE ÉTAPE** : **PLOT-S3** (`ts_datatable()` — boutons DT
+> harmonisés) — ou arbitrage 4E-4 (pool async DA).
 >
-> **Tout est poussé.** `HEAD = aa92f24` (« bulk V2.0, sc compare ») —
-> **0 commit d'avance sur `origin/main`**, arbre de travail **propre**.
+> **1 commit local non poussé** : `612eddf` (finition Bulk V2).
+> **En cours** : **PLOT-S2** (`ts_export_plot()`, 25 sites migrés).
 >
 > **Livré :** **PLOT-S1 ✅** (`ts_theme()` partagé + propagation Bulk/SC/Spatial,
 > 44 sites), **4D-3 — chemin de données ✅** (10X/Seurat → entrée CellChat, sans
-> dépendance nouvelle), **Bulk V2 / batch-QC ✅** (commité par l'utilisateur,
-> puis **fini** — erreur de test corrigée, dette i18n soldée, cf. §5bis).
+> dépendance nouvelle), **Bulk V2 / batch-QC ✅** (commité par l'utilisateur
+> `aa92f24`, puis **fini** `612eddf` — erreur de test corrigée, dette i18n
+> soldée, cf. §5bis).
 >
 > Rapports de stage 6 sections : `docs/ROADMAP_HANDOFF_STAGE_PLOT_S1.md` et
 > `docs/ROADMAP_HANDOFF_STAGE_CELLCHAT_INPUT.md`. Handoff :
@@ -61,7 +62,7 @@ Aucun blocage. Séquençables indépendamment du reste.
 | ID | Contenu | Dépend de | Effort |
 |---|---|---|---|
 | ✅ PLOT-S1 | `ts_theme()` — thème + base_size partagés Bulk/SC/Spatial | — | M |
-| PLOT-S2 | `ts_export_plot()` — helper dpi/format unifié | PLOT-S1 (conseillé) | M |
+| ✅ PLOT-S2 | `ts_export_plot()` — helper dpi/format unifié (25 sites) | PLOT-S1 | M |
 | PLOT-S3 | `ts_datatable()` — boutons DT harmonisés | — | M |
 | PLOT-S4 | Heatmap unifiée "publication-ready" | PLOT-S1/S2/S3 | L |
 | PLOT-S5 | Export SVG (`svglite`) | PLOT-S2 | S |
@@ -218,6 +219,35 @@ docs/
 
 Garde les notes locales, rend les contrats traçables. **Non appliqué** —
 décision de l'utilisateur.
+
+### 2k. ⚠️ Santé de la suite de tests — 16 échecs, **tous** Milo
+
+**Mesuré le 2026-09-11** (suite complète, plafond de rapport relevé à 500 —
+le plafond par défaut de 10 **masquait** 6 échecs supplémentaires).
+
+| Fichier | Échecs |
+|---|---|
+| `test-sc-milo-contract.R` | 8 |
+| `test-sc-milo-views.R` | 4 |
+| `test-milo-contract-freeze.R` | 3 |
+| `test-sc-da-cross-views.R` | 1 |
+
+**Cause unique** : miloR 2.2.0 déclenche la dépréciation Matrix 1.7-5
+`'as(<dgTMatrix>, "dgCMatrix")' is deprecated`. Or `run_milo_da()` **escalade
+les warnings en `milo_error`** → un avertissement bénin devient un échec dur.
+
+**Vérifié indépendant du travail en cours** : ces tests ne sourcent que
+`R/core/*` et `R/sc/*` — ni Bulk, ni i18n, ni `R/plotting/`. PRÉSENT AVANT
+PLOT-S1, PLOT-S2 ET `aa92f24`.
+
+**À traiter séparément** — la piste est de ne pas escalader les dépréciations
+tierces en erreur fatale (distinguer warning de dépendance vs warning
+statistique), pas de modifier le comportement statistique de Milo.
+
+> ⚠️ **Piège d'outillage** : `testthat::test_dir()` s'arrête de *rapporter*
+> après 10 échecs (« Maximum number of 10 failures reached ») mais **continue
+> d'exécuter**. Pour un bilan honnête :
+> `testthat::test_dir("tests/testthat", reporter = testthat::SummaryReporter$new(max_reports = 500L))`
 
 ---
 

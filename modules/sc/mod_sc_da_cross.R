@@ -157,7 +157,7 @@ mod_sc_da_cross_server <- function(id, global_data, shared_rv = NULL) {
 
     # ── Exports (chaque export PRODUIT une entree de provenance figee) ─────
     .export_figure <- function(plot_fn, file) {
-      ggplot2::ggsave(file, plot_fn(), width = 8, height = 6.5, dpi = 300)
+      ts_export_plot(file, plot_fn(), width = 8, height = 6.5, dpi = 300)
     }
     .append_provenance <- function() {
       sm <- .cross_summary()

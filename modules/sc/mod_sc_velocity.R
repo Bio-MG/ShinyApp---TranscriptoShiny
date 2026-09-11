@@ -728,7 +728,7 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
           velocity_state$result, input$velocity_gene,
           data_scope = "full", seurat_obj = global_data$sc_obj
         )
-        ggplot2::ggsave(file, p, width = 8, height = 6, dpi = 300)
+        ts_export_plot(file, p, width = 8, height = 6, dpi = 300)
       }
     )
 
@@ -741,7 +741,7 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
           velocity_state$result, input$velocity_gene,
           data_scope = "full", seurat_obj = global_data$sc_obj
         )
-        ggplot2::ggsave(file, p, width = 8, height = 6)
+        ts_export_plot(file, p, width = 8, height = 6)
       }
     )
 
@@ -764,7 +764,7 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
         selected_reduction = red, data_scope = "full",
         seurat_obj = global_data$sc_obj
       )
-      ggplot2::ggsave(file, p, width = 8, height = 6, dpi = 300)
+      ts_export_plot(file, p, width = 8, height = 6, dpi = 300)
     }
 
     output$dl_velocity_embedding_png <- downloadHandler(

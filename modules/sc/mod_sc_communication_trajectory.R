@@ -251,7 +251,7 @@ mod_sc_communication_trajectory_server <- function(id, comm_state, global_data, 
           ctx <- trj_ctx()
           req(ctx)
           .guard_stale()
-          ggplot2::ggsave(file, plot_fn(), width = 8, height = 6, dpi = 300)
+          ts_export_plot(file, plot_fn(), width = 8, height = 6, dpi = 300)
         }
       )
     }
