@@ -29,6 +29,7 @@
 # UI split:
 #   mod_bulk_filter_ui(id)      -> sidebar accordion body (Step 1 controls)
 #   mod_bulk_filter_pca_ui(id)  -> main panel "PCA" tab
+#   mod_bulk_filter_batch_ui(id) -> main panel "QC Batch" tab (Bulk V2 M1)
 #   mod_bulk_filter_qc_ui(id)   -> main panel "QC Échantillons" tab
 # =============================================================================
 
@@ -122,6 +123,47 @@ mod_bulk_filter_qc_ui <- function(id) {
 .tr_placeholder <- function() "\u2014"
 
 
+# ---------------------------------------------------------------------------
+# UI: QC Batch tab (Bulk V2 M1, contrat BULK_BATCH_QC_CONTRACT.md)
+# Consomme UNIQUEMENT R/bulk/bulk_batch_qc.R (garde anti-counts-bruts,
+# design-check, variance partition) sur shared_rv$vst_mat. Aucune validation
+# locale : toute garde scientifique vient du contrat.
+# ---------------------------------------------------------------------------
+
+mod_bulk_filter_batch_ui <- function(id) {
+  ns <- NS(id)
+  card(
+    full_screen = TRUE,
+    card_header(i18n$t("QC Batch")),
+    div(class = "alert alert-light", style = "font-size:0.85em;",
+        bsicons::bs_icon("info-circle"),
+        " ", i18n$t("V\u00e9rifie que l'effet lot (batch) n'est pas confondu avec la condition biologique AVANT l'analyse diff\u00e9rentielle. Matrice exig\u00e9e : VST (produite \u00e0 l'\u00e9tape 1) \u2014 les counts bruts sont refus\u00e9s.")),
+    fluidRow(
+      column(4, selectizeInput(ns("batch_col"), i18n$t("Colonne batch"), choices = NULL,
+                               options = list(placeholder = .tr_placeholder(), allowEmptyOption = TRUE))),
+      column(4, selectizeInput(ns("batch_cond_col"), i18n$t("Colonne condition (optionnel)"), choices = NULL,
+                               options = list(placeholder = .tr_placeholder(), allowEmptyOption = TRUE))),
+      column(4, div(style = "padding-top:32px;",
+                    actionButton(ns("run_varpart"),
+                                 tagList(icon("play"), i18n$t("D\u00e9composition de variance")),
+                                 class = "btn-outline-primary w-100 btn-sm")))
+    ),
+    uiOutput(ns("batch_alert")),
+    h6(i18n$t("Table de contingence (condition x batch)"), style = "font-weight:bold;"),
+    tableOutput(ns("batch_crosstab")),
+    hr(),
+    h6(i18n$t("Scree Plot \u2014 Variance Expliqu\u00e9e (QC Batch)"), style = "font-weight:bold;"),
+    div(style = "height:400px;overflow-y:auto;", plotOutput(ns("plot_batch_scree"), height = "380px")),
+    hr(),
+    h6(i18n$t("D\u00e9composition de la variance par facteur"), style = "font-weight:bold;"),
+    helpText(i18n$t("Part de variance expliqu\u00e9e par le batch vs la condition, g\u00e8ne par g\u00e8ne (plafond m\u00e9moire d\u00e9terministe, voir contrat).")),
+    verbatimTextOutput(ns("varpart_method")),
+    div(style = "height:420px;overflow-y:auto;", plotOutput(ns("plot_varpart"), height = "400px")),
+    downloadButton(ns("dl_varpart_csv"), i18n$t("Export CSV (fractions)"), class = "btn-sm btn-secondary mt-2")
+  )
+}
+
+
 # ── Server ────────────────────────────────────────────────────────────────────
 
 mod_bulk_filter_server <- function(id, global_data, shared_rv) {
@@ -146,6 +188,8 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
       updateSelectizeInput(session, "pca_shape_by",  label = .tr("Forme par (optionnel)"))
       updateCheckboxInput(session, "pca_interactive", label = .tr("Interactif (Plotly \u2014 survol pour identifier l'\u00e9chantillon)"))
       updateSelectizeInput(session, "qc_corr_annot", label = .tr("Annotation"))
+      updateSelectizeInput(session, "batch_col", label = .tr("Colonne batch"))
+      updateSelectizeInput(session, "batch_cond_col", label = .tr("Colonne condition (optionnel)"))
       updateSelectInput(session, "qc_corr_method", label = .tr("M\u00e9thode"))
       updateActionButton(session, "run_filter_norm",
                          label = paste0("\U0001f680 ", .tr("Lancer Filtrage & VST")))
@@ -161,6 +205,8 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
       updateSelectizeInput(session, "pca_color_by",  choices = cat_cols, server = FALSE)
       updateSelectizeInput(session, "pca_shape_by",  choices = cat_cols, server = FALSE)
       updateSelectizeInput(session, "qc_corr_annot", choices = cat_cols, server = FALSE)
+      updateSelectizeInput(session, "batch_col", choices = cat_cols, server = FALSE)
+      updateSelectizeInput(session, "batch_cond_col", choices = cat_cols, server = FALSE)
     }, ignoreNULL = TRUE)
 
     # ── Mirror PCA inputs + palette choice to shared_rv (read by mod_bulk_report) ─
@@ -399,6 +445,109 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
         png(file, width = 9, height = 8, units = "in", res = 300)
         print(sample_corr_plot_fn())
         dev.off()
+      }
+    )
+
+    # =========================================================================
+    # QC BATCH (Bulk V2 M1 — contrat BULK_BATCH_QC_CONTRACT.md)
+    # Design-check (alerte collinearite) + scree + variance partition, le tout
+    # sur shared_rv$vst_mat. Aucune validation locale : les gardes viennent
+    # de R/bulk/bulk_batch_qc.R (erreurs classees bulk_batch_qc_error).
+    # =========================================================================
+    batch_design_check <- reactive({
+      req(global_data$bulk_obj, global_data$bulk_obj$metadata)
+      req(nzchar(input$batch_col %||% ""))
+      cond <- if (nzchar(input$batch_cond_col %||% "")) input$batch_cond_col else NULL
+      tryCatch(
+        bulk_batch_design_check(global_data$bulk_obj$metadata, input$batch_col, cond),
+        error = function(e) e
+      )
+    })
+
+    output$batch_alert <- renderUI({
+      global_data$language  # i18n
+      if (is.null(shared_rv$vst_mat)) {
+        return(div(class = "alert alert-warning", style = "font-size:0.85em;",
+                   .tr("Lancez d'abord le Filtrage & VST (\u00e9tape 1) pour activer les diagnostics batch.")))
+      }
+      chk <- tryCatch(batch_design_check(), error = function(e) e)
+      if (inherits(chk, "error")) {
+        return(div(class = "alert alert-warning", style = "font-size:0.85em;",
+                   paste0("\u26a0\ufe0f ", conditionMessage(chk))))
+      }
+      if (isTRUE(chk$fully_collinear)) {
+        div(class = "alert alert-danger", style = "font-size:0.85em;",
+            tags$strong(.tr("Batch et condition enti\u00e8rement collin\u00e9aires : ")),
+            chk$warning_messages[1])
+      } else if (length(chk$warning_messages) > 0) {
+        div(class = "alert alert-warning", style = "font-size:0.85em;",
+            paste0("\u26a0\ufe0f ", paste(chk$warning_messages, collapse = " ")))
+      } else {
+        div(class = "alert alert-success", style = "font-size:0.85em;",
+            .tr("\u2713 Plan \u00e9quilibr\u00e9 : l'effet batch peut \u00eatre ajust\u00e9 dans le design."))
+      }
+    })
+
+    output$batch_crosstab <- renderTable({
+      chk <- batch_design_check()
+      if (inherits(chk, "error")) return(NULL)
+      as.data.frame.matrix(chk$cross_table)
+    }, rownames = TRUE)
+
+    batch_scree_plot <- reactive({
+      global_data$language                     # i18n trigger
+      req(shared_rv$vst_mat)
+      # Garde contrat : refuse les counts bruts (defense-in-depth — la VST
+      # produit un continu, ce stop ne doit jamais se declencher en pratique).
+      bulk_assert_transformed_matrix(shared_rv$vst_mat, "diagnostics batch")
+      plot_bulk_batch_scree(shared_rv$vst_mat, tr = .tr_fn(global_data))
+    })
+    output$plot_batch_scree <- renderPlot({
+      .safe_plot_render(session, "plot_batch_scree", function() batch_scree_plot())
+    })
+
+    # eventReactive (pas observeEvent) : aucun nouveau trigger dupliqué.
+    varpart_res <- eventReactive(input$run_varpart, {
+      req(shared_rv$vst_mat)
+      req(nzchar(input$batch_col %||% ""))
+      meta <- global_data$bulk_obj$metadata
+      cond <- if (nzchar(input$batch_cond_col %||% "")) input$batch_cond_col else NULL
+      covs <- c(input$batch_col, cond)
+      p <- shiny::Progress$new(); on.exit(p$close())
+      p$set(message = .tr("D\u00e9composition de variance..."), value = 0.3)
+      tryCatch({
+        bulk_variance_partition(shared_rv$vst_mat, meta, covs)
+      }, error = function(e) {
+        showNotification(paste(.tr("Erreur variance partition :"), conditionMessage(e)),
+                         type = "error", duration = 8)
+        NULL
+      })
+    })
+
+    output$varpart_method <- renderText({
+      global_data$language  # i18n
+      vp <- varpart_res()
+      if (is.null(vp)) {
+        .tr("Cliquez sur D\u00e9composition de variance pour lancer le calcul.")
+      } else {
+        paste0("M\u00e9thode : ", vp$method, " — ",
+               vp$n_genes_used, " g\u00e8nes analys\u00e9s")
+      }
+    })
+    output$plot_varpart <- renderPlot({
+      req(varpart_res())
+      .safe_plot_render(session, "plot_varpart", function() {
+        global_data$language
+        plot_bulk_varpart(varpart_res(), tr = .tr_fn(global_data))
+      })
+    })
+    output$dl_varpart_csv <- downloadHandler(
+      filename = function() paste0("variance_partition_batch_", Sys.Date(), ".csv"),
+      content = function(file) {
+        vp <- varpart_res()
+        req(vp)
+        out <- cbind(gene = rownames(vp$var_part), vp$var_part)
+        utils::write.csv(out, file, row.names = FALSE)
       }
     )
 

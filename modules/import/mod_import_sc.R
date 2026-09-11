@@ -128,6 +128,11 @@ mod_import_sc_ui <- function(id) {
             div(class = "alert alert-info", style = "font-size:0.85rem;",
                 bsicons::bs_icon("info-circle"),
                 " ", i18n$t("Importez plusieurs échantillons pour Harmony.")),
+            # V1.x UX multi-échantillons : rendre le modèle mental explicite
+            # (chaque import = un orig.ident distinct ; analyses aval compatibles).
+            div(class = "alert alert-light", style = "font-size:0.8rem;border-left:3px solid #2C3E50;",
+                bsicons::bs_icon("collection"),
+                " ", i18n$t("Multi-échantillons : pour des expériences à plusieurs échantillons (ex: Contrôle & Traitement), importez chaque échantillon séparément. L'identité de l'échantillon est préservée pour la correction de batch et les analyses différentielles.")),
             div(class = "alert alert-light", style = "font-size:0.8rem;",
                 bsicons::bs_icon("lightbulb"),
                 " ", i18n$t("Formats acceptés : barcodes.tsv(.gz), features.tsv(.gz) ou genes.tsv(.gz), matrix.mtx(.gz).")),
@@ -150,6 +155,10 @@ mod_import_sc_ui <- function(id) {
             value = "opt_b",
             div(class = "alert alert-info", style = "font-size:0.85rem;",
                 bsicons::bs_icon("info-circle"), " ", i18n$t("Importez plusieurs fichiers pour les fusionner.")),
+            # V1.x UX multi-échantillons : même message que l'Option A (clé partagée).
+            div(class = "alert alert-light", style = "font-size:0.8rem;border-left:3px solid #2C3E50;",
+                bsicons::bs_icon("collection"),
+                " ", i18n$t("Multi-échantillons : pour des expériences à plusieurs échantillons (ex: Contrôle & Traitement), importez chaque échantillon séparément. L'identité de l'échantillon est préservée pour la correction de batch et les analyses différentielles.")),
             div(class = "alert alert-light", style = "font-size:0.78rem;",
                 bsicons::bs_icon("hdd"),
                 " ", i18n$t("Fichiers volumineux (> quelques Go) : vérifiez l'espace disque disponible sur le disque où pointe le dossier temporaire de R (TMPDIR), pas seulement celui de l'app.")),
@@ -183,6 +192,9 @@ mod_import_sc_ui <- function(id) {
           value_box(title = i18n$t("Statut"), value = textOutput(ns("status_obj")),
                     showcase = bsicons::bs_icon("check-circle"), theme = "light")
         ),
+        # V1.x UX multi-échantillons : confirmation visuelle immédiate que les
+        # échantillons sont reconnus comme entités distinctes (>= 2 orig.ident).
+        uiOutput(ns("multisample_summary_ui")),
         card_body(h5(i18n$t("Console de Log"), class = "text-muted"),
                   verbatimTextOutput(ns("console_log"), placeholder = TRUE))
       )
@@ -443,6 +455,55 @@ mod_import_sc_server <- function(id, global_data) {
       global_data$language
       txt <- logs()
       if (identical(txt, "En attente d'import...")) .tr("En attente d'import...") else txt
+    })
+
+    # ── V1.x UX multi-échantillons : aperçu récapitulatif (≥ 2 orig.ident) ───
+    # Confirmation visuelle immédiate que les échantillons importés sont
+    # reconnus comme entités distinctes. Reste light par construction :
+    # méta.data uniquement (aucun passage sur la matrice de comptages, aucune
+    # densification — cap mémoire respecté). Gènes = médiane de nFeature_RNA
+    # par échantillon (repli : nombre de gènes de l'objet).
+    output$multisample_summary_ui <- renderUI({
+      global_data$language
+      obj <- global_data$sc_obj
+      if (is.null(obj) || is.null(obj$orig.ident)) return(NULL)
+      if (length(unique(obj$orig.ident)) < 2) return(NULL)
+      tagList(
+        hr(),
+        h6(.tr("Aperçu multi-échantillons — chaque échantillon est reconnu comme une entité distincte :"),
+           style = "font-weight:bold;"),
+        DT::dataTableOutput(ns("multisample_summary"), height = "auto")
+      )
+    })
+
+    output$multisample_summary <- DT::renderDataTable({
+      global_data$language
+      obj <- global_data$sc_obj
+      req(obj, obj$orig.ident)
+      meta    <- obj@meta.data
+      ids     <- obj$orig.ident
+      samples <- levels(factor(ids))
+      smry <- list()
+      smry[[.tr("Échantillon")]] <- samples
+      smry[[.tr("Cellules")]]    <- as.integer(table(ids)[samples])
+      if (!is.null(meta$nFeature_RNA)) {
+        gmed <- suppressWarnings(tapply(meta$nFeature_RNA, ids,
+                                        function(x) round(stats::median(x, na.rm = TRUE))))
+        smry[[.tr("Gènes (méd./cellule)")]] <- as.integer(gmed[samples])
+      } else {
+        smry[[.tr("Gènes")]] <- rep(nrow(obj), length(samples))
+      }
+      if ("condition" %in% colnames(meta)) {
+        smry[[.tr("Condition")]] <- tapply(as.character(meta$condition), ids,
+          function(x) paste(unique(x), collapse = ", "))[samples]
+      }
+      if ("batch" %in% colnames(meta)) {
+        smry[[.tr("Batch")]] <- tapply(as.character(meta$batch), ids,
+          function(x) paste(unique(x), collapse = ", "))[samples]
+      }
+      df <- as.data.frame(smry, check.names = FALSE, stringsAsFactors = FALSE)
+      DT::datatable(df, rownames = FALSE,
+                    options = list(pageLength = 10, dom = "t", scrollX = TRUE))
     })
 
     # ── load_single_cell_data ─────────────────────────────────────────────
