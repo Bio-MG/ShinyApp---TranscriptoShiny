@@ -84,6 +84,8 @@ source("R/sc/sc_pipeline.R")
 source("R/sc/sc_export.R")
 
 source("R/bulk/bulk_helpers.R")
+source("R/bulk/bulk_provenance.R")  # Bulk V2 M1 : manifeste bulk_obj$provenance (pur, testé)
+source("R/bulk/bulk_batch_qc.R")    # Bulk V2 M1 : diagnostics batch (pur, contrat gelé)
 source("R/bulk/bulk_report_engine.R")
 source("R/bulk/bulk_import_engine.R")
 
@@ -879,6 +881,20 @@ server <- function(input, output, session) {
                  
                  .tr_h("Astuce: Pour Harmony (correction de batch), importez 2 échantillons ou plus dans l'onglet Single-Cell (ou Spatial, voir \"Multi-echantillons\").")
                  
+        ),
+        
+        
+        
+        h5(.tr_h("Multi-échantillons (Single-Cell)")),
+        
+        tags$ul(
+          
+          tags$li(.tr_h("Importez plusieurs dossiers 10X / fichiers .rds / .h5 dans une même session : chaque import devient un échantillon distinct (orig.ident).")),
+          
+          tags$li(.tr_h("Harmony s'applique automatiquement sur l'identité d'échantillon (orig.ident) dès que ≥ 2 échantillons sont détectés (choisissez Harmony comme méthode de réduction).")),
+          
+          tags$li(.tr_h("Les analyses aval (pseudobulk, Milo, scCODA) exploitent l'identité d'échantillon pour éviter la pseudo-réplication."))
+          
         ),
         
         

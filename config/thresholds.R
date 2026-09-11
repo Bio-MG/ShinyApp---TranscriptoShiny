@@ -16,6 +16,27 @@ TS_3D_MAX_CELLS            <- 50000L   # 3D plot subsample cap
 TS_BULK_MIN_COUNT_DEFAULT  <- 10L      # default min total counts per gene
 TS_BULK_MIN_SAMPLES_DEFAULT <- 1L      # default min samples above threshold
 
+# --- Bulk V2 — provenance & diagnostics batch --------------------------------
+TS_BULK_VARPART_MAX_GENES  <- 2000L    # cap gènes pour la décomposition de variance (repli R pur)
+
+# --- Bulk V2 — scores par échantillon (GSVA / ssGSEA) -------------------------
+TS_BULK_GSVA_MIN_SIZE      <- 10L      # taille min d'un jeu de gènes
+TS_BULK_GSVA_MAX_SIZE      <- 500L     # taille max d'un jeu de gènes
+
+# --- Bulk V2 — WGCNA safe-mode ------------------------------------------------
+TS_BULK_WGCNA_MIN_SAMPLES  <- 15L      # arrêt dur en dessous (N < 15)
+TS_BULK_WGCNA_MIN_GENES    <- 2000L    # pré-filtrage HVG : plancher
+TS_BULK_WGCNA_MAX_GENES    <- 5000L    # pré-filtrage HVG : plafond
+TS_BULK_WGCNA_R2_MIN       <- 0.80     # fit scale-free cible
+TS_BULK_WGCNA_MAX_BLOCKSIZE<- 5000L    # maxBlockSize (calibré RAM 32 Go)
+TS_BULK_WGCNA_MIN_MODULE   <- 30L      # minModuleSize blockwiseModules
+
+# --- Bulk V2 — parallélisme (garde-fou mémoire 32 Go) -------------------------
+TS_BULK_MAX_WORKERS        <- 4L       # min(detectCores()-1, 4) — jamais au-delà
+
+# --- Bulk V2 — survie & association clinique ----------------------------------
+TS_BULK_SURV_MIN_EVENTS    <- 10L      # événements observés minimum (statut=1)
+
 # --- Spatial deconvolution ---------------------------------------------------
 TS_DECONV_MAX_CELLS_PER_TYPE <- 500L   # per-type subsample cap in artifact
 

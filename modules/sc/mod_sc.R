@@ -190,7 +190,11 @@ mod_sc_ui <- function(id) {
       nav_panel(i18n$t("QC"), value = "tab_qc",
         card(max_height = 750,
           div(class = "card-header bg-light", h5(i18n$t("Contrôle Qualité"), class = "card-title mb-0")),
-          plotOutput(ns("plot_qc"), height = "650px"))),
+          plotOutput(ns("plot_qc"), height = "650px"),
+          # V1.x UX multi-échantillons : sous-panneau léger, visible seulement
+          # quand >= 2 échantillons (orig.ident) — barplots méta.data +
+          # projections sur réductions EXISTANTES (aucun calcul nouveau).
+          uiOutput(ns("multisample_overview_ui")))),
       nav_panel(i18n$t("Résumé Pipeline"), value = "tab_summary",
         card(card_header(i18n$t("Résumé du Pipeline Single-Cell")),
              uiOutput(ns("pipeline_summary_panel"))))
@@ -240,6 +244,82 @@ mod_sc_server <- function(id, global_data) {
       req(global_data$sc_obj)
       VlnPlot(global_data$sc_obj,
               features=c("nFeature_RNA","nCount_RNA","percent.mt"), ncol=3, pt.size=0)
+    })
+
+    # ── V1.x UX multi-échantillons : vue d'ensemble (≥ 2 orig.ident) ─────────
+    # Lectures pures de l'état existant : barplots depuis méta.data, projets
+    # 2D depuis une réduction DÉJÀ calculée (aucun recalcul, aucune
+    # densification). Visible uniquement quand >= 2 échantillons.
+    .ms_pick_reduction <- function(obj) {
+      for (r in c("umap", "umap_harmony", "tsne", "pca"))
+        if (r %in% names(obj@reductions)) return(r)
+      NULL
+    }
+    .ms_dim_plot <- function(obj, group_by, red, title) {
+      tryCatch(
+        Seurat::DimPlot(obj, reduction = red, group.by = group_by,
+                        raster = ncol(obj) > 50000) +
+          ggplot2::ggtitle(title),
+        error = function(e) NULL)
+    }
+    output$multisample_overview_ui <- renderUI({
+      global_data$language
+      obj <- global_data$sc_obj
+      if (is.null(obj) || is.null(obj$orig.ident)) return(NULL)
+      if (length(unique(obj$orig.ident)) < 2) return(NULL)
+      has_cond <- "condition" %in% colnames(obj@meta.data)
+      red      <- .ms_pick_reduction(obj)
+      tagList(
+        hr(),
+        h5(.tr("Vue d'ensemble multi-échantillons"), class = "mb-1"),
+        div(class = "alert alert-light", style = "font-size:0.82em;padding:6px;",
+            bsicons::bs_icon("lightbulb"), " ",
+            .tr("Séparation forte par échantillon ? Activez Harmony dans le Pipeline.")),
+        plotOutput(ns("ms_plot_cells_sample"), height = "280px"),
+        if (has_cond) plotOutput(ns("ms_plot_cells_condition"), height = "280px"),
+        if (!is.null(red)) {
+          tagList(
+            plotOutput(ns("ms_plot_dim_sample"), height = "380px"),
+            if (has_cond) plotOutput(ns("ms_plot_dim_condition"), height = "380px"))
+        } else {
+          div(class = "alert alert-warning", style = "font-size:0.82em;padding:6px;",
+              .tr("Aucune réduction 2D disponible : lancez le Pipeline pour afficher les projections par échantillon."))
+        }
+      )
+    })
+    output$ms_plot_cells_sample <- renderPlot({
+      global_data$language
+      obj <- global_data$sc_obj
+      req(obj, obj$orig.ident)
+      op <- par(mar = c(9, 4, 2, 1)); on.exit(par(op), add = TRUE)
+      barplot(table(obj$orig.ident), las = 2, col = "#2C3E50",
+              main = .tr("Cellules par échantillon"), ylab = "n")
+    })
+    output$ms_plot_cells_condition <- renderPlot({
+      global_data$language
+      obj <- global_data$sc_obj
+      req(obj)
+      req("condition" %in% colnames(obj@meta.data))
+      op <- par(mar = c(9, 4, 2, 1)); on.exit(par(op), add = TRUE)
+      barplot(table(factor(obj@meta.data$condition)), las = 2, col = "#18BC9C",
+              main = .tr("Cellules par condition"), ylab = "n")
+    })
+    output$ms_plot_dim_sample <- renderPlot({
+      global_data$language
+      obj <- global_data$sc_obj
+      req(obj)
+      red <- .ms_pick_reduction(obj)
+      req(red)
+      .ms_dim_plot(obj, "orig.ident", red, .tr("Projection par échantillon"))
+    })
+    output$ms_plot_dim_condition <- renderPlot({
+      global_data$language
+      obj <- global_data$sc_obj
+      req(obj)
+      req("condition" %in% colnames(obj@meta.data))
+      red <- .ms_pick_reduction(obj)
+      req(red)
+      .ms_dim_plot(obj, "condition", red, .tr("Projection par condition"))
     })
 
     # ── Pipeline status bar ───────────────────────────────────────────────────

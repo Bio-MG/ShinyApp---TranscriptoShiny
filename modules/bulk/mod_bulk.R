@@ -46,6 +46,7 @@ mod_bulk_ui <- function(id) {
         id = ns("main_tabs"), title = i18n$t("R\u00e9sultats Bulk RNA-seq"),
         nav_panel("PCA",             value = "tab_pca",         mod_bulk_filter_pca_ui(ns("filter"))),
         nav_panel(i18n$t("QC \u00c9chantillons"), value = "tab_qc",  mod_bulk_filter_qc_ui(ns("filter"))),
+        nav_panel(i18n$t("QC Batch"), value = "tab_batch_qc", mod_bulk_filter_batch_ui(ns("filter"))),
         nav_panel("Volcano Plot",    value = "tab_volcano",     mod_bulk_de_volcano_ui(ns("de"))),
         nav_panel("MA-Plot",         value = "tab_ma",          mod_bulk_de_ma_ui(ns("de"))),
         nav_panel("Heatmap",         value = "tab_heatmap",     mod_bulk_de_heatmap_ui(ns("de"))),

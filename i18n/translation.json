@@ -8216,6 +8216,86 @@
     {
       "fr": "Sélectionnez exactement un objet à exporter en .rds.",
       "en": "Select exactly one object to export as .rds."
+    },
+    {
+      "fr": "Multi-échantillons : pour des expériences à plusieurs échantillons (ex: Contrôle & Traitement), importez chaque échantillon séparément. L'identité de l'échantillon est préservée pour la correction de batch et les analyses différentielles.",
+      "en": "Multi-sample: for experiments with multiple samples (e.g. Control & Treatment), import each sample separately. Sample identity is preserved for batch correction and differential analyses."
+    },
+    {
+      "fr": "Aperçu multi-échantillons — chaque échantillon est reconnu comme une entité distincte :",
+      "en": "Multi-sample overview — each sample is recognized as a distinct entity:"
+    },
+    {
+      "fr": "Gènes (méd./cellule)",
+      "en": "Genes (median/cell)"
+    },
+    {
+      "fr": "Condition",
+      "en": "Condition"
+    },
+    {
+      "fr": "Batch",
+      "en": "Batch"
+    },
+    {
+      "fr": "Exemple de structure de métadonnées attendue (4 échantillons, 2 conditions) :",
+      "en": "Expected metadata structure example (4 samples, 2 conditions):"
+    },
+    {
+      "fr": "condition : Control, Control, Treatment, Treatment",
+      "en": "condition: Control, Control, Treatment, Treatment"
+    },
+    {
+      "fr": "sample_id : S1, S2, S3, S4",
+      "en": "sample_id: S1, S2, S3, S4"
+    },
+    {
+      "fr": "Les cellules ne sont JAMAIS des réplicats biologiques : sample_id est l'unité de réplication.",
+      "en": "Cells are NEVER biological replicates: sample_id is the replication unit."
+    },
+    {
+      "fr": "Vue d'ensemble multi-échantillons",
+      "en": "Multi-sample overview"
+    },
+    {
+      "fr": "Cellules par échantillon",
+      "en": "Cells per sample"
+    },
+    {
+      "fr": "Cellules par condition",
+      "en": "Cells per condition"
+    },
+    {
+      "fr": "Projection par échantillon",
+      "en": "Embedding by sample"
+    },
+    {
+      "fr": "Projection par condition",
+      "en": "Embedding by condition"
+    },
+    {
+      "fr": "Séparation forte par échantillon ? Activez Harmony dans le Pipeline.",
+      "en": "Strong separation by sample? Enable Harmony in the Pipeline."
+    },
+    {
+      "fr": "Aucune réduction 2D disponible : lancez le Pipeline pour afficher les projections par échantillon.",
+      "en": "No 2D reduction available: run the Pipeline to display per-sample projections."
+    },
+    {
+      "fr": "Multi-échantillons (Single-Cell)",
+      "en": "Multi-sample (Single-Cell)"
+    },
+    {
+      "fr": "Importez plusieurs dossiers 10X / fichiers .rds / .h5 dans une même session : chaque import devient un échantillon distinct (orig.ident).",
+      "en": "Import multiple 10x folders / .rds / .h5 files in one session: each import becomes a distinct sample (orig.ident)."
+    },
+    {
+      "fr": "Harmony s'applique automatiquement sur l'identité d'échantillon (orig.ident) dès que ≥ 2 échantillons sont détectés (choisissez Harmony comme méthode de réduction).",
+      "en": "Harmony is automatically applied on sample identity (orig.ident) as soon as ≥ 2 samples are detected (choose Harmony as the reduction method)."
+    },
+    {
+      "fr": "Les analyses aval (pseudobulk, Milo, scCODA) exploitent l'identité d'échantillon pour éviter la pseudo-réplication.",
+      "en": "Downstream analyses (pseudobulk, Milo, scCODA) leverage sample identity to avoid pseudoreplication."
     }
   ]
 }
