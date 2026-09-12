@@ -8888,6 +8888,90 @@
     {
       "fr": "✓ Dataset « %s » supprimé.",
       "en": "✓ Dataset \"%s\" removed."
+    },
+    {
+      "fr": "Comparaison multi-jeux",
+      "en": "Multi-dataset comparison"
+    },
+    {
+      "fr": "Comparez des jeux enregistrés (import nommé ou bouton « Enregistrer l'état courant ») partageant un même nom de contraste. Les seuils choisis s'appliquent à TOUS les jeux comparés.",
+      "en": "Compare registered datasets (named import or the \"Save current state\" button) sharing a common contrast name. The chosen thresholds apply to ALL compared datasets."
+    },
+    {
+      "fr": "Datasets à comparer (>= 2)",
+      "en": "Datasets to compare (>= 2)"
+    },
+    {
+      "fr": "Sélectionnez au moins 2 datasets traités (via « Multi-jeux — Datasets enregistrés » ou l'import nommé).",
+      "en": "Select at least 2 processed datasets (via \"Multi-dataset — Registered datasets\" or the named import)."
+    },
+    {
+      "fr": "Aucun nom de contraste commun aux datasets sélectionnés.",
+      "en": "No contrast name is common to the selected datasets."
+    },
+    {
+      "fr": "Contraste commun",
+      "en": "Common contrast"
+    },
+    {
+      "fr": "Lancer la comparaison",
+      "en": "Run comparison"
+    },
+    {
+      "fr": "Comparaison impossible : %s",
+      "en": "Comparison failed: %s"
+    },
+    {
+      "fr": "✓ Comparaison calculée (contraste « %s », %d datasets).",
+      "en": "✓ Comparison computed (contrast \"%s\", %d datasets)."
+    },
+    {
+      "fr": "Un dataset comparé a été supprimé depuis le calcul — relancez la comparaison.",
+      "en": "A compared dataset was deleted since the run — run the comparison again."
+    },
+    {
+      "fr": "Moins de 2 datasets avec des gènes significatifs — pas d'UpSet.",
+      "en": "Fewer than 2 datasets with significant genes — no UpSet plot."
+    },
+    {
+      "fr": "Aucun gène dans les intersections avec ces seuils.",
+      "en": "No genes in the intersections with these thresholds."
+    },
+    {
+      "fr": "Résultats de la comparaison",
+      "en": "Comparison results"
+    },
+    {
+      "fr": "Volcanos côte à côte",
+      "en": "Side-by-side volcanoes"
+    },
+    {
+      "fr": "Recouvrement des DEGs",
+      "en": "DEG overlap"
+    },
+    {
+      "fr": "Gènes par intersection",
+      "en": "Genes per intersection"
+    },
+    {
+      "fr": "Concordance de direction",
+      "en": "Direction concordance"
+    },
+    {
+      "fr": "Jaccard = recouvrement des ensembles Up (resp. Down) entre deux jeux. « % même direction » = proportion des gènes significatifs communs qui varient dans le même sens.",
+      "en": "Jaccard = overlap of the Up (resp. Down) sets between two datasets. \"% same direction\" = share of common significant genes varying in the same direction."
+    },
+    {
+      "fr": "Détail des datasets",
+      "en": "Dataset details"
+    },
+    {
+      "fr": "En attente — sélectionnez >= 2 datasets puis lancez la comparaison.",
+      "en": "Waiting — select >= 2 datasets then run the comparison."
+    },
+    {
+      "fr": "✓ %s — %d datasets : %s",
+      "en": "✓ %s — %d datasets: %s"
     }
   ]
 }

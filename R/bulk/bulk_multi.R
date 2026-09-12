@@ -26,11 +26,12 @@ bulk_multi_public_api <- function() {
   )
 }
 
-#' Frozen error states (contract §5)
+#' Frozen error states (contract §5 — MD-1 storage + MD-2 comparison)
 #' @return Character vector of `state` attribute values.
 bulk_multi_error_states <- function() {
   c("invalid_input", "invalid_label", "invalid_obj", "invalid_pipeline",
-    "duplicate_label", "unknown_label", "capacity_exceeded")
+    "duplicate_label", "unknown_label", "capacity_exceeded",
+    "insufficient_datasets", "no_common_contrast", "no_significant_genes")
 }
 
 #' Frozen pipeline fields captured in a registered dataset (contract §4.3)

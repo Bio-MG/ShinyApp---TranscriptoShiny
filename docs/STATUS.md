@@ -19,15 +19,15 @@
 `docs/STATUS.md` et `docs/ROADMAP.md` (index + état), dé-obsolescence des
 roadmaps (voir `git log --oneline -- docs/`).
 
-> **▶ PROCHAINE ÉTAPE** : **MD-2 — comparaison multi-jeux** (`mod_bulk_multi.R`,
-> effort L) ou **MD-3 — pont pseudobulk → `bulk_datasets`** (effort S) — les
-> deux sont **indépendants** maintenant que **MD-1 est livré** (conteneur
-> `bulk_datasets`, contrat gelé `docs/contracts/BULK_MULTI_CONTRACT.md`,
-> 3 producteurs `import`/`pipeline_save`/`pseudobulk`, cf. §2t). Design
-> complet : `docs/ROADMAP_MULTI_DATASET.md`. La direction « analyse
-> multi-échantillons avec son propre pipeline, puis pseudobulk, chacun comme
-> le module Spatial » (demandée le 2026-09-12) est **cadrée** — plus un
-> chantier neuf.
+> **▶ PROCHAINE ÉTAPE** : **MD-3 — pont pseudobulk → `bulk_datasets`**
+> (effort S — bouton « Envoyer vers comparaison Bulk » dans
+> `mod_sc_pseudobulk.R`, producteur `pseudobulk` réservé dans le contrat).
+> **MD-2 est ✅ LIVRÉ** (comparaison multi-jeux : volcanos à échelle partagée,
+> recouvrement DEGs, concordance — onglet « Comparaison multi-jeux » du module
+> Bulk, contrat §10, cf. §2u). Design complet :
+> `docs/ROADMAP_MULTI_DATASET.md`. La direction « analyse multi-échantillons
+> avec son propre pipeline, puis pseudobulk, chacun comme le module Spatial »
+> (demandée le 2026-09-12) est **cadrée** — plus un chantier neuf.
 >
 > **PLOT-S6 est CLOS** (décision utilisateur du 2026-09-12) : il était **déjà
 > satisfait par l'arbre** — le routeur `renderUI` statique/interactif existait
@@ -48,7 +48,9 @@ roadmaps (voir `git log --oneline -- docs/`).
 > fonctionnel le 2026-09-12 (§2p) — mais **hors de toute roadmap**.
 >
 > **Livré :** **MD-1 ✅** (conteneur `bulk_datasets` — jeux bulk nommés pour la
-> comparaison multi-jeux, 3 producteurs, contrat gelé, cf. §2t), **STAT-S1 ✅**
+> comparaison multi-jeux, 3 producteurs, contrat gelé, cf. §2t), **MD-2 ✅**
+> (comparaison multi-jeux — volcanos à échelle partagée, recouvrement DEGs,
+> concordance de direction, contrat §10, cf. §2u), **STAT-S1 ✅**
 > (ComBat-seq — onglet QC Batch du Filtrage, contrat
 > gelé, 126 assertions, cf. §2q), **PLOT-S1 ✅** (`ts_theme()` partagé +
 > propagation Bulk/SC/Spatial, 44 sites), **PLOT-S2 ✅** (`ts_export_plot()`, 25
@@ -786,6 +788,62 @@ tous domaines (73 fichiers, runner `tools/run_full_suite.R`)** : **0 FAIL /
 0 ERROR / 0 SKIP — 4011 PASS** (= 3760 baseline + 251 nouvelles assertions,
 comptes exacts) ; e2e shinytest2 bulk **4 PASS** (app démarre et navigue le
 domaine Bulk avec le nouveau panneau). C'est le **nouveau baseline**.
+
+### 2u. ✅ MD-2 — comparaison multi-jeux (`mod_bulk_multi.R`, contrat §10)
+
+**Livré le 2026-09-12 (nuit)** (jalon MD-2 de `docs/ROADMAP_MULTI_DATASET.md`).
+Extension du contrat `BULK_MULTI_CONTRACT.md` (**§10** nouveau — code +
+freeze test + doc simultanément) + **3 états d'erreur** ajoutés à l'ensemble
+gelé du domaine (`insufficient_datasets`, `no_common_contrast`,
+`no_significant_genes` — `bulk_multi_error_states()` passe de 7 à 10, tests
+MD-1 adaptés dans le même commit). Rapport :
+`docs/ROADMAP_HANDOFF_STAGE_MD_2.md`.
+
+**Mesure préalable** : les contrastes stockés dans `pipeline$contrasts` sont
+des data.frames dont `.normalize_de_cols()` garantit les colonnes `gene`,
+`log2FoldChange`, `padj` — donc `plot_volcano_bulk()`,
+`build_contrast_gene_sets()` et `build_contrast_intersection_dt()`
+consomment les entrées du conteneur **telles quelles**. MD-2 est une
+**composition** de helpers existants, pas un nouveau moteur.
+
+| Rôle | Fichier |
+|---|---|
+| Logique pure | `R/bulk/bulk_multi_compare.R` (nouveau — entry_contrasts/common_contrasts/deg_gene_sets/volcano_scales/volcano_panel/concordance/run_comparison) |
+| Tests fonctionnels | `tests/testthat/test-bulk-multi-compare.R` (**64** assertions) |
+| Test de gel | `tests/testthat/test-bulk-multi-compare-contract-freeze.R` (**98** assertions) |
+| Module | `modules/bulk/mod_bulk_multi.R` (nouveau) — onglet « Comparaison multi-jeux » du module Bulk (contrôles + 4 sous-onglets) |
+| Câblage | `mod_bulk.R` (1 nav_panel + 1 appel serveur), `app.R` (source ×2, snapshot/restore `%||% NULL`/reset de `bulk_multi_comparison`) |
+| i18n | `translation.json` **+21 clés** (2242 entrées, 0 doublon) |
+
+**Ce que fait la comparaison** : ≥ 2 jeux enregistrés éligibles (pipeline
+capturé) + **un contraste commun** + des **seuils uniques** appliqués à
+tous les jeux (les seuils stockés restent affichés en transparence,
+colonnes `stored_*`) → (1) **volcanos côte à côte à échelle partagée**
+(`bulk_multi_volcano_scales()` calcule des limites globales — un `padj`
+nul (Inf) est exclu du calcul d'échelle — appliquées via `coord_cartesian`)
+assemblés par `patchwork::wrap_plots()` ; (2) **recouvrement des DEGs**
+(UpSet `plot_upset_contrasts()` + table `build_contrast_intersection_dt()`) ;
+(3) **concordance de direction** par paires (Jaccard Up/Down + % même
+direction) ; (4) table de détail par dataset. Résultat écrit **en plat** dans
+`global_data$bulk_multi_comparison` (pattern `spatial_multi_integration`,
+consommable par le futur 4F-ext) — **sans dupliquer** les data.frames de
+résultats (le rendu relit `bulk_datasets`).
+
+**Gardes gelés** : lecture seule (ni `bulk_datasets`, ni `bulk_obj`, ni
+`shared_rv`) ; réutilisation stricte — le source cite les 4 helpers et le
+test interdit toute redéfinition ; pureté Shiny (mêmes regex que §2.7) ;
+snapshots antérieurs tolérés (`%||% NULL`) ; dataset supprimé depuis le
+calcul → message propre au rendu (pas de crash).
+
+**Portes franchies** : tests ciblés **417 PASS / 0 FAIL / 0 ERROR / 0 SKIP**
+(bulk-multi 95 + gel 156→160 + compare 64 + gel compare 98) ; duplication
+gate **0 erreur / 3 avertissements** = baseline exacte ; `SMOKE_SOURCED:
+TRUE` ; i18n 2242 entrées 0 doublon. **Vérification finale — suite COMPLÈTE
+tous domaines (75 fichiers, runner `tools/run_full_suite.R`)** : **0 FAIL /
+0 ERROR / 0 SKIP — 4177 PASS** (= 4011 baseline + 162 pour les 2 nouveaux
+fichiers + 4 pour le gel MD-1 étendu aux 10 états, comptes exacts) ;
+e2e shinytest2 bulk **4 PASS** (app démarre et navigue le domaine Bulk avec
+le nouvel onglet). C'est le **nouveau baseline**.
 
 
 ---
