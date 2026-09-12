@@ -22,6 +22,10 @@ test_that("Bulk RNA domain: expected namespaced inputs exist", {
   expected_ids <- c(
     "bulk-mapping-run_mapping", "bulk-filter-min_count", "bulk-filter-run_filter_norm",
     "bulk-de-condition_col", "bulk-de-run_de",
+    # PLOT-S4 — reglages de clustering de la heatmap (mod_bulk_de_heatmap_ui,
+    # meme namespace ns("de") que condition_col/run_de).
+    "bulk-de-heatmap_clust_distance", "bulk-de-heatmap_clust_method",
+    "bulk-de-heatmap_k_row",
     "bulk-pathways-pathway_db", "bulk-report-report_title"
   )
   missing <- setdiff(expected_ids, inputs)

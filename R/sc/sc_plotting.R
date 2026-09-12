@@ -256,10 +256,17 @@ build_sc_viz_plot <- function(obj, cfg, sc_palette = "default", manual_colors = 
   if (type == "heatmap_hier") {
     valid <- intersect(cfg$feat_sel %||% character(0), rownames(obj))
     if (!length(valid)) stop("Aucun gène valide sélectionné pour la heatmap")
+    # PLOT-S4 — reglages de clustering. k < 2 (ou vide) = pas de decoupage,
+    # ce qui reproduit exactement le rendu anterieur au jalon.
+    k_row <- suppressWarnings(as.integer(cfg$hier_k_row %||% 0))
+    if (length(k_row) != 1L || is.na(k_row) || k_row < 2L) k_row <- NULL
     return(build_sc_hierarchical_heatmap(
       obj, features = valid, group_by = grp, max_features = 50L,
       max_cells = as.integer(cfg$hier_max_cells %||% 5000L),
-      palette = sc_palette, manual_colors = manual_colors, manual_gradient = manual_gradient
+      palette = sc_palette, manual_colors = manual_colors, manual_gradient = manual_gradient,
+      clustering_distance = cfg$hier_clust_distance %||% "euclidean",
+      clustering_method   = cfg$hier_clust_method %||% "complete",
+      k_row               = k_row
     ))
   }
 

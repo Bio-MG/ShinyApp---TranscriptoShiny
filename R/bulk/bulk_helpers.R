@@ -897,10 +897,18 @@ plot_ma_bulk <- function(res_df, lfc_thresh = 1, padj_thresh = 0.05,
 #'
 #' @param subtitle Optional statistical subtitle (PLOT-Q3) shown as a second
 #'   column title line. Ignored by the ggplot fallback path.
+#' @param clustering_distance,clustering_method PLOT-S4 — transmis au coeur
+#'   unifie `ts_complex_heatmap()`. Les defauts ("euclidean"/"complete")
+#'   reproduisent exactement le comportement anterieur (defauts de
+#'   ComplexHeatmap).
+#' @param k_row PLOT-S4 — NULL (defaut) = pas de decoupage. Entier >= 2 =
+#'   decoupage du dendrogramme de lignes en k groupes.
 plot_heatmap_bulk <- function(vst_matrix, genes, metadata, annotation_col = NULL, scale_rows = TRUE,
 
                               palette = "default", manual_colors = NULL, subtitle = NULL,
-                              theme_choice = TS_THEME_DEFAULT, base_size = TS_BASE_SIZE_DEFAULT, tr = NULL) {
+                              theme_choice = TS_THEME_DEFAULT, base_size = TS_BASE_SIZE_DEFAULT,
+                              clustering_distance = "euclidean", clustering_method = "complete",
+                              k_row = NULL, tr = NULL) {
 
   tr <- tr %||% function(x) x
 
@@ -916,7 +924,9 @@ plot_heatmap_bulk <- function(vst_matrix, genes, metadata, annotation_col = NULL
 
   if (requireNamespace("ComplexHeatmap", quietly = TRUE)) {
 
-    ann <- NULL
+    col_meta <- NULL
+
+    col_ann_colors <- NULL
 
     if (!is.null(annotation_col) && annotation_col %in% colnames(metadata)) {
 
@@ -924,40 +934,49 @@ plot_heatmap_bulk <- function(vst_matrix, genes, metadata, annotation_col = NULL
 
       ann_colors <- bulk_annotation_colors(grp_vals, palette, manual_colors)
 
-      ann <- if (!is.null(ann_colors)) {
+      col_meta   <- list(group = grp_vals)
 
-        ComplexHeatmap::HeatmapAnnotation(group = grp_vals, col = list(group = ann_colors))
-
-      } else {
-
-        ComplexHeatmap::HeatmapAnnotation(group = grp_vals)
-
-      }
+      if (!is.null(ann_colors)) col_ann_colors <- list(group = ann_colors)
 
     }
 
-    ht <- ComplexHeatmap::Heatmap(mat, name = tr("Z-score"), top_annotation = ann,
+    # PLOT-S4 : delegue au coeur unifie (R/plotting/complex_heatmap.R).
+    # - draw = TRUE : dessin explicite a marge sure, comme avant (le bug
+    #   "figure margins too large" corrige ici en PLOT-Q n'est pas reintroduit).
+    # - show_column_names = TRUE est EXPLICITE : le defaut du coeur applique la
+    #   regle "<= 60", que ce site n'appliquait PAS (ComplexHeatmap : TRUE).
+    # - `manual_colors` n'est PAS transmis a la rampe : le code historique ne
+    #   l'utilise que pour l'annotation (via bulk_annotation_colors). Le passer
+    #   changerait la rampe en mode "manual".
+    return(ts_complex_heatmap(
 
-                                  col = bulk_diverging_ramp(range(mat, na.rm = TRUE), palette = palette),
+      mat,
 
-                                  show_row_names = nrow(mat) <= 60,
+      name                  = tr("Z-score"),
 
-                                  column_title = tr("Heatmap — Gènes Différentiels"))
+      column_title          = tr("Heatmap — Gènes Différentiels"),
 
-    # Draw explicitly here (with the same margin safety as
-    # plot_upset_contrasts()/plot_venn_contrasts()) rather than returning
-    # the raw Heatmap object for implicit auto-print elsewhere — auto-print
-    # called draw() with whatever base-graphics mar happened to be active
-    # at TWO different call sites (renderPlot's auto-print AND the
-    # download handler's explicit print()), neither margin-safe, which is
-    # the same class of "figure margins too large" bug as Venn/UpSet.
-    old_mar <- graphics::par("mar")
+      col_meta              = col_meta,
 
-    on.exit(graphics::par(mar = old_mar), add = TRUE)
+      col_annotation_colors = col_ann_colors,
 
-    graphics::par(mar = c(1, 1, 1, 1))
+      ramp                  = "diverging",
 
-    return(invisible(ComplexHeatmap::draw(ht)))
+      palette               = palette,
+
+      show_row_names        = nrow(mat) <= 60,
+
+      show_column_names     = TRUE,
+
+      clustering_distance   = clustering_distance,
+
+      clustering_method     = clustering_method,
+
+      k_row                 = k_row,
+
+      tr                    = tr
+
+    ))
 
   }
 
@@ -1017,7 +1036,9 @@ plot_sample_correlation_heatmap <- function(vst_matrix, metadata = NULL,
 
   if (requireNamespace("ComplexHeatmap", quietly = TRUE)) {
 
-    ann <- NULL
+    col_meta <- NULL
+
+    col_ann_colors <- NULL
 
     if (!is.null(metadata) && !is.null(annotation_col) && annotation_col %in% colnames(metadata)) {
 
@@ -1025,37 +1046,50 @@ plot_sample_correlation_heatmap <- function(vst_matrix, metadata = NULL,
 
       ann_colors <- bulk_annotation_colors(grp_vals, palette, manual_colors)
 
-      ann <- if (!is.null(ann_colors)) {
+      col_meta   <- list(group = grp_vals)
 
-        ComplexHeatmap::HeatmapAnnotation(group = grp_vals, col = list(group = ann_colors))
-
-      } else {
-
-        ComplexHeatmap::HeatmapAnnotation(group = grp_vals)
-
-      }
+      if (!is.null(ann_colors)) col_ann_colors <- list(group = ann_colors)
 
     }
 
-    return(ComplexHeatmap::Heatmap(
+    # PLOT-S4 : delegue au coeur unifie. draw = FALSE CONSERVE exactement le
+    # comportement historique : l'objet Heatmap est rendu (pas dessine) et
+    # c'est print(), chez l'appelant, qui le dessine.
+    # ⚠️ ECART CONNU, volontairement PRESERVE (zero changement) : ce site n'est
+    # donc PAS protege contre "figure margins too large", contrairement a
+    # plot_heatmap_bulk()/build_sc_hierarchical_heatmap(). A corriger dans un
+    # jalon dedie — cf. docs/contracts/PLOT_HEATMAP_CONTRACT.md §Ecart connu.
+    return(ts_complex_heatmap(
 
-      cor_mat, name = paste0(toupper(substring(method, 1, 1)), substring(method, 2)),
+      cor_mat,
 
-      top_annotation     = ann,
+      name                  = paste0(toupper(substring(method, 1, 1)), substring(method, 2)),
 
-      col                = bulk_sequential_ramp(c(min(cor_mat), 1), palette = palette),
+      column_title          = tr("Corrélation Inter-Échantillons (QC)"),
 
-      show_row_names     = TRUE,
+      col_meta              = col_meta,
 
-      show_column_names  = TRUE,
+      col_annotation_colors = col_ann_colors,
 
-      column_title       = tr("Corrélation Inter-Échantillons (QC)"),
+      ramp                  = "sequential",
+
+      ramp_domain           = c(min(cor_mat), 1),
+
+      palette               = palette,
+
+      show_row_names        = TRUE,
+
+      show_column_names     = TRUE,
 
       cell_fun = function(j, i, x, y, width, height, fill) {
 
         grid::grid.text(sprintf("%.2f", cor_mat[i, j]), x, y, gp = grid::gpar(fontsize = 8))
 
-      }
+      },
+
+      draw                  = FALSE,
+
+      tr                    = tr
 
     ))
 

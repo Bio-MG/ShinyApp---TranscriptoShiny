@@ -1320,7 +1320,10 @@ map_ensembl_matrix_to_symbol <- function(mat, organism = c("human", "mouse")) {
 build_sc_hierarchical_heatmap <- function(seurat_obj, features, group_by = "seurat_clusters",
                                           max_features = 50L, max_cells = 5000L, assay = NULL,
                                           palette = "default", manual_colors = NULL,
-                                          manual_gradient = NULL) {
+                                          manual_gradient = NULL,
+                                          clustering_distance = "euclidean",
+                                          clustering_method = "complete",
+                                          k_row = NULL) {
   if (!requireNamespace("ComplexHeatmap", quietly = TRUE)) {
     stop("Package 'ComplexHeatmap' requis pour la heatmap hierarchique.")
   }
@@ -1365,10 +1368,12 @@ build_sc_hierarchical_heatmap <- function(seurat_obj, features, group_by = "seur
     mat_scaled[!is.finite(mat_scaled)] <- 0
     ann_levels <- colnames(mat_scaled)
     ann_colors <- sc_discrete_colors(ann_levels, palette, manual_colors)
-    col_ann <- if (!is.null(ann_colors)) {
-      ComplexHeatmap::HeatmapAnnotation(Groupe = ann_levels,
-                                        col = list(Groupe = stats::setNames(ann_colors, ann_levels)))
-    } else ComplexHeatmap::HeatmapAnnotation(Groupe = ann_levels)
+    # PLOT-S4 : on prepare les arguments du coeur unifie (l'appel est unique,
+    # apres les deux branches) au lieu de construire la HeatmapAnnotation ici.
+    col_meta       <- list(Groupe = ann_levels)
+    col_ann_colors <- if (!is.null(ann_colors)) {
+      list(Groupe = stats::setNames(ann_colors, ann_levels))
+    } else NULL
     subtitle <- sprintf("Moyenne agregee par groupe (%d cellules -> %d colonnes)", n_cells, ncol(mat_scaled))
   } else {
     ord <- order(grp_vec, colnames(seurat_obj))
@@ -1382,25 +1387,36 @@ build_sc_hierarchical_heatmap <- function(seurat_obj, features, group_by = "seur
     ann_vec <- grp_vec[ord]
     ann_levels <- sort(unique(ann_vec))
     ann_colors <- sc_discrete_colors(ann_levels, palette, manual_colors)
-    col_ann <- if (!is.null(ann_colors)) {
-      ComplexHeatmap::HeatmapAnnotation(Groupe = ann_vec,
-                                        col = list(Groupe = stats::setNames(ann_colors, ann_levels)))
-    } else ComplexHeatmap::HeatmapAnnotation(Groupe = ann_vec)
+    col_meta       <- list(Groupe = ann_vec)
+    col_ann_colors <- if (!is.null(ann_colors)) {
+      list(Groupe = stats::setNames(ann_colors, ann_levels))
+    } else NULL
     subtitle <- sprintf("%d cellules x %d genes (resolution cellule)", ncol(mat_scaled), nrow(mat_scaled))
   }
 
-  ht <- ComplexHeatmap::Heatmap(
-    mat_scaled, name = "Z-score", top_annotation = col_ann,
-    col = bulk_diverging_ramp(range(mat_scaled, na.rm = TRUE), palette = palette, manual_colors = manual_gradient),
-    show_column_names = ncol(mat_scaled) <= 60, show_row_names = nrow(mat_scaled) <= 60,
-    column_title = paste0("Heatmap Hierarchique -- ", subtitle),
-    clustering_distance_rows = "euclidean", clustering_method_rows = "complete",
-    clustering_distance_columns = "euclidean", clustering_method_columns = "complete"
-  )
-  old_mar <- graphics::par("mar")
-  on.exit(graphics::par(mar = old_mar), add = TRUE)
-  graphics::par(mar = c(1, 1, 1, 1))
-  invisible(ComplexHeatmap::draw(ht))
+  # PLOT-S4 : delegue au coeur unifie (R/plotting/complex_heatmap.R).
+  # - `name` reste "Z-score" EN DUR (non traduit) : comportement historique de
+  #   ce site, different de Bulk qui le passe par tr().
+  # - `manual_gradient` alimente la RAMPE (comme avant) ; les couleurs
+  #   d'annotation viennent de sc_discrete_colors() — resolveur DISTINCT de
+  #   bulk_annotation_colors() en mode "manual", donc non fusionnes.
+  # - draw = TRUE : dessin explicite a marge sure, comme avant.
+  return(ts_complex_heatmap(
+    mat_scaled,
+    name                  = "Z-score",
+    column_title          = paste0("Heatmap Hierarchique -- ", subtitle),
+    col_meta              = col_meta,
+    col_annotation_colors = col_ann_colors,
+    ramp                  = "diverging",
+    ramp_domain           = range(mat_scaled, na.rm = TRUE),
+    palette               = palette,
+    manual_colors         = manual_gradient,
+    show_column_names     = ncol(mat_scaled) <= 60,
+    show_row_names        = nrow(mat_scaled) <= 60,
+    clustering_distance   = clustering_distance,
+    clustering_method     = clustering_method,
+    k_row                 = k_row
+  ))
 }
 
 #' Build a two-dimensional expression density plot (Nebulosa-like)

@@ -122,7 +122,7 @@ mod_bulk_de_volcano_ui <- function(id) {
     uiOutput(ns("volcano_container")),
     fluidRow(
       column(6, selectInput(ns("volcano_export_fmt"), i18n$t("Format export"),
-                            choices = c("PNG" = "png", "PDF (vectoriel)" = "pdf"))),
+                            choices = ts_export_format_choices_ui())),
       column(6, div(style = "margin-top:25px;",
                     downloadButton(ns("dl_volcano_png"), i18n$t("Export Volcano (statique)"),
                                    class = "btn-sm btn-secondary w-100")))
@@ -145,7 +145,7 @@ mod_bulk_de_ma_ui <- function(id) {
     uiOutput(ns("ma_container")),
     fluidRow(
       column(6, selectInput(ns("ma_export_fmt"), i18n$t("Format export"),
-                            choices = c("PNG" = "png", "PDF (vectoriel)" = "pdf"))),
+                            choices = ts_export_format_choices_ui())),
       column(6, div(style = "margin-top:25px;",
                     downloadButton(ns("dl_ma_png"), i18n$t("Export MA-Plot (statique)"),
                                    class = "btn-sm btn-secondary w-100")))
@@ -172,10 +172,24 @@ mod_bulk_de_heatmap_ui <- function(id) {
                                 .tr_plain("Up-r\u00e9gul\u00e9s"), .tr_plain("Down-r\u00e9gul\u00e9s"), .tr_plain("Non-significatifs")))))
     ),
     uiOutput(ns("heatmap_manual_palette_ui")),
+    # PLOT-S4 — reglages de clustering exposes par ts_complex_heatmap().
+    # Les libelles de choix sont des termes techniques (euclidean, ward.D2…)
+    # identiques en FR et EN : pas de cle i18n a ajouter pour eux.
+    fluidRow(
+      column(4, selectInput(ns("heatmap_clust_distance"), i18n$t("Distance de clustering"),
+                            choices = stats::setNames(TS_HEATMAP_DISTANCES, TS_HEATMAP_DISTANCES),
+                            selected = "euclidean")),
+      column(4, selectInput(ns("heatmap_clust_method"), i18n$t("Méthode de clustering"),
+                            choices = stats::setNames(TS_HEATMAP_METHODS, TS_HEATMAP_METHODS),
+                            selected = "complete")),
+      column(4, numericInput(ns("heatmap_k_row"),
+                             i18n$t("Découpage en k groupes de lignes (0 = aucun)"),
+                             value = 0, min = 0, max = 20, step = 1))
+    ),
     plotOutput(ns("plot_heatmap"), height = "660px"),
     fluidRow(
       column(6, selectInput(ns("heatmap_export_fmt"), i18n$t("Format export"),
-                            choices = c("PNG" = "png", "PDF" = "pdf"))),
+                            choices = ts_export_format_choices_ui())),
       column(6, div(style = "margin-top:25px;",
                     downloadButton(ns("dl_heatmap"), tagList("\U0001f4e5", i18n$t("Export Heatmap")),
                                    class = "btn-sm btn-secondary w-100")))
