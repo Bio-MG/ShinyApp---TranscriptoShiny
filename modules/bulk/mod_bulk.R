@@ -36,6 +36,9 @@ mod_bulk_ui <- function(id) {
                           icon = icon("sliders"), mod_bulk_de_ui(ns("de"))),
           accordion_panel(i18n$t("3. Pathway Enrichment"), value = "panel_pathways",
                           icon = icon("dna"), mod_bulk_pathways_ui(ns("pathways"))),
+          # Bulk V2 M3 : signatures cellulaires (Hallmark/PROGENy/DoRothEA/RDS local).
+          accordion_panel(i18n$t("3b. Signatures cellulaires"), value = "panel_signatures",
+                          icon = icon("fingerprint"), mod_bulk_signatures_ui(ns("signatures"))),
           # LOT 3A (V1.x UX): last panel = deliverables (report + reproducible
           # R script already live together in mod_bulk_report.R — renamed only).
           accordion_panel(i18n$t("4. Livrables — Rapport & Script R"), value = "panel_report",
@@ -55,6 +58,9 @@ mod_bulk_ui <- function(id) {
         nav_panel(i18n$t("Multi-m\u00e9thodes"), value = "tab_multimethod", mod_bulk_de_multimethod_ui(ns("de"))),
         nav_panel("Venn / UpSet",    value = "tab_venn",        mod_bulk_de_venn_ui(ns("de"))),
         nav_panel("Pathway",         value = "tab_pathway",     mod_bulk_pathways_output_ui(ns("pathways"))),
+        # Bulk V2 M3 : signatures cellulaires.
+        nav_panel(i18n$t("Signatures cellulaires"), value = "tab_signatures",
+                  mod_bulk_signatures_output_ui(ns("signatures"))),
         # LOT 3A (V1.x UX): compact pipeline summary — reads EXISTING shared_rv
         # fields only (no new computation, no new QC).
         nav_panel(i18n$t("Résumé Pipeline Bulk"), value = "tab_resume",
@@ -408,6 +414,7 @@ mod_bulk_server <- function(id, global_data) {
     mod_bulk_filter_server(  "filter",   global_data, shared_rv)
     mod_bulk_de_server(      "de",       global_data, shared_rv)
     mod_bulk_pathways_server("pathways", global_data, shared_rv)
+    mod_bulk_signatures_server("signatures", global_data, shared_rv)
     mod_bulk_report_server(  "report",   global_data, shared_rv)
 
   }) # /moduleServer

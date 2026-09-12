@@ -8504,6 +8504,86 @@
     {
       "fr": "Fournissez un fichier .gmt (jeux de gènes).",
       "en": "Provide a .gmt file (gene sets)."
+    },
+    {
+      "fr": "Scores de signatures relatifs : estimation d'abondance relative ne remplaçant pas une quantification cytométrique.",
+      "en": "Relative signature scores: relative abundance estimation that does not replace cytometric quantification."
+    },
+    {
+      "fr": "Ressource de signatures",
+      "en": "Signature resource"
+    },
+    {
+      "fr": "MSigDB Hallmark (50 voies)",
+      "en": "MSigDB Hallmark (50 pathways)"
+    },
+    {
+      "fr": "Fichier RDS local",
+      "en": "Local RDS file"
+    },
+    {
+      "fr": "Fichier .rds (liste nommée ou data.frame signature/gene)",
+      "en": ".rds file (named list or signature/gene data.frame)"
+    },
+    {
+      "fr": "Liste nommée de vecteurs de gènes, ou data.frame avec colonnes 'signature' et 'gene'.",
+      "en": "Named list of gene vectors, or data.frame with 'signature' and 'gene' columns."
+    },
+    {
+      "fr": "ULM (decoupleR)",
+      "en": "ULM (decoupleR)"
+    },
+    {
+      "fr": "Taille min signature",
+      "en": "Min signature size"
+    },
+    {
+      "fr": "Taille max signature",
+      "en": "Max signature size"
+    },
+    {
+      "fr": "Lancer Scores de signatures",
+      "en": "Run signature scores"
+    },
+    {
+      "fr": "Signatures cellulaires",
+      "en": "Cellular signatures"
+    },
+    {
+      "fr": "Rejets",
+      "en": "Rejections"
+    },
+    {
+      "fr": "✓ {n} signatures scorées x {m} échantillons [ {meth} ]",
+      "en": "✓ {n} signatures scored x {m} samples [ {meth} ]"
+    },
+    {
+      "fr": "Chargement de la ressource...",
+      "en": "Loading resource..."
+    },
+    {
+      "fr": "Scores de signatures...",
+      "en": "Signature scoring..."
+    },
+    {
+      "fr": "Erreur signatures:",
+      "en": "Signatures error:"
+    },
+    {
+      "fr": "✓ {n} signatures scorées sur {m} échantillons.",
+      "en": "✓ {n} signatures scored on {m} samples."
+    },
+    {
+      "fr": "⚠️ Fournissez un fichier .rds de signatures.",
+      "en": "⚠️ Please provide a signature .rds file."
+    },
+    {
+      "fr": "Aucune signature rejetée.",
+      "en": "No signature rejected."
+    },
+    {
+      "fr": "{n} signature(s) rejetée(s) :",
+      "en": "{n} rejected signature(s):"
     }
   ]
 }
