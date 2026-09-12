@@ -15,7 +15,14 @@
 #   READ  : shared_rv$counts_mapped    — written by mod_bulk_mapping (Step 0,
 #                                         optional); used instead of the raw
 #                                         import when present (see %||% below)
-#   WRITE : shared_rv$filtered_counts  — matrix, post-filter counts
+#   WRITE : shared_rv$filtered_counts  — matrix, post-filter counts. Peut être
+#                                         CORRIGÉ des effets lot (STAT-S1,
+#                                         ComBat-seq) : dans ce cas c'est la
+#                                         matrice corrigée, et dds_blind /
+#                                         vst_mat sont reconstruits depuis elle.
+#                                         La copie PRISTINE reste locale au
+#                                         module (bc_pristine), donc aucune clé
+#                                         d'état partagé n'a été ajoutée.
 #           shared_rv$dds_blind        — DESeqDataSet (design ~1), exploration only
 #           shared_rv$vst_mat          — matrix, VST-transformed counts
 #           shared_rv$contrasts        — RESET to list() if user re-filters
@@ -151,6 +158,26 @@ mod_bulk_filter_batch_ui <- function(id) {
     uiOutput(ns("batch_alert")),
     h6(i18n$t("Table de contingence (condition x batch)"), style = "font-weight:bold;"),
     tableOutput(ns("batch_crosstab")),
+
+    # ── STAT-S1 — correction de batch ComBat-seq (BATCH_CORRECTION_CONTRACT.md)
+    # Section repliable NATIVE (<details>, aucun JS) et ouverte par défaut.
+    # Rien ne touche le pipeline tant que l'utilisateur ne clique pas
+    # « Appliquer » : l'étage est strictement optionnel (règle dure n°1).
+    tags$details(
+      open = NA,
+      tags$summary(style = "cursor:pointer;font-weight:bold;padding:6px 0;",
+                   i18n$t("Correction de batch (optionnel) \u2014 ComBat-seq")),
+      div(class = "alert alert-light", style = "font-size:0.85em;",
+          bsicons::bs_icon("info-circle"), " ",
+          i18n$t("Corrige l'effet lot sur les COUNTS BRUTS (jamais sur la matrice VST), en pr\u00e9servant la condition biologique. Le VST est recalcul\u00e9 apr\u00e8s correction et les contrastes d\u00e9j\u00e0 calcul\u00e9s sont invalid\u00e9s.")),
+      uiOutput(ns("batch_correction_status")),
+      actionButton(ns("run_batch_correction"),
+                   i18n$t("Appliquer la correction de batch"),
+                   class = "btn-outline-danger w-100 btn-sm"),
+      div(style = "height:520px;overflow-y:auto;margin-top:10px;",
+          plotOutput(ns("plot_batch_correction"), height = "500px"))
+    ),
+
     hr(),
     h6(i18n$t("Scree Plot \u2014 Variance Expliqu\u00e9e (QC Batch)"), style = "font-weight:bold;"),
     div(style = "height:400px;overflow-y:auto;", plotOutput(ns("plot_batch_scree"), height = "380px")),
@@ -193,6 +220,8 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
       updateSelectInput(session, "qc_corr_method", label = .tr("M\u00e9thode"))
       updateActionButton(session, "run_filter_norm",
                          label = paste0("\U0001f680 ", .tr("Lancer Filtrage & VST")))
+      updateActionButton(session, "run_batch_correction",
+                         label = .tr("Appliquer la correction de batch"))
     }, ignoreInit = TRUE)
 
     # ── Refresh metadata-driven choices when bulk_obj changes ────────────────
@@ -223,6 +252,13 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
     })
 
     # =========================================================================
+    # STAT-S1 — copie PRISTINE des counts filtrés, gardée CÔTÉ MODULE (aucune
+    # clé d'état partagé ajoutée). Elle rend « Appliquer la correction de
+    # batch » IDEMPOTENT : re-cliquer re-corrige à partir des counts d'origine,
+    # jamais à partir d'une matrice déjà corrigée. Remise à zéro par chaque
+    # exécution du Filtrage & VST (nouveau jeu de gènes).
+    bc_pristine <- reactiveVal(NULL)
+
     # STEP 1 — Filtering + VST
     # =========================================================================
     observeEvent(input$run_filter_norm, {
@@ -269,6 +305,9 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
         shared_rv$filtered_counts <- filtered
         shared_rv$dds_blind       <- dds_blind
         shared_rv$vst_mat         <- vst_mat
+        # STAT-S1 : nouvelle référence pristine. Toute correction de batch
+        # précédente devient caduque (elle portait sur un autre jeu de gènes).
+        bc_pristine(list(counts = filtered, vst = vst_mat))
 
         showNotification(.t_fmt(.tr("\u2713 {n} g\u00e8nes conserv\u00e9s sur {m} \u00e9chantillons"),
                                 n = nrow(filtered), m = ncol(filtered)),
@@ -550,6 +589,129 @@ mod_bulk_filter_server <- function(id, global_data, shared_rv) {
         utils::write.csv(out, file, row.names = FALSE)
       }
     )
+
+    # =========================================================================
+    # STAT-S1 — CORRECTION DE BATCH (ComBat-seq)
+    # Contrat : docs/contracts/BATCH_CORRECTION_CONTRACT.md
+    # Consomme R/bulk/batch_correction.R (pur). Aucune validation locale : les
+    # gardes viennent du contrat (erreurs classees bulk_batch_correction_error).
+    # L'etage est OPTIONNEL : rien ne change tant que l'utilisateur ne clique
+    # pas « Appliquer ».
+    # =========================================================================
+    batch_correction_design <- reactive({
+      req(global_data$bulk_obj, global_data$bulk_obj$metadata)
+      req(nzchar(input$batch_col %||% ""))
+      cond <- if (nzchar(input$batch_cond_col %||% "")) input$batch_cond_col else NULL
+      tryCatch(
+        bulk_batch_correction_design(global_data$bulk_obj$metadata, input$batch_col, cond),
+        error = function(e) e
+      )
+    })
+
+    output$batch_correction_status <- renderUI({
+      global_data$language  # i18n
+      if (is.null(bc_pristine())) {
+        return(div(class = "alert alert-warning", style = "font-size:0.85em;",
+                   .tr("Lancez d'abord le Filtrage & VST (\u00e9tape 1) pour activer la correction de batch.")))
+      }
+      d <- tryCatch(batch_correction_design(), error = function(e) e)
+      if (inherits(d, "error")) {
+        return(div(class = "alert alert-warning", style = "font-size:0.85em;",
+                   paste0("\u26a0\ufe0f ", conditionMessage(d))))
+      }
+      if (!isTRUE(d$can_apply)) {
+        return(div(class = "alert alert-danger", style = "font-size:0.85em;",
+                   tags$strong(.tr("Correction impossible : ")),
+                   paste(d$blocking_messages, collapse = " ")))
+      }
+      div(class = "alert alert-success", style = "font-size:0.85em;",
+          .tr("\u2713 Correction possible."), " ",
+          if (isTRUE(d$use_group))
+            .tr("La condition d\u00e9clar\u00e9e sera pass\u00e9e en « groupe » et pr\u00e9serv\u00e9e par la correction.")
+          else
+            .tr("Aucune condition d\u00e9clar\u00e9e : la correction sera appliqu\u00e9e sans variable biologique \u00e0 pr\u00e9server."))
+    })
+
+    # eventReactive : aucun nouveau trigger dupliqué (même choix que varpart).
+    batch_correction_res <- eventReactive(input$run_batch_correction, {
+      pristine <- bc_pristine()
+      req(pristine)
+      d <- batch_correction_design()
+      req(isTRUE(d$can_apply))
+
+      # SAFETY (même règle que le re-filtrage) : la correction modifie la
+      # matrice effective -> tout contraste déjà calculé devient incohérent.
+      if (length(shared_rv$contrasts) > 0) {
+        showNotification(
+          .tr("Les contrastes calcul\u00e9s pr\u00e9c\u00e9demment seront invalid\u00e9s par la correction de batch."),
+          type = "warning", duration = 6)
+        shared_rv$contrasts       <- list()
+        shared_rv$active_contrast <- NULL
+      }
+
+      p <- shiny::Progress$new(); on.exit(p$close())
+      p$set(message = .tr("Correction de batch (ComBat-seq)..."), value = 0.2)
+
+      tryCatch({
+        meta      <- global_data$bulk_obj$metadata
+        batch_vec <- as.character(meta[[d$batch_col]])
+        group_vec <- if (isTRUE(d$use_group)) as.character(meta[[d$condition_col]]) else NULL
+
+        corrected <- run_combat_seq(pristine$counts, batch_vec, group = group_vec)
+
+        p$set(0.6, .tr("Reconstruction DESeqDataSet (design ~1)..."))
+        dds <- build_dds(corrected, meta, design_formula = "~1", run_deseq = FALSE)
+        dds <- DESeq2::estimateSizeFactors(dds)
+
+        p$set(0.8, .tr("Transformation VST..."))
+        vst_corrected <- get_vst_matrix(dds)
+
+        shared_rv$filtered_counts <- corrected
+        shared_rv$dds_blind       <- dds
+        shared_rv$vst_mat         <- vst_corrected
+
+        # Provenance (AGENTS.md règle 6) : PRODUITE ici, jamais reconstruite
+        # après coup. Le libellé PRÉSERVE la normalisation déjà déclarée (il la
+        # préfixe) ; l'historique de provenance enregistre la transition.
+        global_data$bulk_obj <- bulk_update_provenance(
+          global_data$bulk_obj,
+          normalization = bulk_batch_correction_label(
+            d$batch_col,
+            if (isTRUE(d$use_group)) d$condition_col else NULL,
+            global_data$bulk_obj$provenance$normalization))
+
+        showNotification(
+          .t_fmt(.tr("\u2713 Correction de batch appliqu\u00e9e \u2014 {n} g\u00e8nes \u00d7 {m} \u00e9chantillons"),
+                 n = nrow(corrected), m = ncol(corrected)),
+          type = "message", duration = 6)
+
+        list(before_vst = pristine$vst, after_vst = vst_corrected)
+      }, error = function(e) {
+        showNotification(paste(.tr("Erreur correction de batch :"), conditionMessage(e)),
+                         type = "error", duration = 8)
+        NULL
+      })
+    })
+
+    # Diagnostic avant / après : deux appels à plot_bulk_pca() (API existante,
+    # aucune logique de tracé dupliquée) composés par plot_batch_correction_pca().
+    output$plot_batch_correction <- renderPlot({
+      res <- batch_correction_res()
+      req(res)
+      .safe_plot_render(session, "plot_batch_correction", function() {
+        global_data$language
+        meta <- global_data$bulk_obj$metadata
+        pal  <- input$palette_choice %||% "default"
+        man  <- if (identical(pal, "manual")) manual_palette_vec() else NULL
+        before <- plot_bulk_pca(res$before_vst, meta, color_by = input$batch_col,
+                                palette = pal, manual_colors = man,
+                                tr = .tr_fn(global_data))
+        after  <- plot_bulk_pca(res$after_vst, meta, color_by = input$batch_col,
+                                palette = pal, manual_colors = man,
+                                tr = .tr_fn(global_data))
+        plot_batch_correction_pca(before, after, tr = .tr_fn(global_data))
+      })
+    })
 
   }) # /moduleServer
 }

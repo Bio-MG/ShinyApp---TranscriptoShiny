@@ -8324,6 +8324,66 @@
     {
       "fr": "Taille de police (base)",
       "en": "Base font size"
+    },
+    {
+      "fr": "Correction de batch (optionnel) — ComBat-seq",
+      "en": "Batch correction (optional) — ComBat-seq"
+    },
+    {
+      "fr": "Corrige l'effet lot sur les COUNTS BRUTS (jamais sur la matrice VST), en préservant la condition biologique. Le VST est recalculé après correction et les contrastes déjà calculés sont invalidés.",
+      "en": "Corrects the batch effect on RAW COUNTS (never on the VST matrix) while preserving the biological condition. VST is recomputed after correction and already-computed contrasts are invalidated."
+    },
+    {
+      "fr": "Appliquer la correction de batch",
+      "en": "Apply batch correction"
+    },
+    {
+      "fr": "Lancez d'abord le Filtrage & VST (étape 1) pour activer la correction de batch.",
+      "en": "Run Filtering & VST (step 1) first to enable batch correction."
+    },
+    {
+      "fr": "Correction impossible : ",
+      "en": "Correction not possible: "
+    },
+    {
+      "fr": "✓ Correction possible.",
+      "en": "✓ Correction possible."
+    },
+    {
+      "fr": "La condition déclarée sera passée en « groupe » et préservée par la correction.",
+      "en": "The declared condition will be passed as \"group\" and preserved by the correction."
+    },
+    {
+      "fr": "Aucune condition déclarée : la correction sera appliquée sans variable biologique à préserver.",
+      "en": "No condition declared: the correction will be applied with no biological variable to preserve."
+    },
+    {
+      "fr": "Les contrastes calculés précédemment seront invalidés par la correction de batch.",
+      "en": "Previously computed contrasts will be invalidated by the batch correction."
+    },
+    {
+      "fr": "Correction de batch (ComBat-seq)...",
+      "en": "Batch correction (ComBat-seq)..."
+    },
+    {
+      "fr": "Reconstruction DESeqDataSet (design ~1)...",
+      "en": "Rebuilding DESeqDataSet (design ~1)..."
+    },
+    {
+      "fr": "✓ Correction de batch appliquée — {n} gènes × {m} échantillons",
+      "en": "✓ Batch correction applied — {n} genes × {m} samples"
+    },
+    {
+      "fr": "Erreur correction de batch :",
+      "en": "Batch correction error:"
+    },
+    {
+      "fr": "Diagnostic de correction de batch",
+      "en": "Batch correction diagnostic"
+    },
+    {
+      "fr": "A : avant correction — B : après correction (lots attendus mélangés)",
+      "en": "A: before correction — B: after correction (batches expected to mix)"
     }
   ]
 }

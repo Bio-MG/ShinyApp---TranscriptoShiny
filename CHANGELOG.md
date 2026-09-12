@@ -4,6 +4,78 @@ Tous les changements notables de TranscriptoShiny (« Cerberus ») sont document
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ;
 versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur `main`.
 
+> ℹ️ **Trou de maintenance assumé** : entre `V1.x-D` (2026-09-06) et l'entrée
+> ci-dessous, plusieurs jalons ont été livrés **sans entrée de changelog**
+> (PLOT-Q1..Q5, PLOT-S1..S5, Bulk V2 / batch-QC, correctif Milo, STAT-Q1..Q4).
+> Leur état fait foi dans **`docs/STATUS.md`** §1 et §2. Ce fichier reprend à
+> partir de `STAT-S1`.
+
+## [V1.x — STAT-S1] — 2026-09-12 — Correction de batch ComBat-seq
+
+Retrait d'un **effet de lot technique** avant l'analyse différentielle Bulk,
+par **ComBat-seq** (`sva`) plutôt que le ComBat classique : il agit sur les
+**comptages bruts** (modèle binomial négatif) et son paramètre `group=`
+**protège la condition biologique** — un ComBat sur matrice transformée peut
+l'effacer. Contrat gelé `docs/contracts/BATCH_CORRECTION_CONTRACT.md`
+(freeze : `test-bulk-batch-correction-contract-freeze.R`).
+
+### Ajouté
+- **Noyau pur** `R/bulk/batch_correction.R` :
+  `bulk_batch_correction_public_api()` (inventaire gelé) ;
+  `bulk_assert_raw_counts()` — **miroir exact** de
+  `bulk_assert_transformed_matrix()` (`bulk_batch_qc.R`) : **même seuil de
+  0,95** de fraction entière, appliqué **dans le sens inverse** (ce que l'une
+  accepte, l'autre le refuse) ; `bulk_batch_correction_design()` — réutilise
+  `bulk_batch_design_check()` (cross-table, **colinéarité lot/condition**) et
+  décide `can_apply` / `use_group` ; `bulk_batch_correction_label()` —
+  provenance **préfixée** (`"<normalisation> + ComBat-seq (batch : X ; groupe :
+  Y)"`), jamais écrasée ; `run_combat_seq()` — enveloppe **paresseuse**
+  (`requireNamespace("sva")` à l'appel, **jamais** au `source`) ; 
+  `plot_batch_correction_pca()` — compose **deux** tracés `plot_bulk_pca()` via
+  `patchwork` (`tr` **en dernier**, piège de signature PLOT-S1/S2).
+- **5 états d'erreur classés gelés** (`bulk_batch_correction_error`) :
+  `invalid_input`, `not_raw_counts`, `degenerate_batch`, `missing_dependency`,
+  `compute_failed` — le freeze test **compte** les `state = "…"` du source pour
+  interdire l'inflation silencieuse de cette surface.
+- **UI** — section repliable « Correction de batch (optionnel) — ComBat-seq »
+  dans l'onglet **QC Batch** de `mod_bulk_filter.R` : sélection de la colonne de
+  lot, choix de la condition à préserver, diagnostic PCA **avant / après**. La
+  copie « pristine » des comptages vit **dans le module** (`bc_pristine`) — 
+  **aucune clé de `shared_rv` ajoutée** ; le pipeline ne change **que sur clic
+  explicite** (idempotent), et les contrastes déjà calculés sont invalidés.
+- **Dépendance** : `sva` ajouté à **`bioc_packages`** — ⚠️ **pas** à
+  `required_packages` : l'application **démarre sans `sva`**, la fonctionnalité
+  échoue alors proprement en erreur classée `missing_dependency` (message FR
+  avec le remède).
+- **Seuil déclaré** `config/thresholds.R` :
+  `TS_BULK_BATCH_MIN_SAMPLES_PER_BATCH <- 2L`.
+- **i18n** : **+15** clés `{fr, en}` (2084 → 2099, 0 doublon).
+- Tests : `test-bulk-batch-correction.R` (**57** assertions) + freeze test
+  dédié (**69** assertions) → **126 PASS / 0 FAIL / 0 ERROR**.
+
+### Mesuré
+- **Critère d'acceptation quantifié** (la fiche proposait une lecture visuelle,
+  non testable) : sur comptages binomials négatifs sur-dispersés à **effet de
+  lot multiplicatif propre à chaque gène**, le **R² du lot sur PC1** passe de
+  **0,74 → 0,23** (< 50 % de l'initial) et l'**écart entre conditions est
+  préservé** (> 70 %). `dimnames` conservés.
+- Porte de duplication : **0 erreur / 3 avertissements** (baseline).
+- `app.R` se source de bout en bout (UI + server construits) — vérifié.
+
+### Limite connue (gelée au contrat §11.1)
+- Un **décalage additif uniforme sur tous les gènes n'est PAS corrigé** :
+  ComBat-seq le lit comme un **effet de profondeur de séquençage** et l'absorbe
+  par son offset. C'est statistiquement correct, mais c'est un **piège de
+  fixture** — un test fige ce comportement pour qu'il ne soit pas « corrigé »
+  par erreur.
+
+### Notes
+- ⚠️ Le contrat vit sous `docs/`, **gitignoré** : le freeze test lit donc
+  l'arbre, pas git. Sur un **clone neuf**, ce test échoue (contrat absent) alors
+  que le code est intact — voir la décision 4 de `docs/ROADMAP.md` §5.
+- ⚠️ `sva` est installé mais **pas encore snapshoté dans `renv.lock`** (snapshot
+  différé, règle du dépôt) — dégradation propre si absent.
+
 ## [V1.x-D] — 2026-09-06 — Perturbation IN SILICO (roadmap CCC avancée, Phase 4)
 
 Simulation de perturbation sur le **réseau INFÉRÉ** importé (suppression /

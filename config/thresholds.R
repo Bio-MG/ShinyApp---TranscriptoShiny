@@ -19,6 +19,13 @@ TS_BULK_MIN_SAMPLES_DEFAULT <- 1L      # default min samples above threshold
 # --- Bulk V2 — provenance & diagnostics batch --------------------------------
 TS_BULK_VARPART_MAX_GENES  <- 2000L    # cap gènes pour la décomposition de variance (repli R pur)
 
+# --- Bulk — correction de batch (STAT-S1, ComBat-seq) ------------------------
+# ComBat-seq (sva) estime une dispersion par gène ET par lot : il exige au
+# moins 2 échantillons par niveau de lot (sva échoue/avertit en dessous).
+# Plancher vérifié AVANT l'appel, pour un message français au lieu d'une
+# erreur anglaise de sva.
+TS_BULK_BATCH_MIN_SAMPLES_PER_BATCH <- 2L   # plancher ComBat-seq par niveau de lot
+
 # --- Bulk V2 — scores par échantillon (GSVA / ssGSEA) -------------------------
 TS_BULK_GSVA_MIN_SIZE      <- 10L      # taille min d'un jeu de gènes
 TS_BULK_GSVA_MAX_SIZE      <- 500L     # taille max d'un jeu de gènes
