@@ -19,15 +19,19 @@
 `docs/STATUS.md` et `docs/ROADMAP.md` (index + état), dé-obsolescence des
 roadmaps (voir `git log --oneline -- docs/`).
 
-> **▶ PROCHAINE ÉTAPE** : **MD-3 — pont pseudobulk → `bulk_datasets`**
-> (effort S — bouton « Envoyer vers comparaison Bulk » dans
-> `mod_sc_pseudobulk.R`, producteur `pseudobulk` réservé dans le contrat).
-> **MD-2 est ✅ LIVRÉ** (comparaison multi-jeux : volcanos à échelle partagée,
-> recouvrement DEGs, concordance — onglet « Comparaison multi-jeux » du module
-> Bulk, contrat §10, cf. §2u). Design complet :
-> `docs/ROADMAP_MULTI_DATASET.md`. La direction « analyse multi-échantillons
-> avec son propre pipeline, puis pseudobulk, chacun comme le module Spatial »
-> (demandée le 2026-09-12) est **cadrée** — plus un chantier neuf.
+> **▶ PROCHAINE ÉTAPE** : **MD-4 — modes 1/2 du double jeu SC** (effort L,
+> conteneur `sc_datasets` calqué sur le pattern `bulk_datasets` — voir
+> `docs/ROADMAP_MULTI_DATASET.md` ; ne démarrer qu'après validation
+> utilisateur du flux Bulk complet MD-1→MD-3). **MD-3 est ✅ LIVRÉ**
+> (pont pseudobulk → `bulk_datasets` : bouton « Envoyer vers comparaison
+> Bulk » dans `mod_sc_pseudobulk.R`, producteur `pseudobulk` désormais
+> câblé — contrat §6 producteur 3, cf. §2v). **MD-2 est ✅ LIVRÉ**
+> (comparaison multi-jeux : volcanos à échelle partagée, recouvrement DEGs,
+> concordance — onglet « Comparaison multi-jeux » du module Bulk, contrat
+> §10, cf. §2u). Design complet : `docs/ROADMAP_MULTI_DATASET.md`. La
+> direction « analyse multi-échantillons avec son propre pipeline, puis
+> pseudobulk, chacun comme le module Spatial » (demandée le 2026-09-12) est
+> **cadrée** — plus un chantier neuf.
 >
 > **PLOT-S6 est CLOS** (décision utilisateur du 2026-09-12) : il était **déjà
 > satisfait par l'arbre** — le routeur `renderUI` statique/interactif existait
@@ -50,7 +54,8 @@ roadmaps (voir `git log --oneline -- docs/`).
 > **Livré :** **MD-1 ✅** (conteneur `bulk_datasets` — jeux bulk nommés pour la
 > comparaison multi-jeux, 3 producteurs, contrat gelé, cf. §2t), **MD-2 ✅**
 > (comparaison multi-jeux — volcanos à échelle partagée, recouvrement DEGs,
-> concordance de direction, contrat §10, cf. §2u), **STAT-S1 ✅**
+> concordance de direction, contrat §10, cf. §2u), **MD-3 ✅** (pont
+> pseudobulk → `bulk_datasets`, producteur `pseudobulk`, cf. §2v), **STAT-S1 ✅**
 > (ComBat-seq — onglet QC Batch du Filtrage, contrat
 > gelé, 126 assertions, cf. §2q), **PLOT-S1 ✅** (`ts_theme()` partagé +
 > propagation Bulk/SC/Spatial, 44 sites), **PLOT-S2 ✅** (`ts_export_plot()`, 25
@@ -844,6 +849,37 @@ tous domaines (75 fichiers, runner `tools/run_full_suite.R`)** : **0 FAIL /
 fichiers + 4 pour le gel MD-1 étendu aux 10 états, comptes exacts) ;
 e2e shinytest2 bulk **4 PASS** (app démarre et navigue le domaine Bulk avec
 le nouvel onglet). C'est le **nouveau baseline**.
+
+### 2v. ✅ MD-3 — pont pseudobulk → `bulk_datasets` (producteur `pseudobulk`)
+
+**Livré le 2026-09-12 (nuit)** (jalon MD-3 de `docs/ROADMAP_MULTI_DATASET.md`).
+Aucun nouveau fichier de logique : le pont est une **composition pure** de
+l'API gelée MD-1 (`bulk_multi_check_label()` → `bulk_multi_capture_pipeline()`
+sur une liste partielle → `bulk_multi_register(producer = "pseudobulk")`),
+câblée dans le module SC existant. Contrat mis à jour (§2.8 + §6 producteur 3
+— code + freeze test + doc simultanément), rapport :
+`docs/ROADMAP_HANDOFF_STAGE_MD_3.md`.
+
+| Rôle | Fichier |
+|---|---|
+| Câblage UI + serveur | `modules/sc/mod_sc_pseudobulk.R` — section « 3. Envoi vers la comparaison multi-jeux Bulk » : label libre (défaut `pseudobulk_<cible>_vs_<réf>`, ne remplit jamais un champ saisi) + bouton « Envoyer vers comparaison Bulk » |
+| Entrée produite | `obj = list(counts, metadata)` (comptages agrégés + metadata façon Bulk) ; pipeline capturé = contraste unique `<cible>_vs_<réf>` + seuils du run, autres champs `NULL` → **éligible à la comparaison MD-2 dès l'envoi** |
+| Test fonctionnel | `tests/testthat/test-bulk-multi-pseudobulk-bridge.R` (**39** assertions — entrée conforme, résumé, éligibilité + `bulk_multi_run_comparison()` contre une entrée bulk, overwrite, `invalid_obj`, isolation par copie) |
+| Test de gel | `test-bulk-multi-contract-freeze.R` — ancre contrat §2.8/§6 mise à jour + garde « consommateur mince » sur `mod_sc_pseudobulk.R` (appels API, `producer = "pseudobulk"`, interdiction d'écriture sur `bulk_obj`/`shared_rv$contrasts`) |
+| i18n | `translation.json` **+9 clés** (2251 entrées, 0 doublon) |
+
+**Gardes** : lecture du seul état `pb$` du module — `bulk_obj` et
+`shared_rv$contrasts` jamais écrits (gelé par test) ; échec d'enregistrement
+= notification d'erreur, jamais d'interruption ; sans résultat DE =
+avertissement ; re-pousser le même label = mise à jour explicite
+(`overwrite = TRUE`, `registered_at` conservé) ; aucun changement app.R
+(`bulk_datasets` déjà snapshot/restore/reset par MD-1).
+
+**Portes franchies** : tests ciblés bulk-multi **513 PASS / 0 FAIL**
+(bulk-multi 95 + gel 164 + compare 64 + gel compare 98 + pont 39 = comptes
+incrémentaux) ; duplication gate **0 erreur / 3 avertissements** = baseline ;
+`SMOKE_SOURCED: TRUE` ; i18n 2251 entrées 0 doublon ; suite complète cf.
+§6 du rapport MD-3.
 
 
 ---

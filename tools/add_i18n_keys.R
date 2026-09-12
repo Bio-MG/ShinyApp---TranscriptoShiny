@@ -201,7 +201,24 @@ new_entries <- list(
   c("Détail des datasets", "Dataset details"),
   c("En attente — sélectionnez >= 2 datasets puis lancez la comparaison.",
     "Waiting — select >= 2 datasets then run the comparison."),
-  c("✓ %s — %d datasets : %s", "✓ %s — %d datasets: %s")
+  c("✓ %s — %d datasets : %s", "✓ %s — %d datasets: %s"),
+  # --- MD-3 (pont pseudobulk -> bulk_datasets) ---
+  c("3. Envoi vers la comparaison multi-jeux Bulk",
+    "3. Send to the Bulk multi-dataset comparison"),
+  c("Enregistre le résultat DE pseudobulk (comptages agrégés + contraste) dans le conteneur bulk_datasets pour le comparer aux jeux Bulk (onglet « Comparaison multi-jeux » du module Bulk). Le jeu actif n'est jamais modifié.",
+    "Registers the pseudobulk DE result (aggregated counts + contrast) into the bulk_datasets container so it can be compared against Bulk datasets (\"Multi-dataset comparison\" tab of the Bulk module). The active dataset is never modified."),
+  c("ex : pseudobulk_T2_vs_ctrl", "e.g.: pseudobulk_T2_vs_ctrl"),
+  c("Envoyer vers comparaison Bulk", "Send to Bulk comparison"),
+  c("Aucun résultat DE pseudobulk à envoyer — lancez d'abord l'analyse différentielle (étape 2).",
+    "No pseudobulk DE result to send — run the differential analysis first (step 2)."),
+  c("✓ Jeu « %s » mis à jour dans bulk_datasets (producteur pseudobulk).",
+    "✓ Dataset \"%s\" updated in bulk_datasets (producer: pseudobulk)."),
+  c("✓ Jeu « %s » enregistré dans bulk_datasets (producteur pseudobulk).",
+    "✓ Dataset \"%s\" registered in bulk_datasets (producer: pseudobulk)."),
+  c("✓ Pseudobulk mis à jour sous « %s » — comparable dans l'onglet « Comparaison multi-jeux » du module Bulk.",
+    "✓ Pseudobulk updated as \"%s\" — comparable in the \"Multi-dataset comparison\" tab of the Bulk module."),
+  c("✓ Pseudobulk enregistré sous « %s » — comparable dans l'onglet « Comparaison multi-jeux » du module Bulk.",
+    "✓ Pseudobulk registered as \"%s\" — comparable in the \"Multi-dataset comparison\" tab of the Bulk module.")
 )
 
 fr_existing <- vapply(j$translation, function(x) x$fr %||% "", character(1))
