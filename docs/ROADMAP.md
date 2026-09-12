@@ -101,10 +101,13 @@ d'entrée de l'app upstream — voir `STATUS.md` §3 et
 Lots 0/1/2/3A/4A/6A/5 livrés. Restent les options **3B/4B/6B** (jamais
 tranchées) et les libellés techniques des modules enfants Spatial.
 
-### Flux E — Bulk V2 / batch-QC · ⚠️ **sans roadmap**
-Travail non commité dans l'arbre. N'appartient à aucun des flux ci-dessus.
-**Recommandation** : lui créer sa propre roadmap avant de reprendre, sinon il
-restera le seul chantier sans état traçable. Voir `STATUS.md` §2h.
+### Flux E — Bulk V2 · ✅ **COMPLET (M1→M5) — roadmap dédiée créée**
+La recommandation « créer une roadmap dédiée » est appliquée :
+**`docs/ROADMAP_BULK_V2.md`** (jalons/contrats/commits, découvertes
+d'environnement, restes ouverts). État détaillé : `STATUS.md` §2h + §2r.
+Rapport de stage : `docs/ROADMAP_HANDOFF_STAGE_BULK_V2_M2_M5.md`.
+Restes ouverts du chantier (NON planifiés) : intégration rapport (4F-ext),
+async (arbitrage 4E-4), caching (règle 8).
 
 ---
 
@@ -174,7 +177,7 @@ auto dès ≥ 2 échantillons). Les modes 1 et 2 n'existent pas encore — c'est
 |---|---|---|
 | 1 | **4E-4** : pool mirai dédié SC / pool applicatif unique / rester synchrone | Architecture async de la DA |
 | 2 | **UX** : options 3B, 4B, 6B | Reprise de la refonte UX |
-| 3 | **Bulk V2** : lui créer une roadmap dédiée ? | Traçabilité du seul chantier sans pilotage |
+| 3 | ~~**Bulk V2** : lui créer une roadmap dédiée ?~~ — ✅ **TRANCHÉ le 2026-09-12** : `docs/ROADMAP_BULK_V2.md` créée (Flux E complet M1→M5) | ~~Traçabilité~~ résolue |
 | 4 | **`docs/` gitignoré** : garder local, ou versionner `docs/*.md` + `docs/contracts/*.md` ? | Les 13 contrats ne sont pas versionnés — voir la remarque ci-dessous |
 | 5 | **Modes 1/2 du double jeu SC** : priorité et périmètre | Direction produit du module SC |
 | 6 | ~~**PLOT-S6′**~~ — ✅ **TRANCHÉE le 2026-09-12 : PLOT-S6 clos, repli PLOT-S6′ non retenu** | Volet « présentation » **terminé** — voir `docs/ROADMAP_HANDOFF_STAGE_PLOT_S6.md` |
