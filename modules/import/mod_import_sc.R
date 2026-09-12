@@ -177,6 +177,27 @@ mod_import_sc_ui <- function(id) {
             # .rda/.RData "Inspect & Select" — carte conditionnelle mutualisée
             # (contrat docs/contracts/RDATA_IMPORT_CONTRACT.md)
             rdata_picker_ui(ns("rdata_picker_sc"))
+          ),
+          # MD-4 (décision 5) : label optionnel + relation déclarée — un
+          # import étiqueté enregistre une COPIE du jeu importé dans le
+          # conteneur sc_datasets (contrat docs/contracts/SC_MULTI_CONTRACT.md).
+          # SANS label, le comportement des options A/B/C est strictement
+          # inchangé (garde zéro changement).
+          accordion_panel(
+            i18n$t("Multi-datasets SC (double jeu)"),
+            value = "opt_multi",
+            div(class = "alert alert-light", style = "font-size:0.78rem;",
+                bsicons::bs_icon("info-circle"), " ",
+                i18n$t("Renseignez un label pour enregistrer une copie du jeu importé dans le conteneur sc_datasets (le jeu actif reste l'objet importé). Relation : mode 1 = traiter avec les mêmes réglages que le jeu de référence ; mode 2 = réglages propres au jeu.")),
+            textInput(ns("multi_label"), i18n$t("Label multi-datasets SC"),
+                      placeholder = i18n$t("ex : Rep2_T2")),
+            selectInput(ns("multi_relation"), i18n$t("Relation déclarée (décision 5)"),
+                        choices = setNames(
+                          c("standalone", "shared_params", "distinct_params"),
+                          c(.tr_plain("Jeu indépendant (aucune relation)"),
+                            .tr_plain("Mode 1 — analyses séparées, paramètres partagés"),
+                            .tr_plain("Mode 2 — analyses séparées, paramètres distincts"))
+                        ), selected = "standalone")
           )
         )
       ),
@@ -219,6 +240,27 @@ mod_import_sc_server <- function(id, global_data) {
       logs(paste0("[", format(Sys.time(),"%H:%M:%S"), "] ", msg, "\n", logs()))
     }
 
+    # ── MD-4 (décision 5) : producteur "import" du conteneur sc_datasets ───
+    # Label optionnel renseigné → enregistre une COPIE du jeu importé
+    # (contrat docs/contracts/SC_MULTI_CONTRACT.md). L'échec est une ALERTE :
+    # l'import ne doit JAMAIS être interrompu (aucun stop() dans ce helper).
+    .register_sc_multi_dataset <- function(obj) {
+      lbl_raw <- input$multi_label %||% ""
+      if (!nzchar(trimws(lbl_raw))) return(invisible(NULL))
+      res <- tryCatch(
+        sc_multi_register(global_data$sc_datasets, lbl_raw, obj,
+                          relation = input$multi_relation %||% "standalone",
+                          producer = "import"),
+        sc_multi_error = function(e) e)
+      if (inherits(res, "sc_multi_error")) {
+        add_log(paste("⚠", res$message))
+        showNotification(res$message, type = "warning", duration = 10)
+        return(invisible(NULL))
+      }
+      global_data$sc_datasets <- res
+      add_log(paste("🗄️", sprintf(.tr("Jeu SC « %s » enregistré dans sc_datasets (producteur import)."), trimws(lbl_raw))))
+    }
+
     # ── .rda/.RData "Inspect & Select" (composant mutualisé) ───────────────
     # Contrat docs/contracts/RDATA_IMPORT_CONTRACT.md : le workspace est
     # inspecté dans un env isolé ; la classe est validée AVANT le commit.
@@ -234,6 +276,7 @@ mod_import_sc_server <- function(id, global_data) {
         if (is.data.frame(obj)) obj <- as.matrix(obj)
         prepared <- prepare_seurat_object(obj, "SingleSample")
         global_data$sc_obj <- prepared
+        .register_sc_multi_dataset(prepared)
         add_log(paste(.tr("✅ Import réussi:"), ncol(prepared), .tr("cellules"), "—", obj_name))
         showNotification(paste(.tr("✅ Import réussi:"), ncol(prepared), .tr("cellules")),
                          type = "message", duration = 5)
@@ -348,6 +391,7 @@ mod_import_sc_server <- function(id, global_data) {
         merged <- if (length(obj_list)==1) obj_list[[1]] else
           merge(obj_list[[1]], y=obj_list[-1], add.cell.ids=names(obj_list), project="MultiSample")
         global_data$sc_obj <- merged
+        .register_sc_multi_dataset(merged)
         add_log(paste("✅", ncol(merged), .tr("cellules,"), length(unique(merged$orig.ident)), .tr("échantillon(s)")))
         showNotification(paste(.tr("✅ Import réussi:"), ncol(merged), .tr("cellules")), type = "message", duration = 5)
       }, error = function(e) {
@@ -398,6 +442,7 @@ mod_import_sc_server <- function(id, global_data) {
         merged <- if (length(obj_list)==1) obj_list[[1]] else
           merge(obj_list[[1]], y=obj_list[-1], add.cell.ids=names(obj_list), project="MultiFile")
         global_data$sc_obj <- merged
+        .register_sc_multi_dataset(merged)
         add_log(paste("✅", ncol(merged), .tr("cellules")))
         showNotification(.tr("✅ Import réussi:"), type = "message", duration = 5)
       }, error = function(e) {
@@ -432,6 +477,7 @@ mod_import_sc_server <- function(id, global_data) {
           raw <- load_single_cell_data(input$single_file_upload$datapath, add_log)
           obj <- prepare_seurat_object(raw, "SingleSample")
           global_data$sc_obj <- obj
+          .register_sc_multi_dataset(obj)
           add_log(paste(.tr("✅ Import réussi:"), ncol(obj), .tr("cellules")))
           showNotification(.tr("✅ Import réussi:"), type = "message")
         }, error = function(e) {

@@ -19,19 +19,13 @@
 `docs/STATUS.md` et `docs/ROADMAP.md` (index + état), dé-obsolescence des
 roadmaps (voir `git log --oneline -- docs/`).
 
-> **▶ PROCHAINE ÉTAPE** : **MD-4 — modes 1/2 du double jeu SC** (effort L,
-> conteneur `sc_datasets` calqué sur le pattern `bulk_datasets` — voir
-> `docs/ROADMAP_MULTI_DATASET.md` ; ne démarrer qu'après validation
-> utilisateur du flux Bulk complet MD-1→MD-3). **MD-3 est ✅ LIVRÉ**
-> (pont pseudobulk → `bulk_datasets` : bouton « Envoyer vers comparaison
-> Bulk » dans `mod_sc_pseudobulk.R`, producteur `pseudobulk` désormais
-> câblé — contrat §6 producteur 3, cf. §2v). **MD-2 est ✅ LIVRÉ**
-> (comparaison multi-jeux : volcanos à échelle partagée, recouvrement DEGs,
-> concordance — onglet « Comparaison multi-jeux » du module Bulk, contrat
-> §10, cf. §2u). Design complet : `docs/ROADMAP_MULTI_DATASET.md`. La
-> direction « analyse multi-échantillons avec son propre pipeline, puis
-> pseudobulk, chacun comme le module Spatial » (demandée le 2026-09-12) est
-> **cadrée** — plus un chantier neuf.
+> **▶ PROCHAINE ÉTAPE** : la roadmap `docs/ROADMAP_MULTI_DATASET.md` est
+> **TOTALEMENT LIVRÉE** (MD-1→MD-4). **MD-4 est ✅ LIVRÉ** (conteneur
+> `sc_datasets` + double jeu SC modes 1/2 de la décision 5 — contrat
+> `SC_MULTI_CONTRACT.md`, cf. §2w). **Retour au point d'entrée** :
+> `docs/ROADMAP_HANDOFF_NEXT.md` (§ « HANDOFF V1.x ») — candidates : audit
+> UX/UI (7 points de friction utilisateur), 4F-ext (consommation de
+> `bulk_multi_comparison` / `sc_datasets` par le rapport consolidé).
 >
 > **PLOT-S6 est CLOS** (décision utilisateur du 2026-09-12) : il était **déjà
 > satisfait par l'arbre** — le routeur `renderUI` statique/interactif existait
@@ -55,7 +49,9 @@ roadmaps (voir `git log --oneline -- docs/`).
 > comparaison multi-jeux, 3 producteurs, contrat gelé, cf. §2t), **MD-2 ✅**
 > (comparaison multi-jeux — volcanos à échelle partagée, recouvrement DEGs,
 > concordance de direction, contrat §10, cf. §2u), **MD-3 ✅** (pont
-> pseudobulk → `bulk_datasets`, producteur `pseudobulk`, cf. §2v), **STAT-S1 ✅**
+> pseudobulk → `bulk_datasets`, producteur `pseudobulk`, cf. §2v), **MD-4 ✅**
+> (conteneur `sc_datasets` — double jeu SC modes 1/2, décision 5 clôturée,
+> cf. §2w), **STAT-S1 ✅**
 > (ComBat-seq — onglet QC Batch du Filtrage, contrat
 > gelé, 126 assertions, cf. §2q), **PLOT-S1 ✅** (`ts_theme()` partagé +
 > propagation Bulk/SC/Spatial, 44 sites), **PLOT-S2 ✅** (`ts_export_plot()`, 25
@@ -875,11 +871,56 @@ avertissement ; re-pousser le même label = mise à jour explicite
 (`overwrite = TRUE`, `registered_at` conservé) ; aucun changement app.R
 (`bulk_datasets` déjà snapshot/restore/reset par MD-1).
 
-**Portes franchies** : tests ciblés bulk-multi **513 PASS / 0 FAIL**
-(bulk-multi 95 + gel 164 + compare 64 + gel compare 98 + pont 39 = comptes
-incrémentaux) ; duplication gate **0 erreur / 3 avertissements** = baseline ;
+**Portes franchies** : tests ciblés bulk-multi **464 PASS / 0 FAIL**
+(bulk-multi 95 + gel 168 + compare 64 + gel compare 98 + pont 39 = comptes
+exact par fichier) ; duplication gate **0 erreur / 3 avertissements** = baseline ;
 `SMOKE_SOURCED: TRUE` ; i18n 2251 entrées 0 doublon ; suite complète cf.
 §6 du rapport MD-3.
+
+### 2w. ✅ MD-4 — conteneur `sc_datasets` & double jeu SC (modes 1/2, décision 5)
+
+**Livré le 2026-09-12 (nuit)** (jalon MD-4 de
+`docs/ROADMAP_MULTI_DATASET.md` — **roadmap MD complète**). Miroir du
+pattern `bulk_datasets` appliqué au domaine SC, avec une différence assumée :
+**pas de capture de pipeline** (l'état pipeline SC vit dans l'objet Seurat ;
+les paramètres sont des inputs de module) — à la place, chaque entrée porte
+une **relation déclarée** (`standalone` | `shared_params` [mode 1] |
+`distinct_params` [mode 2]) = annotation de provenance, jamais appliquée
+mécaniquement. Contrat gelé `docs/contracts/SC_MULTI_CONTRACT.md`
+(code + freeze test + doc simultanément). Rapport :
+`docs/ROADMAP_HANDOFF_STAGE_MD_4.md`.
+
+| Rôle | Fichier |
+|---|---|
+| Logique pure | `R/sc/sc_multi.R` (nouveau — register/remove/get/summary/relations, 7 états `sc_multi_error`) |
+| Seuil config | `config/thresholds.R` — `TS_SC_MULTI_MAX_DATASETS = 5L` (chaque entrée = un objet Seurat **complet**) |
+| Producteur import | `mod_import_sc.R` — panneau « Multi-datasets SC (double jeu) » (label optionnel + relation) ; helper `.register_sc_multi_dataset()` aux **4 points de commit** ; échec = alerte, import jamais bloqué ; sans label = comportement inchangé |
+| Producteur gestion | `modules/sc/mod_sc_datasets.R` (nouveau) — câblé dans `mod_sc.R` (section Préparation) : label, relation, enregistrement (`producer = "pipeline_save"`, overwrite explicite), résumé, suppression |
+| Câblage app.R | source ×2 ; init `sc_datasets = list()` ; snapshot ; restore `%||% list()` ; reset |
+| Tests | `test-sc-multi.R` + `test-sc-multi-contract-freeze.R` — **180 PASS / 0 FAIL** |
+| i18n | `translation.json` **+15 clés** (2266 entrées, 0 doublon) |
+
+**Gardes gelés** : zéro écriture sur `sc_obj` (le pipeline SC existant ne
+référence **jamais** `sc_datasets` — garde de non-régression testée par grep
+sur 33 fichiers SC préexistants) ; pureté Shiny de `sc_multi.R` (regex) ;
+plafond conteneur + repli config ; labels uniques (overwrite explicite) ;
+isolation (remplacer `sc_obj` ne change jamais une entrée).
+
+**Pièges i18n rencontrés et soldés** (cf. rapport §1.1) : avec
+`i18n$use_js()`, `i18n$t()` à l'UI retourne un shiny.tag — les noms de
+choix de `selectInput` exigent `.tr_plain()` ; `c("label" = "valeur")` avec
+des appels de fonction ne parse pas — `setNames()` requis.
+
+**Portes franchies** : sc-multi **180 PASS / 0 FAIL / 0 ERROR / 0 SKIP** ;
+i18n 2266 entrées 0 doublon ; duplication gate **0 erreur /
+3 avertissements** = baseline ; `SMOKE_SOURCED: TRUE` ; **suite COMPLÈTE
+tous domaines (80 fichiers, runner `tools/run_full_suite.R`)** : **0 FAIL /
+0 ERROR — 4484 PASS / 1 SKIP** (skip préexistant dans `test-mod-geo.R`,
+hors périmètre MD) ; e2e shinytest2 bulk **4 PASS** / import **5 PASS** /
+sc **5 PASS** (avec le nouveau panneau datasets au boot) / spatial
+**4 PASS**. Correctif e2e en cours de jalon : le résumé du conteneur ne
+doit PAS passer par `validate(need())` (émet un `.shiny-output-error`
+visible au boot — table vide à la place). C'est le **nouveau baseline**.
 
 
 ---

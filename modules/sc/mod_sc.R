@@ -52,7 +52,13 @@ mod_sc_ui <- function(id) {
                             mod_sc_mapping_ui(ns("mapping"))),
             accordion_panel(i18n$t("1. Pipeline"), icon = icon("cogs"),
                             value = "1_pipeline",
-                            mod_sc_pipeline_ui(ns("pipeline")))
+                            mod_sc_pipeline_ui(ns("pipeline"))),
+            # MD-4 (décision 5) : gestion du conteneur sc_datasets — enregistrer
+            # l'objet SC courant (brut ou traité) sous un label avec relation
+            # déclarée (mode 1 = paramètres partagés, mode 2 = distincts).
+            accordion_panel(i18n$t("Datasets SC enregistrés (double jeu)"), icon = icon("database"),
+                            value = "0_sc_datasets",
+                            mod_sc_datasets_ui(ns("sc_datasets")))
           )),
         # ── 2. Analyse ────────────────────────────────────────────────────
         accordion_panel(i18n$t("Analyse"), icon = icon("chart-area"), value = "grp_analyse",
@@ -402,6 +408,7 @@ mod_sc_server <- function(id, global_data) {
     # ── Child servers ─────────────────────────────────────────────────────────
     mod_sc_mapping_server(   "mapping",   global_data)
     mod_sc_pipeline_server(  "pipeline",  global_data, shared_rv)
+    mod_sc_datasets_server(  "sc_datasets", global_data)  # MD-4 : conteneur sc_datasets (lecture seule de sc_obj)
     mod_sc_annotation_server("annotation",global_data, shared_rv)
     mod_sc_viz_server(       "viz",       global_data, shared_rv)
     # maj 3
