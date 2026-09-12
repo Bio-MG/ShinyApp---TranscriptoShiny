@@ -39,6 +39,9 @@ mod_bulk_ui <- function(id) {
           # Bulk V2 M3 : signatures cellulaires (Hallmark/PROGENy/DoRothEA/RDS local).
           accordion_panel(i18n$t("3b. Signatures cellulaires"), value = "panel_signatures",
                           icon = icon("fingerprint"), mod_bulk_signatures_ui(ns("signatures"))),
+          # Bulk V2 M4 : réseaux de co-expression WGCNA (safe-mode).
+          accordion_panel(i18n$t("3c. R\u00e9seau de co-expression (WGCNA)"), value = "panel_wgcna",
+                          icon = icon("project-diagram"), mod_bulk_wgcna_ui(ns("wgcna"))),
           # LOT 3A (V1.x UX): last panel = deliverables (report + reproducible
           # R script already live together in mod_bulk_report.R — renamed only).
           accordion_panel(i18n$t("4. Livrables — Rapport & Script R"), value = "panel_report",
@@ -61,6 +64,8 @@ mod_bulk_ui <- function(id) {
         # Bulk V2 M3 : signatures cellulaires.
         nav_panel(i18n$t("Signatures cellulaires"), value = "tab_signatures",
                   mod_bulk_signatures_output_ui(ns("signatures"))),
+        # Bulk V2 M4 : WGCNA.
+        nav_panel("WGCNA", value = "tab_wgcna", mod_bulk_wgcna_output_ui(ns("wgcna"))),
         # LOT 3A (V1.x UX): compact pipeline summary — reads EXISTING shared_rv
         # fields only (no new computation, no new QC).
         nav_panel(i18n$t("Résumé Pipeline Bulk"), value = "tab_resume",
@@ -415,6 +420,7 @@ mod_bulk_server <- function(id, global_data) {
     mod_bulk_de_server(      "de",       global_data, shared_rv)
     mod_bulk_pathways_server("pathways", global_data, shared_rv)
     mod_bulk_signatures_server("signatures", global_data, shared_rv)
+    mod_bulk_wgcna_server("wgcna", global_data, shared_rv)
     mod_bulk_report_server(  "report",   global_data, shared_rv)
 
   }) # /moduleServer
