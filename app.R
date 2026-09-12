@@ -95,6 +95,7 @@ source("R/bulk/bulk_signatures.R")    # Bulk V2 M3 : signatures cellulaires (pur
 source("R/bulk/bulk_wgcna.R")         # Bulk V2 M4 : WGCNA safe-mode (pur, contrat gelé)
 source("R/bulk/bulk_survival.R")      # Bulk V2 M5 : survie & clinique (pur, contrat gelé)
 source("R/bulk/bulk_multi.R")         # MD-1 : conteneur bulk_datasets & jeux nommés (pur, contrat gelé)
+source("R/bulk/bulk_multi_compare.R") # MD-2 : comparaison multi-jeux (pur, contrat gelé §10)
 source("R/bulk/bulk_report_engine.R")
 source("R/bulk/bulk_import_engine.R")
 
@@ -157,6 +158,7 @@ source("modules/bulk/mod_bulk_signatures.R")  # Bulk V2 M3 : signatures cellulai
 source("modules/bulk/mod_bulk_wgcna.R")       # Bulk V2 M4 : WGCNA safe-mode
 source("modules/bulk/mod_bulk_survival.R")    # Bulk V2 M5 : survie & clinique
 source("modules/bulk/mod_bulk_datasets.R")    # MD-1 : gestion du conteneur bulk_datasets
+source("modules/bulk/mod_bulk_multi.R")       # MD-2 : comparaison multi-jeux
 source("modules/bulk/mod_bulk_report.R")
 source("modules/bulk/mod_bulk.R")
 
@@ -660,6 +662,8 @@ server <- function(input, output, session) {
 
         bulk_datasets = global_data$bulk_datasets,
 
+        bulk_multi_comparison = global_data$bulk_multi_comparison,
+
         spatial_obj = global_data$spatial_obj,
         
         spatial_datasets = global_data$spatial_datasets,
@@ -737,6 +741,9 @@ server <- function(input, output, session) {
 
       # MD-1 : conteneur absent des snapshots antérieurs — repli list() propre.
       global_data$bulk_datasets <- snapshot$bulk_datasets %||% list()
+
+      # MD-2 : résultat de comparaison absent des snapshots antérieurs.
+      global_data$bulk_multi_comparison <- snapshot$bulk_multi_comparison %||% NULL
 
       global_data$spatial_obj <- snapshot$spatial_obj
       
@@ -1049,6 +1056,8 @@ server <- function(input, output, session) {
     global_data$bulk_obj <- NULL
 
     global_data$bulk_datasets <- list()
+
+    global_data$bulk_multi_comparison <- NULL
 
     global_data$spatial_obj <- NULL
     

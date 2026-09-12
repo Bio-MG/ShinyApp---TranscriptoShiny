@@ -72,14 +72,24 @@ test_that("error states are frozen in code AND contract (no silent inflation)", 
   expect_setequal(states_code, c("invalid_input", "invalid_label",
                                  "invalid_obj", "invalid_pipeline",
                                  "duplicate_label", "unknown_label",
-                                 "capacity_exceeded"))
-  # Chaque état émis par le source appartient à l'ensemble gelé.
+                                 "capacity_exceeded",
+                                 "insufficient_datasets",
+                                 "no_common_contrast",
+                                 "no_significant_genes"))
+  # Chaque état émis par le source appartient à l'ensemble gelé (le fichier
+  # MD-1 n'émet que les 7 états de stockage ; les états MD-2 vivent dans
+  # bulk_multi_compare.R, gelés par son propre test).
   src <- .ts_read("R/bulk/bulk_multi.R")
   emitted <- unique(regmatches(src,
                                gregexpr('(?<=state = ")[^"]+', src,
                                         perl = TRUE))[[1L]])
-  expect_setequal(emitted, states_code)
-  # Le contrat cite les 7 états.
+  expect_true(all(emitted %in% states_code),
+              info = paste("états hors ensemble gelé :",
+                           paste(setdiff(emitted, states_code), collapse = ", ")))
+  expect_setequal(emitted, c("invalid_input", "invalid_label", "invalid_obj",
+                             "invalid_pipeline", "duplicate_label",
+                             "unknown_label", "capacity_exceeded"))
+  # Le contrat cite les 10 états.
   doc <- .ts_read("docs/contracts/BULK_MULTI_CONTRACT.md")
   for (st in states_code) {
     expect_match(doc, paste0("`", st, "`"), fixed = TRUE,

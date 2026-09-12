@@ -80,7 +80,11 @@ mod_bulk_ui <- function(id) {
         # fields only (no new computation, no new QC).
         nav_panel(i18n$t("Résumé Pipeline Bulk"), value = "tab_resume",
                   card(card_header(i18n$t("Résumé Pipeline Bulk")),
-                       uiOutput(ns("bulk_resume_panel"))))
+                       uiOutput(ns("bulk_resume_panel")))),
+        # MD-2 : comparaison multi-jeux (consomme global_data$bulk_datasets,
+        # n'écrit que global_data$bulk_multi_comparison).
+        nav_panel(i18n$t("Comparaison multi-jeux"), value = "tab_bulk_multi",
+                  mod_bulk_multi_ui(ns("multi")))
       )
     )
   )
@@ -433,6 +437,7 @@ mod_bulk_server <- function(id, global_data) {
     mod_bulk_wgcna_server("wgcna", global_data, shared_rv)
     mod_bulk_survival_server("survival", global_data, shared_rv)
     mod_bulk_datasets_server("datasets", global_data, shared_rv)  # MD-1
+    mod_bulk_multi_server("multi", global_data)                   # MD-2
     mod_bulk_report_server(  "report",   global_data, shared_rv)
 
   }) # /moduleServer
