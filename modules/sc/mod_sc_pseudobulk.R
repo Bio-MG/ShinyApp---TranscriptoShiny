@@ -26,6 +26,15 @@
 #
 # FindAllMarkers() (mod_sc_markers.R) is untouched and remains the
 # cluster-level/exploratory tool; this module is the condition-level test.
+#
+# MD-3 (ROADMAP_MULTI_DATASET.md) — additive bridge to the bulk multi-dataset
+# container: a "Envoyer vers comparaison Bulk" button registers the pseudobulk
+# run (aggregated counts + metadata + the single DE contrast) into
+# global_data$bulk_datasets via bulk_multi_register(producer = "pseudobulk"),
+# making it selectable in mod_bulk_multi.R's "Comparaison multi-jeux" tab.
+# Pure logic lives in R/bulk/bulk_multi.R (frozen contract
+# BULK_MULTI_CONTRACT.md §6, producer 3); this module only READS its own pb$
+# state — bulk_obj / shared_rv are never touched here.
 # =============================================================================
 
 `%||%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
@@ -194,6 +203,15 @@ mod_sc_pseudobulk_ui <- function(id) {
     actionButton(ns("run_de"), i18n$t("Lancer l'Analyse Différentielle"),
                  class = "btn-success w-100", icon = icon("chart-line")),
     hr(),
+    h6(i18n$t("3. Envoi vers la comparaison multi-jeux Bulk"), style = "font-weight:bold;"),
+    div(class = "small text-muted mb-1",
+        i18n$t("Enregistre le résultat DE pseudobulk (comptages agrégés + contraste) dans le conteneur bulk_datasets pour le comparer aux jeux Bulk (onglet « Comparaison multi-jeux » du module Bulk). Le jeu actif n'est jamais modifié.")),
+    textInput(ns("pb_send_label"), i18n$t("Label du dataset"),
+              placeholder = i18n$t("ex : pseudobulk_T2_vs_ctrl")),
+    actionButton(ns("pb_send"), i18n$t("Envoyer vers comparaison Bulk"),
+                 class = "btn-outline-primary w-100", icon = icon("paper-plane")),
+    div(class = "small text-muted mt-1", textOutput(ns("pb_send_status"))),
+    hr(),
     downloadButton(ns("dl_pb_csv"), i18n$t("Export CSV"), class = "btn-sm btn-info w-100"),
     div(class = "small text-muted mt-2", textOutput(ns("de_status")))
   )
@@ -244,6 +262,9 @@ mod_sc_pseudobulk_server <- function(id, global_data, shared_rv) {
       updateNumericInput(session, "lfc_thresh", label = .tr("Seuil |Log2FC|"))
       updateNumericInput(session, "padj_thresh", label = .tr("Seuil p-adj"))
       updateActionButton(session, "run_de", label = .tr("Lancer l'Analyse Différentielle"))
+      updateTextInput(session, "pb_send_label", label = .tr("Label du dataset"),
+                      placeholder = .tr("ex : pseudobulk_T2_vs_ctrl"))
+      updateActionButton(session, "pb_send", label = .tr("Envoyer vers comparaison Bulk"))
     }, ignoreInit = TRUE)
 
     pb <- reactiveValues(counts = NULL, metadata = NULL, dropped = NULL, de_result = NULL)
@@ -394,6 +415,69 @@ mod_sc_pseudobulk_server <- function(id, global_data, shared_rv) {
         showNotification(paste("Erreur DE pseudobulk:", conditionMessage(e)),
                          type = "error", duration = 10)
       })
+    })
+
+    # ── MD-3: bridge to the bulk multi-dataset container ────────────────────
+    send_status_rv <- reactiveVal("")
+    output$pb_send_status <- renderText({ send_status_rv() })
+
+    # Default label only fills an EMPTY field (never clobbers a typed label),
+    # same discipline as mod_bulk_datasets.R.
+    observeEvent(pb$de_result, {
+      req(pb$de_result, input$group_target, input$group_ref)
+      if (!nzchar(trimws(input$pb_send_label %||% ""))) {
+        updateTextInput(session, "pb_send_label",
+                        value = paste0("pseudobulk_", input$group_target,
+                                       "_vs_", input$group_ref))
+      }
+    })
+
+    observeEvent(input$pb_send, {
+      global_data$language  # i18n
+      if (is.null(pb$de_result) || is.null(pb$counts) || is.null(pb$metadata)) {
+        showNotification(.tr("Aucun résultat DE pseudobulk à envoyer — lancez d'abord l'analyse différentielle (étape 2)."),
+                         type = "warning", duration = 6)
+        return()
+      }
+      lbl <- tryCatch(bulk_multi_check_label(input$pb_send_label),
+                      bulk_multi_error = function(e) e)
+      if (inherits(lbl, "bulk_multi_error")) {
+        showNotification(lbl$message, type = "error", duration = 8)
+        return()
+      }
+      contrast_name <- paste0(input$group_target, "_vs_", input$group_ref)
+      pipeline <- tryCatch(
+        bulk_multi_capture_pipeline(list(
+          contrasts   = setNames(list(pb$de_result), contrast_name),
+          lfc_thresh  = input$lfc_thresh %||% 1,
+          padj_thresh = input$padj_thresh %||% 0.05
+        )),
+        bulk_multi_error = function(e) e)
+      if (inherits(pipeline, "bulk_multi_error")) {
+        showNotification(pipeline$message, type = "error", duration = 8)
+        return()
+      }
+      had <- lbl %in% names(global_data$bulk_datasets)
+      new_ds <- tryCatch(
+        bulk_multi_register(
+          global_data$bulk_datasets, lbl,
+          obj = list(counts = pb$counts, metadata = pb$metadata),
+          pipeline_state = pipeline,
+          producer = "pseudobulk", overwrite = TRUE),
+        bulk_multi_error = function(e) e)
+      if (inherits(new_ds, "bulk_multi_error")) {
+        showNotification(new_ds$message, type = "error", duration = 8)
+        return()
+      }
+      global_data$bulk_datasets <- new_ds
+      send_status_rv(sprintf(.tr(if (had)
+        "✓ Jeu « %s » mis à jour dans bulk_datasets (producteur pseudobulk)."
+        else "✓ Jeu « %s » enregistré dans bulk_datasets (producteur pseudobulk)."), lbl))
+      showNotification(sprintf(
+        .tr(if (had)
+          "✓ Pseudobulk mis à jour sous « %s » — comparable dans l'onglet « Comparaison multi-jeux » du module Bulk."
+          else "✓ Pseudobulk enregistré sous « %s » — comparable dans l'onglet « Comparaison multi-jeux » du module Bulk."), lbl),
+        type = "message", duration = 6)
     })
 
     output$pb_volcano <- renderPlot({

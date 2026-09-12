@@ -8972,6 +8972,42 @@
     {
       "fr": "✓ %s — %d datasets : %s",
       "en": "✓ %s — %d datasets: %s"
+    },
+    {
+      "fr": "3. Envoi vers la comparaison multi-jeux Bulk",
+      "en": "3. Send to the Bulk multi-dataset comparison"
+    },
+    {
+      "fr": "Enregistre le résultat DE pseudobulk (comptages agrégés + contraste) dans le conteneur bulk_datasets pour le comparer aux jeux Bulk (onglet « Comparaison multi-jeux » du module Bulk). Le jeu actif n'est jamais modifié.",
+      "en": "Registers the pseudobulk DE result (aggregated counts + contrast) into the bulk_datasets container so it can be compared against Bulk datasets (\"Multi-dataset comparison\" tab of the Bulk module). The active dataset is never modified."
+    },
+    {
+      "fr": "ex : pseudobulk_T2_vs_ctrl",
+      "en": "e.g.: pseudobulk_T2_vs_ctrl"
+    },
+    {
+      "fr": "Envoyer vers comparaison Bulk",
+      "en": "Send to Bulk comparison"
+    },
+    {
+      "fr": "Aucun résultat DE pseudobulk à envoyer — lancez d'abord l'analyse différentielle (étape 2).",
+      "en": "No pseudobulk DE result to send — run the differential analysis first (step 2)."
+    },
+    {
+      "fr": "✓ Jeu « %s » mis à jour dans bulk_datasets (producteur pseudobulk).",
+      "en": "✓ Dataset \"%s\" updated in bulk_datasets (producer: pseudobulk)."
+    },
+    {
+      "fr": "✓ Jeu « %s » enregistré dans bulk_datasets (producteur pseudobulk).",
+      "en": "✓ Dataset \"%s\" registered in bulk_datasets (producer: pseudobulk)."
+    },
+    {
+      "fr": "✓ Pseudobulk mis à jour sous « %s » — comparable dans l'onglet « Comparaison multi-jeux » du module Bulk.",
+      "en": "✓ Pseudobulk updated as \"%s\" — comparable in the \"Multi-dataset comparison\" tab of the Bulk module."
+    },
+    {
+      "fr": "✓ Pseudobulk enregistré sous « %s » — comparable dans l'onglet « Comparaison multi-jeux » du module Bulk.",
+      "en": "✓ Pseudobulk registered as \"%s\" — comparable in the \"Multi-dataset comparison\" tab of the Bulk module."
     }
   ]
 }

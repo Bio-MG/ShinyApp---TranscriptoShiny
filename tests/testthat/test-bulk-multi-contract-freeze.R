@@ -141,7 +141,26 @@ test_that("producer tags are frozen (import | pipeline_save | pseudobulk)", {
     expect_match(src, p, fixed = TRUE, info = p)
   }
   doc <- .ts_read("docs/contracts/BULK_MULTI_CONTRACT.md")
-  expect_match(doc, "`pseudobulk` est réservé à MD-3", fixed = TRUE)
+  expect_match(doc, "`pseudobulk` = pont depuis", fixed = TRUE)
+  expect_match(doc, "modules/sc/mod_sc_pseudobulk.R", fixed = TRUE)
+})
+
+# ── MD-3 : le pont pseudobulk est un consommateur mince de l'API pure ──────
+test_that("mod_sc_pseudobulk.R is a thin consumer of the pure API (MD-3)", {
+  msp <- .ts_read("modules/sc/mod_sc_pseudobulk.R")
+  for (call in c("bulk_multi_check_label(", "bulk_multi_capture_pipeline(",
+                 "bulk_multi_register(")) {
+    expect_match(msp, call, fixed = TRUE, info = call)
+  }
+  expect_match(msp, 'producer = "pseudobulk"', fixed = TRUE)
+  expect_match(msp, "overwrite = TRUE", fixed = TRUE)
+  # Le pont ne fait que LIRE son état pb$ — jamais d'écriture sur le jeu
+  # bulk actif ni sur shared_rv$contrasts (garde contrat §2.1 / §6 prod. 3).
+  expect_false(grepl("global_data\\$bulk_obj\\s*(<-|\\[\\[\\]\\s*<-)", msp,
+                     perl = TRUE),
+               info = "écriture interdite sur global_data$bulk_obj")
+  expect_false(grepl("shared_rv\\$contrasts\\s*<-", msp, perl = TRUE),
+               info = "écriture interdite sur shared_rv$contrasts")
 })
 
 # ── Seuil config + repli (contrat §9) ──────────────────────────────────────
