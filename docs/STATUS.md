@@ -53,8 +53,11 @@ roadmaps (voir `git log --oneline -- docs/`).
 > chemin de données ✅** (10X/Seurat → entrée CellChat, sans dépendance
 > nouvelle), **Bulk V2 / batch-QC ✅** (commité par l'utilisateur `aa92f24`,
 > puis **fini** `612eddf` — erreur de test corrigée, dette i18n soldée, cf.
-> §5bis), **Bulk V2 M2 ✅ — Scores de voies par échantillon** (GSVA/ssGSEA/
-> PLAGE/zscore, contrat gelé, 166 assertions, cf. §2r), **Milo — 16 échecs ✅
+> §5bis), **Bulk V2 M2–M5 ✅ — chantier COMPLET** (scores de voies par
+> échantillon GSVA/ssGSEA/PLAGE/zscore, signatures cellulaires Hallmark/
+> PROGENy/DoRothEA/RDS local avec garde « scores relatifs », WGCNA safe-mode,
+> survie KM+Cox — 4 contrats gelés, 555 nouvelles assertions, roadmap dédiée
+> `docs/ROADMAP_BULK_V2.md`, cf. §2r), **Milo — 16 échecs ✅
 > RÉSOLUS** (cause racine : fuite d'option `Matrix.warnDeprecatedCoerce` par
 > `GSVA::.onLoad()`, cf. §2k).
 >
@@ -168,25 +171,28 @@ Détail dans `docs/ROADMAP.md` §4 (« Principe double jeu de données »).
 « séparés » n'existent pas. C'est une **évolution**, pas un correctif — donc
 proposition explicite avant exécution (règle du dépôt).
 
-### 2h. Bulk V2 / batch-QC — ✅ commité, ⚠️ toujours sans roadmap
+### 2h. Bulk V2 / batch-QC — ✅ COMPLET (M1→M5) + roadmap dédiée créée
 
-**Commité et poussé le 2026-09-11** (`aa92f24` — « bulk V2.0, sc compare »),
-puis fini (voir §5bis). Il n'appartient toujours à **aucune des quatre
-roadmaps** : c'est un chantier sans document de pilotage.
-Les seuils associés existent bien dans `config/thresholds.R`
-(`TS_BULK_VARPART_MAX_GENES`, `TS_BULK_GSVA_*`, `TS_BULK_WGCNA_*`,
-`TS_BULK_SURV_MIN_EVENTS`, …) et le contrat
-`docs/contracts/BULK_BATCH_QC_CONTRACT.md` est écrit.
+**Historique** : commité et poussé le 2026-09-11 (`aa92f24` — « bulk V2.0, sc
+compare »), puis fini (`612eddf`). **Le 2026-09-12, les jalons M2→M5 de la
+mission Bulk V2 sont livrés** (§2r étendu ci-dessous + commits `081bc6a`,
+`a4c67c4`, `0054a89`, `a024e94`) — la recommandation « créer une roadmap
+dédiée » est appliquée : **`docs/ROADMAP_BULK_V2.md`** (Flux E documenté,
+découvertes d'environnement, restes ouverts).
 
-**Recommandation** : lui créer sa propre roadmap avant de reprendre, sinon il
-restera le seul chantier sans état traçable. Règles techniques déjà connues
-à ne pas oublier (extraites du prompt de session antérieur) : GSVA via
-`gsvaParam`/`ssgseaParam` avec `BPPARAM` sur `gsva()` et non le constructeur,
-`SnowParam` sous Windows, **jamais** `enableWGCNAThreads`
-(`allowWGCNAThreads(nThreads = 1)` si WGCNA tourne sous mirai), plafonner
-`fitExtractVarPartModel` à 2000–5000 HVG, decoupleR en signatures RDS locales
-uniquement avec assertion réseau sortant = 0, porte de recouvrement de jeux
-de gènes < 20 % après strip des suffixes Ensembl `.1/.2`.
+Règles techniques héritées du brief (STATUS.md §2h) désormais **gelées par
+tests** dans chaque contrat : GSVA via `gsvaParam`/`ssgseaParam` avec
+`BPPARAM` sur `gsva()` (jamais le constructeur) ; `SerialParam` sous Windows
+(jamais `MulticoreParam`) ; **jamais** `enableWGCNAThreads` ;
+`fitExtractVarPartModel` plafonné 2000 gènes ; decoupleR signatures locales
+uniquement (réseau sortant = 0) ; porte de recouvrement < 20 % après strip
+Ensembl `.1/.2` ; N < 15 = arrêt dur WGCNA ; survie médiane/quartiles
+uniquement (aucun cutpoint optimal) ; ≥ 10 événements.
+
+Seuils `config/thresholds.R` : tous les `TS_BULK_*` consommés par les
+domaines (jamais codés en dur). Packages optionnels installés dans la
+bibliothèque renv (GSVA, WGCNA, variancePartition, decoupleR, survminer,
+msigdbr, impute) — **`renv.lock` non modifié** (décision utilisateur).
 
 ---
 
@@ -624,45 +630,51 @@ erreur plus tard.
 > (contrat absent) alors que le code est intact — c'est le point soulevé par la
 > **décision 4** de `ROADMAP.md` §5, désormais **matérialisé par un test**.
 
-### 2r. ✅ Bulk V2 M2 — scores de voies par **échantillon** (GSVA / ssGSEA / PLAGE / zscore)
+### 2r. ✅ Bulk V2 M2–M5 — chantier COMPLET (scores par échantillon, signatures, WGCNA, survie)
 
-**Livré le 2026-09-12** (chantier Flux E, Milestone 2 de la mission Bulk V2).
-Complément de l'ORA/GSEA : attribue un score par voie à CHAQUE échantillon
-(matrice voies × échantillons), **aucun contraste requis** — stocké dans
-`bulk_obj$pathways$per_sample` (mission §M2) + `shared_rv$pathway_scores`.
+**Livré le 2026-09-12** (chantier Flux E, mission Bulk V2 — roadmap dédiée
+`docs/ROADMAP_BULK_V2.md` créée, recommandation §2h appliquée).
 
-**Fichiers** (contract-first) :
+| Jalon | Contenu | Contrat gelé | Commit | Assertions |
+|---|---|---|---|---|
+| M2 | Scores de voies **par échantillon** (gsva/ssgsea/plage/zscore, GSVA 2.x) — onglet « Scores par échantillon » du module Pathways, stockage `bulk_obj$pathways$per_sample` | `BULK_GSVA_CONTRACT.md` | `081bc6a` | 166 |
+| M3 | **Signatures cellulaires** (Hallmark/PROGENy/DoRothEA/**RDS local**) + GARDE « scores relatifs, jamais cytométrique » (résultat + chaque ligne d'export + alerte UI permanente) — panneau 3b, `bulk_obj$pathways$signatures` | `BULK_SIGNATURES_CONTRACT.md` | `a4c67c4` | 108 |
+| M4 | **WGCNA safe-mode** (power pickSoftThreshold, blockwiseModules TOM borné, bicor MEs/traits) — panneau 3c + onglet WGCNA | `BULK_WGCNA_CONTRACT.md` | `0054a89` | 158 |
+| M5 | **Survie** (KM médiane/quartiles, Cox univariés BH) — panneau 3d + onglet Survie, onglets VERROUILLÉS sans temps/statut valides ou < 10 événements | `BULK_SURVIVAL_CONTRACT.md` | `a024e94` | 123 |
 
-| Rôle | Fichier |
-|---|---|
-| Logique pure | `R/bulk/bulk_gsva.R` (nouveau) |
-| Tests fonctionnels | `tests/testthat/test-bulk-gsva.R` |
-| Test de gel | `tests/testthat/test-bulk-gsva-contract-freeze.R` |
-| Contrat gelé | `docs/contracts/BULK_GSVA_CONTRACT.md` |
-| Seuil ajouté | `config/thresholds.R` → `TS_BULK_GSVA_OVERLAP_MIN <- 0.20` |
-| Câblage | `app.R` (source), `modules/bulk/mod_bulk_pathways.R` (section gauche + onglet « Scores par échantillon »), `i18n/translation.json` (+26 clés) |
-| Outillage | `tools/run_tests.R` (runner ciblé), `tools/add_i18n_keys.R` (ajout idempotent, anti-doublon) |
+**Fichiers** (contract-first à chaque jalon) : `R/bulk/{bulk_gsva,
+bulk_signatures,bulk_wgcna,bulk_survival}.R` + leurs tests fonctionnels et
+tests de gel + `modules/bulk/{mod_bulk_signatures,mod_bulk_wgcna,
+mod_bulk_survival}.R` + section onglet dans `mod_bulk_pathways.R`. Sources
+`app.R` câblées à chaque jalon. Seuils ajoutés : `TS_BULK_GSVA_OVERLAP_MIN`.
+i18n : +107 clés au total (2204 entrées, integrity OK).
 
-**Gardes mission vérifiés par test** : counts bruts refusés
-(`raw_counts_rejected` — message citant VST) ; **BPPARAM sur `GSVA::gsva()` et
-jamais au constructeur** (gel structurel) ; **Windows → `SerialParam`,
-jamais MulticoreParam** (gel) ; identifiants nettoyés (strip Ensembl `.1/.2`,
-idempotent) ; porte de recouvrement < 20 % tracée (`dropped` avec
-`matched_fraction`) ; bornes de taille [10, 500] locales + constructeur ;
-provenance PRODUITE au calcul (`new_provenance_entry`). Les 4 méthodes
-(gsva/ssgsea/plage/zscore, API GSVA 2.x `*Param`) testées sur le même
-fixture — matrice toujours voies × échantillons.
+**Gardes mission vérifiés par les tests de gel** : counts bruts refusés
+partout (garde M1 réutilisée, re-classée par domaine) ; `BPPARAM` sur
+`GSVA::gsva()` et jamais au constructeur ; Windows → `SerialParam` (jamais
+MulticoreParam) ; `enableWGCNAThreads`/`allowWGCNAThreads` ABSENTS du code
+WGCNA (disable avant chaque calcul) ; N < 15 = arrêt dur WGCNA (testé N=6) ;
+HVG bornées [2000, 5000] ; maxBlockSize = 5000 ; decoupleR signatures locales
+(réseau sortant = 0, gel structurel) ; découpes survie médiane/quartiles avec
+REFUS du cutpoint optimal ; ≥ 10 événements ; provenance PRODUITE à chaque
+calcul (`new_provenance_entry`).
 
-**GSVA = dépendance OPTIONNELLE à l'exécution** (`requireNamespace` à l'appel,
-jamais au source) : l'app démarre sans lui, échec propre classé
-`missing_dependency`. Installée dans la bibliothèque renv le 2026-09-12 (GSVA
-2.0.7 + survminer 0.5.2 + msigdbr 26.1.1 + WGCNA 1.74 + impute +
-variancePartition 1.36.3 + decoupleR 2.12.0) — **`renv.lock` NON modifié**
-(décision utilisateur à prendre, cf. `renv::status()` out-of-sync).
+**Découvertes d'environnement** (détail + correctifs dans
+`docs/ROADMAP_BULK_V2.md` §3) : quirk d'attache WGCNA 1.74 (blockwiseModules
+namespacé échoue — attach/detach systématique) ; WGCNA renvoie `fitIndices` ;
+decoupleR 2.12 = gènes en ROWS ; variancePartition 1.36.3 vs lme4 récent
+(repli R pur documenté) ; msigdbr >= 26 = cache au premier appel.
 
-**Vérification** : `bulk-gsva` **166 PASS / 0 FAIL / 0 ERROR / 0 SKIP / 0 WARN**
-(fonctionnel + gel, GSVA réel sur fixture 80×8). Tests ciblés uniquement — la
-suite complète reste à relancer en fin de chantier.
+**GSVA/WGCNA/decoupleR/survminer/msigdbr = dépendances OPTIONNELLES à
+l'exécution** (`requireNamespace` à l'appel) : l'app démarre sans elles,
+échec propre classé. Installées dans la bibliothèque renv le 2026-09-12 —
+**`renv.lock` NON modifié** (décision utilisateur, cf. §2p pour le schéma).
+
+**Vérification finale (2026-09-12)** : suite ciblée étendue `bulk|plot|i18n`
+→ **1158 PASS / 0 FAIL / 0 ERROR / 0 SKIP** (shinytest2 e2e bulk inclus) ;
+gate de duplication **0 erreur / 3 avertissements** = baseline exacte ; boot
+headless `HTTP 200` avec tous les modules câblés ; i18n 2204 entrées 0
+doublon. La suite COMPLÈTE (tous domaines) reste à relancer avant push.
 
 ---
 
