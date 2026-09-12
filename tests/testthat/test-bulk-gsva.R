@@ -126,6 +126,15 @@ test_that("calcul : les 4 méthodes renvoient voies x échantillons, contrats re
   }
 })
 
+test_that("GARDE §2k : charger GSVA via compute ne laisse AUCUNE option globale derrière", {
+  # GSVA::.onLoad() pose Matrix.warnDeprecatedCoerce = 2 sans le restaurer —
+  # un chargement direct dans CE domaine réintroduisait les 16 échecs Milo
+  # (option = 2 -> dépréciations Matrix fatales ailleurs). Gelé par test.
+  before <- getOption("Matrix.warnDeprecatedCoerce")
+  compute_pathway_scores(.vst_m2(), .sets_m2(), method = "ssgsea")
+  expect_identical(getOption("Matrix.warnDeprecatedCoerce"), before)
+})
+
 test_that("calcul : erreurs classées (méthode inconnue, aucun set, dépendance)", {
   m <- .vst_m2()
   e1 <- tryCatch(compute_pathway_scores(m, .sets_m2(), method = "nope"), error = function(e) e)

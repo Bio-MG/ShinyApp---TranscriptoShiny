@@ -208,6 +208,16 @@ bulk_bpparam <- function(workers = 1L) {
 compute_pathway_scores <- function(expr_matrix, gene_sets, method = "ssgsea",
                                    min_size = NULL, max_size = NULL, overlap_min = NULL,
                                    workers = 1L, analysis_id = "bulk-pathway-scores") {
+  # Effet de bord tiers neutralisé (même leçon que STATUS.md §2k) :
+  # GSVA::.onLoad() fait options(Matrix.warnDeprecatedCoerce = 2) SANS le
+  # restaurer — charger GSVA ici laissait l'option derrière lui pour toute la
+  # session, escaladant en erreur fatale toute dépréciation Matrix ULTÉRIEURE
+  # d'autres domaines (casse réelle mesurée : les 16 échecs Milo du §2k sont
+  # réapparus dès que ce domaine a chargé GSVA en direct). L'option est
+  # relevée avant le chargement et restaurée à l'identique à la sortie du
+  # calcul (absente -> retirée) ; le namespace GSVA, lui, reste chargé.
+  mwd_before <- getOption("Matrix.warnDeprecatedCoerce")
+  on.exit(options(Matrix.warnDeprecatedCoerce = mwd_before), add = TRUE)
   if (!requireNamespace("GSVA", quietly = TRUE)) {
     stop(errorCondition(paste0(
       "compute_pathway_scores() : le package 'GSVA' est requis (BiocManager::install('GSVA')). ",
