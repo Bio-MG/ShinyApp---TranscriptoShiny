@@ -118,9 +118,21 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
 
     # ── ONLINE: fetch GEO ─────────────────────────────────────────────────────
     observeEvent(input$btn_fetch, {
-      req(nchar(trimws(input$accession)) > 0)
+      # Hardening: explicit, visible validation instead of a silent req() no-op
+      acc_input <- trimws(input$accession %||% "")
+      if (!nzchar(acc_input)) {
+        rv$fetch_msg <- tags$span(icon("circle-xmark"), " ",
+          .tr("Veuillez saisir une accession GEO (ex. GSE147507)."), class = "text-danger")
+        return()
+      }
 
-      accession <- toupper(trimws(input$accession))
+      accession <- toupper(acc_input)
+      if (!grepl("^GSE[0-9]+$", accession)) {
+        rv$fetch_msg <- tags$span(icon("circle-xmark"), " ",
+          .tr("Accession GEO invalide — format attendu : GSE suivi de chiffres (ex. GSE147507)."),
+          class = "text-danger")
+        return()
+      }
       rv$accession <- accession             # store locally (was shared_rv$geo_accession)
       rv$fetch_ok  <- FALSE
       rv$fetch_msg <- tags$span(icon("spinner", class = "fa-spin"),
@@ -204,16 +216,21 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
       name <- input$file_meta$name
 
       meta <- tryCatch({
-        if (grepl("series_matrix", name, ignore.case = TRUE) ||
-            grepl("!Sample_", readLines(path, n = 3, warn = FALSE)[1])) {
+        # Hardening: guard against empty/unreadable files — readLines on an empty
+        # file returns character(0), l[1] is NA and `NA || …` would throw.
+        hdr <- tryCatch({
+          l <- readLines(path, n = 3, warn = FALSE)
+          if (length(l) >= 1 && !is.na(l[1])) l[1] else ""
+        }, error = function(e) "")
+        if (grepl("series_matrix", name, ignore.case = TRUE) || grepl("!Sample_", hdr)) {
           parse_geo_series_matrix(path)
         } else {
           ext <- tolower(tools::file_ext(name))
-          if (ext %in% c("csv", "tsv", "txt")) {
+          if (ext %in% c("csv", "tsv", "txt", "tab")) {
             sep <- if (ext == "csv") "," else "\t"
             df  <- read.delim(path, sep = sep, header = TRUE,
                               check.names = FALSE, stringsAsFactors = FALSE)
-            if (!is.numeric(df[[1]])) { rownames(df) <- df[[1]]; df <- df[, -1, drop = FALSE] }
+            if (ncol(df) > 1 && !is.numeric(df[[1]])) { rownames(df) <- df[[1]]; df <- df[, -1, drop = FALSE] }
             df
           } else NULL
         }
@@ -292,7 +309,7 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
       if (!"sample" %in% colnames(meta)) meta$sample <- rownames(meta)
 
       # FIXED: write to global_data$bulk_obj (standard bulk_obj format)
-      global_data$bulk_obj <- list(
+      obj <- list(
         counts       = counts,
         metadata     = meta,
         project      = rv$accession %||% "GEO_import",
@@ -301,6 +318,25 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
         import_mode  = "geo",
         gene_id_type = tryCatch(detect_gene_id_type(rownames(counts)), error = function(e) "unknown")
       )
+      global_data$bulk_obj <- obj
+
+      # MD-1: also register in the bulk_datasets container (producer "import",
+      # contract BULK_MULTI_CONTRACT.md §6). Mirrors mod_import_bulk: a failure
+      # (e.g. duplicate label) is a WARNING and never blocks the import.
+      lbl <- obj$project
+      reg <- tryCatch(
+        bulk_multi_register(global_data$bulk_datasets, lbl, obj, producer = "import"),
+        bulk_multi_error = function(e) e)
+      if (inherits(reg, "bulk_multi_error")) {
+        showNotification(
+          sprintf(.tr("⚠️ Dataset non enregistré (multi-jeux) : %s"), reg$message),
+          type = "warning", duration = 8)
+      } else {
+        global_data$bulk_datasets <- reg
+        showNotification(
+          sprintf(.tr("📦 Import enregistré pour la comparaison multi-jeux : « %s »."), lbl),
+          type = "message", duration = 6)
+      }
 
       showNotification(
         sprintf("✅ Import GEO confirmé : %d gènes × %d échantillons",
@@ -331,12 +367,25 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
   )
 
   meta <- tryCatch({
-    pheno <- Biobase::pData(if (is.list(gse)) gse[[1]] else gse)
-    informative <- vapply(pheno, function(col) {
-      n_uniq <- length(unique(col))
-      n_uniq > 1 && n_uniq < nrow(pheno) && !all(grepl("^ftp|^http", col))
-    }, logical(1))
-    pheno[, informative, drop = FALSE]
+    gse_list <- if (is.list(gse)) gse else list(gse)
+    # Filter to "informative" pData columns per platform, then combine across
+    # platforms (multi-platform GSE: samples of other platforms keep metadata).
+    filt <- lapply(gse_list, function(x) {
+      pheno <- Biobase::pData(x)
+      informative <- vapply(pheno, function(col) {
+        n_uniq <- length(unique(col))
+        n_uniq > 1 && n_uniq < nrow(pheno) && !all(grepl("^ftp|^http", col))
+      }, logical(1))
+      pheno[, informative, drop = FALSE]
+    })
+    if (length(filt) == 1L) {
+      filt[[1]]
+    } else {
+      common <- Reduce(intersect, lapply(filt, colnames))
+      if (length(common) > 0) {
+        do.call(rbind, lapply(filt, function(f) f[, common, drop = FALSE]))
+      } else filt[[1]]  # fallback: first platform only (previous behavior)
+    }
   }, error = function(e) NULL)
 
   supp_files <- tryCatch(
@@ -344,9 +393,19 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
     error = function(e) stop("Impossible de télécharger les supplémentaires : ", conditionMessage(e))
   )
 
-  candidate_exts <- c("tsv", "csv", "txt", "gz", "xlsx")
-  candidate_paths <- rownames(supp_files)[
-    tolower(tools::file_ext(rownames(supp_files))) %in% candidate_exts
+  # Hardening: GEOquery shifted return formats across versions — paths are
+  # normally in rownames, but fall back to the first character column.
+  candidate_paths <- rownames(supp_files)
+  candidate_paths <- candidate_paths[!is.na(candidate_paths)]
+  if (!any(nzchar(candidate_paths))) {
+    chr_col <- which(vapply(supp_files, is.character, logical(1)))[1]
+    if (!is.na(chr_col)) candidate_paths <- as.character(supp_files[[chr_col]])
+  }
+  candidate_paths <- candidate_paths[!is.na(candidate_paths) & nzchar(candidate_paths)]
+
+  candidate_exts <- c("tsv", "csv", "txt", "tab", "gz", "xlsx")
+  candidate_paths <- candidate_paths[
+    tolower(tools::file_ext(candidate_paths)) %in% candidate_exts
   ]
 
   if (length(candidate_paths) == 0)
@@ -362,27 +421,45 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
 .load_counts_file <- function(path, orig_name = NULL) {
   name <- if (!is.null(orig_name)) orig_name else basename(path)
 
+  # Hardening: actionable French error instead of a raw read failure
+  if (!file.exists(path) || file.size(path) == 0) {
+    return(list(ok = FALSE, counts = NULL,
+                msg = sprintf("Fichier vide ou introuvable : %s", basename(path))))
+  }
+
   if (grepl("\\.gz$", name, ignore.case = TRUE)) {
-    tmp <- tempfile(fileext = sub("\\.gz$", "", paste0(".", tools::file_ext(name))))
+    inner_name <- sub("\\.gz$", "", name, ignore.case = TRUE)
+    inner_ext  <- tolower(tools::file_ext(inner_name))
+    tmp <- tempfile(fileext = if (nzchar(inner_ext)) paste0(".", inner_ext) else "")
     tryCatch(
       R.utils::gunzip(path, destname = tmp, overwrite = TRUE, remove = FALSE),
       error = function(e) {
         con_in  <- gzcon(file(path, "rb"))
         con_out <- file(tmp, "wb")
-        writeBin(readBin(con_in, "raw", n = 1e8), con_out)
+        # stream the whole archive (single readBin(n=1e8) truncated big files)
+        repeat {
+          chunk <- readBin(con_in, "raw", n = 1e8)
+          if (length(chunk) == 0) break
+          writeBin(chunk, con_out)
+        }
         close(con_in); close(con_out)
       }
     )
     path <- tmp
-    name <- sub("\\.gz$", "", name, ignore.case = TRUE)
+    name <- inner_name
   }
 
   result <- tryCatch({
     ext <- tolower(tools::file_ext(name))
+    # Hardening: GEO archives like GSE52778_All_Sample_FPKM_Matrix.txt.gz keep a
+    # usable inner extension, but e.g. GSE123_counts_rpkm.gz has none — sniff
+    # the separator instead of failing with an empty extension.
+    if (!nzchar(ext)) ext <- .sniff_delim_ext(path)
     df <- switch(ext,
       "csv"  = read.csv(path,  header = TRUE, check.names = FALSE, stringsAsFactors = FALSE),
       "tsv"  = ,
-      "txt"  = read.delim(path, header = TRUE, sep = "\t", check.names = FALSE, stringsAsFactors = FALSE),
+      "txt"  = ,
+      "tab"  = read.delim(path, header = TRUE, sep = "\t", check.names = FALSE, stringsAsFactors = FALSE),
       "xlsx" = {
         if (!requireNamespace("readxl", quietly = TRUE))
           stop("Package 'readxl' requis pour lire les fichiers .xlsx")
@@ -390,6 +467,19 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
       },
       stop("Extension non supportée : ", ext)
     )
+
+    # Hardening: whitespace-delimited tables (Cuffdiff-style GEO files) read as
+    # a single column under an explicit sep — retry with sep="" (whitespace).
+    if (ncol(df) == 1L) {
+      df_ws <- tryCatch(
+        read.table(path, header = TRUE, check.names = FALSE, stringsAsFactors = FALSE),
+        error = function(e) NULL)
+      if (!is.null(df_ws) && ncol(df_ws) > 1L) df <- df_ws
+    }
+
+    if (nrow(df) == 0 || ncol(df) == 0)
+      stop("Fichier illisible ou vide (0 ligne ou 0 colonne après lecture). Vérifiez que ce fichier est bien une matrice de counts.")
+    if (anyDuplicated(colnames(df)) > 0) colnames(df) <- make.unique(colnames(df), sep = "_")
 
     if (ncol(df) > 1 && !is.numeric(df[[1]])) {
       rownames(df) <- make.unique(as.character(df[[1]]))
@@ -403,9 +493,11 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
         if (sum(is.na(v)) > sum(is.na(col))) col else v
       })
       num_cols2 <- vapply(df, is.numeric, logical(1))
-      if (!all(num_cols2))
-        stop(sprintf("%d colonne(s) non numérique(s). Vérifiez que ce fichier est bien une matrice de counts.",
-                     sum(!num_cols2)))
+      if (!all(num_cols2)) {
+        bad_cols <- utils::head(names(df)[!num_cols2], 5)
+        stop(sprintf("%d colonne(s) non numérique(s) (%s). Ce fichier n'est pas une matrice de counts pure — choisissez un autre fichier ou utilisez le mode hors-ligne.",
+                     sum(!num_cols2), paste(bad_cols, collapse = ", ")))
+      }
     }
 
     mat <- as.matrix(df)
@@ -413,4 +505,11 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
   }, error = function(e) list(ok = FALSE, counts = NULL, msg = conditionMessage(e)))
 
   result
+}
+
+#' Sniff the delimiter of a header-less-extension table ("csv" or "tsv")
+.sniff_delim_ext <- function(path) {
+  l <- tryCatch(readLines(path, n = 1, warn = FALSE), error = function(e) "")
+  if (!length(l) || is.na(l)) return("tsv")
+  if (grepl(",", l, fixed = TRUE) && !grepl("\t", l, fixed = TRUE)) "csv" else "tsv"
 }
