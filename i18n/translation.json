@@ -9008,6 +9008,66 @@
     {
       "fr": "✓ Pseudobulk enregistré sous « %s » — comparable dans l'onglet « Comparaison multi-jeux » du module Bulk.",
       "en": "✓ Pseudobulk registered as \"%s\" — comparable in the \"Multi-dataset comparison\" tab of the Bulk module."
+    },
+    {
+      "fr": "Enregistrez l'objet SC courant (brut ou traité) sous un label, avec la relation déclarée vis-à-vis du jeu de référence : mode 1 = analyses séparées à paramètres partagés, mode 2 = paramètres distincts. Le jeu actif n'est jamais modifié.",
+      "en": "Register the current SC object (raw or processed) under a label, with the declared relation to the reference dataset: mode 1 = separate analyses with shared parameters, mode 2 = distinct parameters. The active dataset is never modified."
+    },
+    {
+      "fr": "ex : Rep2_T2",
+      "en": "e.g.: Rep2_T2"
+    },
+    {
+      "fr": "Relation déclarée (décision 5)",
+      "en": "Declared relation (decision 5)"
+    },
+    {
+      "fr": "Jeu indépendant (aucune relation)",
+      "en": "Standalone dataset (no relation)"
+    },
+    {
+      "fr": "Mode 1 — analyses séparées, paramètres partagés",
+      "en": "Mode 1 — separate analyses, shared parameters"
+    },
+    {
+      "fr": "Mode 2 — analyses séparées, paramètres distincts",
+      "en": "Mode 2 — separate analyses, distinct parameters"
+    },
+    {
+      "fr": "Enregistrer l'objet SC courant",
+      "en": "Register the current SC object"
+    },
+    {
+      "fr": "Datasets SC enregistrés (double jeu)",
+      "en": "Registered SC datasets (dual dataset)"
+    },
+    {
+      "fr": "Multi-datasets SC (double jeu)",
+      "en": "SC multi-datasets (dual dataset)"
+    },
+    {
+      "fr": "Renseignez un label pour enregistrer une copie du jeu importé dans le conteneur sc_datasets (le jeu actif reste l'objet importé). Relation : mode 1 = traiter avec les mêmes réglages que le jeu de référence ; mode 2 = réglages propres au jeu.",
+      "en": "Enter a label to register a copy of the imported dataset into the sc_datasets container (the active dataset remains the imported object). Relation: mode 1 = process with the same settings as the reference dataset; mode 2 = dataset-specific settings."
+    },
+    {
+      "fr": "Label multi-datasets SC",
+      "en": "SC multi-dataset label"
+    },
+    {
+      "fr": "Jeu SC « %s » enregistré dans sc_datasets (producteur import).",
+      "en": "SC dataset \"%s\" registered in sc_datasets (producer: import)."
+    },
+    {
+      "fr": "Aucun objet SC actif à enregistrer.",
+      "en": "No active SC object to register."
+    },
+    {
+      "fr": "✓ Jeu SC enregistré (mis à jour) sous « %s ».",
+      "en": "✓ SC dataset registered (updated) as \"%s\"."
+    },
+    {
+      "fr": "✓ Jeu SC enregistré sous « %s ».",
+      "en": "✓ SC dataset registered as \"%s\"."
     }
   ]
 }

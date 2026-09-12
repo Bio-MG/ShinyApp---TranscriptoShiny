@@ -218,7 +218,26 @@ new_entries <- list(
   c("✓ Pseudobulk mis à jour sous « %s » — comparable dans l'onglet « Comparaison multi-jeux » du module Bulk.",
     "✓ Pseudobulk updated as \"%s\" — comparable in the \"Multi-dataset comparison\" tab of the Bulk module."),
   c("✓ Pseudobulk enregistré sous « %s » — comparable dans l'onglet « Comparaison multi-jeux » du module Bulk.",
-    "✓ Pseudobulk registered as \"%s\" — comparable in the \"Multi-dataset comparison\" tab of the Bulk module.")
+    "✓ Pseudobulk registered as \"%s\" — comparable in the \"Multi-dataset comparison\" tab of the Bulk module."),
+  # --- MD-4 (conteneur sc_datasets — double jeu SC, modes 1/2) ---
+  c("Enregistrez l'objet SC courant (brut ou traité) sous un label, avec la relation déclarée vis-à-vis du jeu de référence : mode 1 = analyses séparées à paramètres partagés, mode 2 = paramètres distincts. Le jeu actif n'est jamais modifié.",
+    "Register the current SC object (raw or processed) under a label, with the declared relation to the reference dataset: mode 1 = separate analyses with shared parameters, mode 2 = distinct parameters. The active dataset is never modified."),
+  c("ex : Rep2_T2", "e.g.: Rep2_T2"),
+  c("Relation déclarée (décision 5)", "Declared relation (decision 5)"),
+  c("Jeu indépendant (aucune relation)", "Standalone dataset (no relation)"),
+  c("Mode 1 — analyses séparées, paramètres partagés", "Mode 1 — separate analyses, shared parameters"),
+  c("Mode 2 — analyses séparées, paramètres distincts", "Mode 2 — separate analyses, distinct parameters"),
+  c("Enregistrer l'objet SC courant", "Register the current SC object"),
+  c("Datasets SC enregistrés (double jeu)", "Registered SC datasets (dual dataset)"),
+  c("Multi-datasets SC (double jeu)", "SC multi-datasets (dual dataset)"),
+  c("Renseignez un label pour enregistrer une copie du jeu importé dans le conteneur sc_datasets (le jeu actif reste l'objet importé). Relation : mode 1 = traiter avec les mêmes réglages que le jeu de référence ; mode 2 = réglages propres au jeu.",
+    "Enter a label to register a copy of the imported dataset into the sc_datasets container (the active dataset remains the imported object). Relation: mode 1 = process with the same settings as the reference dataset; mode 2 = dataset-specific settings."),
+  c("Label multi-datasets SC", "SC multi-dataset label"),
+  c("Jeu SC « %s » enregistré dans sc_datasets (producteur import).",
+    "SC dataset \"%s\" registered in sc_datasets (producer: import)."),
+  c("Aucun objet SC actif à enregistrer.", "No active SC object to register."),
+  c("✓ Jeu SC enregistré (mis à jour) sous « %s ».", "✓ SC dataset registered (updated) as \"%s\"."),
+  c("✓ Jeu SC enregistré sous « %s ».", "✓ SC dataset registered as \"%s\".")
 )
 
 fr_existing <- vapply(j$translation, function(x) x$fr %||% "", character(1))

@@ -96,6 +96,7 @@ source("R/bulk/bulk_wgcna.R")         # Bulk V2 M4 : WGCNA safe-mode (pur, contr
 source("R/bulk/bulk_survival.R")      # Bulk V2 M5 : survie & clinique (pur, contrat gelé)
 source("R/bulk/bulk_multi.R")         # MD-1 : conteneur bulk_datasets & jeux nommés (pur, contrat gelé)
 source("R/bulk/bulk_multi_compare.R") # MD-2 : comparaison multi-jeux (pur, contrat gelé §10)
+source("R/sc/sc_multi.R")             # MD-4 : conteneur sc_datasets & double jeu SC (pur, contrat gelé)
 source("R/bulk/bulk_report_engine.R")
 source("R/bulk/bulk_import_engine.R")
 
@@ -146,6 +147,7 @@ source("modules/sc/mod_sc_da_milo.R")  # Stage 14 (4E-1) : orchestration Milo (c
 source("modules/sc/mod_sc_da_sccoda.R")  # Stage 15 (4E-2) : orchestration scCODA (consomme le design 8c)
 source("modules/sc/mod_sc_da_cross.R")  # Stage 16 (4E-3) : vues croisées (consomme 8d + 8e, aucun calcul)
 source("modules/sc/mod_sc_report_consolidated.R")  # Stage 17 (4F) : rapport consolidé (compile l'état partagé, aucun calcul)
+source("modules/sc/mod_sc_datasets.R")  # MD-4 : gestion du conteneur sc_datasets (double jeu SC)
 source("modules/sc/mod_sc_mapping.R")
 source("modules/sc/mod_sc.R")
 
@@ -408,7 +410,10 @@ server <- function(input, output, session) {
   global_data <- reactiveValues(
     
     sc_obj = NULL,      # Objet Seurat Single-Cell
-    
+
+    sc_datasets = list(),  # MD-4 : jeux SC nommés (double jeu — modes 1/2 décision 5)
+    # — docs/contracts/SC_MULTI_CONTRACT.md ; sc_obj reste le jeu "actif"
+
     bulk_obj = NULL,    # Objet Bulk (liste avec counts + metadata)
 
     bulk_datasets = list(),  # MD-1 : jeux bulk nommés (comparaison multi-jeux)
@@ -657,7 +662,9 @@ server <- function(input, output, session) {
       session_snapshot <- list(
         
         sc_obj      = global_data$sc_obj,
-        
+
+        sc_datasets = global_data$sc_datasets,
+
         bulk_obj    = global_data$bulk_obj,
 
         bulk_datasets = global_data$bulk_datasets,
@@ -736,7 +743,10 @@ server <- function(input, output, session) {
       
       
       global_data$sc_obj      <- snapshot$sc_obj
-      
+
+      # MD-4 : conteneur absent des snapshots antérieurs — repli list() propre.
+      global_data$sc_datasets <- snapshot$sc_datasets %||% list()
+
       global_data$bulk_obj    <- snapshot$bulk_obj
 
       # MD-1 : conteneur absent des snapshots antérieurs — repli list() propre.
@@ -1052,7 +1062,9 @@ server <- function(input, output, session) {
   observeEvent(input$confirm_reset, {
     
     global_data$sc_obj <- NULL
-    
+
+    global_data$sc_datasets <- list()
+
     global_data$bulk_obj <- NULL
 
     global_data$bulk_datasets <- list()
