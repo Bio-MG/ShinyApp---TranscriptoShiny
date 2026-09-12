@@ -8700,6 +8700,126 @@
     {
       "fr": "Dendrogramme",
       "en": "Dendrogram"
+    },
+    {
+      "fr": "Colonne temps (survie)",
+      "en": "Time column (survival)"
+    },
+    {
+      "fr": "Colonne statut (0 = censuré, 1 = événement)",
+      "en": "Status column (0 = censored, 1 = event)"
+    },
+    {
+      "fr": "Codage du statut",
+      "en": "Status coding"
+    },
+    {
+      "fr": "0/1 (standard)",
+      "en": "0/1 (standard)"
+    },
+    {
+      "fr": "1/2 (1 = censuré, 2 = événement)",
+      "en": "1/2 (1 = censored, 2 = event)"
+    },
+    {
+      "fr": "Source des variables",
+      "en": "Variable source"
+    },
+    {
+      "fr": "Gènes (VST)",
+      "en": "Genes (VST)"
+    },
+    {
+      "fr": "Variable (Kaplan-Meier)",
+      "en": "Variable (Kaplan-Meier)"
+    },
+    {
+      "fr": "Variables (Cox univariés, multi)",
+      "en": "Variables (univariate Cox, multiple)"
+    },
+    {
+      "fr": "Découpe High/Low",
+      "en": "High/Low split"
+    },
+    {
+      "fr": "Médiane",
+      "en": "Median"
+    },
+    {
+      "fr": "Quartiles (Q1 vs Q4, milieu exclu)",
+      "en": "Quartiles (Q1 vs Q4, middle excluded)"
+    },
+    {
+      "fr": "Lancer Kaplan-Meier",
+      "en": "Run Kaplan-Meier"
+    },
+    {
+      "fr": "Lancer Cox univariés",
+      "en": "Run univariate Cox"
+    },
+    {
+      "fr": "Survie & association clinique",
+      "en": "Survival & clinical association"
+    },
+    {
+      "fr": "Survie",
+      "en": "Survival"
+    },
+    {
+      "fr": "Aucune colonne temps/statut exploitable détectée dans les métadonnées (temps numérique > 0, statut 0/1 ou 1/2). Les analyses de survie restent verrouillées.",
+      "en": "No usable time/status column detected in the metadata (numeric time > 0, status 0/1 or 1/2). Survival analyses remain locked."
+    },
+    {
+      "fr": "Analyses activées si >= 10 événements observés (garde de la mission). Découpes médiane/quartiles uniquement — aucune recherche de cutpoint optimal.",
+      "en": "Analyses enabled when >= 10 observed events (mission guard). Median/quartile splits only — no optimal cutpoint search."
+    },
+    {
+      "fr": "KM {f} (p log-rank = {p})",
+      "en": "KM {f} (log-rank p = {p})"
+    },
+    {
+      "fr": "Cox : {n} variable(s)",
+      "en": "Cox: {n} variable(s)"
+    },
+    {
+      "fr": "Erreur survie:",
+      "en": "Survival error:"
+    },
+    {
+      "fr": "⚠️ Sélectionnez au moins une variable pour les Cox.",
+      "en": "⚠️ Select at least one variable for the Cox models."
+    },
+    {
+      "fr": "✓ Kaplan-Meier calculé (p log-rank = {p}).",
+      "en": "✓ Kaplan-Meier computed (log-rank p = {p})."
+    },
+    {
+      "fr": "Lancez d'abord Kaplan-Meier (panneau de gauche). Découpes médiane/quartiles uniquement — aucune recherche de cutpoint optimal.",
+      "en": "Run Kaplan-Meier first (left panel). Median/quartile splits only — no optimal cutpoint search."
+    },
+    {
+      "fr": "✓ {n} Cox univarié(s) calculé(s) (triés par p).",
+      "en": "✓ {n} univariate Cox model(s) computed (sorted by p)."
+    },
+    {
+      "fr": "Temps",
+      "en": "Time"
+    },
+    {
+      "fr": "Probabilité de survie",
+      "en": "Survival probability"
+    },
+    {
+      "fr": "Cox univariés : chaque variable est testée SEULE (HR par unité de la variable). Aucun cutpoint optimal n'est recherché — les découpes KM utilisent la médiane ou les quartiles (Q4 vs Q1, milieu exclu), pratiques standard et non optimisées.",
+      "en": "Univariate Cox: each variable is tested ALONE (HR per unit). No optimal cutpoint is searched — KM splits use the median or quartiles (Q4 vs Q1, middle excluded), standard non-optimized practices."
+    },
+    {
+      "fr": "Dès >= 2 variables testées en rafale, l'ajustement BH (colonne p (BH)) doit être préféré aux p brutes — le multi-testing gonfle le taux de faux positifs.",
+      "en": "When >= 2 variables are tested in bulk, BH adjustment (p (BH) column) should be preferred over raw p-values — multiple testing inflates the false positive rate."
+    },
+    {
+      "fr": "Export CSV (Cox)",
+      "en": "CSV export (Cox)"
     }
   ]
 }
