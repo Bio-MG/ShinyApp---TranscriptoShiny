@@ -148,7 +148,29 @@ new_entries <- list(
   c("Dès >= 2 variables testées en rafale, l'ajustement BH (colonne p (BH)) doit être préféré aux p brutes — le multi-testing gonfle le taux de faux positifs.",
     "When >= 2 variables are tested in bulk, BH adjustment (p (BH) column) should be preferred over raw p-values \u2014 multiple testing inflates the false positive rate."),
   c("Export CSV (Cox)", "CSV export (Cox)"),
-  c("Export RDS (résultats complets)", "RDS export (full results)")
+  c("Export RDS (résultats complets)", "RDS export (full results)"),
+  # ── MD-1 : conteneur bulk_datasets & jeux bulk nommés ──────────────────────
+  c("Label multi-datasets (optionnel)", "Multi-dataset label (optional)"),
+  c("ex : GSE123_T2", "e.g.: GSE123_T2"),
+  c("Si renseigné, le jeu importé est aussi enregistré sous ce nom pour la comparaison multi-jeux (Bulk > Multi-jeux).",
+    "If filled, the imported dataset is also registered under this name for multi-dataset comparison (Bulk > Multi-datasets)."),
+  c("⚠️ Dataset non enregistré (multi-jeux) : %s",
+    "⚠️ Dataset not registered (multi-dataset): %s"),
+  c("📦 Import enregistré pour la comparaison multi-jeux : « %s ».",
+    "📦 Import registered for multi-dataset comparison: \"%s\"."),
+  c("Multi-jeux — Datasets enregistrés", "Multi-dataset — Registered datasets"),
+  c("Enregistrez l'état courant (import + filtrage + DE + voies) sous un label, pour le comparer plus tard à d'autres jeux. Le jeu actif n'est jamais modifié.",
+    "Save the current state (import + filtering + DE + pathways) under a label, to compare it later with other datasets. The active dataset is never modified."),
+  c("Label du dataset", "Dataset label"),
+  c("Enregistrer l'état courant", "Save current state"),
+  c("Datasets enregistrés", "Registered datasets"),
+  c("Aucun jeu Bulk actif à enregistrer.", "No active Bulk dataset to save."),
+  c("✓ État enregistré sous « %s ».", "✓ State saved under \"%s\"."),
+  c("✓ État enregistré (mis à jour) sous « %s ».", "✓ State updated under \"%s\"."),
+  c("Aucun dataset enregistré pour l'instant.", "No registered dataset yet."),
+  c("Dataset à supprimer", "Dataset to remove"),
+  c("Supprimer le dataset", "Remove dataset"),
+  c("✓ Dataset « %s » supprimé.", "✓ Dataset \"%s\" removed.")
 )
 
 fr_existing <- vapply(j$translation, function(x) x$fr %||% "", character(1))

@@ -44,11 +44,13 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 
 ## 2. Les quatre flux de travail
 
-> **▶ Prochaine étape : `MD-1` — conteneur `bulk_datasets`** (multi-pipeline
-> Bulk), voir `docs/ROADMAP_MULTI_DATASET.md`. **Fusionne la décision 8 et la
-> décision 5** (même besoin produit dans 2 domaines) — la décision 5 se ferme
-> par réutilisation en MD-4, pas de chantier SC séparé. Prompt prêt à coller :
-> `docs/ROADMAP_HANDOFF_NEXT.md` §6.
+> **▶ Prochaine étape : `MD-2` (comparaison multi-jeux, effort L) ou `MD-3`
+> (pont pseudobulk → `bulk_datasets`, effort S)** — indépendants, au choix.
+> **`MD-1` est ✅ LIVRÉ** (2026-09-12 soir) : conteneur `bulk_datasets`,
+> contrat gelé `docs/contracts/BULK_MULTI_CONTRACT.md`, rapport
+> `docs/ROADMAP_HANDOFF_STAGE_MD_1.md`. Voir `docs/ROADMAP_MULTI_DATASET.md`
+> (fusionne la décision 8 et la décision 5 — la décision 5 se ferme
+> par réutilisation en MD-4, pas de chantier SC séparé).
 >
 > Le volet « présentation » (`plot-shared-helpers`) est **terminé et clos** :
 > PLOT-S1..S5 livrés ; **PLOT-S6 était déjà satisfait par l'arbre** (mesure du

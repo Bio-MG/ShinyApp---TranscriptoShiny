@@ -94,6 +94,7 @@ source("R/bulk/bulk_gsva.R")          # Bulk V2 M2 : scores de voies par échant
 source("R/bulk/bulk_signatures.R")    # Bulk V2 M3 : signatures cellulaires (pur, contrat gelé)
 source("R/bulk/bulk_wgcna.R")         # Bulk V2 M4 : WGCNA safe-mode (pur, contrat gelé)
 source("R/bulk/bulk_survival.R")      # Bulk V2 M5 : survie & clinique (pur, contrat gelé)
+source("R/bulk/bulk_multi.R")         # MD-1 : conteneur bulk_datasets & jeux nommés (pur, contrat gelé)
 source("R/bulk/bulk_report_engine.R")
 source("R/bulk/bulk_import_engine.R")
 
@@ -155,6 +156,7 @@ source("modules/bulk/mod_bulk_pathways.R")
 source("modules/bulk/mod_bulk_signatures.R")  # Bulk V2 M3 : signatures cellulaires
 source("modules/bulk/mod_bulk_wgcna.R")       # Bulk V2 M4 : WGCNA safe-mode
 source("modules/bulk/mod_bulk_survival.R")    # Bulk V2 M5 : survie & clinique
+source("modules/bulk/mod_bulk_datasets.R")    # MD-1 : gestion du conteneur bulk_datasets
 source("modules/bulk/mod_bulk_report.R")
 source("modules/bulk/mod_bulk.R")
 
@@ -406,7 +408,10 @@ server <- function(input, output, session) {
     sc_obj = NULL,      # Objet Seurat Single-Cell
     
     bulk_obj = NULL,    # Objet Bulk (liste avec counts + metadata)
-    
+
+    bulk_datasets = list(),  # MD-1 : jeux bulk nommés (comparaison multi-jeux)
+    # — docs/contracts/BULK_MULTI_CONTRACT.md ; bulk_obj reste le jeu "actif"
+
     spatial_obj = NULL,  # Spatial : liste (sketch, bpcells_dir, coords, ...) — voir R/utils_spatial_io.R
     # — POINTE TOUJOURS vers l'echantillon "actif" (voir spatial_datasets ci-dessous)
     
@@ -652,7 +657,9 @@ server <- function(input, output, session) {
         sc_obj      = global_data$sc_obj,
         
         bulk_obj    = global_data$bulk_obj,
-        
+
+        bulk_datasets = global_data$bulk_datasets,
+
         spatial_obj = global_data$spatial_obj,
         
         spatial_datasets = global_data$spatial_datasets,
@@ -727,7 +734,10 @@ server <- function(input, output, session) {
       global_data$sc_obj      <- snapshot$sc_obj
       
       global_data$bulk_obj    <- snapshot$bulk_obj
-      
+
+      # MD-1 : conteneur absent des snapshots antérieurs — repli list() propre.
+      global_data$bulk_datasets <- snapshot$bulk_datasets %||% list()
+
       global_data$spatial_obj <- snapshot$spatial_obj
       
       global_data$spatial_datasets <- snapshot$spatial_datasets %||%
@@ -1037,7 +1047,9 @@ server <- function(input, output, session) {
     global_data$sc_obj <- NULL
     
     global_data$bulk_obj <- NULL
-    
+
+    global_data$bulk_datasets <- list()
+
     global_data$spatial_obj <- NULL
     
     global_data$spatial_datasets <- list()

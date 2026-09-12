@@ -19,12 +19,15 @@
 `docs/STATUS.md` et `docs/ROADMAP.md` (index + état), dé-obsolescence des
 roadmaps (voir `git log --oneline -- docs/`).
 
-> **▶ PROCHAINE ÉTAPE** : **MD-1 — conteneur `bulk_datasets`** (multi-pipeline
-> Bulk), design complet dans `docs/ROADMAP_MULTI_DATASET.md` (fusion des
-> décisions 8 et 5), prompt prêt à coller dans `docs/ROADMAP_HANDOFF_NEXT.md`
-> §6. La direction « analyse multi-échantillons avec son propre pipeline, puis
-> pseudobulk, chacun comme le module Spatial » (demandée le 2026-09-12) est
-> **cadrée** — plus un chantier neuf.
+> **▶ PROCHAINE ÉTAPE** : **MD-2 — comparaison multi-jeux** (`mod_bulk_multi.R`,
+> effort L) ou **MD-3 — pont pseudobulk → `bulk_datasets`** (effort S) — les
+> deux sont **indépendants** maintenant que **MD-1 est livré** (conteneur
+> `bulk_datasets`, contrat gelé `docs/contracts/BULK_MULTI_CONTRACT.md`,
+> 3 producteurs `import`/`pipeline_save`/`pseudobulk`, cf. §2t). Design
+> complet : `docs/ROADMAP_MULTI_DATASET.md`. La direction « analyse
+> multi-échantillons avec son propre pipeline, puis pseudobulk, chacun comme
+> le module Spatial » (demandée le 2026-09-12) est **cadrée** — plus un
+> chantier neuf.
 >
 > **PLOT-S6 est CLOS** (décision utilisateur du 2026-09-12) : il était **déjà
 > satisfait par l'arbre** — le routeur `renderUI` statique/interactif existait
@@ -34,16 +37,19 @@ roadmaps (voir `git log --oneline -- docs/`).
 > restantes + normaliser `pageLength` = changement **visible** → jalon dédié
 > (`docs/contracts/PLOT_DATATABLE_CONTRACT.md` §6).
 >
-> **4 commits locaux non poussés** : `612eddf` (finition Bulk V2),
-> `0912c24` (PLOT-S2), `2cd39b4` (PLOT-S3) et **STAT-S1** (ce commit, §2q).
-> **Restent NON commités, sur décision utilisateur** : le correctif Milo (§2k),
-> **PLOT-S4** (§2m) et **PLOT-S5** (§2n). La suite complète n'a plus **aucun
+> **Commits locaux non poussés (compté 2026-09-12 soir, avant le commit MD-1
+> ci-dessous)** : 10 en avance sur `origin/main` — les 4 cités ici
+> historiquement (`612eddf`, `0912c24`, `2cd39b4`, STAT-S1) plus la campagne
+> Bulk V2 M2–M5 et sa documentation (`081bc6a`…`9d38ec7`). Le push reste à
+> **la main de l'utilisateur**. La suite complète n'a plus **aucun
 > échec** (hors segfault de sortie, §2l, sans impact sur les résultats).
 >
 > **Serveur MCP local** (`scripts/mcp_server.R` + `mcp.examples/`) : vérifié
 > fonctionnel le 2026-09-12 (§2p) — mais **hors de toute roadmap**.
 >
-> **Livré :** **STAT-S1 ✅** (ComBat-seq — onglet QC Batch du Filtrage, contrat
+> **Livré :** **MD-1 ✅** (conteneur `bulk_datasets` — jeux bulk nommés pour la
+> comparaison multi-jeux, 3 producteurs, contrat gelé, cf. §2t), **STAT-S1 ✅**
+> (ComBat-seq — onglet QC Batch du Filtrage, contrat
 > gelé, 126 assertions, cf. §2q), **PLOT-S1 ✅** (`ts_theme()` partagé +
 > propagation Bulk/SC/Spatial, 44 sites), **PLOT-S2 ✅** (`ts_export_plot()`, 25
 > sites), **PLOT-S3 ✅** (`ts_datatable()`, 6 sites), **PLOT-S4 ✅**
@@ -719,8 +725,70 @@ l'ouverture du workspace, statut à contrôler dans **Settings → MCP** après
 redémarrage. Santé serveur re-vérifiée le soir même (`mcp_server check:
 OK`).
 
----
+### 2t. ✅ MD-1 — conteneur `bulk_datasets` (fondation multi-dataset Bulk)
 
+**Livré le 2026-09-12 (soir)** (jalon MD-1 de `docs/ROADMAP_MULTI_DATASET.md`,
+fusion des décisions 8 et 5 — priorité utilisateur `++`). Contrat gelé :
+`docs/contracts/BULK_MULTI_CONTRACT.md` (9 sections). Rapport :
+`docs/ROADMAP_HANDOFF_STAGE_MD_1.md`.
+
+**Le piège re-vérifié AVANT tout code** (comme l'exigeait le handoff) : le
+mode « one file per sample » de `mod_import_bulk.R` fait bien un full-join
+en **UN SEUL** `bulk_obj` (`.merge_per_sample_tables()` →
+`global_data$bulk_obj <- list(..., import_mode = "per_sample")`) — MD-1 est
+donc bien nécessaire. La prémisse du handoff était correcte cette fois (4e
+occurrence du motif « re-mesurer avant de planifier », §2o — mesurée et
+confirmée avant le code).
+
+| Rôle | Fichier |
+|---|---|
+| Logique pure | `R/bulk/bulk_multi.R` (nouveau — check_label/check_obj/capture_pipeline/register/remove/get/summary) |
+| Tests fonctionnels | `tests/testthat/test-bulk-multi.R` (**95** assertions) |
+| Test de gel | `tests/testthat/test-bulk-multi-contract-freeze.R` (**156** assertions) |
+| Module de gestion | `modules/bulk/mod_bulk_datasets.R` (nouveau) — panneau « Multi-jeux — Datasets enregistrés » du module Bulk (producteur `pipeline_save`) |
+| Label à l'import | `modules/import/mod_import_bulk.R` — champ **optionnel** `multi_label` + `.register_multi_dataset()` aux **2** points de commit (producteur `import`, échec = alerte non bloquante) |
+| Conteneur | `app.R` — init `bulk_datasets = list()` à côté de `bulk_obj`, snapshot session, restore `%||% list()` (snapshots anciens), reset `confirm_reset` |
+| Seuil déclaré | `config/thresholds.R` → `TS_BULK_MULTI_MAX_DATASETS <- 20L` (RAM 32 Go) |
+| i18n | `translation.json` **+17 clés** (2221 entrées, 0 doublon) + liste idempotente `tools/add_i18n_keys.R` |
+
+**Design — 3 producteurs pour le conteneur** : `import` (état brut, label
+optionnel à l'import) · `pipeline_save` (état traité : `bulk_obj` + les
+**12 champs de pipeline figés** de `bulk_multi_pipeline_fields()` — contrasts,
+filtered_counts, vst_mat, pathway_results… ; JAMAIS `dds_blind`/`dds_full`/
+`counts_original`, objets volumineux non comparables) · `pseudobulk`
+(réservé MD-3, aucun code en MD-1).
+
+**Gardes gelés par le test de gel** : zéro mutation de `bulk_obj`/`shared_rv`
+(lecture seule) ; **isolation par copie** (muter la source après
+enregistrement ne change jamais l'entrée — testé) ; **zéro référence à
+`bulk_datasets` dans le pipeline existant** (17 fichiers du pipeline vérifiés,
+garde §2.3 du contrat) ; labels uniques (refus `duplicate_label` sauf
+`overwrite = TRUE` explicite) ; plafond `capacity_exceeded` ; logique pure
+(0 symbole Shiny dans `bulk_multi.R` — regex gelées) ; 7 états d'erreur
+classés `bulk_multi_error` (inflation interdite) ; app.R 4 ancres (init /
+snapshot / restore / reset).
+
+**Écart assumé vs la fiche initiale du jalon** (corrigé dans
+`ROADMAP_MULTI_DATASET.md`) : la fiche limitait l'UI à
+`mod_import_bulk.R (mode additif)` ; la livraison y ajoute le module de
+gestion `mod_bulk_datasets.R` (câblé dans `mod_bulk.R`) car l'acceptation du
+handoff exige « un second dataset importé, **traité (Filtrage → DE) et
+stocké** » — l'état traité vit dans `shared_rv` (portée `mod_bulk.R`),
+l'import seul ne peut produire que l'état brut. `bulk_obj` reste le slot
+« actif » ; **l'activation d'un jeu enregistré vers `bulk_obj` n'existe pas
+en MD-1** (hors périmètre, candidat MD-2+/MD-4).
+
+**Portes franchies** : tests ciblés **251 PASS / 0 FAIL / 0 ERROR / 0 SKIP**
+(fonctionnel 95 + gel 156) ; duplication gate **0 erreur / 3 avertissements**
+= baseline exacte ; `app.R` se source de bout en bout (`SMOKE_SOURCED:
+TRUE`) ; i18n 2221 entrées 0 doublon. **Vérification finale — suite COMPLÈTE
+tous domaines (73 fichiers, runner `tools/run_full_suite.R`)** : **0 FAIL /
+0 ERROR / 0 SKIP — 4011 PASS** (= 3760 baseline + 251 nouvelles assertions,
+comptes exacts) ; e2e shinytest2 bulk **4 PASS** (app démarre et navigue le
+domaine Bulk avec le nouveau panneau). C'est le **nouveau baseline**.
+
+
+---
 
 ## 3. 4D-3 — décision et contrat d'entrée upstream
 

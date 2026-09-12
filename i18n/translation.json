@@ -8820,6 +8820,74 @@
     {
       "fr": "Export CSV (Cox)",
       "en": "CSV export (Cox)"
+    },
+    {
+      "fr": "Label multi-datasets (optionnel)",
+      "en": "Multi-dataset label (optional)"
+    },
+    {
+      "fr": "ex : GSE123_T2",
+      "en": "e.g.: GSE123_T2"
+    },
+    {
+      "fr": "Si renseigné, le jeu importé est aussi enregistré sous ce nom pour la comparaison multi-jeux (Bulk > Multi-jeux).",
+      "en": "If filled, the imported dataset is also registered under this name for multi-dataset comparison (Bulk > Multi-datasets)."
+    },
+    {
+      "fr": "⚠️ Dataset non enregistré (multi-jeux) : %s",
+      "en": "⚠️ Dataset not registered (multi-dataset): %s"
+    },
+    {
+      "fr": "📦 Import enregistré pour la comparaison multi-jeux : « %s ».",
+      "en": "📦 Import registered for multi-dataset comparison: \"%s\"."
+    },
+    {
+      "fr": "Multi-jeux — Datasets enregistrés",
+      "en": "Multi-dataset — Registered datasets"
+    },
+    {
+      "fr": "Enregistrez l'état courant (import + filtrage + DE + voies) sous un label, pour le comparer plus tard à d'autres jeux. Le jeu actif n'est jamais modifié.",
+      "en": "Save the current state (import + filtering + DE + pathways) under a label, to compare it later with other datasets. The active dataset is never modified."
+    },
+    {
+      "fr": "Label du dataset",
+      "en": "Dataset label"
+    },
+    {
+      "fr": "Enregistrer l'état courant",
+      "en": "Save current state"
+    },
+    {
+      "fr": "Datasets enregistrés",
+      "en": "Registered datasets"
+    },
+    {
+      "fr": "Aucun jeu Bulk actif à enregistrer.",
+      "en": "No active Bulk dataset to save."
+    },
+    {
+      "fr": "✓ État enregistré sous « %s ».",
+      "en": "✓ State saved under \"%s\"."
+    },
+    {
+      "fr": "✓ État enregistré (mis à jour) sous « %s ».",
+      "en": "✓ State updated under \"%s\"."
+    },
+    {
+      "fr": "Aucun dataset enregistré pour l'instant.",
+      "en": "No registered dataset yet."
+    },
+    {
+      "fr": "Dataset à supprimer",
+      "en": "Dataset to remove"
+    },
+    {
+      "fr": "Supprimer le dataset",
+      "en": "Remove dataset"
+    },
+    {
+      "fr": "✓ Dataset « %s » supprimé.",
+      "en": "✓ Dataset \"%s\" removed."
     }
   ]
 }
