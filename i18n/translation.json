@@ -8584,6 +8584,122 @@
     {
       "fr": "{n} signature(s) rejetée(s) :",
       "en": "{n} rejected signature(s):"
+    },
+    {
+      "fr": "WGCNA exige au moins 15 échantillons et une matrice transformée (VST, étape 1). Le réseau est construit sur 2000–5000 gènes les plus variables (garde mémoire 32 Go, TOM borné).",
+      "en": "WGCNA requires at least 15 samples and a transformed matrix (VST, step 1). The network is built on the 2,000–5,000 most variable genes (32 GB memory guard, bounded TOM)."
+    },
+    {
+      "fr": "1. Analyse du power (soft-thresholding)",
+      "en": "1. Power analysis (soft-thresholding)"
+    },
+    {
+      "fr": "Gènes les plus variables",
+      "en": "Most variable genes"
+    },
+    {
+      "fr": "Analyser le power",
+      "en": "Analyse power"
+    },
+    {
+      "fr": "2. Modules et traits cliniques",
+      "en": "2. Modules and clinical traits"
+    },
+    {
+      "fr": "Power (vide = retenu à l'étape 1)",
+      "en": "Power (empty = chosen in step 1)"
+    },
+    {
+      "fr": "Traits cliniques (numériques / binaires)",
+      "en": "Clinical traits (numeric / binary)"
+    },
+    {
+      "fr": "Construire les modules",
+      "en": "Build modules"
+    },
+    {
+      "fr": "Export CSV (gènes -> modules)",
+      "en": "CSV export (genes -> modules)"
+    },
+    {
+      "fr": "Export RDS (résultats complets)",
+      "en": "RDS export (full results)"
+    },
+    {
+      "fr": "En attente — analyse du power d'abord.",
+      "en": "Waiting — run the power analysis first."
+    },
+    {
+      "fr": "✓ Power retenu : {p} (R2 = {r}) — {g} gènes, {n} échantillons.",
+      "en": "✓ Chosen power: {p} (R2 = {r}) — {g} genes, {n} samples."
+    },
+    {
+      "fr": "✓ {k} modules détectés sur {g} gènes (power = {p}).",
+      "en": "✓ {k} modules detected on {g} genes (power = {p})."
+    },
+    {
+      "fr": "✓ {k} modules détectés.",
+      "en": "✓ {k} modules detected."
+    },
+    {
+      "fr": "Étape 2 en attente — analyse du power d'abord.",
+      "en": "Step 2 waiting — run the power analysis first."
+    },
+    {
+      "fr": "Analyse du power (soft-thresholding)...",
+      "en": "Power analysis (soft-thresholding)..."
+    },
+    {
+      "fr": "Construction des modules (blockwiseModules)...",
+      "en": "Building modules (blockwiseModules)..."
+    },
+    {
+      "fr": "Erreur WGCNA:",
+      "en": "WGCNA error:"
+    },
+    {
+      "fr": "Analyse du power (soft-thresholding)",
+      "en": "Power analysis (soft-thresholding)"
+    },
+    {
+      "fr": "Power",
+      "en": "Power"
+    },
+    {
+      "fr": "Fit scale-free (R2)",
+      "en": "Scale-free fit (R2)"
+    },
+    {
+      "fr": "Connectivité moyenne",
+      "en": "Mean connectivity"
+    },
+    {
+      "fr": "Connectivité moyenne (mean.k.)",
+      "en": "Mean connectivity (mean.k.)"
+    },
+    {
+      "fr": "Modules <-> traits cliniques",
+      "en": "Modules <-> clinical traits"
+    },
+    {
+      "fr": "Méthode : %s — %d échantillons",
+      "en": "Method: %s — %d samples"
+    },
+    {
+      "fr": "Modules",
+      "en": "Modules"
+    },
+    {
+      "fr": "Réseau de co-expression (WGCNA)",
+      "en": "Co-expression network (WGCNA)"
+    },
+    {
+      "fr": "Construisez d'abord les modules (étape 2 du panneau de gauche).",
+      "en": "Build the modules first (step 2 of the left panel)."
+    },
+    {
+      "fr": "Dendrogramme",
+      "en": "Dendrogram"
     }
   ]
 }

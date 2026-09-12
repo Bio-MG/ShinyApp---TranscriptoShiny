@@ -92,6 +92,7 @@ source("R/bulk/bulk_batch_qc.R")    # Bulk V2 M1 : diagnostics batch (pur, contr
 source("R/bulk/batch_correction.R")  # STAT-S1 : correction de batch ComBat-seq (pur, contrat gelé)
 source("R/bulk/bulk_gsva.R")          # Bulk V2 M2 : scores de voies par échantillon (pur, contrat gelé)
 source("R/bulk/bulk_signatures.R")    # Bulk V2 M3 : signatures cellulaires (pur, contrat gelé)
+source("R/bulk/bulk_wgcna.R")         # Bulk V2 M4 : WGCNA safe-mode (pur, contrat gelé)
 source("R/bulk/bulk_report_engine.R")
 source("R/bulk/bulk_import_engine.R")
 
@@ -151,6 +152,7 @@ source("modules/bulk/mod_bulk_filter.R")
 for (f in list.files("modules/bulk_de", pattern = "\\.R$", full.names = TRUE)) source(f)
 source("modules/bulk/mod_bulk_pathways.R")
 source("modules/bulk/mod_bulk_signatures.R")  # Bulk V2 M3 : signatures cellulaires
+source("modules/bulk/mod_bulk_wgcna.R")       # Bulk V2 M4 : WGCNA safe-mode
 source("modules/bulk/mod_bulk_report.R")
 source("modules/bulk/mod_bulk.R")
 
