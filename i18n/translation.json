@@ -8400,6 +8400,110 @@
     {
       "fr": "A : avant correction — B : après correction (lots attendus mélangés)",
       "en": "A: before correction — B: after correction (batches expected to mix)"
+    },
+    {
+      "fr": "Scores par échantillon (GSVA / ssGSEA)",
+      "en": "Per-sample scores (GSVA / ssGSEA)"
+    },
+    {
+      "fr": "Attribue à chaque échantillon un score par voie — PCA et heatmaps par voie même sans contraste. Exige la matrice VST (étape 1) et un fichier .gmt (nom<TAB>description<TAB>gènes...). Les jeux dont moins de 20 % des gènes sont retrouvés sont rejetés (décalage d'identifiants).",
+      "en": "Assigns each sample a per-pathway score — PCA and per-pathway heatmaps even without any contrast. Requires the VST matrix (step 1) and a .gmt file (name<TAB>description<TAB>genes...). Gene sets with less than 20% of their genes found are rejected (identifier mismatch)."
+    },
+    {
+      "fr": "Méthode de scoring",
+      "en": "Scoring method"
+    },
+    {
+      "fr": "Fichier de jeux de gènes (.gmt)",
+      "en": "Gene sets file (.gmt)"
+    },
+    {
+      "fr": "Taille min voie",
+      "en": "Min pathway size"
+    },
+    {
+      "fr": "Taille max voie",
+      "en": "Max pathway size"
+    },
+    {
+      "fr": "Lancer Scores par échantillon",
+      "en": "Run per-sample scores"
+    },
+    {
+      "fr": "En attente — lancez d'abord le Filtrage & VST (étape 1).",
+      "en": "Waiting — run Filtering & VST (step 1) first."
+    },
+    {
+      "fr": "✓ {n} voies scorées x {m} échantillons [ {meth} ]",
+      "en": "✓ {n} pathways scored x {m} samples [ {meth} ]"
+    },
+    {
+      "fr": "Scores de voies par échantillon...",
+      "en": "Per-sample pathway scoring..."
+    },
+    {
+      "fr": "✓ {n} voies scorées (ssGSEA/GSVA) sur {m} échantillons.",
+      "en": "✓ {n} pathways scored (ssGSEA/GSVA) on {m} samples."
+    },
+    {
+      "fr": "⚠️ Fournissez un fichier .gmt (jeux de gènes).",
+      "en": "⚠️ Please provide a .gmt file (gene sets)."
+    },
+    {
+      "fr": "Erreur GMT:",
+      "en": "GMT error:"
+    },
+    {
+      "fr": "Erreur scores:",
+      "en": "Scores error:"
+    },
+    {
+      "fr": "⚠️ {n} jeu(x) de gènes rejeté(s) — voir le détail dans l'onglet Scores.",
+      "en": "⚠️ {n} gene set(s) rejected — see details in the Scores tab."
+    },
+    {
+      "fr": "{n} jeu(x) rejeté(s) — recouvrement < {pct} % ou taille hors bornes. Détail :",
+      "en": "{n} rejected set(s) — overlap < {pct}% or size out of bounds. Details:"
+    },
+    {
+      "fr": "Colorer la PCA par",
+      "en": "Color PCA by"
+    },
+    {
+      "fr": "Voies affichées (heatmap)",
+      "en": "Pathways shown (heatmap)"
+    },
+    {
+      "fr": "Export CSV (scores)",
+      "en": "CSV export (scores)"
+    },
+    {
+      "fr": "Export RDS (résultat complet)",
+      "en": "RDS export (full result)"
+    },
+    {
+      "fr": "Scores par échantillon",
+      "en": "Per-sample scores"
+    },
+    {
+      "fr": "PCA des scores de voies (par échantillon)",
+      "en": "Pathway-scores PCA (per sample)"
+    },
+    {
+      "fr": "Méthode : %s — %d voies",
+      "en": "Method: %s — %d pathways"
+    },
+    {
+      "fr": "Score",
+      "en": "Score"
+    },
+    {
+      "fr": "Scores de voies",
+      "en": "Pathway scores"
+    },
+    {
+      "fr": "Fournissez un fichier .gmt (jeux de gènes).",
+      "en": "Provide a .gmt file (gene sets)."
     }
   ]
 }

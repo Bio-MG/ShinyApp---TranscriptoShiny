@@ -90,6 +90,7 @@ source("R/bulk/bulk_helpers.R")
 source("R/bulk/bulk_provenance.R")  # Bulk V2 M1 : manifeste bulk_obj$provenance (pur, testé)
 source("R/bulk/bulk_batch_qc.R")    # Bulk V2 M1 : diagnostics batch (pur, contrat gelé)
 source("R/bulk/batch_correction.R")  # STAT-S1 : correction de batch ComBat-seq (pur, contrat gelé)
+source("R/bulk/bulk_gsva.R")          # Bulk V2 M2 : scores de voies par échantillon (pur, contrat gelé)
 source("R/bulk/bulk_report_engine.R")
 source("R/bulk/bulk_import_engine.R")
 

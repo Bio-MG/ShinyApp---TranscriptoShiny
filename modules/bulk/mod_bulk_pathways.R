@@ -50,7 +50,31 @@ mod_bulk_pathways_ui <- function(id) {
     # CSV du helper n'est utilise que si openxlsx est absent.
     downloadButton(ns("dl_pathway_excel"), i18n$t("Export Excel"), class = "btn-sm btn-success w-100 mt-2"),
 
-    div(class = "small text-muted mt-1", textOutput(ns("pathway_status")))
+    div(class = "small text-muted mt-1", textOutput(ns("pathway_status"))),
+
+    # ── Bulk V2 M2 — scores de voies PAR ÉCHANTILLON (GSVA/ssGSEA/PLAGE/zscore).
+    # Complément de l'ORA/GSEA ci-dessus : attribue un score par voie à CHAQUE
+    # échantillon (aucun contraste requis). La matrice (voies x échantillons)
+    # vit dans bulk_obj$pathways$per_sample + shared_rv$pathway_scores.
+    hr(),
+    h6(i18n$t("Scores par \u00e9chantillon (GSVA / ssGSEA)"), style = "font-weight:bold;"),
+    div(class = "small text-muted mb-2",
+        i18n$t("Attribue \u00e0 chaque \u00e9chantillon un score par voie \u2014 PCA et heatmaps par voie m\u00eame sans contraste. Exige la matrice VST (\u00e9tape 1) et un fichier .gmt (nom<TAB>description<TAB>g\u00e8nes...). Les jeux dont moins de 20 % des g\u00e8nes sont retrouv\u00e9s sont rejet\u00e9s (d\u00e9calage d'identifiants).")),
+    selectInput(ns("scores_method"), i18n$t("M\u00e9thode de scoring"),
+                choices = stats::setNames(c("ssgsea", "gsva", "plage", "zscore"),
+                  c("ssGSEA", "GSVA", "PLAGE", "zscore")),
+                selected = "ssgsea"),
+    fileInput(ns("scores_gmt"), i18n$t("Fichier de jeux de g\u00e8nes (.gmt)"),
+              accept = c(".gmt", ".txt"), buttonLabel = i18n$t("Parcourir...")),
+    fluidRow(
+      column(6, numericInput(ns("scores_min_size"), i18n$t("Taille min voie"),
+                            value = TS_BULK_GSVA_MIN_SIZE, min = 1, step = 1)),
+      column(6, numericInput(ns("scores_max_size"), i18n$t("Taille max voie"),
+                            value = TS_BULK_GSVA_MAX_SIZE, min = 2, step = 1))
+    ),
+    actionButton(ns("run_scores"), i18n$t("Lancer Scores par \u00e9chantillon"),
+                 class = "btn-warning w-100", icon = icon("layer-group")),
+    div(class = "small text-muted mt-1", textOutput(ns("scores_status")))
   )
 }
 
@@ -60,10 +84,33 @@ mod_bulk_pathways_output_ui <- function(id) {
     full_screen = TRUE, max_height = "900px",
     card_header("Pathway Enrichment"),
     navset_tab(
+      id = ns("pathways_tabs"),
       nav_panel(i18n$t("Barplot Top 15"), plotOutput(ns("pathway_barplot"), height = "580px")),
       nav_panel(i18n$t("Dotplot"),        plotOutput(ns("pathway_dotplot"), height = "580px")),
       nav_panel(i18n$t("Table"),          DTOutput(ns("pathway_table"))),
-      nav_panel(i18n$t("Courbe GSEA"),    uiOutput(ns("gsea_curve_ui")))
+      nav_panel(i18n$t("Courbe GSEA"),    uiOutput(ns("gsea_curve_ui"))),
+      # Bulk V2 M2 — scores par échantillon (voies x échantillons)
+      nav_panel(i18n$t("Scores par \u00e9chantillon"), value = "tab_scores",
+        uiOutput(ns("scores_dropped_ui")),
+        fluidRow(
+          column(4, selectizeInput(ns("scores_color_by"), i18n$t("Colorer la PCA par"),
+                                   choices = NULL,
+                                   options = list(placeholder = .tr_placeholder(), allowEmptyOption = TRUE))),
+          column(4, numericInput(ns("scores_heat_top_n"), i18n$t("Voies affichées (heatmap)"),
+                                 value = 50, min = 5, max = 500, step = 5))
+        ),
+        plotOutput(ns("scores_pca"), height = "420px"),
+        hr(),
+        plotOutput(ns("scores_heatmap"), height = "620px"),
+        hr(),
+        fluidRow(
+          column(6, downloadButton(ns("dl_scores_csv"), i18n$t("Export CSV (scores)"),
+                                   class = "btn-sm btn-info w-100")),
+          column(6, downloadButton(ns("dl_scores_rds"), i18n$t("Export RDS (résultat complet)"),
+                                   class = "btn-sm btn-secondary w-100"))
+        ),
+        DTOutput(ns("scores_table"))
+      )
     )
   )
 }
@@ -92,8 +139,19 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
       updateSelectInput(session, "pathway_org", label = .tr("Organisme"),
         choices = stats::setNames(c("human","mouse"), c(.tr("Humain"), .tr("Souris"))))
       updateNumericInput(session, "pathway_pval", label = .tr("P-value cutoff"))
-      updateSelectInput(session, "pathway_padj_method", label = .tr("M\u00e9thode de correction (p-adj)"))
+      updateSelectInput(session, "pathway_padj_method", label = .tr("Méthode de correction (p-adj)"))
       updateActionButton(session, "run_pathway", label = .tr("Lancer Enrichissement"))
+      # Bulk V2 M2 — libellés « scores par échantillon »
+      updateSelectInput(session, "scores_method", label = .tr("Méthode de scoring"),
+        choices = stats::setNames(c("ssgsea", "gsva", "plage", "zscore"),
+                                  c("ssGSEA", "GSVA", "PLAGE", "zscore")))
+      updateNumericInput(session, "scores_min_size", label = .tr("Taille min voie"))
+      updateNumericInput(session, "scores_max_size", label = .tr("Taille max voie"))
+      updateActionButton(session, "run_scores", label = .tr("Lancer Scores par échantillon"))
+      updateSelectizeInput(session, "scores_color_by", label = .tr("Colorer la PCA par"))
+      updateNumericInput(session, "scores_heat_top_n", label = .tr("Voies affichées (heatmap)"))
+      updateActionButton(session, "dl_scores_csv", label = .tr("Export CSV (scores)"))
+      updateActionButton(session, "dl_scores_rds", label = .tr("Export RDS (résultat complet)"))
     }, ignoreInit = TRUE)
 
     # (unchanged) manual gene picker refresh + mirroring
@@ -118,7 +176,134 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
     observe({
       shinyjs::toggleState("run_pathway", condition = !is.null(shared_rv$filtered_counts))
       shinyjs::toggleState("dl_pathway",  condition = !is.null(shared_rv$pathway_results))
+      # Bulk V2 M2 — le scoring exige la matrice VST (étape 1), pas les counts.
+      shinyjs::toggleState("run_scores", condition = !is.null(shared_rv$vst_mat))
+      shinyjs::toggleState("dl_scores_csv", condition = !is.null(shared_rv$pathway_scores))
+      shinyjs::toggleState("dl_scores_rds", condition = !is.null(shared_rv$pathway_scores))
     })
+
+    # ── Bulk V2 M2 — scores de voies par échantillon ────────────────────────
+    observeEvent(shared_rv$vst_mat, {
+      req(global_data$bulk_obj$metadata)
+      meta <- global_data$bulk_obj$metadata
+      updateSelectizeInput(session, "scores_color_by", choices = colnames(meta), server = FALSE)
+    }, ignoreNULL = TRUE)
+
+    output$scores_status <- renderText({
+      global_data$language
+      sc <- shared_rv$pathway_scores
+      if (is.null(sc)) .tr("En attente — lancez d'abord le Filtrage & VST (étape 1).")
+      else .t_fmt(.tr("\u2713 {n} voies scorées x {m} échantillons [ {meth} ]"),
+                  n = nrow(sc$scores), m = ncol(sc$scores), meth = sc$method)
+    })
+
+    observeEvent(input$run_scores, {
+      req(shared_rv$vst_mat)
+      if (is.null(input$scores_gmt) || is.null(input$scores_gmt$datapath)) {
+        showNotification(.tr("\u26a0\ufe0f Fournissez un fichier .gmt (jeux de gènes)."),
+                         type = "warning", duration = 5)
+        return()
+      }
+      sets <- tryCatch(bulk_parse_gmt(input$scores_gmt$datapath), error = function(e) e)
+      if (inherits(sets, "error")) {
+        showNotification(paste(.tr("Erreur GMT:"), conditionMessage(sets)),
+                         type = "error", duration = 8)
+        return()
+      }
+      p <- shiny::Progress$new(); on.exit(p$close())
+      p$set(message = .tr("Scores de voies par échantillon..."), value = 0.2)
+      tryCatch({
+        res <- compute_pathway_scores(
+          shared_rv$vst_mat, sets,
+          method      = input$scores_method %||% "ssgsea",
+          min_size    = input$scores_min_size %||% TS_BULK_GSVA_MIN_SIZE,
+          max_size    = input$scores_max_size %||% TS_BULK_GSVA_MAX_SIZE,
+          overlap_min = TS_BULK_GSVA_OVERLAP_MIN
+        )
+        shared_rv$pathway_scores <- res
+        # Stockage contractuel : bulk_obj$pathways$per_sample (réaffectation
+        # complète pour déclencher la réactivité de global_data).
+        bo <- global_data$bulk_obj
+        if (!is.list(bo$pathways)) bo$pathways <- list()
+        bo$pathways$per_sample <- res$scores
+        bo <- bulk_ensure_provenance(bo)
+        global_data$bulk_obj <- bo
+        if (nrow(res$qc$dropped) > 0L) {
+          showNotification(.t_fmt(.tr("\u26a0\ufe0f {n} jeu(x) de gènes rejeté(s) — voir le détail dans l'onglet Scores."),
+                                   n = nrow(res$qc$dropped)), type = "warning", duration = 6)
+        }
+        showNotification(.t_fmt(.tr("\u2713 {n} voies scorées (ssGSEA/GSVA) sur {m} échantillons."),
+                                 n = nrow(res$scores), m = ncol(res$scores)), type = "message")
+        nav_select(id = "pathways_tabs", selected = "tab_scores", session = session)
+      }, error = function(e) {
+        showNotification(paste(.tr("Erreur scores:"), conditionMessage(e)),
+                         type = "error", duration = 8)
+        shared_rv$pathway_scores <- NULL
+      })
+    })
+
+    output$scores_dropped_ui <- renderUI({
+      global_data$language
+      sc <- shared_rv$pathway_scores
+      if (is.null(sc) || nrow(sc$qc$dropped) == 0L) return(NULL)
+      div(class = "alert alert-warning", style = "font-size:0.82em;",
+          icon("triangle-exclamation"), " ",
+          .t_fmt(.tr("{n} jeu(x) rejeté(s) — recouvrement < {pct} % ou taille hors bornes. Détail :"),
+                 n = nrow(sc$qc$dropped), pct = round(100 * TS_BULK_GSVA_OVERLAP_MIN)),
+          DT::datatable(sc$qc$dropped, rownames = FALSE, options = list(pageLength = 5)))
+    })
+
+    output$scores_pca <- renderPlot({
+      global_data$language
+      req(shared_rv$pathway_scores)
+      color_by <- if (nzchar(input$scores_color_by %||% "")) input$scores_color_by else NULL
+      tryCatch(
+        plot_pathway_scores_pca(shared_rv$pathway_scores,
+                                metadata = global_data$bulk_obj$metadata,
+                                color_by = color_by, tr = .tr_fn(global_data)),
+        error = function(e) {
+          ggplot2::ggplot() +
+            ggplot2::annotate("text", x = 1, y = 1,
+                              label = paste(.tr("Erreur:"), conditionMessage(e)), color = "red") +
+            ggplot2::theme_void()
+        }
+      )
+    })
+
+    output$scores_heatmap <- renderPlot({
+      global_data$language
+      req(shared_rv$pathway_scores)
+      h <- plot_pathway_scores_heatmap(shared_rv$pathway_scores,
+                                       top_n = input$scores_heat_top_n %||% 50,
+                                       tr = .tr_fn(global_data))
+      # ComplexHeatmap -> print() explicite ; ggplot de repli s'imprime pareil.
+      print(h)
+    })
+
+    output$scores_table <- renderDT({
+      global_data$language
+      req(shared_rv$pathway_scores)
+      s <- round(shared_rv$pathway_scores$scores, 4)
+      DT::datatable(as.data.frame(s), rownames = TRUE,
+                    options = list(pageLength = 15, scrollX = TRUE))
+    })
+
+    output$dl_scores_csv <- downloadHandler(
+      filename = function() paste0("pathway_scores_", shared_rv$pathway_scores$method,
+                                   "_", Sys.Date(), ".csv"),
+      content  = function(file) {
+        req(shared_rv$pathway_scores)
+        write.csv(build_pathway_scores_export(shared_rv$pathway_scores), file, row.names = FALSE)
+      }
+    )
+    output$dl_scores_rds <- downloadHandler(
+      filename = function() paste0("pathway_scores_", shared_rv$pathway_scores$method,
+                                   "_", Sys.Date(), ".rds"),
+      content  = function(file) {
+        req(shared_rv$pathway_scores)
+        saveRDS(shared_rv$pathway_scores, file)
+      }
+    )
 
     # ── Enrichment (ORA + GSEA) — strings translated ─────────────────────
     observeEvent(input$run_pathway, {

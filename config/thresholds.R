@@ -29,6 +29,7 @@ TS_BULK_BATCH_MIN_SAMPLES_PER_BATCH <- 2L   # plancher ComBat-seq par niveau de 
 # --- Bulk V2 — scores par échantillon (GSVA / ssGSEA) -------------------------
 TS_BULK_GSVA_MIN_SIZE      <- 10L      # taille min d'un jeu de gènes
 TS_BULK_GSVA_MAX_SIZE      <- 500L     # taille max d'un jeu de gènes
+TS_BULK_GSVA_OVERLAP_MIN   <- 0.20     # fraction min de gènes d'un set retrouvés dans la matrice (après strip Ensembl .1/.2)
 
 # --- Bulk V2 — WGCNA safe-mode ------------------------------------------------
 TS_BULK_WGCNA_MIN_SAMPLES  <- 15L      # arrêt dur en dessous (N < 15)
