@@ -154,7 +154,18 @@ mod_sc_viz_ui <- function(id) {
           h6(i18n$t("Heatmap Hierarchique"), style="font-weight:bold;"),
           helpText("Genes du panier ci-dessus (max 50). Clustering hierarchique lignes/colonnes."),
           numericInput(ns("hier_max_cells"), i18n$t("Max cellules avant agregation par groupe"),
-                       value = 5000, min = 200, max = 20000, step = 500))
+                       value = 5000, min = 200, max = 20000, step = 500),
+          # PLOT-S4 — memes reglages de clustering que cote Bulk DE.
+          fluidRow(
+            column(6, selectInput(ns("hier_clust_distance"), i18n$t("Distance de clustering"),
+                                  choices = stats::setNames(TS_HEATMAP_DISTANCES, TS_HEATMAP_DISTANCES),
+                                  selected = "euclidean")),
+            column(6, selectInput(ns("hier_clust_method"), i18n$t("Méthode de clustering"),
+                                  choices = stats::setNames(TS_HEATMAP_METHODS, TS_HEATMAP_METHODS),
+                                  selected = "complete"))
+          ),
+          numericInput(ns("hier_k_row"), i18n$t("Découpage en k groupes de lignes (0 = aucun)"),
+                       value = 0, min = 0, max = 20, step = 1))
     ),
 
     conditionalPanel(
@@ -245,7 +256,7 @@ mod_sc_viz_output_ui <- function(id) {
             numericInput(ns("plot_width"),  i18n$t("Largeur"), 800, min=400, max=2000),
             numericInput(ns("plot_height"), i18n$t("Hauteur"), 600, min=300, max=1500),
             selectInput(ns("export_format"), i18n$t("Format"),
-                        choices = c("PNG"="png","PDF"="pdf")),
+                        choices = ts_export_format_choices_ui()),
             uiOutput(ns("export_fidelity_note")),
             downloadButton(ns("export_plot"), i18n$t("Exporter"))
           )
@@ -394,6 +405,9 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
         sc_gradient        = if (identical(input$sc_palette, "manual")) sc_gradient_vec() else NULL,
         sc_volcano_colors  = if (identical(input$sc_palette, "manual")) sc_volcano_colors_vec() else NULL,
         hier_max_cells         = input$hier_max_cells,
+        hier_clust_distance    = input$hier_clust_distance,
+        hier_clust_method      = input$hier_clust_method,
+        hier_k_row             = input$hier_k_row,
         density_gene           = input$density_gene,
         density_reduction      = input$density_reduction,
         density_max_cells      = input$density_max_cells,
@@ -637,6 +651,9 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
       cfg <- list(type=type, feat_sel=input$feat_sel, group_by=input$group_by,
                   pt_size=input$pt_size, plot_theme=input$plot_theme,
                   hier_max_cells=input$hier_max_cells,
+                  hier_clust_distance=input$hier_clust_distance,
+                  hier_clust_method=input$hier_clust_method,
+                  hier_k_row=input$hier_k_row,
                   density_gene=input$density_gene, density_reduction=input$density_reduction,
                   density_max_cells=input$density_max_cells)
 
@@ -783,9 +800,17 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
           value = 0.3, {
             if (identical(type, "heatmap_hier")) {
               incProgress(0.3, detail = "Rendu de la heatmap...")
+              # PLOT-S5 — device ouvert a la main (ComplexHeatmap n'est pas un
+              # ggplot). `svg` rejoint `pdf` (vectoriel, dimensions en pouces) ;
+              # `png` reste en pixels. Branches png/pdf inchangees.
               fmt <- input$export_format %||% "png"
-              if (fmt == "pdf") pdf(file, width = (input$plot_width %||% 800)/100, height = (input$plot_height %||% 600)/100)
-              else png(file, width = input$plot_width %||% 800, height = input$plot_height %||% 600, res = 100)
+              if (identical(fmt, "svg")) {
+                svglite::svglite(file, width = (input$plot_width %||% 800)/100, height = (input$plot_height %||% 600)/100)
+              } else if (identical(fmt, "pdf")) {
+                pdf(file, width = (input$plot_width %||% 800)/100, height = (input$plot_height %||% 600)/100)
+              } else {
+                png(file, width = input$plot_width %||% 800, height = input$plot_height %||% 600, res = 100)
+              }
               tryCatch({
                 build_sc_viz_plot(global_data$sc_obj, cfg, cfg$sc_palette %||% input$sc_palette,
                                   cfg$sc_manual_colors, cfg$sc_gradient, cfg$sc_volcano_colors)
@@ -805,7 +830,8 @@ mod_sc_viz_server <- function(id, global_data, shared_rv) {
               ts_export_plot(file, p,
                      width  = (input$plot_width  %||% 800) / 100,
                      height = (input$plot_height %||% 600) / 100,
-                     dpi    = 300)
+                     dpi    = 300,
+                     format = input$export_format %||% "png")
             }
           }
         )

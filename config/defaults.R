@@ -145,3 +145,15 @@ TS_EXPORT_FORMAT_DEFAULT <- NULL
 # bord de la migration.
 TS_DT_PAGE_LENGTHS       <- c(6L, 8L, 10L, 15L, 20L)
 TS_DT_BUTTONS_DEFAULT    <- FALSE
+
+# --- PLOT-S4 : heatmap ComplexHeatmap unifiee --------------------------------
+# TS_HEATMAP_MAX_NAMES = 60 est la valeur historique PARTAGEE par les trois
+# implementations (plot_heatmap_bulk, build_sc_hierarchical_heatmap) : au-dela,
+# les noms de lignes/colonnes sont masques. plot_sample_correlation_heatmap ne
+# l'utilise PAS (elle force TRUE/TRUE) -> elle le passe explicitement.
+# TS_HEATMAP_DISTANCES : "pearson"/"spearman" sont des distances de correlation
+# natives de ComplexHeatmap::Heatmap() (get_dist).
+# TS_HEATMAP_METHODS : methodes hclust proposees a l'utilisateur.
+TS_HEATMAP_MAX_NAMES     <- 60L
+TS_HEATMAP_DISTANCES     <- c("euclidean", "pearson", "spearman")
+TS_HEATMAP_METHODS       <- c("complete", "ward.D2", "average")

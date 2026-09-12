@@ -58,6 +58,22 @@ test_that("session_packages : seuls les packages installés, jamais NA", {
   expect_true(all(grepl("^[0-9]+\\.[0-9]+", pkgs)))
 })
 
+test_that("session_packages ne laisse aucun état global (option Matrix)", {
+  # Régression mesurée : GSVA::.onLoad() fait
+  # options(Matrix.warnDeprecatedCoerce = 2) SANS le restaurer. Comme GSVA était
+  # chargé par cette fonction, l'option fuyait sur tout le reste de la session et
+  # escaladait toute dépréciation Matrix en erreur fatale -> Milo
+  # (miloR::calcNhoodDistance -> as(<dgTMatrix>, "dgCMatrix")) échouait.
+  before <- getOption("Matrix.warnDeprecatedCoerce")
+  invisible(bulk_provenance_session_packages())
+  expect_identical(getOption("Matrix.warnDeprecatedCoerce"), before)
+  # L'option doit aussi être REMISE à sa valeur d'origine quand elle existait.
+  old <- options(Matrix.warnDeprecatedCoerce = 1)
+  on.exit(options(old), add = TRUE)
+  invisible(bulk_provenance_session_packages())
+  expect_identical(getOption("Matrix.warnDeprecatedCoerce"), 1)
+})
+
 test_that("ensure : création paresseuse + idempotence + erreurs classées", {
   bo <- list(counts = matrix(1:24, 4, 6), metadata = .meta_prov(6))
   out <- bulk_ensure_provenance(bo)

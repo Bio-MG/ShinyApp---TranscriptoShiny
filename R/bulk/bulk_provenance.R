@@ -45,11 +45,26 @@ bulk_provenance_known_normalizations <- function() {
 #' Releve nominal (jamais une re-derivation) : seule la version constatee est
 #' enregistree. Les packages absents sont omis (la cle n'existe pas).
 #'
+#' Le chargement des namespaces est un simple CONSTAT de version : la fonction
+#' ne doit laisser AUCUN etat global derriere elle (voir le correctif
+#' `Matrix.warnDeprecatedCoerce` ci-dessous).
+#'
 #' @return Vecteur character nomme, au minimum vide.
 bulk_provenance_session_packages <- function() {
   candidates <- c("DESeq2", "edgeR", "limma", "GSVA", "GSEABase", "WGCNA",
                   "variancePartition", "decoupleR", "msigdbr", "survival",
                   "survminer", "ComplexHeatmap", "mirai")
+  # Effet de bord tiers neutralise : GSVA::.onLoad() fait
+  # options(Matrix.warnDeprecatedCoerce = 2) SANS le restaurer. Charger GSVA
+  # ici (uniquement pour LIRE sa version) escaladait donc toute depreciation
+  # Matrix ulterieure en ERREUR FATALE (Matrix::Matrix.DeprecatedCoerce force
+  # alors options(warn = 2L)). Casse reelle mesuree : Milo
+  # (miloR::calcNhoodDistance -> as(<dgTMatrix>, "dgCMatrix")) echouait parce
+  # que ce chargement laissait l'option derriere lui, globalement, pour tout le
+  # reste de la session. On releve l'option avant le chargement et on la
+  # restaure a l'identique (absente -> retiree, valeur NULL).
+  mwd_before <- getOption("Matrix.warnDeprecatedCoerce")
+  on.exit(options(Matrix.warnDeprecatedCoerce = mwd_before), add = TRUE)
   out <- character(0)
   for (p in candidates) {
     if (requireNamespace(p, quietly = TRUE)) {

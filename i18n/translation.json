@@ -5166,8 +5166,8 @@
       "en": "Export Genes/Pseudo"
     },
     {
-      "fr": "Format export plots (PNG/PDF)",
-      "en": "Export plots format (PNG/PDF)"
+      "fr": "Format export plots (PNG/PDF/SVG)",
+      "en": "Export plots format (PNG/PDF/SVG)"
     },
     {
       "fr": "Calcul trajectoire...",
@@ -8324,6 +8324,22 @@
     {
       "fr": "Taille de police (base)",
       "en": "Base font size"
+    },
+    {
+      "fr": "Apparence des graphiques",
+      "en": "Graph appearance"
+    },
+    {
+      "fr": "Distance de clustering",
+      "en": "Clustering distance"
+    },
+    {
+      "fr": "Méthode de clustering",
+      "en": "Clustering method"
+    },
+    {
+      "fr": "Découpage en k groupes de lignes (0 = aucun)",
+      "en": "Split rows into k groups (0 = none)"
     },
     {
       "fr": "Correction de batch (optionnel) — ComBat-seq",

@@ -51,7 +51,13 @@ required_packages <- c(
   "harmony", "destiny", "fs", "igraph", "Matrix", "reshape2",
   "shinyjs", "circlize", "rmarkdown", "zip",
   "mirai", "sf", "leaflet", "scattermore",
-  "ape", "RANN", "irlba", "png", "RColorBrewer", "shinyWidgets", "shinycssloaders"
+  "ape", "RANN", "irlba", "png", "RColorBrewer", "shinyWidgets", "shinycssloaders",
+  # PLOT-S5 — export SVG. svglite est le device vectoriel de la branche
+  # format == "svg" de ts_export_plot() (R/plotting/export.R). Il etait deja
+  # installe ET present dans renv.lock (2.2.2) mais NON declare : la branche
+  # svg retombait donc silencieusement sur png. Le declarer la rend
+  # garantie (et non plus dependante d'une installation fortuite).
+  "svglite"
 )
 
 optional_packages <- c(

@@ -6,6 +6,8 @@
 #   - format = NULL => on ne passe PAS `device` (ggsave devine l'extension)
 #   - bg = NULL     => on ne passe PAS `bg`
 #   - width/height  => transmis tels quels
+# PLOT-S5 (2026-09-12) ajoute : les choix UI (ts_export_format_choices_ui),
+# la garde structurelle des 5 selecteurs, et le rendu ComplexHeatmap -> svglite.
 # =============================================================================
 library(testthat)
 suppressWarnings(suppressPackageStartupMessages(library(ggplot2)))
@@ -44,9 +46,45 @@ test_that("surface publique figee", {
   expect_setequal(
     ts_export_public_api(),
     c("ts_export_dpi_choices", "ts_export_format_choices",
+      "ts_export_format_choices_ui",
       "ts_export_plot", "ts_export_public_api", "ts_export_resolve_format")
   )
   expect_false(anyDuplicated(ts_export_public_api()) > 0)
+})
+
+test_that("PLOT-S5 : les choix UI exposent png / pdf / svg, dans l'ordre", {
+  ch <- ts_export_format_choices_ui()
+  # valeurs = ce que le handler recoit ; noms = ce que l'utilisateur lit
+  expect_identical(unname(ch), c("png", "pdf", "svg"))
+  expect_identical(names(ch), c("PNG", "PDF (vectoriel)", "SVG (vectoriel)"))
+  # "svg" doit etre PROPOSE, pas seulement reconnu par le resolveur
+  expect_true("svg" %in% unname(ch))
+  # les valeurs proposees sont exactement les formats reconnus (pas de derive)
+  expect_setequal(unname(ch), ts_export_format_choices())
+})
+
+test_that("PLOT-S5 : les 5 selecteurs d'export consomment la source unique", {
+  # Garde structurelle : sans elle, un retour a un vecteur png/pdf code en dur
+  # dans UN seul des 5 selecteurs re-desactiverait SVG sans rien casser ailleurs.
+  selecteurs <- list(
+    c("modules/bulk_de/mod_bulk_de_ui.R", "volcano_export_fmt"),
+    c("modules/bulk_de/mod_bulk_de_ui.R", "ma_export_fmt"),
+    c("modules/bulk_de/mod_bulk_de_ui.R", "heatmap_export_fmt"),
+    c("modules/sc/mod_sc_trajectory.R",   "traj_export_fmt"),
+    c("modules/sc/mod_sc_viz.R",          "export_format")
+  )
+  for (s in selecteurs) {
+    rel <- s[1]; id <- s[2]
+    path <- file.path(ts_project_root(), rel)
+    expect_true(file.exists(path), info = rel)
+    code <- readLines(path, warn = FALSE, encoding = "UTF-8")
+    # le selectInput(ns("<id>"), ...) et sa ligne `choices =` qui suit
+    idx <- grep(paste0("ns\\(\"", id, "\"\\)"), code, perl = TRUE)
+    expect_true(length(idx) >= 1L, info = paste("selectInput introuvable :", id))
+    win <- paste(code[idx[1]:min(idx[1] + 2L, length(code))], collapse = "\n")
+    expect_match(win, "ts_export_format_choices_ui\\(\\)", perl = TRUE,
+                 info = paste0(id, " n'utilise pas ts_export_format_choices_ui()"))
+  }
 })
 
 test_that("dpi : le defaut est 300 — celui de ggsave ET des 23/24 sites", {
@@ -73,7 +111,10 @@ test_that("format : valeur inconnue => erreur classee invalid_format", {
 })
 
 test_that("format svg : degrade en png quand svglite est absent", {
-  # svglite n'est pas dans renv.lock -> degradation attendue, avec avertissement
+  # svglite 2.2.2 EST installe et present dans renv.lock ; il est desormais
+  # declare dans required_packages (PLOT-S5, global.R). La degradation reste
+  # neanmoins testee : c'est le contrat du helper, independamment de l'etat
+  # de l'environnement.
   has_svglite <- requireNamespace("svglite", quietly = TRUE)
   out <- if (has_svglite) "svg" else "png"
   if (has_svglite) {
@@ -83,6 +124,61 @@ test_that("format svg : degrade en png quand svglite est absent", {
     expect_identical(suppressWarnings(ts_export_resolve_format("svg")), "png")
   }
   expect_true(out %in% ts_export_format_choices())
+})
+
+test_that("PLOT-S5 : format svg produit un VRAI fichier SVG", {
+  skip_if_not_installed("svglite")
+  p <- .tsx_plot()
+  tmp <- tempfile(fileext = ".svg")
+  on.exit(unlink(tmp), add = TRUE)
+
+  ts_export_plot(tmp, p, width = 8, height = 6, format = "svg")
+
+  expect_true(file.exists(tmp))
+  expect_gt(file.size(tmp), 0)
+  # Un SVG valide commence par <?xml ... <svg et declare le namespace SVG.
+  # NB : svglite ecrit les attributs avec des GUILLEMETS SIMPLES
+  # (xmlns='...') -> ne jamais asserter la variante a guillemets doubles.
+  txt <- paste(readLines(tmp, warn = FALSE), collapse = "\n")
+  expect_match(txt, "<svg", fixed = TRUE)
+  expect_match(txt, "http://www.w3.org/2000/svg", fixed = TRUE)
+})
+
+test_that("PLOT-S5 : le format devine depuis l'extension .svg est bien 'svg'", {
+  # ggsave(device = NULL) devine depuis l'extension -> .svg doit produire du
+  # vectoriel, pas du PNG renomme.
+  skip_if_not_installed("svglite")
+  p <- .tsx_plot()
+  tmp <- tempfile(fileext = ".svg")
+  on.exit(unlink(tmp), add = TRUE)
+
+  ts_export_plot(tmp, p, width = 8, height = 6)   # pas de `format` : extension seule
+  txt <- paste(readLines(tmp, warn = FALSE), collapse = "\n")
+  expect_match(txt, "<svg", fixed = TRUE)
+})
+
+test_that("PLOT-S5 : un ComplexHeatmap se dessine sur un device svglite", {
+  # Les 2 sites a device BRUT (heatmap bulk_de, heatmap_hier de mod_sc_viz)
+  # ouvrent svglite::svglite() a la main : ComplexHeatmap n'est pas un ggplot,
+  # ts_export_plot() (ggsave) ne s'y applique pas. Ce test prouve que le rendu
+  # fonctionne reellement sur ce device — pas seulement que le fichier existe.
+  skip_if_not_installed("svglite")
+  skip_if_not_installed("ComplexHeatmap")
+  m  <- matrix(seq_len(20), nrow = 4,
+               dimnames = list(paste0("g", 1:4), paste0("c", 1:5)))
+  ht <- ComplexHeatmap::Heatmap(m, name = "Z-score")
+  tmp <- tempfile(fileext = ".svg")
+  on.exit(unlink(tmp), add = TRUE)
+
+  svglite::svglite(tmp, width = 9, height = 8)
+  ComplexHeatmap::draw(ht)
+  grDevices::dev.off()
+
+  expect_true(file.exists(tmp))
+  expect_gt(file.size(tmp), 0)
+  txt <- paste(readLines(tmp, warn = FALSE), collapse = "\n")
+  expect_match(txt, "<svg", fixed = TRUE)
+  expect_match(txt, "http://www.w3.org/2000/svg", fixed = TRUE)
 })
 
 # --- 2. GARANTIE zero changement de comportement ------------------------------

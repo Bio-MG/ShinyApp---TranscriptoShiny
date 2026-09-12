@@ -215,8 +215,15 @@
   })
 
   output$dl_volcano_png <- downloadHandler(
-    filename = function() paste0("volcano_", shared_rv$active_contrast, "_", Sys.Date(), ".png"),
-    content  = function(file) ts_export_plot(file, volcano_plot(), width = 8, height = 6, dpi = 300)
+    # PLOT-S5 — `volcano_export_fmt` etait un controle MORT : declare dans l'UI
+    # mais jamais lu, et l'extension `.png` codee en dur ici faisait qu'un choix
+    # "PDF" produisait quand meme un PNG. Le format pilote desormais le fichier
+    # ET le device, comme MA-Plot juste en dessous.
+    filename = function() paste0("volcano_", shared_rv$active_contrast, "_", Sys.Date(),
+                                 ".", input$volcano_export_fmt %||% "png"),
+    content  = function(file) ts_export_plot(file, volcano_plot(), width = 8, height = 6,
+                                             dpi = 300,
+                                             format = input$volcano_export_fmt %||% "png")
   )
 
   # =========================================================================
@@ -272,13 +279,13 @@
   output$dl_ma_png <- downloadHandler(
     filename = function() paste0("ma_plot_", shared_rv$active_contrast, "_", Sys.Date(),
                                  ".", input$ma_export_fmt %||% "png"),
-    content  = function(file) {
-      if (identical(input$ma_export_fmt, "pdf")) {
-        ts_export_plot(file, ma_plot(), width = 8, height = 6, format = "pdf")
-      } else {
-        ts_export_plot(file, ma_plot(), width = 8, height = 6, dpi = 300)
-      }
-    }
+    # PLOT-S5 — le format pilote directement `device` : la branche if/else
+    # historique (pdf vs reste) ne connaissait que png/pdf, elle ignorait "svg".
+    # `dpi` est sans effet sur un device vectoriel (ggsave l'accepte et
+    # l'ignore) : le passer inconditionnellement ne change rien au PDF.
+    content  = function(file) ts_export_plot(file, ma_plot(), width = 8, height = 6,
+                                             dpi = 300,
+                                             format = input$ma_export_fmt %||% "png")
   )
 
   # =========================================================================
@@ -387,12 +394,19 @@
     global_data$language                     # i18n trigger
     annot <- if (nzchar(input$heatmap_annot %||% "")) input$heatmap_annot else NULL
     pal   <- shared_rv$bulk_palette %||% "default"
+    # PLOT-S4 — reglages de clustering. k < 2 (ou vide) = pas de decoupage,
+    # ce qui reproduit exactement le rendu anterieur au jalon.
+    k_row <- suppressWarnings(as.integer(input$heatmap_k_row %||% 0))
+    if (length(k_row) != 1L || is.na(k_row) || k_row < 2L) k_row <- NULL
     plot_heatmap_bulk(shared_rv$vst_mat, heatmap_genes(), global_data$bulk_obj$metadata,
                       annotation_col = annot, palette = pal,
                       manual_colors = if (identical(pal, "manual")) heatmap_manual_colors() else NULL,
                       subtitle = .heatmap_stat_subtitle(),
                       theme_choice = input$plot_theme %||% TS_THEME_DEFAULT,
                       base_size    = input$base_size %||% TS_BASE_SIZE_DEFAULT,
+                      clustering_distance = input$heatmap_clust_distance %||% "euclidean",
+                      clustering_method   = input$heatmap_clust_method %||% "complete",
+                      k_row               = k_row,
                       tr = .tr_fn(global_data))
   }
 
@@ -401,9 +415,17 @@
   })
 
   output$dl_heatmap <- downloadHandler(
-    filename = function() paste0("heatmap_", shared_rv$active_contrast, "_", Sys.Date(), ".", input$heatmap_export_fmt),
+    filename = function() paste0("heatmap_", shared_rv$active_contrast, "_", Sys.Date(), ".",
+                                 input$heatmap_export_fmt %||% "png"),
+    # PLOT-S5 — ComplexHeatmap n'est pas un ggplot : ts_export_plot() (ggsave)
+    # ne s'applique pas ici, on ouvre donc le device nous-memes. Branche `svg`
+    # ajoutee (svglite), meme taille physique 9x8 in que pdf/png. Les branches
+    # png/pdf sont inchangees.
     content  = function(file) {
-      if (input$heatmap_export_fmt == "pdf") {
+      fmt <- input$heatmap_export_fmt %||% "png"
+      if (identical(fmt, "svg")) {
+        svglite::svglite(file, width = 9, height = 8)
+      } else if (identical(fmt, "pdf")) {
         pdf(file, width = 9, height = 8)
       } else {
         png(file, width = 9, height = 8, units = "in", res = 300)

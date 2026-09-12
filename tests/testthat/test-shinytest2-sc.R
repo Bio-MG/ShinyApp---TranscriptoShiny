@@ -30,6 +30,9 @@ test_that("Single-Cell domain: expected namespaced inputs exist", {
     "sc-mapping-run_mapping",   # regression guard: real NESTED mapping module
     "sc-pipeline-run_pipeline", "sc-annotation-run_annot",
     "sc-viz-viz_type", "sc-markers-run_markers", "sc-pathways-run_pathway",
+    # PLOT-S4 — reglages de clustering de la heatmap hierarchique
+    # (mod_sc_viz.R, conditionalPanel de viz_type == 'heatmap_hier').
+    "sc-viz-hier_clust_distance", "sc-viz-hier_clust_method", "sc-viz-hier_k_row",
     # Corrélation (mod_sc_corr.R -> ns("corr"))
     "sc-corr-target_gene", "sc-corr-cor_method", "sc-corr-find_correlated",
     # Trajectory (mod_sc_trajectory.R -> ns("trajectory"))

@@ -194,8 +194,8 @@ mod_sc_trajectory_output_ui <- function(id) {
                                    i18n$t("Export Distribution CSV"), class = "btn-sm btn-info w-100")),
           column(4, downloadButton(ns("dl_genes_pseudotime"),
                                    i18n$t("Export Gènes/Pseudo CSV"), class = "btn-sm btn-info w-100")),
-          column(4, selectInput(ns("traj_export_fmt"), i18n$t("Format export plots (PNG/PDF)"),
-                                choices = c("PNG" = "png", "PDF" = "pdf"), selected = "png", width = "100%"))
+          column(4, selectInput(ns("traj_export_fmt"), i18n$t("Format export plots (PNG/PDF/SVG)"),
+                                choices = ts_export_format_choices_ui(), selected = "png", width = "100%"))
         )
       ),
       nav_panel(
@@ -803,7 +803,7 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
       }
     )
 
-    # ── 7. Plot Exports (Step-3.7: fixed + format-aware PNG/PDF via
+    # ── 7. Plot Exports (Step-3.7: fixed + format-aware PNG/PDF/SVG via
     #    input$traj_export_fmt, all routed through the shared plot helpers) ──
     output$dl_trajectory_png <- downloadHandler(
       filename = function() paste0("trajectory_plot_", Sys.Date(), ".", input$traj_export_fmt %||% "png"),
@@ -840,7 +840,7 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
         }, error = function(e) NULL)
         req(p)
         ts_export_plot(file, p, width = 8, height = 6, dpi = 300,
-               format = if ((input$traj_export_fmt %||% "png") == "pdf") "pdf" else "png")
+               format = input$traj_export_fmt %||% "png")
       }
     )
     output$dl_dist_png <- downloadHandler(
@@ -853,7 +853,7 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
                       error = function(e) NULL)
         req(p)
         ts_export_plot(file, p, width = 7, height = 5, dpi = 300,
-               format = if ((input$traj_export_fmt %||% "png") == "pdf") "pdf" else "png")
+               format = input$traj_export_fmt %||% "png")
       }
     )
     output$dl_genes_png <- downloadHandler(
@@ -867,7 +867,7 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
                       error = function(e) NULL)
         req(p)
         ts_export_plot(file, p, width = 8, height = 6, dpi = 300,
-               format = if ((input$traj_export_fmt %||% "png") == "pdf") "pdf" else "png")
+               format = input$traj_export_fmt %||% "png")
       }
     )
   }) # /moduleServer
