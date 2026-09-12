@@ -68,7 +68,14 @@ bioc_packages <- c(
   # "Slingshot — inférence de lignées"). Bioconductor :
   #   BiocManager::install("slingshot")
   # Absent => seul le pseudotemps exploratoire kNN reste disponible.
-  "slingshot"
+  "slingshot",
+  # STAT-S1 — correction de batch ComBat-seq. Bioconductor :
+  #   BiocManager::install("sva")
+  # Volontairement ICI (et non dans required_packages) : la correction de
+  # batch est un etage OPTIONNEL du pipeline bulk. Absent, l'app demarre
+  # normalement et run_combat_seq() renvoie une erreur classee
+  # `missing_dependency` citant le remede — jamais de repli silencieux.
+  "sva"
 )
 
 

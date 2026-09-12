@@ -13,29 +13,52 @@
 > Mis à jour à la fin de chaque session, dans le même commit que le travail.
 
 **Branche** : `main` (travail direct sur main, décision utilisateur).
-**Dernier commit fonctionnel de référence** : `4dee553` — feat(plots): ggrepel
-volcano, 300dpi, pdf export, stat subtitles (PLOT-Q1..Q5).
+**Dernier commit fonctionnel de référence** : `2cd39b4` — feat(plots): PLOT-S3
+`ts_datatable()` (wrapper DT harmonisé, 6 sites).
 **Dernière consolidation documentaire** : commit `docs(status):` — création de
 `docs/STATUS.md` et `docs/ROADMAP.md` (index + état), dé-obsolescence des
 roadmaps (voir `git log --oneline -- docs/`).
 
-> **▶ PROCHAINE ÉTAPE** : **PLOT-S4** (heatmap unifiée « publication-ready »,
-> effort **L**) — ou arbitrage 4E-4 (pool async DA), moins coûteux.
+> **▶ PROCHAINE ÉTAPE** : **STAT-S2 — réseau d'enrichissement** (`emapplot` /
+> `cnetplot`, effort **M** ; `enrichplot` est **déjà présent**). `STAT-S1` vient
+> d'être livré (§2q). Direction **explicitement demandée par l'utilisateur le
+> 2026-09-12**, à traiter ensuite : **analyse multi-échantillons avec son propre
+> pipeline**, puis **pseudobulk**, « **chacun comme le module Spatial** » —
+> chantier **neuf et non cadré** : à transformer en roadmap dédiée **avant** de
+> le planifier (même situation que Bulk V2, §2h).
+>
+> **PLOT-S6 est CLOS** (décision utilisateur du 2026-09-12) : il était **déjà
+> satisfait par l'arbre** — le routeur `renderUI` statique/interactif existait
+> déjà (`modules/sc/mod_sc_viz.R:635`) et Spatial est déjà plotly. Le repli
+> **PLOT-S6′** n'est **pas retenu** (§2o). Le volet « présentation » est terminé.
 > ⚠️ **Décision ouverte** : déployer les boutons d'export DT sur les ~43 tables
 > restantes + normaliser `pageLength` = changement **visible** → jalon dédié
 > (`docs/contracts/PLOT_DATATABLE_CONTRACT.md` §6).
 >
-> **2 commits locaux non poussés** : `612eddf` (finition Bulk V2),
-> `0912c24` (PLOT-S2). **En cours** : **PLOT-S3** (`ts_datatable()`).
+> **4 commits locaux non poussés** : `612eddf` (finition Bulk V2),
+> `0912c24` (PLOT-S2), `2cd39b4` (PLOT-S3) et **STAT-S1** (ce commit, §2q).
+> **Restent NON commités, sur décision utilisateur** : le correctif Milo (§2k),
+> **PLOT-S4** (§2m) et **PLOT-S5** (§2n). La suite complète n'a plus **aucun
+> échec** (hors segfault de sortie, §2l, sans impact sur les résultats).
 >
-> **Livré :** **PLOT-S1 ✅** (`ts_theme()` partagé + propagation Bulk/SC/Spatial,
-> 44 sites), **PLOT-S2 ✅** (`ts_export_plot()`, 25 sites), **4D-3 — chemin de
-> données ✅** (10X/Seurat → entrée CellChat, sans dépendance nouvelle),
-> **Bulk V2 / batch-QC ✅** (commité par l'utilisateur `aa92f24`, puis **fini**
-> `612eddf` — erreur de test corrigée, dette i18n soldée, cf. §5bis).
+> **Serveur MCP local** (`scripts/mcp_server.R` + `mcp.examples/`) : vérifié
+> fonctionnel le 2026-09-12 (§2p) — mais **hors de toute roadmap**.
 >
-> Rapports de stage 6 sections : `docs/ROADMAP_HANDOFF_STAGE_PLOT_S1.md` et
-> `docs/ROADMAP_HANDOFF_STAGE_CELLCHAT_INPUT.md`. Handoff :
+> **Livré :** **STAT-S1 ✅** (ComBat-seq — onglet QC Batch du Filtrage, contrat
+> gelé, 126 assertions, cf. §2q), **PLOT-S1 ✅** (`ts_theme()` partagé +
+> propagation Bulk/SC/Spatial, 44 sites), **PLOT-S2 ✅** (`ts_export_plot()`, 25
+> sites), **PLOT-S3 ✅** (`ts_datatable()`, 6 sites), **PLOT-S4 ✅**
+> (`ts_complex_heatmap()` — 3 heatmaps ComplexHeatmap unifiées, cf. §2m),
+> **PLOT-S5 ✅** (SVG exposé dans les 5 sélecteurs d'export, cf. §2n), **4D-3 —
+> chemin de données ✅** (10X/Seurat → entrée CellChat, sans dépendance
+> nouvelle), **Bulk V2 / batch-QC ✅** (commité par l'utilisateur `aa92f24`,
+> puis **fini** `612eddf` — erreur de test corrigée, dette i18n soldée, cf.
+> §5bis), **Milo — 16 échecs ✅ RÉSOLUS** (cause racine : fuite d'option
+> `Matrix.warnDeprecatedCoerce` par `GSVA::.onLoad()`, cf. §2k).
+>
+> Rapports de stage 6 sections : `docs/ROADMAP_HANDOFF_STAGE_PLOT_S1.md`,
+> `docs/ROADMAP_HANDOFF_STAGE_CELLCHAT_INPUT.md` et
+> **`docs/ROADMAP_HANDOFF_STAGE_STAT_S1.md`** (dernier livré). Handoff :
 > `docs/ROADMAP_HANDOFF_NEXT.md`. Rien à fournir côté données.
 
 ---
@@ -67,9 +90,10 @@ Aucun blocage. Séquençables indépendamment du reste.
 | ✅ PLOT-S1 | `ts_theme()` — thème + base_size partagés Bulk/SC/Spatial | — | M |
 | ✅ PLOT-S2 | `ts_export_plot()` — helper dpi/format unifié (25 sites) | PLOT-S1 | M |
 | ✅ PLOT-S3 | `ts_datatable()` — wrapper DT harmonisé (6 sites) | — | M |
-| PLOT-S4 | Heatmap unifiée "publication-ready" | PLOT-S1/S2/S3 | L |
-| PLOT-S5 | Export SVG (`svglite`) | PLOT-S2 | S |
-| PLOT-S6 | Toggle plotly étendu à SC/Spatial | — | M |
+| ✅ PLOT-S4 | `ts_complex_heatmap()` — 3 heatmaps ComplexHeatmap unifiées | PLOT-S1/S2/S3 | L |
+| ✅ PLOT-S5 | Export SVG (`svglite`) — exposé dans les 5 sélecteurs d'export | PLOT-S2 | S |
+| ✅ PLOT-S6 | Toggle plotly étendu à SC/Spatial — **déjà satisfait par l'arbre** : le routeur `renderUI` demandé existe (`mod_sc_viz.R:635`) et Spatial est déjà plotly | — | **0** |
+| ❌ PLOT-S6′ | *(résiduel)* repli **statique** optionnel côté SC — **non retenu** : décision utilisateur du 2026-09-12 = clore PLOT-S6, ne pas ouvrir le repli (§2o) | — | S |
 
 > ⚠️ **PLOT-S1 — piège vérifié le 2026-09-10** : la roadmap propose
 > `ts_theme(..., base_size = 12)`, mais **le défaut de ggplot2 est 11** et
@@ -87,7 +111,7 @@ Aucun blocage. Séquençables indépendamment du reste.
 | ✅ STAT-Q2 | Afficher `lfcSE` (déjà calculé par DESeq2) | S |
 | ✅ STAT-Q3 | Note outliers Cook's distance | S |
 | ✅ STAT-Q4 | Export Excel pour les pathways | S |
-| STAT-S1 | ComBat-seq (dépendance `sva`) dans Filtrage | L |
+| ✅ STAT-S1 | **ComBat-seq** (`sva`) — onglet « QC Batch » du Filtrage, contrat gelé — **2026-09-12** (§2q) | L |
 | STAT-S2 | Réseau d'enrichissement (`emapplot`/`cnetplot`) | M |
 | STAT-S3 | Pattern/profile clustering (kmeans MVP, Mfuzz en v2) | L |
 
@@ -96,7 +120,7 @@ Aucun blocage. Séquençables indépendamment du reste.
 | ID | Contenu | Prérequis |
 |---|---|---|
 | NEW-1 | Dose-réponse / time-course (`drc`) | — |
-| NEW-2 | Fusionner des jeux de données | STAT-S1 (réutilise `run_combat_seq`) |
+| NEW-2 | Fusionner des jeux de données | ✅ **prérequis levé** — `STAT-S1` livré le 2026-09-12 (`run_combat_seq()` disponible) |
 | NEW-3 | Réseau PCSF / interactome | **Backlog conditionnel** — interactome local à évaluer vs contrainte offline |
 
 ### 2d. Propositions V1.x (parking officiel)
@@ -223,34 +247,380 @@ docs/
 Garde les notes locales, rend les contrats traçables. **Non appliqué** —
 décision de l'utilisateur.
 
-### 2k. ⚠️ Santé de la suite de tests — 16 échecs, **tous** Milo
+### 2k. ✅ Santé de la suite — 16 échecs Milo **RÉSOLUS** (cause racine : fuite d'option GSVA)
 
-**Mesuré le 2026-09-11** (suite complète, plafond de rapport relevé à 500 —
-le plafond par défaut de 10 **masquait** 6 échecs supplémentaires).
+**Ouvert le 2026-09-11, résolu le 2026-09-12.** Les 16 échecs (tous Milo)
+n'étaient **pas** un bug de Milo : Milo en était la **victime**.
 
-| Fichier | Échecs |
-|---|---|
-| `test-sc-milo-contract.R` | 8 |
-| `test-sc-milo-views.R` | 4 |
-| `test-milo-contract-freeze.R` | 3 |
-| `test-sc-da-cross-views.R` | 1 |
+| Fichier | Échecs (avant) | Après |
+|---|---|---|
+| `test-sc-milo-contract.R` | 8 | **0** |
+| `test-sc-milo-views.R` | 4 | **0** |
+| `test-milo-contract-freeze.R` | 3 | **0** |
+| `test-sc-da-cross-views.R` | 1 | **0** |
 
-**Cause unique** : miloR 2.2.0 déclenche la dépréciation Matrix 1.7-5
-`'as(<dgTMatrix>, "dgCMatrix")' is deprecated`. Or `run_milo_da()` **escalade
-les warnings en `milo_error`** → un avertissement bénin devient un échec dur.
+**Chaîne causale complète (vérifiée par traçage de pile à l'exécution) :**
 
-**Vérifié indépendant du travail en cours** : ces tests ne sourcent que
-`R/core/*` et `R/sc/*` — ni Bulk, ni i18n, ni `R/plotting/`. PRÉSENT AVANT
-PLOT-S1, PLOT-S2 ET `aa92f24`.
+1. `bulk_provenance_session_packages()` (`R/bulk/bulk_provenance.R`) charge les
+   namespaces de 13 packages pour **lire leurs versions** — dont `GSVA`.
+2. **`GSVA::.onLoad()` est, mot pour mot,
+   `function(libname, pkgname) { options(Matrix.warnDeprecatedCoerce = 2) }`**
+   — et ne restaure **jamais** l'option. Charger GSVA laisse donc un **état
+   global** derrière lui, pour tout le reste de la session.
+3. Avec `Matrix.warnDeprecatedCoerce = 2`, `Matrix::Matrix.DeprecatedCoerce()`
+   exécute `oop <- options(warn = 2L)` **avant** d'appeler `.Deprecated()` → la
+   dépréciation devient une **erreur fatale** (d'où le « *(converted from
+   warning)* » du message).
+4. Milo appelle `miloR::calcNhoodDistance()`, qui fait
+   `lapply(value, function(X) as(X, "dgCMatrix"))` sur des `dgTMatrix` →
+   `as(<dgTMatrix>, "dgCMatrix")` est déprécié (Matrix 1.7-5) → erreur.
+5. Le `tryCatch` de `run_milo_da()` la convertit en `compute_failed`
+   (`milo_error`).
 
-**À traiter séparément** — la piste est de ne pas escalader les dépréciations
-tierces en erreur fatale (distinguer warning de dépendance vs warning
-statistique), pas de modifier le comportement statistique de Milo.
+**C'est donc un vrai bug inter-modules de production, pas un artefact de test** :
+importer un jeu bulk suffisait à rendre **toute** dépréciation Matrix fatale
+dans l'application entière.
 
-> ⚠️ **Piège d'outillage** : `testthat::test_dir()` s'arrête de *rapporter*
-> après 10 échecs (« Maximum number of 10 failures reached ») mais **continue
-> d'exécuter**. Pour un bilan honnête :
+**Correction** — `bulk_provenance_session_packages()` relève l'option avant le
+chargement et la **restaure à l'identique** (absente → retirée). Une fonction
+qui ne fait que *constater* des versions ne doit laisser aucun état global.
+Test de non-régression ajouté dans `test-bulk-provenance.R` (40 → 42 assertions).
+
+**Pourquoi les tests passaient en isolation** : sans passage préalable par
+`bulk_provenance_session_packages()`, GSVA n'est jamais chargé → l'option reste
+absente (défaut `NA`) → Matrix prend la branche **`message()`** (bénigne, avalée
+par `suppressMessages`) au lieu de la branche erreur. Le bug n'apparaît donc que
+dans le contexte de la suite complète (ordre alphabétique : `bulk` avant `milo`).
+
+**Validation — suite complète du 2026-09-12** : `test_dir()` avec
+`SummaryReporter(max_reports = 500L)` → **0 échec** (aucune section `Failed`),
+**32 avertissements** (tous bénins : « built under R 4.4.3 » et « Coercing to
+dgCMatrix »), `EXIT=139` = le segfault de sortie `igraph` du §2l, **sans effet
+sur les résultats** (le bilan est imprimé avant le crash). C'est le **nouveau
+baseline**, contre 16 échecs avant correction.
+
+**Leçon** : une fonction utilitaire qui appelle `requireNamespace()` sur une
+liste de packages hérite des `.onLoad()` de **tous** leurs graphes de
+dépendances. C'est un vecteur d'effets de bord globaux — à encadrer.
+
+> ⚠️ **Piège d'outillage (toujours valable)** : `testthat::test_dir()` s'arrête
+> de *rapporter* après 10 échecs (« Maximum number of 10 failures reached »)
+> mais **continue d'exécuter**. Pour un bilan honnête :
 > `testthat::test_dir("tests/testthat", reporter = testthat::SummaryReporter$new(max_reports = 500L))`
+
+### 2l. ⚠️ SEGFAULT en sortie de session R — `igraph` (préexistant, **non corrigé**)
+
+**Mesuré le 2026-09-12.** Un processus R qui a chargé `igraph` **segfault en
+sortie** (exit code 139), même sans exécuter la moindre fonction d'igraph.
+
+```
+Rscript --vanilla -e 'library(igraph)'      # => Segmentation fault (139)
+Rscript --vanilla -e 'cat("no igraph\n")'   # => 0   (témoin)
+```
+
+**Isolé :** c'est **igraph** (et non miloR, ni renv, ni le projet) :
+`scran` et `scater` crashent aussi (ils dépendent d'igraph) ; `edgeR`,
+`BiocNeighbors`, `SingleCellExperiment`, `SummarizedExperiment`, `beachmat`,
+`Rcpp` sortent proprement.
+
+**Stratégies de sortie testées — toutes échouent** : `q("no", runLast = FALSE)`,
+`detach("package:igraph", unload = TRUE)`, `gc()` explicite. Les deux
+installations d'igraph (renv 2.3.3 **et** système 2.2.1) crashent.
+
+**Piste** : les deux binaires igraph ont été compilés **sous R 4.4.3** alors que
+R est en **4.4.2** — un décalage ABI au déchargement de la DLL est le suspect
+le plus probable. **Correctif = action sur l'environnement** (réinstaller un
+binaire igraph pour R 4.4.2, ou passer R en 4.4.3) → **à trancher par
+l'utilisateur**, non appliqué.
+
+**Impact réel : faible.** Le résumé testthat est **imprimé avant** le crash
+(« ══ DONE ══ » puis segfault) → les résultats sont valides ; seul le **code de
+sortie** du processus est faux. Dans l'app Shiny, R ne sort qu'à l'arrêt de
+l'app, après écriture des sorties.
+
+> 🔁 **CORRECTION (2026-09-12, mesuré lors de l'audit du serveur MCP §2p) :
+> l'attribution à `igraph` est INCOMPLÈTE — ce n'est pas igraph qui est en
+> cause, c'est une classe de paquets.**
+>
+> Testé un par un, `Rscript -e 'library(<pkg>)'` (renv du projet actif),
+> code de sortie :
+>
+> | Paquet | Sortie | Paquet | Sortie |
+> |---|---|---|---|
+> | `igraph` | **139** | `jsonlite` | **0** |
+> | `rlang` | **139** | `R6` | **0** |
+> | `shiny` | **139** | *(aucun `library()`)* | **0** |
+> | `mcptools` | **139** | | |
+> | `btw` | **139** | | |
+> | `ellmer` | **139** | | |
+>
+> `mcptools` + `btw` chargés → **`igraph` n'est PAS dans `loadedNamespaces()`**
+> et le processus sort quand même en 139. Le déclencheur n'est donc pas igraph
+> *en particulier*. L'hypothèse ABI du paragraphe précédent (binaires compilés
+> sous R 4.4.3 vs R 4.4.2) reste la piste la plus plausible, mais **le
+> correctif doit viser l'environnement R dans son ensemble, pas igraph seul**.
+> ⚠️ **Conséquence pour le serveur MCP (§2p)** : un client MCP peut
+> interpréter un code de sortie 139 comme un **crash** (journal d'erreur,
+> redémarrage du serveur). Le serveur fonctionne (§2p) — c'est bien un défaut
+> de *teardown*, pas de service.
+
+---
+
+### 2m. ✅ PLOT-S4 — heatmap ComplexHeatmap unifiée (`ts_complex_heatmap()`)
+
+**Livré le 2026-09-12** (effort **L**, dernier jalon de la série
+`plot-shared-helpers`). Nouveau fichier `R/plotting/complex_heatmap.R` +
+contrat gelé `docs/contracts/PLOT_HEATMAP_CONTRACT.md` + tests
+`tests/testthat/test-plot-complex-heatmap.R` (103 assertions).
+
+**Le problème** : trois implémentations ComplexHeatmap divergentes
+(`plot_heatmap_bulk`, `plot_sample_correlation_heatmap`,
+`build_sc_hierarchical_heatmap`) — **et aucune des trois n'était testée**.
+
+**Mesure préalable** : les trois divergent sur **9 axes** (`name`, rampe, noms
+de lignes/colonnes, titre, `cell_fun`, clustering, mode de dessin, repli sans
+ComplexHeatmap, traduction du titre). Aucune valeur n'est neutre → chaque
+wrapper passe la sienne **explicitement** (même discipline que `base_size` en
+PLOT-S1 et `page_length` en PLOT-S3).
+
+**Décision : zéro changement de comportement.** Les 3 sites deviennent de fins
+wrappers. Deux écarts sont **volontairement préservés** :
+`plot_sample_correlation_heatmap` ne dessine toujours pas (elle rend l'objet,
+l'appelant fait `print()`) → elle reste **non protégée** contre « figure margins
+too large » ; et le `name` SC reste `"Z-score"` non traduit. Deux autres constats
+sont documentés sans être corrigés : le repli `GetAssayData(slot=)` est *defunct*
+depuis SeuratObject 5.0, et **`subtitle` de `plot_heatmap_bulk()` n'est lu nulle
+part** — PLOT-Q3 est donc un **no-op sur la heatmap** (il fonctionne sur
+Volcano/MA). Cf. contrat §6.
+
+**Nouveautés** : choix **distance/méthode** de clustering, **`k_row`**
+(`row_split`, découpage du dendrogramme de lignes en k groupes), et annotations
+**multiples** (`col_meta`/`row_meta` en liste nommée ou `data.frame`).
+
+**Vérification** : le test **reconstruit la construction historique** et compare
+propriété par propriété (matrice, `name`, titre, affichage des noms, **couleurs
+de rampe échantillonnées**, clustering, annotation) — les rampes sont comparées
+par leurs couleurs, deux `colorRamp2` créés séparément n'étant jamais
+`identical()`. Suite ciblée : **0 échec** (`bulk-helpers`, `sc-helpers`,
+`plot-theme`, `plot-datatable`, `plot-export`, `stats-quickwins`,
+`bulk-provenance`, `plot-complex-heatmap`). Gate de duplication : **0 erreur /
+3 avertissements** (baseline inchangée).
+
+**e2e `shinytest2`** : **13 tests, 0 échec, 0 avertissement** (bulk 4, sc 5,
+spatial 4) — l'app démarre et navigue les 3 domaines sans erreur Shiny. Les
+**garde-fous de dérive de namespace** ont été étendus aux **6 nouveaux inputs**
+(`bulk-de-heatmap_clust_distance` / `_clust_method` / `_k_row` et
+`sc-viz-hier_clust_distance` / `_clust_method` / `_k_row`) : un renommage
+accidentel côté UI serait désormais détecté au lieu de retomber silencieusement
+sur le `%||%` du serveur.
+
+**i18n** : 3 clés ajoutées pour les nouveaux contrôles + 1 clé **résiduelle**
+(`"Apparence des graphiques"`, utilisée par PLOT-S1 mais jamais reportée dans
+`translation.json` → fuite de français dans l'UI anglaise, corrigée ici).
+`translation.json` passe de **2080 à 2084 entrées**, toujours valide, 0 doublon.
+
+**⚠️ Non commité** : sur décision utilisateur (cf. en-tête).
+
+---
+
+### 2n. ✅ PLOT-S5 — SVG exposé dans les 5 sélecteurs d'export
+
+**Décision utilisateur (2026-09-12) : « exposer SVG partout »** — changement
+**visible** assumé (une entrée de menu en plus), donc jalon dédié.
+
+**Le constat qui a changé la donne** : la fiche
+(`ROADMAP_presentation_stats.md` §3) annonce « nouvelle dépendance légère ».
+**C'est faux** — `svglite` **2.2.2 était déjà installé ET déjà présent dans
+`renv.lock`**, et la branche `format == "svg"` de `ts_export_plot()` **existait
+déjà** (PLOT-S2). Le vrai problème : **la branche était INATTEIGNABLE depuis
+l'application** — sur 31 appels à `ts_export_plot()`, aucun ne passait
+`format = "svg"`, et aucun sélecteur UI ne proposait `SVG`.
+
+**Livré**
+
+- **Source unique des choix** : `ts_export_format_choices_ui()`
+  (`R/plotting/export.R`) dérive le menu de `TS_EXPORT_FORMATS`. Avant, chacun
+  des 5 sélecteurs codait son propre `c("PNG"="png","PDF"="pdf")` — c'est
+  exactement ce qui a laissé `volcano_export_fmt` dériver jusqu'à devenir mort.
+  Une **garde structurelle** du test vérifie que les 5 consomment ce helper.
+- **Les 5 sélecteurs proposent désormais SVG** : `volcano_export_fmt`,
+  `ma_export_fmt`, `heatmap_export_fmt` (`mod_bulk_de_ui.R`), `traj_export_fmt`
+  (`mod_sc_trajectory.R`), `export_format` (`mod_sc_viz.R`).
+- **2 sites à device brut complétés** — ComplexHeatmap n'est pas un ggplot,
+  `ggsave()` ne s'y applique pas : `mod_bulk_de_viz.R` (heatmap, 9×8 in) et le
+  cas `heatmap_hier` de `mod_sc_viz.R` reçoivent une branche
+  `svglite::svglite()`. Branches `png`/`pdf` inchangées.
+- **`svglite` déclaré** dans `required_packages` (`global.R`) : la branche ne
+  retombe plus silencieusement sur `png`. **`renv.lock` inchangé** — aucune
+  dépendance réellement nouvelle. 3 listes disjointes, 0 doublon,
+  40 requis / 5 optionnels / 7 Bioc.
+- **i18n** : le libellé du sélecteur Trajectoire passe de
+  « Format export plots (PNG/PDF) » à « … (PNG/PDF/SVG) » (clé FR + valeur EN
+  mises à jour dans `translation.json` ; l'ancienne clé n'était référencée
+  qu'ici). Les **libellés de choix** restent techniques et **non traduits**
+  (« PNG » / « PDF (vectoriel) » / « SVG (vectoriel) ») — ce ne sont pas des
+  clés i18n, comportement inchangé depuis PLOT-Q4.
+
+**🐞 Bug corrigé au passage — `volcano_export_fmt` était un contrôle MORT** :
+déclaré dans l'UI (`mod_bulk_de_ui.R`) mais **référencé nulle part**, et
+`dl_volcano_png` codait l'extension `.png` en dur → choisir « PDF (vectoriel) »
+produisait **quand même un PNG**. Le contrôle pilote désormais le nom de fichier
+**et** le device. (Antérieur à PLOT-S5, probablement PLOT-Q4.)
+
+**Écarts assumés, non corrigés** (diff volontairement limité au format) :
+libellés unifiés sur « PDF (vectoriel) » (2 sites disaient déjà ça, 3 disaient
+« PDF » — valeurs inchangées) ; `dl_heatmap` garde son `dev.off()` sans
+`on.exit` (pré-existant) ; `dpi = 300` passé aussi aux devices vectoriels, où
+`ggsave()` l'ignore. Détail : `docs/contracts/PLOT_EXPORT_CONTRACT.md` §5bis.
+
+**Vérification** : `plot-export` **103 assertions / 0 échec** (dont un test qui
+dessine un **vrai ComplexHeatmap sur un device svglite**) ; gate de duplication
+**0 erreur / 3 avertissements** (baseline inchangée).
+
+---
+
+### 2o. ⚠️ PLOT-S6 — **prémisse périmée : le jalon est déjà satisfait** (mesuré 2026-09-12)
+
+**Aucun code écrit.** Mesure préalable exigée par `ROADMAP.md` §3.2 (« l'arbre
+fait foi ») → la fiche `ROADMAP_presentation_stats.md` §3 décrit un travail
+**déjà présent dans le dépôt**.
+
+| Ce que la fiche annonce | Réalité mesurée |
+|---|---|
+| « créer un `renderUI` qui bascule `plotOutput` ↔ `plotlyOutput`, appliqué à 2-3 vues SC » | **`output$plot_container` (`modules/sc/mod_sc_viz.R:635-642`) EST ce routeur** |
+| FeaturePlot / corrélation de gènes « à rendre interactifs » | **déjà `plotlyOutput(ns("plot_interactive"))`** (branche `else`, l. 640-641) |
+| SC — volcano | **déjà plotly, plus riche que Bulk** (tooltip natif construit en R, l. 698-720) |
+| Spatial « déjà interactive » (concession de la fiche) | **confirmé** : `spatial_preview_plot` = `renderPlotly` (l. 1109) + 5 `plotlyOutput` (l. 226/280/289/321/339) |
+| dépendance `plotly` à ajouter ? | **déjà requise** (`global.R:49`) — rien à toucher dans `renv.lock` |
+
+**Le vrai écart est l'inverse de la fiche** : le SC est déjà *interactif par
+défaut* (bascule **automatique par type de vue**, non pilotée par
+l'utilisateur). Ce qui manque, c'est de pouvoir **revenir au statique** — comme
+le font `volcano_interactive` / `ma_interactive` côté Bulk
+(`mod_bulk_de_ui.R:120` et `:142`). Jalon résiduel proposé : **PLOT-S6′**
+(effort **S**).
+
+⚠️ **Si PLOT-S6′ est retenu, le défaut doit rester l'INTERACTIF**
+(`value = TRUE`, à l'inverse de Bulk) : aujourd'hui l'utilisateur SC reçoit du
+plotly sans rien demander — un défaut à `FALSE` serait un changement visuel
+silencieux, interdit par la règle dure n°1.
+
+📌 **Motif systémique — 3ᵉ prémisse périmée d'affilée** : `base_size` (PLOT-S1),
+`pageLength` (PLOT-S3), `plotly` (PLOT-S6). Les fiches §3 datent de l'audit
+initial ; l'arbre a évolué depuis. **Toute fiche §3 doit être re-mesurée avant
+d'être planifiée.** Détail et commandes : `docs/ROADMAP_HANDOFF_STAGE_PLOT_S6.md`.
+
+---
+
+### 2p. Serveur MCP local (`scripts/mcp_server.R`) — ✅ fonctionnel, ⚠️ hors roadmap
+
+Ajouté par l'utilisateur le 2026-09-12. Serveur **MCP stdio** pour ce projet
+(`posit-dev/mcptools` + sous-ensemble léger de `btw` : outils `docs` + `pkg`).
+**N'appartient à aucune roadmap** — même situation que Bulk V2 en son temps
+(§2h).
+
+**Vérifié le 2026-09-12** :
+
+- `Rscript scripts/mcp_server.R --check` → **`mcp_server check: OK`**,
+  `renv_active: TRUE`, `mcptools 1.0.2`, `btw 1.5.0`.
+- Transport **stdio uniquement** (aucun port réseau) — conforme à la contrainte
+  local-first/offline du dépôt.
+- Fichiers : `scripts/mcp_server.R` (118 l.), `mcp.examples/` (5 snippets +
+  README). Tous **non suivis par git**.
+
+**⚠️ Deux points ouverts** :
+
+1. **`renv.lock` désynchronisé.** `mcptools`, `btw`, `ellmer` (+ leurs
+   dépendances) sont installés dans `renv/library/…` (448 paquets) mais
+   **absents de `renv.lock`** (419 entrées) → `renv::status()` reste
+   « out-of-sync ». Sur un **clone neuf**, le serveur ne démarrera pas. La règle
+   du dépôt (« aucun changement de `renv.lock` sans justification documentée »)
+   impose une décision : soit les snapshoter avec justification, soit assumer
+   que l'outillage MCP est **local à cette machine**.
+2. **Segfault de sortie** — le processus sort en **139** (§2l), et la mesure
+   montre que **ce n'est pas propre à igraph** (voir la note ajoutée en §2l).
+
+**Câblage WorkBuddy** : `~/.workbuddy-ai/mcp.json` créé le 2026-09-12
+(`mcpServers.transcriptoshiny-r-btw`). Le serveur **ne s'active pas
+automatiquement** — il faut le « Trust » depuis la gestion des connecteurs.
+`mcp.examples/workbuddy_template.json` passe d'« UNVERIFIED » à **format
+vérifié**.
+
+### 2q. ✅ STAT-S1 — correction de batch **ComBat-seq** (`sva`)
+
+**Livré le 2026-09-12** (effort **L**, 1ᵉʳ jalon du volet statistique
+`STAT-S1..S3`). Onglet **« QC Batch » du Filtrage** (`mod_bulk_filter.R`) :
+section repliable « Correction de batch (optionnel) — ComBat-seq ».
+
+**Fichiers** (contract-first, règle §4 de `ROADMAP.md`) :
+
+| Rôle | Fichier |
+|---|---|
+| Logique pure | `R/bulk/batch_correction.R` (nouveau, ~330 l.) |
+| Tests fonctionnels | `tests/testthat/test-bulk-batch-correction.R` (**57** assertions) |
+| Test de gel | `tests/testthat/test-bulk-batch-correction-contract-freeze.R` (**69** assertions) |
+| Contrat gelé | `docs/contracts/BATCH_CORRECTION_CONTRACT.md` (11 sections) |
+| Seuil déclaré | `config/thresholds.R` → `TS_BULK_BATCH_MIN_SAMPLES_PER_BATCH <- 2L` |
+| Dépendance | `global.R` → `"sva"` ajouté à **`bioc_packages`** (⚠️ **pas** `required_packages`) |
+| Câblage | `app.R` (source), `modules/bulk/mod_bulk_filter.R`, `i18n/translation.json` (**+15** clés) |
+
+**Décisions de conception** :
+
+- **ComBat-seq, pas ComBat classique** : agit sur les **comptages bruts** (modèle
+  binomial négatif) et accepte `group=` — la condition biologique est donc
+  **préservée**, contrairement au ComBat sur matrice transformée qui peut
+  l'effacer. C'est la raison du choix.
+- **Garde `bulk_assert_raw_counts()` = miroir exact** de
+  `bulk_assert_transformed_matrix()` (`bulk_batch_qc.R`) : **même seuil de 0,95**
+  de fraction entière, appliqué dans le sens inverse. Le test de gel vérifie la
+  symétrie (ce que l'une accepte, l'autre le refuse).
+- **Import paresseux** de `sva` (`requireNamespace` au moment de l'appel,
+  **jamais** au `source`) → l'app **démarre sans `sva`** ; la fonctionnalité
+  échoue alors proprement en erreur classée `missing_dependency`.
+- **Zéro duplication** : réutilise `bulk_batch_design_check()` (plan
+  d'expérience / colinéarité), `plot_bulk_pca()` (les deux tracés PCA) et
+  `patchwork::wrap_plots()`. Aucune logique de plan ni de tracé n'est réécrite.
+- **5 états d'erreur gelés** : `invalid_input`, `not_raw_counts`,
+  `degenerate_batch`, `missing_dependency`, `compute_failed` (classe
+  `bulk_batch_correction_error`). Le test de gel **interdit l'inflation
+  silencieuse** (il compte les `state = "…"` du source).
+- **Provenance** : `bulk_batch_correction_label()` **préfixe** la normalisation
+  déclarée (`"<normalisation> + ComBat-seq (batch : X ; groupe : Y)"`) — jamais
+  d'écrasement (principe §4 de `AGENTS.md`).
+- **Idempotence** : la copie « pristine » des comptages filtrés vit **dans le
+  module** (`bc_pristine`), pas dans `shared_rv` — **aucune clé d'état partagé
+  ajoutée**. Le pipeline ne change que sur **clic explicite**.
+
+**Critère d'acceptation (mesuré)** : sur un jeu simulé à comptages binomials
+négatifs sur-dispersés et **effet de lot multiplicatif propre à chaque gène**,
+le **R² du lot sur PC1** passe de **0,74 → 0,23** (< 50 % de l'initial), et
+l'écart entre conditions est **préservé** (> 70 %). Le test vérifie en plus que
+la matrice de sortie **conserve `dimnames`**.
+
+⚠️ **Limite gelée, documentée au contrat §11.1** : un **décalage additif
+uniforme sur tous les gènes n'est PAS corrigé** — ComBat-seq le lit comme un
+**effet de profondeur de séquençage** et l'absorbe par son offset. C'est
+**correct** statistiquement (ce n'est pas un effet de lot), mais c'est un piège
+de test : la 1ʳᵉ version du fixture échouait pour cette raison. Un test
+fonctionnel **fige** ce comportement pour qu'il ne soit pas « corrigé » par
+erreur plus tard.
+
+**Portes franchies** :
+
+| Vérification | Résultat |
+|---|---|
+| Tests ciblés (fonctionnel + gel) | **126 PASS / 0 FAIL / 0 ERROR / 0 SKIP / 0 WARN** |
+| `app.R` se source de bout en bout (UI + server construits) | ✅ `SMOKE_SOURCED: TRUE` |
+| `sva` dans `bioc_packages` (et **pas** `required_packages`) | ✅ mesuré |
+| Porte de duplication (`tools/check_duplication.R … --fail-on-warning`) | **0 erreur / 3 avertissements** = baseline exacte |
+
+> ⚠️ **Note de méthode — le contrôle « doc ↔ code » du test de gel lit l'arbre,
+> pas git.** `docs/` est gitignoré (§2j) : le contrat
+> `docs/contracts/BATCH_CORRECTION_CONTRACT.md` **n'est pas versionné**, comme
+> les 17 autres. Le test `expect_match(doc, "\`nom\`")` vérifie donc le fichier
+> présent sur le disque. Conséquence : sur un **clone neuf**, ce test échoue
+> (contrat absent) alors que le code est intact — c'est le point soulevé par la
+> **décision 4** de `ROADMAP.md` §5, désormais **matérialisé par un test**.
 
 ---
 

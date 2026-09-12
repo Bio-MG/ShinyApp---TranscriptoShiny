@@ -29,11 +29,13 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 | `docs/ROADMAP_HANDOFF_STAGE_11_20.md` | Stages 8–20 (V1.0, livré) + **HANDOFF V1.x** | Historique V1.0 ; entrées V1.x |
 | `docs/ROADMAP_HANDOFF_NEXT.md` | **Prochaine session** : périmètre PLOT-S1, ancres vérifiées, décisions à prendre, prompt à coller | **Au démarrage de la prochaine session** |
 | `docs/ROADMAP_HANDOFF_STAGE_PLOT_Q.md` | Rapport de stage PLOT-Q (6 sections) | Exemple du format de rapport attendu |
-| `docs/ROADMAP_HANDOFF_STAGE_STAT_Q.md` | Rapport de stage STAT-Q (6 sections) | Dernier rapport livré (2026-09-10) |
+| `docs/ROADMAP_HANDOFF_STAGE_STAT_Q.md` | Rapport de stage STAT-Q (6 sections) | Historique du volet statistique |
+| `docs/ROADMAP_HANDOFF_STAGE_PLOT_S6.md` | Mesure PLOT-S6 (6 sections) — **prémisse périmée, jalon déjà satisfait par l'arbre** | Avant de planifier PLOT-S6 / PLOT-S6′ |
+| `docs/ROADMAP_HANDOFF_STAGE_STAT_S1.md` | Rapport de stage STAT-S1 (6 sections) — **ComBat-seq** | **Dernier rapport livré (2026-09-12)** |
 | `docs/proposals/V1X_UX_REFACTOR_PROPOSAL.md` | Conception des lots UX (⚠️ état corrigé en tête) | Avant toute reprise UX |
 | `docs/proposals/CCC_DATA_PATH_ASSESSMENT.md` | 10X → CellChat : faisabilité et chemins | Avant 4D-3 / phases 5–6 |
 | `docs/release/UPGRADE_AND_COMPATIBILITY.md` | §3 = parking officiel V1.x (4D-3, 4E-4, 4F) | Pour les propositions V1.x |
-| `docs/contracts/*.md` | 13 contrats gelés (contract-first) | Avant de toucher un domaine gelé |
+| `docs/contracts/*.md` | **18** contrats gelés (contract-first) — ⚠️ non versionnés (`docs/` gitignoré) | Avant de toucher un domaine gelé |
 | `docs/kanban_roadmap.html` | Tableau visuel (lecture seule, miroir de `STATUS.md`) | Démonstration / vue d'ensemble |
 | `CHANGELOG.md` (racine, suivi par git) | Historique des livraisons | Après un commit notable |
 
@@ -41,12 +43,31 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 
 ## 2. Les quatre flux de travail
 
-> **▶ Prochaine étape recommandée : PLOT-S1** (`ts_theme()` partagé +
-> propagation, flux A). Justification : `ROADMAP_presentation_stats.md` §8
-> ordonne `stat-quickwins` **avant** `plot-shared-helpers` — les deux lots
-> « quick wins » (PLOT-Q1..Q5, STAT-Q1..Q4) sont désormais **livrés**, donc
-> `plot-shared-helpers` est débloqué. Périmètre, ancres vérifiées, décisions à
-> prendre et prompt prêt à coller : **`docs/ROADMAP_HANDOFF_NEXT.md`**.
+> **▶ Prochaine étape : `STAT-S2` — réseau d'enrichissement** (`emapplot` /
+> `cnetplot`, effort **M** ; `enrichplot` est **déjà présent**). **`STAT-S1`
+> (ComBat-seq) a été livré le 2026-09-12** — rapport
+> `docs/ROADMAP_HANDOFF_STAGE_STAT_S1.md`, état `STATUS.md` §2q.
+>
+> Le volet « présentation » (`plot-shared-helpers`) est **terminé et clos** :
+> PLOT-S1..S5 livrés ; **PLOT-S6 était déjà satisfait par l'arbre** (mesure du
+> 2026-09-12, `docs/ROADMAP_HANDOFF_STAGE_PLOT_S6.md`) et le repli **PLOT-S6′
+> n'est pas retenu** (décision utilisateur du 2026-09-12).
+>
+> **Direction utilisateur du 2026-09-12, à cadrer** : **analyse
+> multi-échantillons avec son propre pipeline**, puis **pseudobulk**, « chacun
+> comme le module Spatial ». C'est un chantier **neuf — aucune fiche n'existe** :
+> **à transformer en roadmap dédiée avant toute planification** (même situation
+> que Bulk V2, §2h).
+>
+> Restent ensuite `STAT-S3`, `NEW-1..3` (⚠️ le prérequis de `NEW-2` est **levé**
+> par STAT-S1), ou un arbitrage (`4E-4`, UX 3B/4B/6B — §5).
+
+> 📌 **Règle ajoutée le 2026-09-12 — re-mesurer avant de planifier.**
+> **Trois** fiches §3 de `ROADMAP_presentation_stats.md` se sont révélées
+> périmées d'affilée : `base_size` (PLOT-S1), `pageLength` (PLOT-S3), `plotly`
+> (PLOT-S6). Les fiches ont été rédigées lors de l'audit initial et l'arbre a
+> évolué depuis. **Toute fiche §3 doit être re-mesurée contre le dépôt avant
+> d'être planifiée** — c'est le §3.2 du protocole, appliqué plus tôt.
 
 Chaque flux a sa roadmap et son avancement dans `STATUS.md`. Ils sont
 **indépendants** sauf mention contraire : on peut en mener un seul à la fois,
@@ -54,12 +75,17 @@ mais rien n'oblige à les séquencer entre eux.
 
 ### Flux A — Présentation & statistiques · `ROADMAP_presentation_stats.md`
 Quick wins **tous livrés** : PLOT-Q1..Q5 (`4dee553`) et STAT-Q1..Q4
-(`fda5a81`..`5f3c9f0`). Restent **PLOT-S1..S6**, **STAT-S1..S3**, **NEW-1..3**.
+(`fda5a81`..`5f3c9f0`). Puis **PLOT-S1..S5 livrés** (S1..S3 commités, **S4 et
+S5 non commités** — décision utilisateur) ; **PLOT-S6 déjà satisfait par
+l'arbre** (mesuré 2026-09-12) et **PLOT-S6′ non retenu** → volet présentation
+**clos**. Côté statistiques : **STAT-S1 ✅ livré le 2026-09-12** (ComBat-seq).
+Restent **STAT-S2..S3**, **NEW-1..3**.
 
 Ordre conseillé (fondations d'abord) :
-`PLOT-S1 → PLOT-S2 → PLOT-S3 → PLOT-S4`, puis `PLOT-S5`, `PLOT-S6`.
-`STAT-S1..S3` sont indépendants et parallélisables.
-`NEW-2` dépend de `STAT-S1`.
+`PLOT-S1 → PLOT-S2 → PLOT-S3 → PLOT-S4 → PLOT-S5` ✅ **fait** ; `PLOT-S6` ✅
+**déjà fait par l'arbre** ; `STAT-S1` ✅ **fait**. `STAT-S2` et `STAT-S3` sont
+indépendants et parallélisables. `NEW-2` dépendait de `STAT-S1` → **prérequis
+levé**.
 
 ### Flux B — CCC avancée · `ROADMAP_CCC_ADVANCED.md`
 Phases 1–4 livrées. **Phases 5–10 parkées**, chacune avec sa condition de
@@ -151,6 +177,9 @@ auto dès ≥ 2 échantillons). Les modes 1 et 2 n'existent pas encore — c'est
 | 3 | **Bulk V2** : lui créer une roadmap dédiée ? | Traçabilité du seul chantier sans pilotage |
 | 4 | **`docs/` gitignoré** : garder local, ou versionner `docs/*.md` + `docs/contracts/*.md` ? | Les 13 contrats ne sont pas versionnés — voir la remarque ci-dessous |
 | 5 | **Modes 1/2 du double jeu SC** : priorité et périmètre | Direction produit du module SC |
+| 6 | ~~**PLOT-S6′**~~ — ✅ **TRANCHÉE le 2026-09-12 : PLOT-S6 clos, repli PLOT-S6′ non retenu** | Volet « présentation » **terminé** — voir `docs/ROADMAP_HANDOFF_STAGE_PLOT_S6.md` |
+| 7 | **Outillage MCP** : snapshoter `mcptools`/`btw`/`ellmer` dans `renv.lock` (avec justification), ou assumer qu'ils restent locaux à cette machine ? | Un clone neuf ne peut pas démarrer `scripts/mcp_server.R` tant que ce n'est pas tranché — `STATUS.md` §2p |
+| 8 | **Multi-échantillons + pseudobulk « comme Spatial »** (demandé le 2026-09-12) : créer une roadmap dédiée ? Quel périmètre (Bulk, SC, les deux) ? | Chantier **neuf, sans aucune fiche** — à cadrer avant planification |
 
 > **Remarque sur la décision 4** — garder roadmaps et instructions d'agents
 > locales est un choix défendable. En revanche `docs/contracts/*.md` est un cas
