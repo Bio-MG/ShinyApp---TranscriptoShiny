@@ -48,7 +48,11 @@ mod_bulk_ui <- function(id) {
           # LOT 3A (V1.x UX): last panel = deliverables (report + reproducible
           # R script already live together in mod_bulk_report.R — renamed only).
           accordion_panel(i18n$t("4. Livrables — Rapport & Script R"), value = "panel_report",
-                          icon = icon("file-export"), mod_bulk_report_ui(ns("report")))
+                          icon = icon("file-export"), mod_bulk_report_ui(ns("report"))),
+          # MD-1 : conteneur bulk_datasets — enregistrement/gestion des jeux
+          # nommés (producteur "pipeline_save") ; la comparaison est MD-2.
+          accordion_panel(i18n$t("Multi-jeux — Datasets enregistr\u00e9s"), value = "panel_datasets",
+                          icon = icon("layer-group"), mod_bulk_datasets_ui(ns("datasets")))
         )
       ),
       navset_card_underline(
@@ -428,6 +432,7 @@ mod_bulk_server <- function(id, global_data) {
     mod_bulk_signatures_server("signatures", global_data, shared_rv)
     mod_bulk_wgcna_server("wgcna", global_data, shared_rv)
     mod_bulk_survival_server("survival", global_data, shared_rv)
+    mod_bulk_datasets_server("datasets", global_data, shared_rv)  # MD-1
     mod_bulk_report_server(  "report",   global_data, shared_rv)
 
   }) # /moduleServer

@@ -45,6 +45,9 @@ TS_BULK_MAX_WORKERS        <- 4L       # min(detectCores()-1, 4) — jamais au-d
 # --- Bulk V2 — survie & association clinique ----------------------------------
 TS_BULK_SURV_MIN_EVENTS    <- 10L      # événements observés minimum (statut=1)
 
+# --- MD-1 — conteneur bulk_datasets (jeux nommés) -----------------------------
+TS_BULK_MULTI_MAX_DATASETS <- 20L      # plafond du conteneur (budget RAM 32 Go — chaque entrée duplique counts + filtré + VST)
+
 # --- Spatial deconvolution ---------------------------------------------------
 TS_DECONV_MAX_CELLS_PER_TYPE <- 500L   # per-type subsample cap in artifact
 

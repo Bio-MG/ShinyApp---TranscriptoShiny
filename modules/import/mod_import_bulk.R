@@ -181,7 +181,14 @@ mod_import_bulk_ui <- function(id) {
             
             textInput(ns("project_name"), "Nom du Projet",
                       value = "BulkRNA_Project", placeholder = "Ex: Study_2024"),
-            
+
+            # MD-1 : label optionnel — enregistre aussi le jeu importé dans
+            # global_data$bulk_datasets (producteur "import") sans toucher
+            # bulk_obj (contrat docs/contracts/BULK_MULTI_CONTRACT.md §6).
+            textInput(ns("multi_label"), i18n$t("Label multi-datasets (optionnel)"),
+                      placeholder = i18n$t("ex : GSE123_T2")),
+            helpText(i18n$t("Si renseigné, le jeu importé est aussi enregistré sous ce nom pour la comparaison multi-jeux (Bulk > Multi-jeux).")),
+
             conditionalPanel(
               condition = sprintf("input['%s'] === 'merged_matrix'", ns("bulk_import_mode")),
               numericInput(ns("min_counts"), "Counts minimum par gène (pré-filtre grossier)",
@@ -290,6 +297,32 @@ mod_import_bulk_server <- function(id, global_data) {
       tr <- isolate(global_data$i18n)
       if (is.null(tr)) return(key)
       tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
+    }
+
+    # ── MD-1 : enregistrement optionnel du jeu importé dans bulk_datasets ───
+    # Producteur "import" (contrat BULK_MULTI_CONTRACT.md §6) : lecture seule
+    # de bulk_obj ; un échec (ex. label déjà pris) est un AVERTISSEMENT et ne
+    # bloque jamais l'import.
+    .register_multi_dataset <- function(obj) {
+      lbl <- trimws(input$multi_label %||% "")
+      if (!nzchar(lbl)) return(invisible(NULL))
+      res <- tryCatch(
+        bulk_multi_register(global_data$bulk_datasets, lbl, obj,
+                            producer = "import"),
+        bulk_multi_error = function(e) e)
+      if (inherits(res, "bulk_multi_error")) {
+        add_log(paste(" ⚠️ Dataset non enregistré (multi-jeux) :", res$message))
+        showNotification(
+          sprintf(.tr("⚠️ Dataset non enregistré (multi-jeux) : %s"), res$message),
+          type = "warning", duration = 8)
+        return(invisible(NULL))
+      }
+      global_data$bulk_datasets <- res
+      add_log(paste(" 📦 Dataset enregistré pour la comparaison multi-jeux :", lbl))
+      showNotification(
+        sprintf(.tr("📦 Import enregistré pour la comparaison multi-jeux : « %s »."), lbl),
+        type = "message", duration = 6)
+      invisible(NULL)
     }
 
     # ── LOT 4A (V1.x UX): native jump to the EXISTING Bulk mapping panel ────
@@ -893,6 +926,7 @@ mod_import_bulk_server <- function(id, global_data) {
           temp_data$is_loaded  <- TRUE
           add_log(paste("✅ Import réussi!", nrow(counts_matrix), "gènes ×",
                         ncol(counts_matrix), "échantillons"))
+          .register_multi_dataset(global_data$bulk_obj)  # MD-1 (label optionnel)
           removeNotification(id = ns("progress"))
           showNotification(paste("✅ Import réussi:", ncol(counts_matrix),
                                  "échantillons,", nrow(counts_matrix), "gènes"),
@@ -1043,7 +1077,9 @@ mod_import_bulk_server <- function(id, global_data) {
           de_allowed    = result$de_ok,
           import_mode   = "per_sample"
         )
-        
+
+        .register_multi_dataset(global_data$bulk_obj)  # MD-1 (label optionnel)
+
         temp_data$is_loaded <- TRUE
         removeNotification(id = ns("progress"))
         add_log(paste("✅ Import multi-fichiers réussi —",
