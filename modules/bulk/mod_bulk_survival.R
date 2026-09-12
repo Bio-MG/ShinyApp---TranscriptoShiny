@@ -127,7 +127,7 @@ mod_bulk_survival_server <- function(id, global_data, shared_rv) {
       }
       div(class = "alert alert-info", style = "font-size:0.78em;",
           icon("info-circle"), " ",
-          .tr("Analyses activées si >= 10 événements observés (garde de la mission). Découpes médiane/quartiles uniquement — aucune recherche de cutpoint optimal.")))
+          .tr("Analyses activées si >= 10 événements observés (garde de la mission). Découpes médiane/quartiles uniquement — aucune recherche de cutpoint optimal."))
     })
 
     # ── Choix des variables selon la source ──────────────────────────────
