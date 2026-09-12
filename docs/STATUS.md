@@ -53,8 +53,10 @@ roadmaps (voir `git log --oneline -- docs/`).
 > chemin de données ✅** (10X/Seurat → entrée CellChat, sans dépendance
 > nouvelle), **Bulk V2 / batch-QC ✅** (commité par l'utilisateur `aa92f24`,
 > puis **fini** `612eddf` — erreur de test corrigée, dette i18n soldée, cf.
-> §5bis), **Milo — 16 échecs ✅ RÉSOLUS** (cause racine : fuite d'option
-> `Matrix.warnDeprecatedCoerce` par `GSVA::.onLoad()`, cf. §2k).
+> §5bis), **Bulk V2 M2 ✅ — Scores de voies par échantillon** (GSVA/ssGSEA/
+> PLAGE/zscore, contrat gelé, 166 assertions, cf. §2r), **Milo — 16 échecs ✅
+> RÉSOLUS** (cause racine : fuite d'option `Matrix.warnDeprecatedCoerce` par
+> `GSVA::.onLoad()`, cf. §2k).
 >
 > Rapports de stage 6 sections : `docs/ROADMAP_HANDOFF_STAGE_PLOT_S1.md`,
 > `docs/ROADMAP_HANDOFF_STAGE_CELLCHAT_INPUT.md` et
@@ -622,7 +624,48 @@ erreur plus tard.
 > (contrat absent) alors que le code est intact — c'est le point soulevé par la
 > **décision 4** de `ROADMAP.md` §5, désormais **matérialisé par un test**.
 
+### 2r. ✅ Bulk V2 M2 — scores de voies par **échantillon** (GSVA / ssGSEA / PLAGE / zscore)
+
+**Livré le 2026-09-12** (chantier Flux E, Milestone 2 de la mission Bulk V2).
+Complément de l'ORA/GSEA : attribue un score par voie à CHAQUE échantillon
+(matrice voies × échantillons), **aucun contraste requis** — stocké dans
+`bulk_obj$pathways$per_sample` (mission §M2) + `shared_rv$pathway_scores`.
+
+**Fichiers** (contract-first) :
+
+| Rôle | Fichier |
+|---|---|
+| Logique pure | `R/bulk/bulk_gsva.R` (nouveau) |
+| Tests fonctionnels | `tests/testthat/test-bulk-gsva.R` |
+| Test de gel | `tests/testthat/test-bulk-gsva-contract-freeze.R` |
+| Contrat gelé | `docs/contracts/BULK_GSVA_CONTRACT.md` |
+| Seuil ajouté | `config/thresholds.R` → `TS_BULK_GSVA_OVERLAP_MIN <- 0.20` |
+| Câblage | `app.R` (source), `modules/bulk/mod_bulk_pathways.R` (section gauche + onglet « Scores par échantillon »), `i18n/translation.json` (+26 clés) |
+| Outillage | `tools/run_tests.R` (runner ciblé), `tools/add_i18n_keys.R` (ajout idempotent, anti-doublon) |
+
+**Gardes mission vérifiés par test** : counts bruts refusés
+(`raw_counts_rejected` — message citant VST) ; **BPPARAM sur `GSVA::gsva()` et
+jamais au constructeur** (gel structurel) ; **Windows → `SerialParam`,
+jamais MulticoreParam** (gel) ; identifiants nettoyés (strip Ensembl `.1/.2`,
+idempotent) ; porte de recouvrement < 20 % tracée (`dropped` avec
+`matched_fraction`) ; bornes de taille [10, 500] locales + constructeur ;
+provenance PRODUITE au calcul (`new_provenance_entry`). Les 4 méthodes
+(gsva/ssgsea/plage/zscore, API GSVA 2.x `*Param`) testées sur le même
+fixture — matrice toujours voies × échantillons.
+
+**GSVA = dépendance OPTIONNELLE à l'exécution** (`requireNamespace` à l'appel,
+jamais au source) : l'app démarre sans lui, échec propre classé
+`missing_dependency`. Installée dans la bibliothèque renv le 2026-09-12 (GSVA
+2.0.7 + survminer 0.5.2 + msigdbr 26.1.1 + WGCNA 1.74 + impute +
+variancePartition 1.36.3 + decoupleR 2.12.0) — **`renv.lock` NON modifié**
+(décision utilisateur à prendre, cf. `renv::status()` out-of-sync).
+
+**Vérification** : `bulk-gsva` **166 PASS / 0 FAIL / 0 ERROR / 0 SKIP / 0 WARN**
+(fonctionnel + gel, GSVA réel sur fixture 80×8). Tests ciblés uniquement — la
+suite complète reste à relancer en fin de chantier.
+
 ---
+
 
 ## 3. 4D-3 — décision et contrat d'entrée upstream
 
