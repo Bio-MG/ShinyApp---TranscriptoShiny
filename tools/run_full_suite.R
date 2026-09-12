@@ -26,14 +26,17 @@ for (f in files) {
   }, error = function(e) sprintf("%-58s RUNNER-ERROR: %.120s", bn, conditionMessage(e)))
   writeLines(r, con); flush(con)
   if (grepl("RUNNER-ERROR", r)) next
-  # parse numbers for the tally (best-effort)
-  nums <- as.integer(regmatches(r, gregexpr("(-?\\d+)", r))[[1]])
-  if (length(nums) >= 4L) {
-    total_failed <- total_failed + nums[1]
-    total_passed <- total_passed + nums[2]
-    total_error  <- total_error + nums[3]
-    total_skipped <- total_skipped + nums[4]
+  # Tally anchored on the labelled fields (a naive digit grab breaks on
+  # filenames containing digits, e.g. test-shinytest2-bulk.R).
+  getn <- function(tag) {
+    m <- regmatches(r, regexpr(paste0(tag, "=(-?\\d+)"), r))
+    if (!length(m)) return(0L)
+    as.integer(sub(paste0(tag, "="), "", m))
   }
+  total_failed  <- total_failed  + getn("fail")
+  total_passed  <- total_passed  + getn("pass")
+  total_error   <- total_error   + getn("err")
+  total_skipped <- total_skipped + getn("skip")
   rm(r)
 }
 writeLines(sprintf("BILAN: failed=%d passed=%d error=%d skipped=%d | %s",

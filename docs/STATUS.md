@@ -669,11 +669,21 @@ l'exécution** (`requireNamespace` à l'appel) : l'app démarre sans elles,
 échec propre classé. Installées dans la bibliothèque renv le 2026-09-12 —
 **`renv.lock` NON modifié** (décision utilisateur, cf. §2p pour le schéma).
 
-**Vérification finale (2026-09-12)** : suite ciblée étendue `bulk|plot|i18n`
-→ **1158 PASS / 0 FAIL / 0 ERROR / 0 SKIP** (shinytest2 e2e bulk inclus) ;
-gate de duplication **0 erreur / 3 avertissements** = baseline exacte ; boot
-headless `HTTP 200` avec tous les modules câblés ; i18n 2204 entrées 0
-doublon. La suite COMPLÈTE (tous domaines) reste à relancer avant push.
+**Vérification finale (2026-09-12, suite COMPLÈTE tous domaines, post-correctif
+`5ae0b8b`)** : **0 FAIL / 0 ERROR / 0 SKIP — 3760 PASS** (71 fichiers, runner
+crash-resilient `tools/run_full_suite.R`, bilan par fichier flushé) ; gate de
+duplication **0 erreur / 3 avertissements** = baseline exacte ; boot headless
+`HTTP 200` avec tous les modules câblés ; i18n 2204 entrées 0 doublon.
+
+**§2k — RÉCURRENCE détectée puis re-fermée pendant cette campagne** : le
+NOUVEAU domaine `bulk_gsva.R` chargeait GSVA en direct (requireNamespace au
+calcul) → `GSVA::.onLoad()` reposait `Matrix.warnDeprecatedCoerce = 2` sans
+le restaurer → les 16 échecs Milo réapparaissaient en suite complète (le
+baseline vert du matin précédait M2, l'effet de bord n'avait pas pu se
+manifester). Correctif `5ae0b8b` : option relevée/restaurée dans
+`compute_pathway_scores()` + test de non-régression dédié dans
+`test-bulk-gsva.R`. Leçon §2k généralisée : tout nouveau chargement de
+package dans un domaine doit encadrer l'option (gelé par test ici).
 
 ### 2s. Serveur MCP (§2p) — recommandation sur `renv.lock` + diagnostic ABI
 
