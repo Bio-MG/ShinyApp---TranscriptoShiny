@@ -27,7 +27,8 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 | `docs/ROADMAP_presentation_stats.md` | Plots & stats : PLOT-Q/S, STAT-Q/S, NEW-1..3 | Pour tout travail présentation/statistique |
 | `docs/ROADMAP_CCC_ADVANCED.md` | CCC avancée, phases 1–10 + conditions de déblocage | Pour tout travail communication |
 | `docs/ROADMAP_HANDOFF_STAGE_11_20.md` | Stages 8–20 (V1.0, livré) + **HANDOFF V1.x** | Historique V1.0 ; entrées V1.x |
-| `docs/ROADMAP_HANDOFF_NEXT.md` | **Prochaine session** : périmètre PLOT-S1, ancres vérifiées, décisions à prendre, prompt à coller | **Au démarrage de la prochaine session** |
+| `docs/ROADMAP_HANDOFF_NEXT.md` | **Prochaine session** : périmètre MD-1, ancres vérifiées, prompt à coller | **Au démarrage de la prochaine session** |
+| `docs/ROADMAP_MULTI_DATASET.md` | Design MD-1..MD-4 (multi-pipeline Bulk + pseudobulk + SC double jeu, fusion décisions 8+5) | Avant tout travail multi-dataset |
 | `docs/ROADMAP_HANDOFF_STAGE_PLOT_Q.md` | Rapport de stage PLOT-Q (6 sections) | Exemple du format de rapport attendu |
 | `docs/ROADMAP_HANDOFF_STAGE_STAT_Q.md` | Rapport de stage STAT-Q (6 sections) | Historique du volet statistique |
 | `docs/ROADMAP_HANDOFF_STAGE_PLOT_S6.md` | Mesure PLOT-S6 (6 sections) — **prémisse périmée, jalon déjà satisfait par l'arbre** | Avant de planifier PLOT-S6 / PLOT-S6′ |
@@ -43,24 +44,26 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 
 ## 2. Les quatre flux de travail
 
-> **▶ Prochaine étape : `STAT-S2` — réseau d'enrichissement** (`emapplot` /
-> `cnetplot`, effort **M** ; `enrichplot` est **déjà présent**). **`STAT-S1`
-> (ComBat-seq) a été livré le 2026-09-12** — rapport
-> `docs/ROADMAP_HANDOFF_STAGE_STAT_S1.md`, état `STATUS.md` §2q.
+> **▶ Prochaine étape : `MD-1` — conteneur `bulk_datasets`** (multi-pipeline
+> Bulk), voir `docs/ROADMAP_MULTI_DATASET.md`. **Fusionne la décision 8 et la
+> décision 5** (même besoin produit dans 2 domaines) — la décision 5 se ferme
+> par réutilisation en MD-4, pas de chantier SC séparé. Prompt prêt à coller :
+> `docs/ROADMAP_HANDOFF_NEXT.md` §6.
 >
 > Le volet « présentation » (`plot-shared-helpers`) est **terminé et clos** :
 > PLOT-S1..S5 livrés ; **PLOT-S6 était déjà satisfait par l'arbre** (mesure du
 > 2026-09-12, `docs/ROADMAP_HANDOFF_STAGE_PLOT_S6.md`) et le repli **PLOT-S6′
 > n'est pas retenu** (décision utilisateur du 2026-09-12).
 >
-> **Direction utilisateur du 2026-09-12, à cadrer** : **analyse
-> multi-échantillons avec son propre pipeline**, puis **pseudobulk**, « chacun
-> comme le module Spatial ». C'est un chantier **neuf — aucune fiche n'existe** :
-> **à transformer en roadmap dédiée avant toute planification** (même situation
-> que Bulk V2, §2h).
+> **Flux E — Bulk V2 : ✅ COMPLET (M1→M5)**, livré le soir du 2026-09-12
+> (`081bc6a`→`5ae0b8b`, 4 contrats gelés) — référence :
+> `docs/ROADMAP_BULK_V2.md`. (La fiche `docs/ROADMAP_BULK_V2_STATS.md` du
+> matin, qui parquait M2–M5, est caduque — voir son en-tête.)
 >
-> Restent ensuite `STAT-S3`, `NEW-1..3` (⚠️ le prérequis de `NEW-2` est **levé**
-> par STAT-S1), ou un arbitrage (`4E-4`, UX 3B/4B/6B — §5).
+> Restent ensuite `STAT-S2` (réseau d'enrichissement, `emapplot`/`cnetplot`,
+> effort **M** ; `enrichplot` est **déjà présent**), `STAT-S3`, `NEW-1..3`
+> (⚠️ le prérequis de `NEW-2` est **levé** par STAT-S1), ou un arbitrage
+> (`4E-4`, UX 3B/4B/6B — §5).
 
 > 📌 **Règle ajoutée le 2026-09-12 — re-mesurer avant de planifier.**
 > **Trois** fiches §3 de `ROADMAP_presentation_stats.md` se sont révélées
@@ -181,8 +184,8 @@ auto dès ≥ 2 échantillons). Les modes 1 et 2 n'existent pas encore — c'est
 | 4 | **`docs/` gitignoré** : garder local, ou versionner `docs/*.md` + `docs/contracts/*.md` ? | Les 13 contrats ne sont pas versionnés — voir la remarque ci-dessous |
 | 5 | **Modes 1/2 du double jeu SC** : priorité et périmètre | Direction produit du module SC |
 | 6 | ~~**PLOT-S6′**~~ — ✅ **TRANCHÉE le 2026-09-12 : PLOT-S6 clos, repli PLOT-S6′ non retenu** | Volet « présentation » **terminé** — voir `docs/ROADMAP_HANDOFF_STAGE_PLOT_S6.md` |
-| 7 | **Outillage MCP** : snapshoter `mcptools`/`btw`/`ellmer` dans `renv.lock` (avec justification), ou assumer qu'ils restent locaux à cette machine ? | Un clone neuf ne peut pas démarrer `scripts/mcp_server.R` tant que ce n'est pas tranché — `STATUS.md` §2p |
-| 8 | **Multi-échantillons + pseudobulk « comme Spatial »** (demandé le 2026-09-12) : créer une roadmap dédiée ? Quel périmètre (Bulk, SC, les deux) ? | Chantier **neuf, sans aucune fiche** — à cadrer avant planification |
+| 7 | **Outillage MCP** : ~~snapshoter `mcptools`/`btw`/`ellmer` dans `renv.lock`, ou assumer qu'ils restent locaux ?~~ → **recommandation posée le 2026-09-12** (`STATUS.md` §2s) : profil renv `dev` séparé, pas de snapshot dans le lockfile principal — **à valider**. Diagnostic ABI §2p fait le soir : hypothèse d'un décalage massif **réfutée** (seul `jsonlite` est Built 4.4.3) ; template de connexion ZCode posé (`mcp.examples/`) | Un clone neuf ne peut pas démarrer `scripts/mcp_server.R` tant que ce n'est pas tranché |
+| 8 | ~~**Multi-échantillons + pseudobulk « comme Spatial »**~~ — ✅ **CADRÉ le 2026-09-12** : fusionné avec la décision 5, roadmap `docs/ROADMAP_MULTI_DATASET.md` (MD-1..MD-4) ; **MD-1 = prochaine étape** | ~~Chantier neuf~~ résolu — voir décision 5 pour le volet SC |
 
 > **Remarque sur la décision 4** — garder roadmaps et instructions d'agents
 > locales est un choix défendable. En revanche `docs/contracts/*.md` est un cas

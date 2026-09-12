@@ -19,13 +19,12 @@
 `docs/STATUS.md` et `docs/ROADMAP.md` (index + état), dé-obsolescence des
 roadmaps (voir `git log --oneline -- docs/`).
 
-> **▶ PROCHAINE ÉTAPE** : **STAT-S2 — réseau d'enrichissement** (`emapplot` /
-> `cnetplot`, effort **M** ; `enrichplot` est **déjà présent**). `STAT-S1` vient
-> d'être livré (§2q). Direction **explicitement demandée par l'utilisateur le
-> 2026-09-12**, à traiter ensuite : **analyse multi-échantillons avec son propre
-> pipeline**, puis **pseudobulk**, « **chacun comme le module Spatial** » —
-> chantier **neuf et non cadré** : à transformer en roadmap dédiée **avant** de
-> le planifier (même situation que Bulk V2, §2h).
+> **▶ PROCHAINE ÉTAPE** : **MD-1 — conteneur `bulk_datasets`** (multi-pipeline
+> Bulk), design complet dans `docs/ROADMAP_MULTI_DATASET.md` (fusion des
+> décisions 8 et 5), prompt prêt à coller dans `docs/ROADMAP_HANDOFF_NEXT.md`
+> §6. La direction « analyse multi-échantillons avec son propre pipeline, puis
+> pseudobulk, chacun comme le module Spatial » (demandée le 2026-09-12) est
+> **cadrée** — plus un chantier neuf.
 >
 > **PLOT-S6 est CLOS** (décision utilisateur du 2026-09-12) : il était **déjà
 > satisfait par l'arbre** — le routeur `renderUI` statique/interactif existait
@@ -675,6 +674,40 @@ l'exécution** (`requireNamespace` à l'appel) : l'app démarre sans elles,
 gate de duplication **0 erreur / 3 avertissements** = baseline exacte ; boot
 headless `HTTP 200` avec tous les modules câblés ; i18n 2204 entrées 0
 doublon. La suite COMPLÈTE (tous domaines) reste à relancer avant push.
+
+### 2s. Serveur MCP (§2p) — recommandation sur `renv.lock` + diagnostic ABI
+
+**Ne pas snapshoter `mcptools`/`btw`/`ellmer` dans le `renv.lock`
+principal.** Ce ne sont jamais des dépendances de `app.R`/`global.R` (aucun
+`library()`/`::` applicatif) — seulement des outils de dev pour l'agent.
+Les mélanger au lockfile de reproductibilité scientifique ferait dériver ce
+fichier à chaque mise à jour de `mcptools` sans rapport avec une analyse.
+
+**Recommandé** : `renv::activate(profile = "dev")` (bibliothèque/lockfile
+dev séparés), ou a minima documenter dans `scripts/mcp_server.R` que ces
+paquets sont locaux à la machine et à installer manuellement sur un
+nouveau clone. **À valider par l'utilisateur** (décision 7 de
+`ROADMAP.md` §5). *(Note : le §2r proposé initialement pour cette
+sous-section était déjà pris par Bulk V2 M2–M5 — renuméroté §2s.)*
+
+**Diagnostic ABI §2l/§2p — exécuté le 2026-09-12 (soir), hypothèse
+RÉFUTÉE**. L'hypothèse était un décalage massif « bibliothèque compilée
+sous 4.4.3 vs interpréteur 4.4.2 ». Mesure réelle (`installed.packages()
+[, c("Package","Built")]` + `find.package()`) : la bibliothèque renv
+active est majoritairement Built **R 4.4.2**, comme l'interpréteur —
+`rlang`, `igraph`, `shiny`, `mcptools`, `btw`, `ellmer`, `R6` = 4.4.2.
+**Seul `jsonlite` est Built R 4.4.3** (direction risquée : binaire plus
+récent que l'interpréteur), cas isolé. Le segfault de sortie §2l n'est
+donc **pas** expliqué par un décalage ABI global. Candidat de correction
+ciblé si besoin : réinstaller `jsonlite` sous 4.4.2 — **décision
+utilisateur, ne pas faire sans accord** (conséquence renv à documenter
+avant). **Connexion à ZCode posée le 2026-09-12 (soir)** :
+`.zcode/config.json` créé (portée workspace, clé `mcp.servers`, schéma
+strict `stdio` — gitignoré, non commité), format `mcp.examples/
+zcode_template.json` passé de UNVERIFIED à **vérifié** ; auto-connexion à
+l'ouverture du workspace, statut à contrôler dans **Settings → MCP** après
+redémarrage. Santé serveur re-vérifiée le soir même (`mcp_server check:
+OK`).
 
 ---
 
