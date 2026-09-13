@@ -19,15 +19,19 @@
 `docs/STATUS.md` et `docs/ROADMAP.md` (index + état), dé-obsolescence des
 roadmaps (voir `git log --oneline -- docs/`).
 
-> **▶ PROCHAINE ÉTAPE** : la roadmap `docs/ROADMAP_MULTI_DATASET.md` est
-> **TOTALEMENT LIVRÉE** (MD-1→MD-4) et **4F-EXT est ✅ LIVRÉ** (consommation
-> de `bulk_multi_comparison` par le rapport consolidé — 12ᵉ domaine figé,
-> contrat §2 mis à jour, cf. §2x). **Parking V1.x restant** (décisions
-> utilisateur requises) : Phase 5–6 CCC **bloquée** par 4D-3 (contrat
-> d'entrée de l'app upstream fasta/fastq non gelé — demander son statut) ;
-> Phases 7–8 CCC (interop OmnipathR/liana = renv.lock justifié, ou route
-> d'IMPORT LIANA sans dépendance) ; Phase 9 CCC (audit chevauchement Milo
-> d'abord) ; entrée `ROADMAP_HANDOFF_NEXT.md` §« HANDOFF V1.x ».
+> **▶ PROCHAINE ÉTAPE** (transfert **Workbuddy**, tranché par l'utilisateur
+> le 2026-09-13 — cf. §2y) : **Phase 7–8 CCC (interop OmniPath/LIANA) =
+> DÉBLOQUÉE** — choisir la route (renv.lock justifié OU import de résultats
+> LIANA externes sans dépendance) ; **Phase 9 CCC (rare cells) = VALIDÉE, à
+> prévoir** (audit chevauchement Milo d'abord) ; **Phase 5–6 CCC = GELÉE
+> SANS SUITE** (pas d'import fastP côté 4D-3 — ne plus re-proposer).
+> **Convention amendée** : « nouvelle dépendance = renv.lock justifié »
+> n'est **pas immuable** — une dépendance est acceptable si efficience sans
+> régression, justification documentée obligatoire (inscrit dans AGENTS.md
+> §5 et `docs/ROADMAP_CCC_ADVANCED.md` §4). État livré : MD-1→MD-4 ✅ +
+> 4F-EXT ✅ (cf. §2t–§2x). **Le MCP local fonctionne bien (confirmé
+> utilisateur 2026-09-13)** ; l'utilisateur peut prendre en charge
+> certaines tâches manuellement (ex. push, vérifs) pour gagner du temps.
 >
 > **PLOT-S6 est CLOS** (décision utilisateur du 2026-09-12) : il était **déjà
 > satisfait par l'arbre** — le routeur `renderUI` statique/interactif existait
@@ -958,6 +962,37 @@ gate **0 erreur / 3 avertissements** = baseline ; `SMOKE_SOURCED: TRUE` ;
 suite complète : **0 FAIL / 0 ERROR — 4511 PASS / 1 SKIP** (skip = ping LIVE
 conditionnel `test-mod-geo.R`, hors périmètre). C'est le **nouveau
 baseline**.
+
+### 2y. Décisions utilisateur 2026-09-13 — parking CCC tranché + transfert Workbuddy
+
+Consignées dans `docs/ROADMAP_CCC_ADVANCED.md` §4 (parking des phases) et
+dans le HANDOFF V1.x (`docs/ROADMAP_HANDOFF_STAGE_11_20.md`). Décret :
+
+1. **Phase 5–6 CCC (targets / NicheNet-like) : GELÉE et CLASSÉE SANS
+   SUITE** — pas d'import fastP côté 4D-3 ; la voie upstream ne fournira
+   pas ce que la phase exige. Ne plus la re-proposer (sauf demande
+   explicite contraire de l'utilisateur).
+2. **Phases 7–8 CCC (interop OmniPath / LIANA) : DÉBLOQUÉES** — deux
+   routes possibles : (a) OmnipathR/liana = ajout `renv.lock` justifié ;
+   (b) route d'IMPORT de résultats LIANA externes sans dépendance
+   (extension du contrat Stage 11 — `communication_supported_sources` —
+   code + freeze test + doc simultanément ; comparaison inter-méthodes en
+   **rangs/recouvrement uniquement**, jamais de score consensus).
+3. **Convention amendée (à inscrire partout où elle s'applique)** : la
+   règle « nouvelle dépendance = renv.lock justifié » **n'est pas
+   immuable** — une dépendance nouvelle n'est pas à exclure si elle gagne
+   en **efficience sans régression** ; la justification documentée reste
+   obligatoire. Inscrite dans AGENTS.md §5 et `ROADMAP_CCC_ADVANCED.md` §4.
+4. **Phase 9 CCC (rare cells) : VALIDÉE — à prévoir** : commencer par
+   l'audit de chevauchement avec Milo (Stage 14, règle 3 : aucun moteur
+   dupliqué) avant toute proposition.
+
+**Transfert d'agent** : la suite revient à **Workbuddy**. Notes
+d'environnement confirmées par l'utilisateur le 2026-09-13 : le **serveur
+MCP local fonctionne bien** (cf. §2s-bis — santé vérifiée ; template de
+connexion `mcp.examples/`) ; **l'utilisateur peut prendre en charge
+certaines tâches manuellement** (push, vérifications, arbitrages) pour
+gagner du temps — lui demander ce qu'il préfère garder avant d'automatiser.
 
 
 ---
