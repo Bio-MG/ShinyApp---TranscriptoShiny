@@ -95,6 +95,7 @@ source("R/bulk/bulk_gsva.R")          # Bulk V2 M2 : scores de voies par échant
 source("R/bulk/bulk_signatures.R")    # Bulk V2 M3 : signatures cellulaires (pur, contrat gelé)
 source("R/bulk/bulk_wgcna.R")         # Bulk V2 M4 : WGCNA safe-mode (pur, contrat gelé)
 source("R/bulk/bulk_survival.R")      # Bulk V2 M5 : survie & clinique (pur, contrat gelé)
+source("R/bulk/bulk_pattern.R")       # STAT-S3 : clustering de profils (kmeans MVP, pur, contrat gelé)
 source("R/bulk/bulk_multi.R")         # MD-1 : conteneur bulk_datasets & jeux nommés (pur, contrat gelé)
 source("R/bulk/bulk_multi_compare.R") # MD-2 : comparaison multi-jeux (pur, contrat gelé §10)
 source("R/sc/sc_multi.R")             # MD-4 : conteneur sc_datasets & double jeu SC (pur, contrat gelé)
@@ -161,6 +162,7 @@ source("modules/bulk/mod_bulk_pathways.R")
 source("modules/bulk/mod_bulk_signatures.R")  # Bulk V2 M3 : signatures cellulaires
 source("modules/bulk/mod_bulk_wgcna.R")       # Bulk V2 M4 : WGCNA safe-mode
 source("modules/bulk/mod_bulk_survival.R")    # Bulk V2 M5 : survie & clinique
+source("modules/bulk/mod_bulk_pattern.R")     # STAT-S3 : clustering de profils (kmeans MVP)
 source("modules/bulk/mod_bulk_datasets.R")    # MD-1 : gestion du conteneur bulk_datasets
 source("modules/bulk/mod_bulk_multi.R")       # MD-2 : comparaison multi-jeux
 source("modules/bulk/mod_bulk_report.R")

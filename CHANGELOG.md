@@ -10,6 +10,38 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > Leur état fait foi dans **`docs/STATUS.md`** §1 et §2. Ce fichier reprend à
 > partir de `STAT-S1`.
 
+## [V1.x — STAT-S3] — 2026-09-13 — Clustering de profils (kmeans MVP)
+
+Rang 3 de l'ordre d'actionnabilité. **Zéro dépendance nouvelle** — `stats::kmeans`
+et la matrice VST existante (étape 1). Analyse **descriptive** de la forme des
+profils entre groupes : aucune p-value produite.
+
+### Ajouté
+- **`run_pattern_clustering(vst_mat, metadata, group_column, genes, k, seed, …)`
+  (`R/bulk/bulk_pattern.R`)** — moyenne VST par groupe, **z-score par gène** à
+  travers les groupes, `stats::kmeans()` (nstart/itermax déclarés en config,
+  graine tracée dans le résultat). Exclusions comptabilisées : gènes fournis
+  absents de la matrice, gènes constants/NA, échantillons sans libellé.
+- **`docs/contracts/BULK_PATTERN_CONTRACT.md`** — contrat gelé (type
+  `bulk_pattern_clusters`, `analysis_id` `"bulk-pattern-clusters"`) ; surface
+  publique figée (8 fonctions) ; erreurs classées `bulk_pattern_error` (FR).
+- **Module « 3e. Clustering de profils »** (`mod_bulk_pattern.R`) côté Bulk :
+  sources de gènes `up`/`down`/`all_sig` (convention du module Enrichissement),
+  colonne de groupe déclarée, k (2–12, plafond configuré, **aucun défaut
+  métier**) et graine déclarés ; sortie : courbes de profils moyens par
+  cluster (`plot_pattern_profiles`, palette partagée), table gènes→clusters,
+  export CSV.
+- `config/thresholds.R` : `TS_PATTERN_KMEANS_{NSTART,MAX_K,ITERMAX,SEED}`.
+- Tests : `test-bulk-pattern.R` **31 PASS / 0 FAIL** (100 % hors-ligne) ;
+  ciblés : e2e `shinytest2-bulk` 4 PASS, freezes consommant app.R 68+80 PASS,
+  i18n 15 PASS. **Suite complète non lancée ce jalon (demande utilisateur).**
+- i18n : **24** clés FR/EN (2410 → 2434 entrées cumulées).
+
+### Non retenu
+- **V2 floue (Mfuzz)** — option de la fiche : dépendance Bioconductor
+  nouvelle, aucun besoin exprimé (écrit au contrat §8).
+- Sélection automatique de k (silhouette/elbow) — non demandée.
+
 ## [V1.x — STAT-S2] — 2026-09-13 — Réseau d'enrichissement (emapplot / cnetplot)
 
 Rang 2 de l'ordre d'actionnabilité. **Aucune dépendance nouvelle** —

@@ -45,6 +45,9 @@ mod_bulk_ui <- function(id) {
           # Bulk V2 M5 : survie & associations cliniques (KM + Cox).
           accordion_panel(i18n$t("3d. Survie & association clinique"), value = "panel_survival",
                           icon = icon("heart-pulse"), mod_bulk_survival_ui(ns("survival"))),
+          # STAT-S3 : clustering de profils d'expression (kmeans MVP, descriptif).
+          accordion_panel(i18n$t("3e. Clustering de profils"), value = "panel_pattern",
+                          icon = icon("chart-line"), mod_bulk_pattern_ui(ns("pattern"))),
           # LOT 3A (V1.x UX): last panel = deliverables (report + reproducible
           # R script already live together in mod_bulk_report.R — renamed only).
           accordion_panel(i18n$t("4. Livrables — Rapport & Script R"), value = "panel_report",
@@ -73,6 +76,9 @@ mod_bulk_ui <- function(id) {
                   mod_bulk_signatures_output_ui(ns("signatures"))),
         # Bulk V2 M4 : WGCNA.
         nav_panel("WGCNA", value = "tab_wgcna", mod_bulk_wgcna_output_ui(ns("wgcna"))),
+        # STAT-S3 : clustering de profils (descriptif).
+        nav_panel(i18n$t("Clustering de profils"), value = "tab_pattern",
+                  mod_bulk_pattern_output_ui(ns("pattern"))),
         # Bulk V2 M5 : survie.
         nav_panel(i18n$t("Survie"), value = "tab_survival",
                   mod_bulk_survival_output_ui(ns("survival"))),
@@ -435,6 +441,7 @@ mod_bulk_server <- function(id, global_data) {
     mod_bulk_pathways_server("pathways", global_data, shared_rv)
     mod_bulk_signatures_server("signatures", global_data, shared_rv)
     mod_bulk_wgcna_server("wgcna", global_data, shared_rv)
+    mod_bulk_pattern_server("pattern", global_data, shared_rv)  # STAT-S3
     mod_bulk_survival_server("survival", global_data, shared_rv)
     mod_bulk_datasets_server("datasets", global_data, shared_rv)  # MD-1
     mod_bulk_multi_server("multi", global_data)                   # MD-2

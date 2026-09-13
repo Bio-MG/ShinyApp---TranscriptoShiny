@@ -45,6 +45,14 @@ TS_BULK_MAX_WORKERS        <- 4L       # min(detectCores()-1, 4) — jamais au-d
 # --- Bulk V2 — survie & association clinique ----------------------------------
 TS_BULK_SURV_MIN_EVENTS    <- 10L      # événements observés minimum (statut=1)
 
+# --- STAT-S3 — clustering de profils (kmeans MVP) -----------------------------
+# Le nombre de clusters k est un CHOIX DECLARE de l'utilisateur (pas de défaut
+# métier) ; ces constantes ne déclarent que le cadre d'exécution.
+TS_PATTERN_KMEANS_NSTART   <- 10L      # relances kmeans (stabilité des centres)
+TS_PATTERN_KMEANS_MAX_K    <- 12L      # plafond k (au-delà : profils illisibles)
+TS_PATTERN_KMEANS_ITERMAX  <- 50L      # iter.max kmeans
+TS_PATTERN_KMEANS_SEED     <- 15L      # graine par défaut de l'UI (déclarée, reproductible)
+
 # --- MD-1 — conteneur bulk_datasets (jeux nommés) -----------------------------
 TS_BULK_MULTI_MAX_DATASETS <- 20L      # plafond du conteneur (budget RAM 32 Go — chaque entrée duplique counts + filtré + VST)
 
