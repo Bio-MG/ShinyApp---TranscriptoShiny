@@ -1230,6 +1230,22 @@ d'export DT (~43 tables) = jalon dédié à créer. Le volet flux A
 (`ROADMAP_presentation_stats.md`) est **TERMINÉ** (PLOT-Q/S, STAT-Q/S,
 NEW-1..2 livrés ; NEW-3 non planifié).
 
+### 2ah. 🔎 Check-up NEW-2 + politique de tests (2026-09-14)
+
+Séance de reprise — aucune fonctionnalité nouvelle.
+
+- **Check-up NEW-2 (post-livraison)** : tests ciblés relancés —
+  `test-bulk-merge.R` (97 PASS) + `test-bulk-merge-contract-freeze.R`
+  (131 PASS), **0 FAIL / 0 WARN**. Gates : conventions **0 erreur**
+  (324 avert., plafond inchangé). **Suite complète volontairement non
+  lancée.**
+- **Nouvelle règle — politique de tests (décision utilisateur 2026-09-14)** :
+  tests **ciblés par défaut** (seuls les fichiers concernés par le changement
+  + gates conventions/duplication) ; la **suite complète ne tourne qu'en fin
+  de version** — après accumulation de plusieurs fonctionnalités, avant un
+  tag release/RC. Consignée dans `AGENTS.md` §1 (Test policy) et
+  `ROADMAP.md` §2.0 (commit `867bb39`).
+
 ---
 
 ## 3. 4D-3 — décision et contrat d'entrée upstream
