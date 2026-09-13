@@ -181,7 +181,7 @@ test_that("report/export consumers do not reimplement communication import", {
   # pures, sections velocity/communication/DA) - il n a jamais le droit
   # de REIMPLEMENTER l analyse. Garde ciblee : aucun appel de
   # calcul/validation/empreinte du domaine.
-  compute_ban <- "parse_cellchat_|parse_cellphonedb_|harmonize_communication_identities\\(|communication_import_qc\\(|finalize_communication_result\\("
+  compute_ban <- "parse_cellchat_|parse_cellphonedb_|parse_liana_|harmonize_communication_identities\\(|communication_import_qc\\(|finalize_communication_result\\("
   for (tpl in list.files(file.path(ts_project_root(), "reports"),
                          full.names = TRUE)) {
     tpl_src <- paste(readLines(tpl), collapse = "\n")
@@ -228,6 +228,43 @@ test_that("module consumes the frozen views accessors (Stage 12)", {
   expect_match(src, "parse_cellchat_object(", fixed = TRUE)
 })
 
+# ── CCC 7-8 route (b) : contrat des rangs (source LIANA) ───────────────────
+test_that("rank measure fields are frozen and separate from the 12 contract fields", {
+  expect_setequal(communication_rank_fields(),
+                  c("rank", "rank_direction", "rank_aggregation_mode"))
+  expect_setequal(communication_rank_aggregation_modes(),
+                  c("specificity", "magnitude"))
+  # Un rang n'existe ni chez CellChat ni chez CellPhoneDB : les champs de
+  # mesure ne doivent JAMAIS entrer dans les 12 champs contractuels, sinon ces
+  # deux sources seraient forcees d'emettre des colonnes NA et leurs resultats
+  # changeraient (regle 1).
+  expect_length(intersect(communication_rank_fields(),
+                          communication_contract_fields()), 0L)
+})
+
+test_that("liana is a supported import source", {
+  expect_true("liana" %in% communication_supported_sources())
+})
+
+test_that("a LIANA result carries the rank fields and the external-consensus marker", {
+  res <- .comm_liana_result()
+  expect_true(all(communication_rank_fields() %in% colnames(res$canonical_table)))
+  expect_identical(unique(res$canonical_table$rank_direction), "lower_is_better")
+  expect_true(isTRUE(res$provenance$is_external_consensus))
+  # score reste NA : un rang n'est pas un score (erreur de categorie).
+  expect_true(all(is.na(res$canonical_table$score)))
+  # aggregate_rank (p-value RRA) alimente p_value, jamais score.
+  expect_false(all(is.na(res$canonical_table$p_value)))
+})
+
+test_that("existing sources stay free of rank columns (rule 1)", {
+  for (canon in list(.comm_freeze_canonical_full(), .comm_freeze_canonical_min())) {
+    expect_length(intersect(communication_rank_fields(),
+                            colnames(canon$canonical_table)), 0L)
+    expect_false(isTRUE(canon$provenance$is_external_consensus))
+  }
+})
+
 # ── Synchronisation code <-> contrat documentaire ───────────────────────────
 test_that("contract document is in sync with the frozen code", {
   doc_path <- file.path(ts_project_root(), "docs", "contracts",
@@ -250,4 +287,16 @@ test_that("contract document is in sync with the frozen code", {
   expect_match(doc, "communication_apply_filters", fixed = TRUE)
   expect_match(doc, "build_communication_filter_provenance", fixed = TRUE)
   expect_match(doc, "communication_views_public_api", fixed = TRUE)
+  # CCC 7-8 route (b) : les nouveaux elements du contrat doivent etre
+  # documentes, sinon le code evolue sans le document (interdit).
+  expect_match(doc, "parse_liana_import", fixed = TRUE)
+  expect_match(doc, "communication_rank_fields", fixed = TRUE)
+  expect_match(doc, "communication_rank_aggregation_modes", fixed = TRUE)
+  expect_match(doc, "is_external_consensus", fixed = TRUE)
+  expect_match(doc, "lower_is_better", fixed = TRUE)
+  expect_match(doc, "aggregate_rank", fixed = TRUE)
+  for (f in communication_rank_fields()) {
+    expect_match(doc, paste0("`", f, "`"), fixed = TRUE,
+                 info = paste("champ de mesure absent du document :", f))
+  }
 })

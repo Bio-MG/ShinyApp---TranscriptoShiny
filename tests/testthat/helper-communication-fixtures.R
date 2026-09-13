@@ -87,6 +87,60 @@ source_project_file("R/sc/sc_communication_views.R")
   )
 }
 
+# ── Fixture LIANA : table agregee (CCC 7-8 route (b)) ──────────────────────
+# Schema reel d'une sortie liana_aggregate()/rank_aggregate() : identite de
+# l'interaction (source/target + complexes), rangs PAR methode
+# ({methode}.rank), consensus mean_rank + aggregate_rank (p-value RRA).
+# `ligand`/`receptor` sont les colonnes DECOMPLEXIFIEES que LIANA produit en
+# plus des `.complex`.
+.comm_liana_tab <- function() {
+  data.frame(
+    source = c("CD4 T", "B", "CD4 T", "NK"),
+    target = c("B", "CD8 T", "CD8 T", "B"),
+    ligand.complex = c("IL7", "CD40", "CCL5", "GZMB"),
+    receptor.complex = c("IL7R", "CD40", "CCR5", "NKG7"),
+    ligand = c("IL7", "CD40", "CCL5", "GZMB"),
+    receptor = c("IL7R", "CD40", "CCR5", "NKG7"),
+    natmi.edge_specificity = c(0.9, 0.7, 0.5, 0.3),
+    natmi.rank = c(1, 2, 3, 4),
+    cellphonedb.pvalue = c(0.01, 0.03, 0.20, 0.50),
+    cellphonedb.rank = c(1, 2, 3, 4),
+    mean_rank = c(1.0, 2.0, 3.0, 4.0),
+    aggregate_rank = c(0.001, 0.010, 0.200, 0.500),
+    stringsAsFactors = FALSE
+  )
+}
+
+# Variante SANS aucune colonne de consensus : uniquement des rangs PAR
+# methode. Prouve que external_consensus vaut FALSE quand la table ne porte
+# aucune valeur agregee inter-methodes.
+.comm_liana_tab_single_method <- function() {
+  tab <- .comm_liana_tab()
+  tab[, setdiff(colnames(tab), c("mean_rank", "aggregate_rank"))]
+}
+
+# Variante SANS colonnes decomplexifiees : uniquement les `.complex`. Le
+# parseur doit alors les reprendre TELLES QUELLES — jamais les decouper.
+.comm_liana_tab_complex_only <- function() {
+  tab <- .comm_liana_tab()
+  tab[, setdiff(colnames(tab), c("ligand", "receptor"))]
+}
+
+# Resultat canonique LIANA (rangs) — orchestration miroir du module.
+.comm_liana_result <- function(rank_column = "mean_rank",
+                               aggregation_mode = "specificity",
+                               tab = .comm_liana_tab(),
+                               source_files = list(table = "liana_aggr.csv")) {
+  parsed <- parse_liana_import(
+    tab, rank_column = rank_column, aggregation_mode = aggregation_mode,
+    source_file = source_files$table
+  )
+  .comm_import_and_finalize(
+    parsed, source_files = source_files,
+    external_consensus = isTRUE(parsed$external_consensus)
+  )
+}
+
 # Identites Seurat de la colonne choisie (extraites par le module depuis
 # obj@meta.data) — le domaine consomme un vecteur, pas un objet Seurat.
 .comm_identities <- c("CD4 T", "CD8 T", "B", "NK")
@@ -147,12 +201,15 @@ source_project_file("R/sc/sc_communication_views.R")
 
 # ── Orchestration miroir du module (sequence d'import Stage 11) ─────────────
 # reproduce EXACTEMENT la sequence du module : harmonisation -> QC ->
-# finalisation, avertissements fusionnes via extra_warnings.
+# finalisation, avertissements fusionnes via extra_warnings. La route LIANA
+# transmet en plus le marqueur de consensus externe (parse_liana_import()$-
+# external_consensus), comme le fait le module — jamais recalcule ici.
 .comm_import_and_finalize <- function(parsed,
                                       identities = .comm_identities,
                                       identity_column = "cell_type",
                                       source_files = list(table = "import.csv"),
-                                      seurat_obj = .comm_obj_stub()) {
+                                      seurat_obj = .comm_obj_stub(),
+                                      external_consensus = FALSE) {
   harm <- harmonize_communication_identities(
     parsed$table, identities, identity_column,
     context = "communication import"
@@ -170,6 +227,7 @@ source_project_file("R/sc/sc_communication_views.R")
     qc              = qcr$counts,
     n_input_rows    = parsed$n_input_rows,
     seurat_obj      = seurat_obj,
-    extra_warnings  = warnings_all
+    extra_warnings  = warnings_all,
+    external_consensus = external_consensus
   )
 }

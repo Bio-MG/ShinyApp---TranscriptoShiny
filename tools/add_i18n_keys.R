@@ -378,7 +378,20 @@ new_entries <- list(
   c("Fraction de la variance expliquée", "Fraction of variance explained"),
   c("Pseudotemps\n(sans unite)", "Pseudotime\n(no unit)"),
   c("Pseudotemps exploratoire (graphe kNN pondere)", "Exploratory pseudotime (weighted kNN graph)"),
-  c("Scree Plot — Variance Expliquée (QC Batch)", "Scree Plot — Variance Explained (Batch QC)")
+  c("Scree Plot — Variance Expliquée (QC Batch)", "Scree Plot — Variance Explained (Batch QC)"),
+  # ── CCC 7-8 route (b) : import de rangs LIANA ─────────────────────────────
+  c("LIANA (rangs agreges)", "LIANA (aggregated ranks)"),
+  c("Table LIANA agregee (CSV/TSV)", "Aggregated LIANA table (CSV/TSV)"),
+  c("Mode d'agregation LIANA (requis)", "LIANA aggregation mode (required)"),
+  c("Specificite — l'interaction est-elle specifique de ces types cellulaires ?",
+    "Specificity — is this interaction specific to these cell types?"),
+  c("Magnitude — l'interaction est-elle abondante ?",
+    "Magnitude — is this interaction abundant?"),
+  c("Colonne de rang a importer (requis)", "Rank column to import (required)"),
+  c("Colonnes de rang : mean_rank, aggregate_rank ou {methode}.rank. Dans LIANA, rang 1 = meilleur (inverse de prob) : aucun score n'est reconstitue, et les modes specificite/magnitude ne sont pas comparables entre eux.",
+    "Rank columns: mean_rank, aggregate_rank or {method}.rank. In LIANA, rank 1 = best (opposite of prob): no score is reconstructed, and specificity/magnitude modes are not comparable to each other."),
+  c("Communication cellule-cellule — import de resultats externes uniquement (CellChat / CellPhoneDB / LIANA). ",
+    "Cell-cell communication — import of external results only (CellChat / CellPhoneDB / LIANA). ")
 )
 
 fr_existing <- vapply(j$translation, function(x) x$fr %||% "", character(1))
