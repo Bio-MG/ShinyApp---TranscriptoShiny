@@ -96,3 +96,66 @@ test_that("build_pathway_dt only keeps columns actually present in the input (de
   dt <- build_pathway_dt(df)
   expect_identical(colnames(dt$x$data), c("ID", "Description", "P-adj"))
 })
+
+# ---------------------------------------------------------------------------
+# plot_pathway_network() — STAT-S2
+# ---------------------------------------------------------------------------
+# Unlike run_pathway_enrichment()/run_gsea_enrichment(), the network plot only
+# needs the RAW enrichResult object + enrichplot — both offline. The happy path
+# below therefore builds a REAL enrichGO result (org.Hs.eg.db, no network
+# access) instead of a mock, which also regression-covers the additive
+# `enrich_obj` attribute contract introduced by STAT-S2.
+
+.enrich_obj_fixture <- function() {
+  skip_if_not_installed("clusterProfiler")
+  skip_if_not_installed("org.Hs.eg.db")
+  suppressPackageStartupMessages({
+    library(clusterProfiler)
+    library(org.Hs.eg.db)
+    library(AnnotationDbi)
+  })
+  # Gene set built straight from the annotation (cell cycle GO:0007049) —
+  # offline, no DOSE dataset lazy-load quirks, and guaranteed to enrich its own term.
+  all_ids <- AnnotationDbi::keys(org.Hs.eg.db, "ENTREZID")
+  cc <- intersect(AnnotationDbi::get("GO:0007049", org.Hs.egGO2ALLEGS), all_ids)
+  ego <- clusterProfiler::enrichGO(
+    gene = cc, universe = all_ids, OrgDb = org.Hs.eg.db,
+    keyType = "ENTREZID", ont = "BP",
+    pvalueCutoff = 0.05, qvalueCutoff = 0.2, readable = TRUE)
+  skip_if(is.null(ego) || nrow(as.data.frame(ego)) < 5,
+          "enrichGO n'a renvoyé aucune voie enrichie")
+  ego
+}
+
+test_that("plot_pathway_network refuses a result without the raw enrich_obj attribute", {
+  expect_error(
+    plot_pathway_network(.toy_pathway_df(), top_n = 10),
+    "enrich_obj", fixed = TRUE
+  )
+})
+
+test_that("plot_pathway_network validates mode and top_n", {
+  expect_error(plot_pathway_network(.toy_pathway_df(), top_n = 1), "top_n")
+  expect_error(plot_pathway_network(.toy_pathway_df(), top_n = NA), "top_n")
+  expect_error(plot_pathway_network(.toy_pathway_df(), mode = "nope"), "'arg'")
+})
+
+test_that("plot_pathway_network refuses fewer than two enriched pathways", {
+  skip_if_not_installed("enrichplot")
+  ego <- .enrich_obj_fixture()
+  ego1 <- ego[1]  # single-pathway enrichResult (S4 subset)
+  df <- as.data.frame(ego1)
+  attr(df, "enrich_obj") <- ego1
+  expect_error(plot_pathway_network(df, top_n = 10), "Au moins deux voies", fixed = TRUE)
+})
+
+test_that("plot_pathway_network builds emap and cnet networks from a real enrichResult", {
+  skip_if_not_installed("enrichplot")
+  ego <- .enrich_obj_fixture()
+  df <- as.data.frame(ego)
+  attr(df, "enrich_obj") <- ego
+  p_emap <- plot_pathway_network(df, db_label = "GOBP", top_n = 10, mode = "emap")
+  expect_s3_class(p_emap, "ggplot")
+  p_cnet <- plot_pathway_network(df, db_label = "GOBP", top_n = 10, mode = "cnet")
+  expect_s3_class(p_cnet, "ggplot")
+})

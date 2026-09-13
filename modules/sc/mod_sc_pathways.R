@@ -77,6 +77,8 @@ mod_sc_pathways_output_ui <- function(id) {
     navset_tab(
       nav_panel(i18n$t("Barplot Top 15"), plotOutput(ns("pathway_barplot"), height="500px")),
       nav_panel(i18n$t("Dotplot"),        plotOutput(ns("pathway_dotplot"), height="500px")),
+      # STAT-S2 — réseau d'enrichissement (descriptif : similarité de gènes / appartenance)
+      nav_panel(i18n$t("Réseau"),         uiOutput(ns("network_ui"))),
       nav_panel(i18n$t("Table"),          DTOutput(ns("pathway_table")))
     )
   )
@@ -217,6 +219,41 @@ mod_sc_pathways_server <- function(id, global_data, shared_rv) {
     })
     output$pathway_table <- renderDT({
       req(pathway_rv()); build_pathway_dt(pathway_rv(), tr = .tr)
+    })
+
+    # ── STAT-S2 : réseau d'enrichissement (emapplot / cnetplot) ─────────────
+    output$network_ui <- renderUI({
+      if (is.null(attr(pathway_rv(), "enrich_obj"))) {
+        return(div(class="alert alert-light", style="font-size:0.85em;margin:15px;",
+                   icon("info-circle"), " ",
+                   .tr("Disponible uniquement après une analyse de voies — relancez l'enrichissement (panneau de gauche).")))
+      }
+      tagList(
+        fluidRow(
+          column(6, radioButtons(ns("network_mode"), .tr("Type de réseau"),
+                                 choices = c("emap" = .tr("Voies ↔ voies (similarité de gènes)"),
+                                             "cnet" = .tr("Voies ↔ gènes")),
+                                 inline = TRUE)),
+          column(6, numericInput(ns("network_top_n"), .tr("Voies affichées (réseau)"),
+                                 value = 30, min = 2, max = 100, step = 1))
+        ),
+        plotOutput(ns("network_plot"), height = "560px")
+      )
+    })
+
+    output$network_plot <- renderPlot({
+      req(pathway_rv())
+      top_n <- input$network_top_n
+      if (is.null(top_n) || is.na(top_n)) top_n <- 30
+      tryCatch(
+        plot_pathway_network(pathway_rv(), db_label = shared_rv$pathway_db %||% input$pathway_db,
+                             top_n = top_n, mode = input$network_mode, tr = .tr),
+        error = function(e) {
+          ggplot() +
+            annotate("text", x = 1, y = 1, label = paste(.tr("Erreur:"), conditionMessage(e)), color = "red") +
+            theme_void()
+        }
+      )
     })
 
     .dl <- function() downloadHandler(
