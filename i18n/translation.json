@@ -9472,6 +9472,38 @@
     {
       "fr": "Scree Plot — Variance Expliquée (QC Batch)",
       "en": "Scree Plot — Variance Explained (Batch QC)"
+    },
+    {
+      "fr": "LIANA (rangs agreges)",
+      "en": "LIANA (aggregated ranks)"
+    },
+    {
+      "fr": "Table LIANA agregee (CSV/TSV)",
+      "en": "Aggregated LIANA table (CSV/TSV)"
+    },
+    {
+      "fr": "Mode d'agregation LIANA (requis)",
+      "en": "LIANA aggregation mode (required)"
+    },
+    {
+      "fr": "Specificite — l'interaction est-elle specifique de ces types cellulaires ?",
+      "en": "Specificity — is this interaction specific to these cell types?"
+    },
+    {
+      "fr": "Magnitude — l'interaction est-elle abondante ?",
+      "en": "Magnitude — is this interaction abundant?"
+    },
+    {
+      "fr": "Colonne de rang a importer (requis)",
+      "en": "Rank column to import (required)"
+    },
+    {
+      "fr": "Colonnes de rang : mean_rank, aggregate_rank ou {methode}.rank. Dans LIANA, rang 1 = meilleur (inverse de prob) : aucun score n'est reconstitue, et les modes specificite/magnitude ne sont pas comparables entre eux.",
+      "en": "Rank columns: mean_rank, aggregate_rank or {method}.rank. In LIANA, rank 1 = best (opposite of prob): no score is reconstructed, and specificity/magnitude modes are not comparable to each other."
+    },
+    {
+      "fr": "Communication cellule-cellule — import de resultats externes uniquement (CellChat / CellPhoneDB / LIANA). ",
+      "en": "Cell-cell communication — import of external results only (CellChat / CellPhoneDB / LIANA). "
     }
   ]
 }

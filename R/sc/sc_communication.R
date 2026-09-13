@@ -23,9 +23,10 @@
 #   type                  "cell_cell_communication" (constant)
 #   status                etat de validite technique, voir
 #                         communication_validity_states() / labels
-#   source_method         "cellchat" ou "cellphonedb" (jamais melanges dans un
-#                         meme resultat : les scores de sources differentes ne
-#                         sont PAS comparables sur une echelle commune)
+#   source_method         "cellchat", "cellphonedb" ou "liana" (jamais
+#                         melanges dans un meme resultat : les scores de
+#                         sources differentes ne sont PAS comparables sur une
+#                         echelle commune)
 #   canonical_table       table canonique (12 champs contractuels + colonnes
 #                         originales utiles + sender_mapped/receiver_mapped +
 #                         duplicate_interaction)
@@ -51,6 +52,21 @@
 # Champs derives ajoutés a la table (jamais confondus avec les champs
 # contractuels) : sender_mapped/receiver_mapped (exact match uniquement —
 # JAMAIS de renommage silencieux de populations) et duplicate_interaction.
+#
+# ── CHAMPS DE MESURE DE RANG (CCC 7-8 route (b), source "liana") ────────────
+# Colonnes ADDITIONNELLES presentes UNIQUEMENT quand la source fournit une
+# mesure ordinale — voir communication_rank_fields() :
+#   rank                  valeur ordinale importee (mean_rank, {methode}.rank
+#                         ou aggregate_rank selon le choix de l'utilisateur)
+#   rank_direction        "lower_is_better" (dans LIANA, rang 1 = meilleur :
+#                         c'est l'INVERSE de 'prob' CellChat)
+#   rank_aggregation_mode "specificity" ou "magnitude" — CHOIX EXPLICITE, les
+#                         deux modes ne sont pas comparables entre eux
+# Elles ne font PAS partie des 12 champs contractuels : ceux-ci sont EXIGES
+# de toute source, alors qu'un rang n'existe pas chez CellChat/CellPhoneDB.
+# Les y ajouter forcerait ces sources a emettre des colonnes NA et modifierait
+# leurs resultats (interdit par la regle 1). Un consommateur DOIT tester leur
+# presence. 'score' reste NA sur cette route : un rang n'est pas un score.
 #
 # ── API PUBLIQUE FIGEE DES LE STAGE 11 ──────────────────────────────────────
 # communication_public_api() enumere la surface publique ; le test de freeze
@@ -82,9 +98,55 @@ communication_contract_fields <- function() {
 
 #' Sources d'import supportees (v1)
 #'
+#' `"liana"` a ete ajoutee en CCC 7-8 route (b) — import de rangs produits par
+#' LIANA HORS de l'application, sans aucune dependance nouvelle.
+#'
 #' @return Vecteur character des identifiants de sources supportees.
 #' @export
-communication_supported_sources <- function() c("cellchat", "cellphonedb")
+communication_supported_sources <- function() {
+  c("cellchat", "cellphonedb", "liana")
+}
+
+#' Champs de MESURE de rang — specifiques aux sources qui en fournissent
+#'
+#' Colonnes ADDITIONNELLES de la table canonique, presentes UNIQUEMENT quand la
+#' source importee fournit une mesure ordinale (aujourd'hui : la route LIANA).
+#' Elles ne font volontairement PAS partie de communication_contract_fields() :
+#' les 12 champs contractuels sont EXIGES de toute source
+#' (finalize_communication_result() echoue si l'un manque), alors qu'un rang
+#' n'existe pas chez CellChat/CellPhoneDB. Les y ajouter forcerait ces deux
+#' sources a emettre des colonnes NA et modifierait leurs resultats — interdit
+#' par la regle 1 (zero changement de comportement sur l'existant).
+#'
+#' Un consommateur DOIT donc tester la presence de ces colonnes avant usage.
+#'
+#' @return Vecteur character des 3 champs de mesure de rang.
+#' @export
+communication_rank_fields <- function() {
+  c("rank", "rank_direction", "rank_aggregation_mode")
+}
+
+#' Modes d'agregation LIANA supportes
+#'
+#' `specificity` et `magnitude` repondent a DEUX questions differentes
+#' (« cette interaction est-elle specifique de ces types cellulaires ? » vs
+#' « est-elle abondante ? »). Les melanger produirait un artefact d'analyse :
+#' le mode est donc un CHOIX EXPLICITE de l'utilisateur, jamais un defaut
+#' implicite.
+#'
+#' @return Vecteur character des modes acceptes.
+#' @export
+communication_rank_aggregation_modes <- function() {
+  c("specificity", "magnitude")
+}
+
+#' Valeur du champ `rank_direction` pour la route LIANA
+#'
+#' Dans LIANA, **plus petit = meilleur** (rang 1 = interaction la plus
+#' specifique/abondante) — l'INVERSE de `prob` (CellChat) ou de
+#' `edge_specificity`. Toute comparaison doit inverser explicitement la
+#' direction, jamais supposer la meme.
+.COMMUNICATION_RANK_DIRECTION_LOWER <- "lower_is_better"
 
 # Etats de validite explicites du contrat (source de verite ; ne pas
 # re-enseigner ailleurs — communication_validity_states() est l'accesseur
@@ -196,6 +258,24 @@ communication_error_state <- function(e) {
   cellphonedb = list(
     ligand_pair = c("interacting_pair"),
     p_value_key = c("interacting_pair")
+  ),
+  # LIANA (CCC 7-8 route (b)) : table agregee produite HORS de l'application.
+  #   - `source`/`target` = populations sender/receiver ;
+  #   - `ligand`/`receptor` = colonnes DECOMPLEXIFIEES (LIANA decomplexifie
+  #     CellChat avant agregation). Les colonnes `.complex` servent de REPLI
+  #     quand le decomplexifie est absent : elles sont alors reprises TELLES
+  #     QUELLES, jamais decoupees — un complexe (« TGFB1_TGFB2 ») n'a pas de
+  #     decoupage univoque, le deviner serait inventer une donnee ;
+  #   - `aggregate_rank` est une P-VALUE (RRA : min(p) x k), pas un score :
+  #     elle alimente `p_value`, jamais `score`.
+  liana = list(
+    sender   = c("source", "sender"),
+    receiver = c("target", "receiver"),
+    ligand   = c("ligand"),
+    receptor = c("receptor"),
+    ligand_complex   = c("ligand.complex", "ligand_complex"),
+    receptor_complex = c("receptor.complex", "receptor_complex"),
+    p_value  = c("aggregate_rank")
   )
 )
 
@@ -772,6 +852,282 @@ parse_cellphonedb_import <- function(means_tab, pvalues_tab = NULL,
   )
 }
 
+#' Importer les resultats LIANA agreges (rangs) — CCC 7-8 route (b)
+#'
+#' Route (b) : la table a ETE produite par LIANA HORS de l'application
+#' (`liana_aggregate()` / `rank_aggregate()` avec `get_ranks = TRUE` et
+#' `get_agrank = TRUE`). L'application n'execute AUCUNE methode CCC, ne
+#' recalcule AUCUN rang et ne fabrique AUCUN score : elle lit des colonnes
+#' deja calculees et les range dans la table canonique.
+#'
+#' ── SEMANTIQUE DES RANGS (a ne pas confondre avec un score) ────────────────
+#' 1. **Dans LIANA, plus petit = meilleur.** Rang 1 = interaction la plus
+#'    specifique (ou la plus abondante selon le mode). C'est l'INVERSE de
+#'    `prob` (CellChat) et d'`edge_specificity`. `rank_direction` vaut donc
+#'    "lower_is_better" pour TOUTES les lignes.
+#' 2. **`aggregate_rank` est une P-VALUE**, pas un score de communication :
+#'    produite par Robust Rank Aggregation (`min(p) x k`, `p_i = pbeta(r_i, i,
+#'    k-i+1)`). Elle alimente `p_value` — jamais `score`.
+#' 3. **`score` reste NA** : le contrat interdit de fabriquer un champ absent,
+#'    et convertir un rang en score serait une erreur de categorie (echelles et
+#'    directions differentes).
+#' 4. **`rank_aggregation_mode` est un CHOIX EXPLICITE** (`specificity` ou
+#'    `magnitude`) : les deux modes repondent a des questions differentes et ne
+#'    sont pas comparables entre eux. Aucun defaut implicite.
+#'
+#' ── DEUX PARAMETRES SONT REQUIS (pas deduits du fichier) ───────────────────
+#' `rank_column` et `aggregation_mode` ne sont pas deductibles de façon fiable
+#' du contenu : un fichier peut porter `mean_rank`, `aggregate_rank` ET une
+#' colonne `{methode}.rank` par methode agregee. L'appelant les declare.
+#'
+#' @param tab Table importee (data.frame) — la lecture du fichier est du
+#'   ressort de l'appelant (module).
+#' @param rank_column Nom de la colonne de rang a importer (`mean_rank`,
+#'   `aggregate_rank` ou `{methode}.rank`). Resolution insensible a la casse.
+#' @param aggregation_mode `specificity` ou `magnitude` (voir ci-dessus).
+#' @param source_file Nom ORIGINAL du fichier source (jamais le chemin local).
+#' @return list(table = champs canoniques + champs de rang
+#'   (communication_rank_fields()), column_mapping, n_input_rows, warnings,
+#'   external_consensus = logical — TRUE quand la table porte une valeur
+#'   agregee INTER-METHODES calculee par LIANA).
+#' @export
+parse_liana_import <- function(tab, rank_column, aggregation_mode,
+                               source_file = NA_character_) {
+  if (is.null(tab) || !is.data.frame(tab)) {
+    .communication_stop(
+      "invalid_input",
+      paste0(
+        "Import LIANA : une table (data.frame) lue depuis le fichier agrege ",
+        "est requise (recu : ",
+        if (is.null(tab)) "NULL" else paste(class(tab), collapse = "/"), ")."
+      )
+    )
+  }
+  if (nrow(tab) == 0L) {
+    .communication_stop(
+      "invalid_input",
+      "Import LIANA : la table importee est vide (0 ligne)."
+    )
+  }
+
+  # -- Mode d'agregation : CHOIX EXPLICITE de l'utilisateur. Jamais de defaut
+  #    implicite : specificity et magnitude repondent a deux questions
+  #    differentes (cf. doc ci-dessus).
+  mode_val <- as.character(aggregation_mode)[1L]
+  if (is.na(mode_val) || .communication_is_blank(mode_val)) {
+    .communication_stop(
+      "invalid_input",
+      paste0(
+        "Import LIANA : le mode d'agregation est requis (aucun defaut ",
+        "implicite). Valeurs acceptees : ",
+        paste(communication_rank_aggregation_modes(), collapse = ", "), "."
+      )
+    )
+  }
+  if (!mode_val %in% communication_rank_aggregation_modes()) {
+    .communication_stop(
+      "invalid_input",
+      sprintf(
+        "Import LIANA : mode d'agregation inconnu '%s'. Valeurs acceptees : %s.",
+        mode_val, paste(communication_rank_aggregation_modes(), collapse = ", ")
+      )
+    )
+  }
+
+  # -- Colonne de rang : CHOIX EXPLICITE egalement.
+  rank_req <- as.character(rank_column)[1L]
+  if (is.na(rank_req) || .communication_is_blank(rank_req)) {
+    .communication_stop(
+      "invalid_input",
+      paste0(
+        "Import LIANA : la colonne de rang a importer est requise (aucun ",
+        "defaut implicite) — ex. 'mean_rank', 'aggregate_rank' ou ",
+        "'natmi.rank'. La route (b) importe des RANGS : sans rang, il n'y a ",
+        "pas de mesure."
+      )
+    )
+  }
+
+  col <- vapply(
+    c("sender", "receiver", "ligand", "receptor", "ligand_complex",
+      "receptor_complex", "p_value"),
+    function(f) .communication_pick_column(tab, .COMMUNICATION_FIELD_ALIASES$liana[[f]]),
+    character(1)
+  )
+
+  missing_required <- c("sender", "receiver")[
+    is.na(col[c("sender", "receiver")])
+  ]
+  if (length(missing_required)) {
+    .communication_stop(
+      "invalid_schema",
+      sprintf(
+        paste0(
+          "Import LIANA : colonne(s) requise(s) absente(s) de la table ",
+          "importee : %s. Colonnes presentes : %s. Format attendu : table ",
+          "agregee LIANA (source/target/ligand.complex/receptor.complex + ",
+          "colonnes de rang)."
+        ),
+        paste(missing_required, collapse = ", "),
+        paste(utils::head(colnames(tab), 20), collapse = ", ")
+      )
+    )
+  }
+
+  # Ligand/recepteur : la colonne DECOMPLEXIFIEE est prioritaire ; a defaut on
+  # reprend la colonne `.complex` TELLE QUELLE (jamais decoupee : un complexe
+  # n'a pas de decoupage univoque — le deviner serait inventer une donnee).
+  lig_col <- if (!is.na(col[["ligand"]])) col[["ligand"]] else col[["ligand_complex"]]
+  rec_col <- if (!is.na(col[["receptor"]])) col[["receptor"]] else col[["receptor_complex"]]
+  if (is.na(lig_col) || is.na(rec_col)) {
+    .communication_stop(
+      "invalid_schema",
+      sprintf(
+        paste0(
+          "Import LIANA : ni ligand/receptor decomplexifies ni ligand.complex/",
+          "receptor.complex trouves (colonnes presentes : %s)."
+        ),
+        paste(utils::head(colnames(tab), 20), collapse = ", ")
+      )
+    )
+  }
+  ligand_from_complex <- is.na(col[["ligand"]])
+  receptor_from_complex <- is.na(col[["receptor"]])
+
+  # -- La colonne de rang demandee doit EXISTER (resolution insensible a la
+  #    casse, comme tous les alias).
+  rank_col <- .communication_pick_column(tab, rank_req)
+  if (is.na(rank_col)) {
+    rank_like <- grep("(^mean_rank$)|(^aggregate_rank$)|(\\.rank$)",
+                      colnames(tab), value = TRUE, ignore.case = TRUE)
+    .communication_stop(
+      "invalid_schema",
+      sprintf(
+        paste0(
+          "Import LIANA : colonne de rang '%s' absente de la table importee. ",
+          "Colonnes de rang detectees : %s. Colonnes presentes : %s."
+        ),
+        rank_req,
+        if (length(rank_like)) paste(utils::head(rank_like, 20), collapse = ", ") else "(aucune)",
+        paste(utils::head(colnames(tab), 20), collapse = ", ")
+      )
+    )
+  }
+
+  n <- nrow(tab)
+  rank_c <- .communication_coerce_numeric(tab[[rank_col]])
+  pval_c <- if (!is.na(col[["p_value"]])) {
+    .communication_coerce_numeric(tab[[col[["p_value"]]]])
+  } else {
+    list(values = rep(NA_real_, n), n_coerced_na = 0L)
+  }
+
+  ligand <- as.character(tab[[lig_col]])
+  receptor <- as.character(tab[[rec_col]])
+
+  table <- data.frame(
+    sender     = as.character(tab[[col[["sender"]]]]),
+    receiver   = as.character(tab[[col[["receiver"]]]]),
+    ligand     = ligand,
+    receptor   = receptor,
+    interaction = paste(ligand, receptor, sep = " -> "),
+    # LIANA n'expose pas de pathway dans la table agregee : NA, jamais fabrique.
+    pathway    = rep(NA_character_, n),
+    # score : NA par CONSTRUCTION (un rang n'est pas un score).
+    score      = rep(NA_real_, n),
+    # aggregate_rank EST une p-value (RRA) : c'est sa place exacte.
+    p_value    = pval_c$values,
+    p_adjusted = rep(NA_real_, n),
+    source_method = rep("liana", n),
+    source_file = rep(as.character(source_file)[1L], n),
+    source_cell_identity_level = rep(NA_character_, n),
+    # -- Champs de MESURE de rang (communication_rank_fields()).
+    rank = rank_c$values,
+    rank_direction = rep(.COMMUNICATION_RANK_DIRECTION_LOWER, n),
+    rank_aggregation_mode = rep(mode_val, n),
+    stringsAsFactors = FALSE
+  )
+
+  # -- Consensus inter-methodes : `mean_rank` (moyenne des rangs) et
+  #    `aggregate_rank` (RRA) sont des agregats calcules par LIANA sur
+  #    PLUSIEURS methodes ; une colonne `{methode}.rank` ne concerne qu'UNE
+  #    methode. L'application n'agrege rien elle-meme — elle importe et
+  #    MARQUE, pour que la nature de la valeur reste tracable dans le
+  #    resultat et pas seulement dans la documentation.
+  rank_is_consensus <- grepl("^(mean_rank|aggregate_rank)$", rank_col, ignore.case = TRUE)
+  pval_is_consensus <- !is.na(col[["p_value"]])
+  external_consensus <- isTRUE(rank_is_consensus || pval_is_consensus)
+
+  warnings <- character(0)
+  warnings <- c(warnings, sprintf(
+    paste0("Import LIANA : score laisse a NA pour les %d lignes — LIANA ",
+           "produit des rangs et des p-values, pas un score comparable a ",
+           "'prob' (CellChat). Aucune conversion rang -> score n'est faite."),
+    n
+  ))
+  warnings <- c(warnings, sprintf(
+    paste0("Import LIANA : pathway laisse a NA pour les %d lignes — la table ",
+           "agregee LIANA n'expose pas de pathway."),
+    n
+  ))
+  warnings <- c(warnings, sprintf(
+    paste0("Import LIANA : p_adjusted laisse a NA pour les %d lignes — le ",
+           "format agrege n'expose pas de p-value ajustee."),
+    n
+  ))
+  warnings <- c(warnings, sprintf(
+    paste0("Import LIANA : rang importe depuis '%s' — direction ",
+           "'lower_is_better' (dans LIANA, rang 1 = meilleur ; c'est l'INVERSE ",
+           "de 'prob'). Mode d'agregation : '%s'."),
+    rank_col, mode_val
+  ))
+  if (rank_c$n_coerced_na > 0L) {
+    warnings <- c(warnings, sprintf(
+      "Import LIANA : %d valeur(s) de rang non numerique(s) mises a NA.",
+      rank_c$n_coerced_na
+    ))
+  }
+  if (pval_c$n_coerced_na > 0L) {
+    warnings <- c(warnings, sprintf(
+      "Import LIANA : %d valeur(s) d'aggregate_rank non numerique(s) mises a NA.",
+      pval_c$n_coerced_na
+    ))
+  }
+  if (external_consensus) {
+    warnings <- c(warnings, paste0(
+      "Import LIANA : la table porte une valeur agregee INTER-METHODES ",
+      "calculee par LIANA (", rank_col, " et/ou aggregate_rank). ",
+      "L'application n'agrege rien elle-meme, mais cette valeur n'est PAS ",
+      "le resultat d'une seule methode — voir le contrat, section 6."
+    ))
+  }
+
+  column_mapping <- list(
+    sender = col[["sender"]],
+    receiver = col[["receiver"]],
+    ligand = if (ligand_from_complex) {
+      paste0(lig_col, " (complexe repris tel quel)")
+    } else lig_col,
+    receptor = if (receptor_from_complex) {
+      paste0(rec_col, " (complexe repris tel quel)")
+    } else rec_col,
+    rank = rank_col,
+    rank_direction = "constante (lower_is_better)",
+    rank_aggregation_mode = paste0("choix utilisateur : ", mode_val)
+  )
+  if (!is.na(col[["p_value"]])) {
+    column_mapping$p_value <- col[["p_value"]]
+  }
+
+  list(
+    table = table,
+    column_mapping = column_mapping,
+    n_input_rows = as.integer(n),
+    warnings = warnings,
+    external_consensus = external_consensus
+  )
+}
+
 # =============================================================================
 # Harmonisation des identites (exact match uniquement)
 # =============================================================================
@@ -984,6 +1340,19 @@ communication_import_qc <- function(canonical_table) {
     p_bad <- sum(!is.na(p) & (p < 0 | p > 1))
   }
 
+  # -- QC des rangs : uniquement quand la source fournit les champs de mesure
+  #    (aujourd'hui la route LIANA). Borne HAUTE = nombre de lignes ; borne
+  #    BASSE = 0 et non 1 : `aggregate_rank` est une p-value RRA sur [0,1] et
+  #    peut legitimement etre importe comme colonne de rang — mieux vaut
+  #    sous-signaler que produire un faux positif sur un fichier valide.
+  n_rank_bad <- 0L
+  n_rank_missing <- 0L
+  if (nrow(table) && "rank" %in% colnames(table)) {
+    r <- table$rank
+    n_rank_bad <- sum(!is.na(r) & (r < 0 | r > nrow(table)))
+    n_rank_missing <- sum(is.na(r))
+  }
+
   counts <- list(
     n_rows_before = as.integer(n_before),
     n_rows_after = as.integer(nrow(table)),
@@ -992,6 +1361,8 @@ communication_import_qc <- function(canonical_table) {
     n_duplicate_interactions = as.integer(n_dup),
     n_pathway_missing = as.integer(n_pathway_missing),
     n_p_value_out_of_range = as.integer(p_bad),
+    n_rank_out_of_range = as.integer(n_rank_bad),
+    n_rank_missing = as.integer(n_rank_missing),
     duplicate_policy = "conservees_flaggees"
   )
 
@@ -1021,6 +1392,19 @@ communication_import_qc <- function(canonical_table) {
     warnings <- c(warnings, sprintf(
       "%d p-value(s) hors [0,1] — conservees, comptabilisees, jamais corrigees.",
       p_bad
+    ))
+  }
+  if (n_rank_bad > 0L) {
+    warnings <- c(warnings, sprintf(
+      paste0("%d rang(s) hors [0, n] (n = %d lignes) — conserves, ",
+             "comptabilises, jamais corriges."),
+      n_rank_bad, nrow(table)
+    ))
+  }
+  if (n_rank_missing > 0L) {
+    warnings <- c(warnings, sprintf(
+      "%d rang(s) manquant(s) (NA) — conserves, jamais imputes.",
+      n_rank_missing
     ))
   }
 
@@ -1114,7 +1498,8 @@ communication_result_is_stale <- function(communication_result, seurat_obj) {
 #'
 #' @param canonical_table Table harmonisee + QC (champ table de
 #'   communication_import_qc()).
-#' @param source_method "cellchat" ou "cellphonedb" (un seul par resultat).
+#' @param source_method "cellchat", "cellphonedb" ou "liana" (un seul par
+#'   resultat).
 #' @param source_files Liste nommee des fichiers sources — NOMS ORIGINAUX
 #'   uniquement, jamais les chemins locaux complets.
 #' @param identity_column Colonne de metadonnees Seurat choisie.
@@ -1128,12 +1513,18 @@ communication_result_is_stale <- function(communication_result, seurat_obj) {
 #' @param extra_warnings Avertissements supplementaires produits par
 #'   l'orchestration (y compris les avertissements d'harmonisation et du QC,
 #'   jamais caches ailleurs) — fusionnes, sans doublon.
+#' @param external_consensus TRUE quand la table porte une valeur agregee
+#'   INTER-METHODES calculee par la source elle-meme (aujourd'hui : `mean_rank`
+#'   ou `aggregate_rank` de LIANA). L'application n'agrege RIEN — elle importe
+#'   et MARQUE, pour que la nature de la valeur reste tracable dans le
+#'   resultat (champ `is_external_consensus`) et pas seulement dans la
+#'   documentation.
 #' @param analysis_id Identifiant d'analyse.
 #' @return L'objet canonique (champs documentes dans l'en-tete de fichier).
 #' @export
 finalize_communication_result <- function(
     canonical_table,
-    source_method = c("cellchat", "cellphonedb"),
+    source_method = c("cellchat", "cellphonedb", "liana"),
     source_files = list(),
     identity_column = NA_character_,
     identity_mapping = NULL,
@@ -1143,6 +1534,7 @@ finalize_communication_result <- function(
     n_input_rows = NA_integer_,
     seurat_obj = NULL,
     extra_warnings = character(0),
+    external_consensus = FALSE,
     analysis_id = "sc-communication-import"
 ) {
   source_method <- match.arg(source_method)
@@ -1218,7 +1610,8 @@ finalize_communication_result <- function(
       n_self_interactions = qc$n_self_interactions %||% NULL,
       n_duplicate_interactions = qc$n_duplicate_interactions %||% NULL,
       column_mapping = column_mapping,
-      object_fingerprint = result$object_identity$fingerprint
+      object_fingerprint = result$object_identity$fingerprint,
+      external_consensus = isTRUE(external_consensus)
     ),
     dataset = seurat_obj,
     cells_used = NULL,
@@ -1229,6 +1622,10 @@ finalize_communication_result <- function(
   entry$analysis_type <- "cell_cell_communication"
   entry$status <- "valid"
   entry$import_only <- TRUE
+  # Marqueur de nature de la valeur (route LIANA) : l'application n'agrege
+  # jamais, mais elle doit DIRE quand la valeur importee est un agregat
+  # inter-methodes calcule par la source.
+  entry$is_external_consensus <- isTRUE(external_consensus)
   entry$timestamp_utc <- format(
     entry$timestamp, "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"
   )
@@ -1388,9 +1785,11 @@ communication_public_api <- function() {
     "communication_validity_states", "communication_status_labels",
     "communication_status_is_valid", "communication_error_state",
     "assert_communication_result", "communication_public_api",
+    # Champs de mesure de rang (CCC 7-8 route (b))
+    "communication_rank_fields", "communication_rank_aggregation_modes",
     # Parseurs par source
     "parse_cellchat_import", "parse_cellphonedb_import",
-    "parse_cellchat_object",
+    "parse_cellchat_object", "parse_liana_import",
     # Harmonisation / QC / finalisation
     "harmonize_communication_identities", "communication_import_qc",
     "finalize_communication_result", "communication_result_is_stale",

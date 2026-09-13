@@ -18,7 +18,17 @@ test_that("communication contract exposes documented fields, sources and states"
     "score", "p_value", "p_adjusted",
     "source_method", "source_file", "source_cell_identity_level"
   ))
-  expect_setequal(communication_supported_sources(), c("cellchat", "cellphonedb"))
+  expect_setequal(communication_supported_sources(),
+                  c("cellchat", "cellphonedb", "liana"))
+  # CCC 7-8 route (b) : les champs de MESURE de rang forment une surface
+  # SEPAREE des 12 champs contractuels — un rang n'existe ni chez CellChat ni
+  # chez CellPhoneDB, et les y ajouter modifierait leurs resultats (regle 1).
+  expect_setequal(communication_rank_fields(),
+                  c("rank", "rank_direction", "rank_aggregation_mode"))
+  expect_setequal(communication_rank_aggregation_modes(),
+                  c("specificity", "magnitude"))
+  expect_length(intersect(communication_rank_fields(),
+                          communication_contract_fields()), 0L)
   expect_setequal(communication_validity_states(), c(
     "valid", "invalid_input", "invalid_schema",
     "invalid_identity_mapping", "stale_against_current_seurat_object"

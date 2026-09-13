@@ -20,14 +20,15 @@ mod_sc_communication_ui <- function(id) {
   tagList(
     div(class = "alert alert-light",
         style = "font-size:0.9em;border-left:3px solid #2980B9;",
-        i18n$t("Communication cellule-cellule — import de resultats externes uniquement (CellChat / CellPhoneDB). "),
+        i18n$t("Communication cellule-cellule — import de resultats externes uniquement (CellChat / CellPhoneDB / LIANA). "),
         i18n$t("Aucun recalcul, aucun score recompose. Les scores de sources differentes ne sont pas comparables.")),
 
     radioButtons(ns("comm_source"), i18n$t("Source des resultats"),
-                 choices = setNames(c("cellchat", "cellchat_object", "cellphonedb"),
+                 choices = setNames(c("cellchat", "cellchat_object", "cellphonedb", "liana"),
                                     c(.tr_plain("CellChat (table exportee)"),
                                       .tr_plain("Objet CellChat (.rds, resultats deja calcules)"),
-                                      .tr_plain("CellPhoneDB (means.txt)"))),
+                                      .tr_plain("CellPhoneDB (means.txt)"),
+                                      .tr_plain("LIANA (rangs agreges)"))),
                  selected = "cellchat"),
 
     conditionalPanel(
@@ -54,6 +55,25 @@ mod_sc_communication_ui <- function(id) {
                 accept = c(".txt", ".tsv", ".csv"), width = "100%"),
       div(class = "small text-muted mb-2",
           i18n$t("Format v2 : colonne interacting_pair (ligand|receptor) + une colonne par paire sender|receiver."))
+    ),
+
+    # ── CCC 7-8 route (b) : import de RANGS LIANA produits hors de l'app ────
+    # Aucune inference : l'app lit une table agregee deja calculee. Deux choix
+    # EXPLICITES sont exiges (mode d'agregation + colonne de rang) car ni l'un
+    # ni l'autre n'est deductible du contenu du fichier.
+    conditionalPanel(
+      condition = "input.comm_source == 'liana'", ns = ns,
+      fileInput(ns("comm_liana_file"), i18n$t("Table LIANA agregee (CSV/TSV)"),
+                accept = c(".csv", ".tsv", ".txt"), width = "100%"),
+      radioButtons(ns("comm_liana_mode"), i18n$t("Mode d'agregation LIANA (requis)"),
+                   choices = setNames(c("specificity", "magnitude"),
+                                      c(.tr_plain("Specificite — l'interaction est-elle specifique de ces types cellulaires ?"),
+                                        .tr_plain("Magnitude — l'interaction est-elle abondante ?"))),
+                   selected = character(0)),
+      selectInput(ns("comm_liana_rank"), i18n$t("Colonne de rang a importer (requis)"),
+                  choices = character(0), width = "100%"),
+      div(class = "small text-muted mb-2",
+          i18n$t("Colonnes de rang : mean_rank, aggregate_rank ou {methode}.rank. Dans LIANA, rang 1 = meilleur (inverse de prob) : aucun score n'est reconstitue, et les modes specificite/magnitude ne sont pas comparables entre eux."))
     ),
 
     hr(),
@@ -233,6 +253,24 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
                         selected = if ("seurat_clusters" %in% meta_cols) "seurat_clusters" else meta_cols[1])
     }, ignoreInit = TRUE)
 
+    # ── Colonnes de rang LIANA : proposees depuis l'en-tete du fichier ─────
+    # La liste est PROPOSEE, jamais imposee : comme le mode d'agregation, le
+    # choix reste explicite (aucun element preselectionne). On met en avant les
+    # colonnes qui ressemblent a des rangs ; si aucune n'est reconnue, on
+    # propose TOUTES les colonnes — le parseur diagnostiquera un choix
+    # inexploitable plutot que d'interdire l'import.
+    observeEvent(input$comm_liana_file, {
+      f <- input$comm_liana_file
+      tab <- if (is.null(f)) NULL else
+        tryCatch(.read_table_auto(f$datapath), error = function(e) NULL)
+      nms <- if (is.null(tab)) character(0) else colnames(tab)
+      rank_like <- grep("(^mean_rank$)|(^aggregate_rank$)|(\\.rank$)",
+                        nms, value = TRUE, ignore.case = TRUE)
+      updateSelectInput(session, "comm_liana_rank",
+                        choices = if (length(rank_like)) rank_like else nms,
+                        selected = character(0))
+    }, ignoreInit = TRUE)
+
     # ── Filtres reactifs (operation d'affichage uniquement) ────────────────
     .num_filter <- function(x) {
       if (is.null(x) || is.na(x)) NA_real_ else as.numeric(x)
@@ -286,7 +324,7 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
           parsed <- parse_cellchat_object(input$comm_cellchat_obj$datapath,
                                           source_file = input$comm_cellchat_obj$name)
           files <- list(object = input$comm_cellchat_obj$name)
-        } else {
+        } else if (identical(src, "cellphonedb")) {
           req(input$comm_cpdb_means)
           means <- .read_table_auto(input$comm_cpdb_means$datapath)
           pvals <- NULL
@@ -296,6 +334,34 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
             files$pvalues <- input$comm_cpdb_pvalues$name
           }
           parsed <- parse_cellphonedb_import(means, pvals, source_file = input$comm_cpdb_means$name)
+        } else {
+          # ── LIANA (CCC 7-8 route (b)) : import de RANGS produits hors de
+          # l'app. Les deux choix ci-dessous sont EXIGES — ni le mode
+          # d'agregation ni la colonne de rang ne sont deductibles du fichier,
+          # et un defaut implicite produirait un artefact d'analyse.
+          req(input$comm_liana_file)
+          if (is.null(input$comm_liana_mode) || !nzchar(input$comm_liana_mode)) {
+            stop(paste0(
+              "Choisissez le mode d'agregation LIANA (specificite ou magnitude) : ",
+              "les deux repondent a des questions differentes et ne sont pas ",
+              "comparables entre elles."
+            ), call. = FALSE)
+          }
+          rank_col <- input$comm_liana_rank
+          if (is.null(rank_col) || !nzchar(rank_col)) {
+            stop(paste0(
+              "Choisissez la colonne de rang LIANA a importer (mean_rank, ",
+              "aggregate_rank ou {methode}.rank) — la route (b) importe des ",
+              "rangs : sans rang, il n'y a pas de mesure."
+            ), call. = FALSE)
+          }
+          liana_tab <- .read_table_auto(input$comm_liana_file$datapath)
+          parsed <- parse_liana_import(
+            liana_tab, rank_column = rank_col,
+            aggregation_mode = input$comm_liana_mode,
+            source_file = input$comm_liana_file$name
+          )
+          files <- list(table = input$comm_liana_file$name)
         }
         warnings_all <- c(warnings_all, parsed$warnings)
 
@@ -330,6 +396,10 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
           n_input_rows    = parsed$n_input_rows,
           seurat_obj      = obj,
           extra_warnings  = warnings_all,
+          # Route LIANA : la table porte un agregat inter-methodes calcule par
+          # LIANA (mean_rank/aggregate_rank). L'app n'agrege rien — elle MARQUE
+          # (NULL pour les autres sources -> FALSE).
+          external_consensus = isTRUE(parsed$external_consensus),
           analysis_id     = "sc-communication-import"
         )
         comm_state$result <- canonical
