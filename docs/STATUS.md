@@ -1108,6 +1108,32 @@ de CCC 7–8 reste une **décision séparée**, non demandée. Les questions 2
 (rareté par voisinage) et 3 (rareté × communication) de la phase 9 ne sont
 **pas** retenues par la décision du 2026-09-13.
 
+### 2ac. ✅ CCC 9 — rareté par population annotée IMPLÉMENTÉE (2026-09-13)
+
+Suite directe du §2ab : les 5 décisions de la proposition (§12) sont appliquées
+telles quelles (jalon descriptif ; seuil = choix déclaré obligatoire ; rapport
+consolidé 4F inchangé — option A ; unification cluster × type reportée à une
+tâche séparée ; type canonique `sc_population_rarity` / `analysis_id`
+`sc-population-rarity`).
+
+| Élément | Détail |
+|---|---|
+| **Moteur pur** | `R/sc/sc_population_rarity.R` — `compute_population_rarity(meta, identity_column, rule_type, threshold, sample_column, seurat_obj)` + surface publique gelée (12 fonctions). `table()`/base R : règle 3 satisfaite trivialement, aucune primitive miloR |
+| **Contrat** | `docs/contracts/POPULATION_RARITY_CONTRACT.md` — gelé ; porte Stage 13 **inapplicable, motif écrit** (§1.1) + `descriptive_only = TRUE` dans la provenance ; corollaire contraignant : toute comparaison entre conditions repasse par la porte DA |
+| **Aucun seuil implicite** | `config/defaults.R` : `TS_POPULATION_RARITY_RULES` (règles autorisées) + `TS_POPULATION_RARITY_MIN_CELLS_TOTAL` (plancher de garde 50) — **jamais** un seuil de rareté ; `TS_DA_MIN_IDENTITY_CELLS_PER_SAMPLE` non réutilisé (garde au contrat §1.3) |
+| **UI** | onglet **dans** le panneau SC existant (`mod_sc.R` : accordion « 2b. Rareté par population » + `nav_panel` sortie) — jamais un nouveau panneau latéral ; champ seuil part **vide** (`value = NA`) |
+| **Rapport** | section optionnelle du rapport SC (`reports/sc_report_template.Rmd`), **consomme** `shared_rv$population_rarity_result` — aucune ré-exécution ; rapport consolidé 4F **inchangé** (12 domaines figés) |
+| **États** | `valid` / `valid_with_warnings` / `unavailable_single_population` (`is_rare = NA`, pas une erreur) / `invalid_input` (erreurs classées, FR, `call. = FALSE`) |
+| **Tests** | `test-sc-population-rarity.R` **98 PASS** + freeze **83 PASS** + i18n 15 PASS ; gardes : conventions **0 erreur / 324 avert.** (plafond), duplication **0 erreur / 3 avert.** (préexistants) ; suite complète : **`failed=0 passed=4788 error=0 skipped=2`** — les 2 SKIP = le SKIP de référence (GEO live smoke) + `test-shinytest2-bulk` **flake chromote** (« Chrome debugging port not open »), repassé **seul : 4/4 PASS** → effectif **4790 PASS / 0 FAIL / 1 SKIP** (référence 4609 PASS / 1 SKIP → **+181 PASS** = exactement les 181 assertions du jalon). **Aucune régression.** |
+| **Boot** | headless `runApp()` → **HTTP 200** |
+| **Rapport de stage** | `docs/ROADMAP_HANDOFF_STAGE_CCC_9_IMPL.md` (6 sections) |
+
+**Reste ouvert (inchangé)** : les questions 2 et 3 de la phase 9 ne sont pas
+retenues ; CCC 5–6 gelées ; route (a) de CCC 7–8 = décision séparée ;
+`docs/STATUS.md` §2ab rappelle que **24 contrats** (dont le nouveau
+`POPULATION_RARITY_CONTRACT.md`) ne sont pas versionnés dans git — décision
+ouverte n°4.
+
 
 ---
 

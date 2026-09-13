@@ -83,6 +83,7 @@ source("R/sc/sc_abundance_milo_views.R")  # Stage 14 : vues pures du resultat Mi
 source("R/sc/sc_abundance_sccoda.R")  # Stage 15 (4E-2) : scCODA, GATED sur le design Stage 13 (reticulate, jamais de repli silencieux)
 source("R/sc/sc_abundance_sccoda_views.R")  # Stage 15 : vues pures du resultat scCODA
 source("R/sc/sc_abundance_cross_views.R")  # Stage 16 (4E-3) : vues croisées Milo x scCODA, consommatrices pures des deux contrats
+source("R/sc/sc_population_rarity.R")  # CCC 9 (question 1) : rareté par population annotée — DESCRIPTIF, aucun graphe (APRES sc_velocity.R : empreinte v2)
 source("R/sc/sc_pipeline.R")
 source("R/sc/sc_export.R")
 
@@ -130,6 +131,7 @@ source("modules/import/mod_geo.R")
 # 5b. Single-Cell
 source("modules/sc/mod_sc_pipeline.R")
 source("modules/sc/mod_sc_annotation.R")
+source("modules/sc/mod_sc_rarity.R")  # CCC 9 (Q1) : onglet « Rareté par population » (descriptif)
 source("modules/sc/mod_sc_viz.R")
 source("modules/sc/mod_sc_markers.R")
 source("modules/sc/mod_sc_pseudobulk.R")

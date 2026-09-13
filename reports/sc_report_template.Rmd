@@ -29,6 +29,7 @@ params:
   da_design_result: NULL
   da_milo_result: NULL
   da_sccoda_result: NULL
+  population_rarity_result: NULL
   fig_width: 9
   fig_height: 6
   saved_viz_list: NULL
@@ -86,6 +87,9 @@ render_plot <- function(p, allow_interactive=TRUE) {
 .has_traj    <- !is.null(obj) && "pseudotime" %in% colnames(obj@meta.data)
 .has_singler <- !is.null(obj) && length(grep("^SingleR_", colnames(obj@meta.data))) > 0
 .has_viz     <- !is.null(params$saved_viz_list) && length(params$saved_viz_list) > 0
+# CCC 9 (Q1) : le rapport AFFICHE le resultat canonique de rareté (tables
+# pures) — il ne le recalcule jamais (aucune re-execution dans le template).
+.has_rarity  <- !is.null(params$population_rarity_result)
 
 # Step-3.7: genes actually present in the object, used by the new
 # "Gènes vs Pseudotemps" section below.
@@ -214,6 +218,33 @@ if (!is.null(red_a)) {
   if (!is.null(pal_scale)) p_annot <- suppressWarnings(p_annot + pal_scale)
   render_plot(p_annot)
 } else { cat("UMAP non calculé.") }
+```
+
+---
+
+```{r rarity_section, eval="rarity" %in% sections && .has_rarity, results='asis'}
+cat(paste0("# ", tr("Rareté par population (descriptif)"), "\n\n"))
+```
+
+```{r rarity_note, eval="rarity" %in% sections && .has_rarity, results='asis'}
+cat(paste0("*Analyse descriptive, mono-condition : aucune comparaison entre ",
+           "conditions, aucun test. « Rare » résulte d'une règle DÉCLARÉE par ",
+           "l'utilisateur, jamais d'une vérité biologique.*\n\n"))
+```
+
+```{r rarity_summary, eval="rarity" %in% sections && .has_rarity}
+rar_smry <- build_population_rarity_summary(params$population_rarity_result)
+knitr::kable(
+  data.frame(Champ  = names(rar_smry),
+             Valeur = as.character(unlist(rar_smry, use.names = FALSE)),
+             row.names = NULL),
+  caption = "Règle déclarée, compteurs et provenance")
+```
+
+```{r rarity_pop_table, eval="rarity" %in% sections && .has_rarity}
+knitr::kable(
+  build_population_rarity_table_export(params$population_rarity_result),
+  caption = "Populations et rareté déclarée")
 ```
 
 ---
