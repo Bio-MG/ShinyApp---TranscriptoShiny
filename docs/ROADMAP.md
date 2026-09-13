@@ -117,8 +117,8 @@ avance jalon par jalon, un jalon = un commit.
 | — | ~~**CCC 7–8** — interop OmniPath / LIANA~~ | — | — | ✅ **LIVRÉ le 2026-09-13** (`a88577f`, route (b) sans dépendance) — `STATUS.md` §2aa |
 | — | ~~**CCC 9** — rare-cell annotator = **question 1 : rareté par population**~~ | M | — | ✅ **LIVRÉ le 2026-09-13** (`8c1a969`) — `STATUS.md` §2ac ; questions 2 et 3 non retenues |
 | — | ~~**STAT-S2** — réseau d'enrichissement (`emapplot`/`cnetplot`)~~ | M | — | ✅ **LIVRÉ le 2026-09-13** — `STATUS.md` §2ad |
-| 3 | **STAT-S3** — clustering de profils (kmeans MVP) | L | — | 🟢 **PROCHAIN** (re-mesurer la fiche §3 avant planification) |
-| 4 | **NEW-1** — dose-réponse / time-course | M | — | 🟢 prêt |
+| — | ~~**STAT-S3** — clustering de profils (kmeans MVP)~~ | L | — | ✅ **LIVRÉ le 2026-09-13** — `STATUS.md` §2ae ; V2 floue (Mfuzz) non retenue |
+| 4 | **NEW-1** — dose-réponse / time-course | M | — | 🟢 **PROCHAIN** (re-mesurer la fiche §6 avant planification ; dépendance `drc` = justification renv.lock requise) |
 | 5 | **NEW-2** — fusion de jeux | M | ~~STAT-S1~~ ✅ prérequis levé | 🟢 prêt |
 | 6 | **NEW-3** — réseau PCSF | L | interactome local vs contrainte offline | 🔵 backlog conditionnel |
 | 7 | **UX 3B / 4B / 6B** | M | décision 2 | ⏸ en attente d'arbitrage |
@@ -139,8 +139,9 @@ Restent **STAT-S2..S3**, **NEW-1..3**.
 Ordre conseillé (fondations d'abord) :
 `PLOT-S1 → PLOT-S2 → PLOT-S3 → PLOT-S4 → PLOT-S5` ✅ **fait** ; `PLOT-S6` ✅
 **déjà fait par l'arbre** ; `STAT-S1` ✅ **fait** ; `STAT-S2` ✅ **livré le
-2026-09-13** (réseau d'enrichissement, `STATUS.md` §2ad). Reste `STAT-S3`
-(**prochain jalon de la séquence**), `NEW-1..3` (prérequis de NEW-2 levé).
+2026-09-13** (réseau d'enrichissement, `STATUS.md` §2ad) ; `STAT-S3` ✅
+**livré le 2026-09-13** (clustering de profils, `STATUS.md` §2ae). Restent
+`NEW-1..3` (**NEW-1 prochain** ; prérequis de `NEW-2` levé par STAT-S1).
 
 ### Flux B — CCC avancée · `ROADMAP_CCC_ADVANCED.md`
 Phases 1–4 livrées ; **5–6 GELÉES SANS SUITE** (2026-09-13) ; **7–8 LIVRÉES**

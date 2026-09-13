@@ -9644,6 +9644,102 @@
     {
       "fr": "Voies reliées à leurs gènes (descriptif)",
       "en": "Pathways linked to their genes (descriptive)"
+    },
+    {
+      "fr": "3e. Clustering de profils",
+      "en": "3e. Profile clustering"
+    },
+    {
+      "fr": "Clustering de profils",
+      "en": "Profile clustering"
+    },
+    {
+      "fr": "Clustering de profils (descriptif)",
+      "en": "Profile clustering (descriptive)"
+    },
+    {
+      "fr": "Regroupe les gènes par forme de profil d'expression entre groupes (moyenne VST par groupe, z-score par gène, kmeans).",
+      "en": "Groups genes by expression profile shape across groups (per-group VST mean, per-gene z-score, kmeans)."
+    },
+    {
+      "fr": "Surexprimés (up)",
+      "en": "Upregulated (up)"
+    },
+    {
+      "fr": "Sous-exprimés (down)",
+      "en": "Downregulated (down)"
+    },
+    {
+      "fr": "Tous les significatifs",
+      "en": "All significant"
+    },
+    {
+      "fr": "Colonne de groupe (profils)",
+      "en": "Group column (profiles)"
+    },
+    {
+      "fr": "Nombre de clusters (k)",
+      "en": "Number of clusters (k)"
+    },
+    {
+      "fr": "Graine (reproductibilité)",
+      "en": "Seed (reproducibility)"
+    },
+    {
+      "fr": "Lancer le clustering",
+      "en": "Run clustering"
+    },
+    {
+      "fr": "Gènes par cluster",
+      "en": "Genes per cluster"
+    },
+    {
+      "fr": "En attente — lancez d'abord le Filtrage & VST (étape 1) et l'analyse différentielle (étape 2).",
+      "en": "Waiting — run Filtering & VST (step 1) and differential analysis (step 2) first."
+    },
+    {
+      "fr": "✓ {g} gènes regroupés en {k} clusters ({c} groupes, graine {s}).",
+      "en": "✓ {g} genes grouped into {k} clusters ({c} groups, seed {s})."
+    },
+    {
+      "fr": "✓ {g} gènes regroupés en {k} clusters.",
+      "en": "✓ {g} genes grouped into {k} clusters."
+    },
+    {
+      "fr": "⚠️ Trop peu de gènes ({n}) — élargissez la liste (source ou seuils).",
+      "en": "⚠️ Too few genes ({n}) — widen the list (source or thresholds)."
+    },
+    {
+      "fr": "Clustering des profils (kmeans)...",
+      "en": "Profile clustering (kmeans)..."
+    },
+    {
+      "fr": "Erreur clustering:",
+      "en": "Clustering error:"
+    },
+    {
+      "fr": "Profils d'expression par cluster (kmeans)",
+      "en": "Expression profiles per cluster (kmeans)"
+    },
+    {
+      "fr": "groupe",
+      "en": "group"
+    },
+    {
+      "fr": "graine",
+      "en": "seed"
+    },
+    {
+      "fr": "Groupe",
+      "en": "Group"
+    },
+    {
+      "fr": "Expression VST (z-score par gène)",
+      "en": "VST expression (per-gene z-score)"
+    },
+    {
+      "fr": "k",
+      "en": "k"
     }
   ]
 }

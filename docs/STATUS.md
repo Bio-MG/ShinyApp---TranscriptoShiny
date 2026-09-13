@@ -1157,6 +1157,28 @@ Barplot/Dotplot/Table des deux côtés). Livraison le même jour que CCC 9
 kmeans MVP, effort L) — fiche à re-mesurer avant planification ; puis NEW-1..3
 prêts, UX 3B/4B/6B et 4E-4 en attente d'arbitrage.
 
+### 2ae. ✅ STAT-S3 — clustering de profils (kmeans MVP) (2026-09-13)
+
+Jalon flux A, **rang 3** de l'ordre d'actionnabilité — fiche **re-mesurée**
+avant planification ; **adaptation assumée** : moteur dans `R/bulk/` (et non
+`R/core/` comme écrit dans la fiche) — l'arbre actuel place les moteurs bulk
+dans `R/bulk/` (bulk_wgcna.R, bulk_gsva.R, bulk_survival.R). **Sur demande
+utilisateur : tests ciblés uniquement, pas de suite complète ce jalon.**
+
+| Élément | Détail |
+|---|---|
+| **Moteur pur** | `R/bulk/bulk_pattern.R` — `run_pattern_clustering(vst_mat, metadata, group_column, genes, k, seed, …)` : moyenne VST par groupe → **z-score par gène** → `stats::kmeans()` ; descriptif, aucune p-value |
+| **Contrat** | `docs/contracts/BULK_PATTERN_CONTRACT.md` gelé ; type `bulk_pattern_clusters`, `analysis_id` `"bulk-pattern-clusters"` ; erreurs classées `bulk_pattern_error` ; surface publique figée (8 fonctions) |
+| **Tout est déclaré** | `group_column`, liste de gènes (up/down/all_sig, convention pathways), **k** (2..12, plafond `TS_PATTERN_KMEANS_MAX_K`, aucun défaut métier), `seed` tracée (défaut UI 15) ; exclusions comptabilisées (gènes absents/constants, échantillons NA) |
+| **Module** | `modules/bulk/mod_bulk_pattern.R` — accordion « 3e. Clustering de profils » + onglet sortie (profils moyens par cluster, table gènes→clusters, export CSV) ; `shared_rv$pattern_result` |
+| **V2 floue (Mfuzz)** | non retenue (dépendance nouvelle, aucun besoin exprimé) — écrit au contrat §8 |
+| **Tests** | `test-bulk-pattern.R` **31 PASS / 0 FAIL** (100 % hors-ligne) ; ciblés : i18n 15, e2e `shinytest2-bulk` 4, freezes signatures/survie (app.R) 68+80, wgcna 52 ; gardes : conventions **0 erreur / 324 avert.** (1 clé i18n détectée manquante puis ajoutée — flux normal), duplication **0 erreur / 3 avert.** ; boot **HTTP 200** |
+| **Rapport de stage** | `docs/ROADMAP_HANDOFF_STAGE_STAT_S3.md` (6 sections) |
+
+**Suivant** : **NEW-1** (dose-réponse / time-course, `drc`) — re-mesurer la
+fiche avant planification ; `NEW-2` prérequis levé ; `NEW-3` backlog
+conditionnel ; UX 3B/4B/6B et 4E-4 en attente d'arbitrage.
+
 
 ---
 
