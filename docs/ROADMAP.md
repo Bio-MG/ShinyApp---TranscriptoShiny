@@ -37,6 +37,7 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 | `docs/ROADMAP_HANDOFF_STAGE_STAT_S1.md` | Rapport de stage STAT-S1 (6 sections) — **ComBat-seq** | **Dernier rapport livré (2026-09-12)** |
 | `docs/proposals/V1X_UX_REFACTOR_PROPOSAL.md` | Conception des lots UX (⚠️ état corrigé en tête) | Avant toute reprise UX |
 | `docs/proposals/CCC_DATA_PATH_ASSESSMENT.md` | 10X → CellChat : faisabilité et chemins | Avant 4D-3 / phases 5–6 |
+| `docs/proposals/CCC_7_8_LIANA_IMPORT_PROPOSAL.md` | **Proposition CCC 7–8 route (b)** : import de rangs LIANA, 9 éléments V1.x, 4 décisions demandées | **Avant de coder CCC 7–8** |
 | `docs/release/UPGRADE_AND_COMPATIBILITY.md` | §3 = parking officiel V1.x (4D-3, 4E-4, 4F) | Pour les propositions V1.x |
 | `docs/contracts/*.md` | **24** contrats gelés (contract-first) — ⚠️ non versionnés (`docs/` gitignoré) | Avant de toucher un domaine gelé |
 | `docs/kanban_roadmap.html` | Tableau visuel (lecture seule, miroir de `STATUS.md`) | Démonstration / vue d'ensemble |
@@ -107,7 +108,7 @@ avance jalon par jalon, un jalon = un commit.
 
 | Rang | Jalon | Effort | Dépend de | État |
 |---|---|---|---|---|
-| 1 | **CCC 7–8** — interop OmniPath / LIANA | M–L | décision 9 (route) | 🟢 prêt (débloqué) |
+| 1 | **CCC 7–8** — interop OmniPath / LIANA | M–L | **proposition écrite** (route (b), 2026-09-13) → décision utilisateur | 🟢 prêt (débloqué) |
 | 2 | **CCC 9** — rare-cell annotator | M | audit de chevauchement Milo | 🟡 à prévoir (audit d'abord) |
 | 3 | **STAT-S2** — réseau d'enrichissement (`emapplot`/`cnetplot`) | M | — (`enrichplot` déjà présent) | 🟢 prêt |
 | 4 | **STAT-S3** — clustering de profils (kmeans MVP) | L | — | 🟢 prêt |
@@ -235,7 +236,7 @@ auto dès ≥ 2 échantillons). Les modes 1 et 2 n'existent pas encore — c'est
 | 6 | ~~**PLOT-S6′**~~ — ✅ **TRANCHÉE le 2026-09-12 : PLOT-S6 clos, repli PLOT-S6′ non retenu** | Volet « présentation » **terminé** — voir `docs/ROADMAP_HANDOFF_STAGE_PLOT_S6.md` |
 | 7 | **Outillage MCP** : ~~snapshoter `mcptools`/`btw`/`ellmer` dans `renv.lock`, ou assumer qu'ils restent locaux ?~~ → **recommandation posée le 2026-09-12** (`STATUS.md` §2s) : profil renv `dev` séparé, pas de snapshot dans le lockfile principal — **à valider**. Diagnostic ABI §2p fait le soir : hypothèse d'un décalage massif **réfutée** (seul `jsonlite` est Built 4.4.3) ; template de connexion ZCode posé (`mcp.examples/`) | Un clone neuf ne peut pas démarrer `scripts/mcp_server.R` tant que ce n'est pas tranché |
 | 8 | ~~**Multi-échantillons + pseudobulk « comme Spatial »**~~ — ✅ **LIVRÉ le 2026-09-13** : `MD-1` (conteneur `bulk_datasets`), `MD-2` (comparaison), `MD-3` (pont pseudobulk), `MD-4` (conteneur `sc_datasets`) + `4F-EXT` (rapport consolidé) | ~~Chantier neuf~~ **clos** — voir `docs/ROADMAP_MULTI_DATASET.md` |
-| 9 | **CCC phases 7–8** : route (a) `OmnipathR`/`liana` avec `renv.lock` justifié, ou (b) **import de résultats LIANA externes sans dépendance** ? — **DÉBLOQUÉ le 2026-09-13**, arbitrage utilisateur attendu | Interop inter-méthodes ; (b) n'ajoute aucune dépendance et respecte le périmètre « import-only » |
+| 9 | **CCC phases 7–8** : route (a) `OmnipathR`/`liana` avec `renv.lock` justifié, ou (b) **import de résultats LIANA externes sans dépendance** ? — **DÉBLOQUÉ le 2026-09-13** ; **proposition route (b) écrite le 2026-09-13** (`docs/proposals/CCC_7_8_LIANA_IMPORT_PROPOSAL.md`, 9 éléments V1.x + 4 décisions à trancher) — arbitrage utilisateur attendu | Interop inter-méthodes ; (b) n'ajoute aucune dépendance et respecte le périmètre « import-only » |
 | 10 | **Dette de conventions** (relevé 2026-09-13) : C6 = 16 `library()` au top-level de `R/`, C9 = 37 fichiers sans test éponyme, C10 = 270 `stop()` non classés — chantier de réduction, ou statu quo avec plafond ? | Qualité long terme ; les compteurs ne doivent **pas augmenter** (garde `tools/check_conventions.R`) |
 
 > **Remarque sur la décision 4** — garder roadmaps et instructions d'agents
