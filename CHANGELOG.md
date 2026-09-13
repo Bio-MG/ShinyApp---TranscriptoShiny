@@ -10,6 +10,59 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > Leur état fait foi dans **`docs/STATUS.md`** §1 et §2. Ce fichier reprend à
 > partir de `STAT-S1`.
 
+## [V1.x — CCC 9] — 2026-09-13 — Rareté par population annotée (descriptif)
+
+Implémentation de la **question 1** de la phase 9 (« quelles populations
+annotées sont rares ? »), tranchée le 2026-09-13. Jalon **descriptif et
+mono-condition** : **aucun graphe kNN**, aucune affirmation différentielle —
+la porte Stage 13 est inapplicable et le motif est **écrit au contrat**.
+**Aucune dépendance nouvelle, `renv.lock` intouché.**
+
+### Ajouté
+- **`compute_population_rarity(meta, identity_column, rule_type, threshold,
+  sample_column, seurat_obj)`** — décompte des cellules par niveau d'une
+  colonne d'identité déclarée ; `is_rare` résulte d'une **règle déclarée**
+  (`absolute_n_cells` ou `relative_fraction`), jamais d'une vérité biologique.
+  La règle est **dans le résultat** (`rarity_rule`) et dans la provenance
+  (`descriptive_only = TRUE`).
+- **`docs/contracts/POPULATION_RARITY_CONTRACT.md`** — contrat gelé
+  (`type = "sc_population_rarity"`, `analysis_id = "sc-population-rarity"`) ;
+  porte Stage 13 inapplicable, motif écrit (§1.1) ; corollaire contraignant :
+  toute comparaison entre conditions repasse par la porte DA.
+- **Surface publique gelée** (12 fonctions) : `population_rarity_contract_fields`,
+  `population_rarity_validity_states`, `population_rarity_status_labels`,
+  `population_rarity_rule_types`, `population_rarity_error_state`,
+  `population_rarity_is_stale` (empreinte v2 réutilisée),
+  `assert_population_rarity_result`, `build_population_rarity_summary`,
+  `build_population_rarity_table_export`, `population_rarity_export_filename`,
+  `population_rarity_public_api`.
+- **Onglet « 2b. Rareté par population »** dans le panneau Single-Cell existant
+  (jamais un nouveau panneau latéral) : table, compteurs, figure descriptive,
+  export CSV. Le champ seuil part **vide** — le calcul refuse sans seuil
+  (**aucun défaut implicite**).
+- **Section optionnelle du rapport SC** (« Rareté par population »), consommant
+  le résultat canonique — aucune ré-exécution.
+- `config/defaults.R` : `TS_POPULATION_RARITY_RULES` (règles autorisées) et
+  `TS_POPULATION_RARITY_MIN_CELLS_TOTAL` (plancher de garde 50) — **aucun
+  seuil de rareté par défaut**.
+- Tests : `test-sc-population-rarity.R` (**98** assertions) +
+  `test-sc-population-rarity-contract-freeze.R` (**83**) — suite complète :
+  **0 FAIL / 0 ERROR** ; 4788 PASS / 2 SKIP sur le run (SKIP de référence GEO +
+  flake chromote sur `test-shinytest2-bulk`, repassé seul **4/4**) → effectif
+  **4790 PASS** (référence 4609 → +181, aucune régression).
+
+### Modifié
+- `modules/sc/mod_sc.R` — onglet + case `report_sections` + serveur + passage
+  du résultat au rapport.
+- `app.R` — 2 `source()` ; `reports/sc_report_template.Rmd` — paramètre +
+  section ; `i18n/translation.json` + `tools/add_i18n_keys.R` — clés FR/EN.
+
+### Non modifié
+- Rapport consolidé 4F (12 domaines figés), tableau croisé cluster × type
+  (`mod_sc_annotation.R`), table d'identités du design DA (`sc_abundance_design.R`),
+  `renv.lock`. Les questions 2 (rareté par voisinage) et 3 (rareté ×
+  communication) ne sont **pas** retenues.
+
 ## [V1.x — CCC 7–8 route (b)] — 2026-09-13 — Import de rangs LIANA
 
 Premier jalon d'**interopération communication cellule–cellule** (`a88577f`).

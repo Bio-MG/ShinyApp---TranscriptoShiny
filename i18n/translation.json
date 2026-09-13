@@ -9504,6 +9504,114 @@
     {
       "fr": "Communication cellule-cellule — import de resultats externes uniquement (CellChat / CellPhoneDB / LIANA). ",
       "en": "Cell-cell communication — import of external results only (CellChat / CellPhoneDB / LIANA). "
+    },
+    {
+      "fr": "2b. Rareté par population",
+      "en": "2b. Rarity per population"
+    },
+    {
+      "fr": "Rareté par population",
+      "en": "Rarity per population"
+    },
+    {
+      "fr": "Rareté par population (descriptif)",
+      "en": "Rarity per population (descriptive)"
+    },
+    {
+      "fr": "Compte les cellules par population annotée et signale celles qui passent sous un seuil que vous déclarez.",
+      "en": "Counts cells per annotated population and flags those falling below a threshold you declare."
+    },
+    {
+      "fr": "Analyse descriptive, mono-condition : aucune comparaison entre conditions, aucun test.",
+      "en": "Descriptive, single-condition analysis: no comparison between conditions, no test."
+    },
+    {
+      "fr": "Colonne d'identité (populations)",
+      "en": "Identity column (populations)"
+    },
+    {
+      "fr": "Règle de rareté",
+      "en": "Rarity rule"
+    },
+    {
+      "fr": "Nombre de cellules sous le seuil",
+      "en": "Cell count below the threshold"
+    },
+    {
+      "fr": "Fraction du jeu sous le seuil",
+      "en": "Fraction of the dataset below the threshold"
+    },
+    {
+      "fr": "Seuil déclaré",
+      "en": "Declared threshold"
+    },
+    {
+      "fr": "Colonne d'échantillon (optionnel)",
+      "en": "Sample column (optional)"
+    },
+    {
+      "fr": "Calculer la rareté",
+      "en": "Compute rarity"
+    },
+    {
+      "fr": "Populations et rareté déclarée",
+      "en": "Populations and declared rarity"
+    },
+    {
+      "fr": "Règle déclarée et compteurs",
+      "en": "Declared rule and counters"
+    },
+    {
+      "fr": "Composition par population (descriptif)",
+      "en": "Composition per population (descriptive)"
+    },
+    {
+      "fr": "En attente d'un calcul. Choisissez la colonne d'identité, la règle et le seuil déclaré.",
+      "en": "Waiting for a computation. Choose the identity column, the rule and the declared threshold."
+    },
+    {
+      "fr": "Calcul de rareté terminé.",
+      "en": "Rarity computation finished."
+    },
+    {
+      "fr": "Erreur rareté :",
+      "en": "Rarity error:"
+    },
+    {
+      "fr": "Choisissez d'abord la colonne de métadonnées décrivant les populations.",
+      "en": "Choose the metadata column describing the populations first."
+    },
+    {
+      "fr": "non qualifiée",
+      "en": "not qualified"
+    },
+    {
+      "fr": "rare",
+      "en": "rare"
+    },
+    {
+      "fr": "non rare",
+      "en": "not rare"
+    },
+    {
+      "fr": "règle déclarée par l'utilisateur",
+      "en": "rule declared by the user"
+    },
+    {
+      "fr": "Nombre de cellules",
+      "en": "Cell count"
+    },
+    {
+      "fr": "Rareté déclarée",
+      "en": "Declared rarity"
+    },
+    {
+      "fr": "Champ",
+      "en": "Field"
+    },
+    {
+      "fr": "Valeur",
+      "en": "Value"
     }
   ]
 }

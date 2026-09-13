@@ -85,6 +85,26 @@ TS_DA_SCCODA_SEED           <- 15L     # graine tensorflow enregistree
 # TS_DA_MILO_DISPLAY_ALPHA).
 TS_DA_CROSS_SIGNIF_FRACTION <- 0.5    # plancher de voisinages significatifs (Milo)
 
+# --- Rarete par population annotee (CCC 9, question 1) ------------------------
+# Jalon DESCRIPTIF et MONO-CONDITION : compter les cellules par niveau d'une
+# colonne d'identite declaree et qualifier de "rare" celles qui passent sous un
+# seuil DECLARE. AUCUNE comparaison entre conditions -> la porte Stage 13
+# (assert_da_design_result) ne s'applique pas (motif ecrit dans
+# docs/contracts/POPULATION_RARITY_CONTRACT.md).
+#
+# ATTENTION : il n'y a PAS de seuil de rarete par defaut, et il ne doit pas y
+# en avoir. Le seuil est un CHOIX DECLARE de l'utilisateur (meme discipline que
+# le mode d'agregation de CCC 7-8) : `compute_population_rarity()` refuse un
+# appel sans regle ni seuil (invalid_input). Ce qui est declare ici, ce sont
+# uniquement les REGLES AUTORISEES et un PLANCHER DE GARDE.
+#
+# ⚠️ Ne JAMAIS reutiliser TS_DA_MIN_IDENTITY_CELLS_PER_SAMPLE (plancher de
+# testabilite du design DA) comme seuil de rarete : ce serait a la fois un
+# defaut implicite interdit ET une confusion semantique entre deux notions
+# differentes.
+TS_POPULATION_RARITY_RULES <- c("absolute_n_cells", "relative_fraction")
+TS_POPULATION_RARITY_MIN_CELLS_TOTAL <- 50L   # refus en dessous (rarefaction illusoire)
+
 # --- Import .rda/.RData (Inspect & Select) -------------------------------------
 # Extensions acceptees par les modules d'import pour le mode "Inspecter
 # d'abord, importer ensuite" (R/core/rdata_io.R, contrat

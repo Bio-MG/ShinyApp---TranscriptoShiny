@@ -66,6 +66,12 @@ mod_sc_ui <- function(id) {
             accordion_panel(i18n$t("2. Annotation"), icon = icon("user-tag"),
                             value = "2_annotation",
                             mod_sc_annotation_ui(ns("annotation"))),
+            # CCC 9 (Q1) : rareté par population annotée — DESCRIPTIF et
+            # mono-condition. Onglet du panneau SC existant, jamais un nouveau
+            # panneau latéral (point de friction UX n°2).
+            accordion_panel(i18n$t("2b. Rareté par population"), icon = icon("magnifying-glass-chart"),
+                            value = "2b_rarity",
+                            mod_sc_rarity_ui(ns("rarity"))),
             accordion_panel(i18n$t("3. Visualisation"), icon = icon("chart-area"),
                             value = "3_viz",
                             mod_sc_viz_ui(ns("viz"))),
@@ -140,8 +146,9 @@ mod_sc_ui <- function(id) {
               textAreaInput(ns("report_notes"), i18n$t("Notes"), rows = 3),
               checkboxGroupInput(ns("report_sections"), i18n$t("Sections"),
                 choices = setNames(
-                  c("qc", "dim", "annotation", "markers", "correlation", "pathway", "trajectory", "velocity", "communication", "da", "custom_viz"),
+                  c("qc", "dim", "annotation", "rarity", "markers", "correlation", "pathway", "trajectory", "velocity", "communication", "da", "custom_viz"),
                   c(.tr_plain("QC"), .tr_plain("Réduction Dimensionnelle"), .tr_plain("Annotation"),
+                    .tr_plain("Rareté par population"),
                     .tr_plain("Marqueurs"), .tr_plain("Réseau Corrélation"), .tr_plain("Pathway Enrichment"),
                     .tr_plain("Trajectoire"), .tr_plain("Vitesse ARN"), .tr_plain("Communication cellulaire"),
                     .tr_plain("Abondance différentielle"), .tr_plain("Visualisations Sauvegardées"))),
@@ -183,6 +190,7 @@ mod_sc_ui <- function(id) {
       nav_panel(i18n$t("Table Marqueurs"), value = "tab_table", mod_sc_markers_output_ui(ns("markers"))),
       nav_panel(i18n$t("Pseudobulk DE"), value = "tab_pseudobulk", mod_sc_pseudobulk_output_ui(ns("pseudobulk"))),
       nav_panel(i18n$t("Annotation"), value = "tab_annotation", mod_sc_annotation_output_ui(ns("annotation"))),
+      nav_panel(i18n$t("Rareté par population"), value = "tab_rarity", mod_sc_rarity_output_ui(ns("rarity"))),
       nav_panel(i18n$t("Gènes Corrélés"), value = "tab_correlation", mod_sc_corr_output_ui(ns("corr"))),
       nav_panel(i18n$t("Pathways"), value = "tab_pathway", mod_sc_pathways_output_ui(ns("pathways"))),
       nav_panel(i18n$t("Trajectory"), value = "tab_trajectory", mod_sc_trajectory_output_ui(ns("trajectory"))),
@@ -220,8 +228,9 @@ mod_sc_server <- function(id, global_data) {
       updateCheckboxGroupInput(session, "report_sections",
         label = .tr("Sections"),
         choices = stats::setNames(
-          c("qc", "dim", "annotation", "markers", "correlation", "pathway", "trajectory", "velocity", "communication", "da", "custom_viz"),
+          c("qc", "dim", "annotation", "rarity", "markers", "correlation", "pathway", "trajectory", "velocity", "communication", "da", "custom_viz"),
           c(.tr("QC"), .tr("Réduction Dimensionnelle"), .tr("Annotation"),
+            .tr("Rareté par population"),
             .tr("Marqueurs"), .tr("Réseau Corrélation"), .tr("Pathway Enrichment"),
             .tr("Trajectoire"), .tr("Vitesse ARN"), .tr("Communication cellulaire"),
             .tr("Abondance différentielle"), .tr("Visualisations Sauvegardées"))))
@@ -410,6 +419,7 @@ mod_sc_server <- function(id, global_data) {
     mod_sc_pipeline_server(  "pipeline",  global_data, shared_rv)
     mod_sc_datasets_server(  "sc_datasets", global_data)  # MD-4 : conteneur sc_datasets (lecture seule de sc_obj)
     mod_sc_annotation_server("annotation",global_data, shared_rv)
+    mod_sc_rarity_server("rarity", global_data, shared_rv)
     mod_sc_viz_server(       "viz",       global_data, shared_rv)
     # maj 3
     mod_sc_markers_server(   "markers",   global_data, shared_rv)
@@ -653,6 +663,9 @@ mod_sc_server <- function(id, global_data) {
           da_design_result     = state_get(shared_rv, "da_design_result"),
           da_milo_result       = state_get(shared_rv, "da_milo_result"),
           da_sccoda_result     = state_get(shared_rv, "da_sccoda_result"),
+          # CCC 9 (Q1) : rareté par population — restituée TELLE QUELLE
+          # (table descriptive, aucune re-exécution).
+          population_rarity_result = state_get(shared_rv, "population_rarity_result"),
           saved_viz_list   = if (length(state_get(shared_rv, "report_viz_list"))) state_get(shared_rv, "report_viz_list") else NULL,
           group_by         = "seurat_clusters",
           sc_palette         = state_get(shared_rv, "sc_palette") %||% "default",
