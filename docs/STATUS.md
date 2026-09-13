@@ -154,16 +154,22 @@ Source : `docs/release/UPGRADE_AND_COMPATIBILITY.md` §3.
 | 4F-ext | Rapport consolidé étendu Bulk/Spatial | Prêt (aucun blocage technique) |
 | Cache | Élargissement du cache | ❌ **Non demandé** — règle 8, ne pas étendre |
 
-### 2e. CCC avancée — phases parkées (`ROADMAP_CCC_ADVANCED.md` §4)
+### 2e. CCC avancée — parking **tranché** le 2026-09-13 (`ROADMAP_CCC_ADVANCED.md` §4)
 
-| Phase | Contenu | Condition de déblocage |
+| Phase | Contenu | État / condition de déblocage |
 |---|---|---|
-| 5 | Ligand→receptor→target | ⛔ Contrat d'entrée upstream (§3) — **le format d'entrée, lui, n'est plus une question ouverte** : il est implémenté et testé, cf. §3 |
-| 6 | NicheNet-like scoring | ⛔ Contrat d'entrée upstream (§3) — idem |
-| 7 | OmniPath | Nouvelle dépendance (renv.lock justifié) — **variante sans dépendance** : import de résultats LIANA externes (colonnes `.rank`), extension du contrat Stage 11 |
-| 8 | LIANA | Idem ; comparaison en rangs/recouvrement uniquement, **jamais de score consensus** |
-| 9 | Rare-cell annotator | Auditer d'abord le chevauchement avec Milo (Stage 14) |
-| 10 | Gallery d'étendue | Tient tant que « aucune dépendance graph nouvelle » (Stage 12) |
+| 5 | Ligand→receptor→target | ❌ **GELÉE SANS SUITE** (2026-09-13) — pas d'import fastP côté 4D-3 ; l'entrée démontrée est la matrice 10X. **Ne plus re-proposer** |
+| 6 | NicheNet-like scoring | ❌ **GELÉE SANS SUITE** (2026-09-13) — idem |
+| 7 | OmniPath | 🟢 **DÉBLOQUÉE** — route (a) `OmnipathR` = `renv.lock` justifié, **ou** route (b) import de résultats LIANA externes (colonnes `.rank`) **sans dépendance** — extension du contrat Stage 11. **Recommandation : (b)** |
+| 8 | LIANA | 🟢 **DÉBLOQUÉE** — idem ; comparaison en **rangs/recouvrement uniquement**, **jamais de score consensus** |
+| 9 | Rare-cell annotator | 🟡 **VALIDÉE — à prévoir** : auditer **d'abord** le chevauchement avec Milo (Stage 14, règle 3 : aucun moteur dupliqué) |
+| 10 | Gallery d'étendue | ⏸ Tient tant que « aucune dépendance graph nouvelle » (Stage 12) — même assouplissement que 7–8 possible, non activé |
+
+Convention amendée (2026-09-13) : « nouvelle dépendance = `renv.lock`
+justifié » **n'est pas immuable** — une dépendance est acceptable si elle
+apporte une efficience **sans régression**, justification documentée
+obligatoire (inscrit dans `AGENTS.md` §5, `ROADMAP_CCC_ADVANCED.md` §4 et
+`docs/CONVENTIONS.md` §10).
 
 ### 2f. UX/UI — lots restants
 
@@ -173,18 +179,27 @@ Lots 0/1/2/3A/4A/6A/5 **exécutés** (preuve §1). Restent :
 - **Libellés techniques des modules enfants Spatial** (Moran, niches…) —
   volontairement intouchés lors des passes UX.
 
-### 2g. Single-Cell — « double jeu de données » (direction produit, non démarré)
+### 2g. Single-Cell — « double jeu de données » — ✅ FONDATION LIVRÉE (MD-4, 2026-09-13)
 
 Intention utilisateur : deux fichiers chargés, avec **trois relations
-déclarées** — analyses séparées à paramètres **partagés**, analyses séparées à
-paramètres **distincts**, ou **fusion** quand ce sont des réplicats.
-Détail dans `docs/ROADMAP.md` §4 (« Principe double jeu de données »).
+déclarées** — analyses séparées à paramètres **partagés** (mode 1), analyses
+séparées à paramètres **distincts** (mode 2), ou **fusion** quand ce sont des
+réplicats. Détail dans `docs/ROADMAP.md` §4 (« Principe double jeu de
+données »).
 
-*État réel* : l'app **fusionne toujours** les imports multiples
-(`merge()` + `add.cell.ids` dans `mod_import_sc.R`, chaque import devenant un
-`orig.ident` ; Harmony automatique dès ≥ 2 échantillons). Les modes
-« séparés » n'existent pas. C'est une **évolution**, pas un correctif — donc
-proposition explicite avant exécution (règle du dépôt).
+*État réel (corrigé le 2026-09-13 — l'ancien texte disait « non démarré »)* :
+**MD-4 est livré** (`654ab59`) — conteneur `sc_datasets` (`R/sc/sc_multi.R`,
+contrat gelé `docs/contracts/SC_MULTI_CONTRACT.md`, plafond
+`TS_SC_MULTI_MAX_DATASETS = 5L`), relation **déclarée**
+`standalone` / `shared_params` (mode 1) / `distinct_params` (mode 2),
+producteurs import + gestion (`modules/sc/mod_sc_datasets.R`) ; voir **§2w**.
+
+Ce qui reste : l'**usage** des modes 1/2 à l'intérieur des panneaux
+d'analyse (appliquer les paramètres partagés ou distincts au moment du
+traitement). C'est une évolution sur la fondation livrée — proposition
+explicite avant exécution, pas un correctif. L'import multiple continue de
+fusionner par défaut (`merge()` + `add.cell.ids`, Harmony auto ≥ 2
+échantillons) : comportement **inchangé**.
 
 ### 2h. Bulk V2 / batch-QC — ✅ COMPLET (M1→M5) + roadmap dédiée créée
 
@@ -998,6 +1013,26 @@ MCP local fonctionne bien** (cf. §2s-bis — santé vérifiée ; template de
 connexion `mcp.examples/`) ; **l'utilisateur peut prendre en charge
 certaines tâches manuellement** (push, vérifications, arbitrages) pour
 gagner du temps — lui demander ce qu'il préfère garder avant d'automatiser.
+
+### 2z. Passe de maintenance 2026-09-13 — conventions, i18n, versionnage
+
+Passe transversale (hors jalon produit) lancée depuis Workbuddy : « remettre
+les fichiers à jour, documenter et appliquer les conventions ».
+
+| Action | Résultat mesuré |
+|---|---|
+| **`docs/CONVENTIONS.md` créé** | conventions de code C1..C12, une seule source ; référencé par `AGENTS.md` et `docs/ROADMAP.md` |
+| **`tools/check_conventions.R` créé** | garde base-R (comme `check_duplication.R`) : **0 erreur**, **324 avertissements** de dette (C6 = 16, C9 = 37, C10 = 270, C11 = 1). Exit 0 = vert |
+| **Dette i18n soldée** | 101 clés manquantes ajoutées via `tools/add_i18n_keys.R` (idempotent) → **2367 clés**, `tr()` : **0 clé manquante** (C7). Aucune entrée `en` vide (intégrité OK) |
+| **🐛 P0 versionnage corrigé** | `R/plotting/complex_heatmap.R` (cœur de **PLOT-S4**, marqué livré en §2m) n'avait **jamais été commité** : absent de `HEAD`, exclu par le `.gitignore` local, alors que `app.R:64` le source — **l'app ne pouvait pas démarrer depuis un clone**. Fichier sorti du `.gitignore` et suivi par git (premier commit) ; verrouillé par la règle **C3** (toute cible de `source()` doit exister **et** être versionnée). ⚠️ Précision : le `.gitignore` lui-même **n'est pas versionné** (dé-tracqué en `7e67581`) — le risque était donc « poste courant + toute copie du `.gitignore` », pas « clone nu » |
+| **Docs remises à jour** | `ROADMAP.md` (§2.0 ordre d'actionnabilité daté, 24 contrats au lieu de 13/18, flux B 2026-09-13, décisions 4/5/8 mises à jour + décisions 9 et 10 ajoutées) ; `ROADMAP_HANDOFF_NEXT.md` **ré-écrit** (prompt MD-1 retiré, étape = CCC 7–8, ancres re-vérifiées) ; `STATUS.md` §2g corrigé (le « double jeu SC » n'était plus « non démarré » : MD-4 l'a livré) ; `ROADMAP_MULTI_DATASET.md` §5 repointé |
+
+**Dette résiduelle assumée** (avertissements, plafonds — ils ne doivent pas
+augmenter) : 16 `library()`/`require()` au top-level de `R/` (C6), 37
+fichiers de `R/` sans test éponyme (C9 — beaucoup sont couverts sous un autre
+nom), 270 `stop()` non classés (C10), 1 `BiocParallel::MulticoreParam` sous
+garde Unix (C11). Chantier de réduction proposé à l'arbitrage : décision 10
+dans `docs/ROADMAP.md` §5.
 
 
 ---

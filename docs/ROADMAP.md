@@ -7,6 +7,7 @@
 > |---|---|
 > | Où en est-on ? (état réel, commits) | **`docs/STATUS.md`** — source de vérité |
 > | Quelles sont les règles non négociables ? | **`AGENTS.md`** (racine, local) |
+> | Comment écrire le code ? | **`docs/CONVENTIONS.md`** (+ `tools/check_conventions.R`, garde mécanique) |
 > | Quelle est la tâche détaillée ? | roadmaps thématiques (§1) |
 > | Vue visuelle de l'avancement | `docs/kanban_roadmap.html` |
 >
@@ -23,6 +24,7 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 | Document | Rôle | Quand le lire |
 |---|---|---|
 | `AGENTS.md` | Règles dures, environnement, commandes, baseline de tests | **Toujours, en premier** |
+| `docs/CONVENTIONS.md` | Conventions de code (C1..C12) + garde `tools/check_conventions.R` | Avant d'écrire du code ; relancer la garde avant tout merge |
 | `docs/STATUS.md` | État réel : livré / ouvert / bloqué + refs de commit | Au début et à la fin de chaque session |
 | `docs/ROADMAP_presentation_stats.md` | Plots & stats : PLOT-Q/S, STAT-Q/S, NEW-1..3 | Pour tout travail présentation/statistique |
 | `docs/ROADMAP_CCC_ADVANCED.md` | CCC avancée, phases 1–10 + conditions de déblocage | Pour tout travail communication |
@@ -36,7 +38,7 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 | `docs/proposals/V1X_UX_REFACTOR_PROPOSAL.md` | Conception des lots UX (⚠️ état corrigé en tête) | Avant toute reprise UX |
 | `docs/proposals/CCC_DATA_PATH_ASSESSMENT.md` | 10X → CellChat : faisabilité et chemins | Avant 4D-3 / phases 5–6 |
 | `docs/release/UPGRADE_AND_COMPATIBILITY.md` | §3 = parking officiel V1.x (4D-3, 4E-4, 4F) | Pour les propositions V1.x |
-| `docs/contracts/*.md` | **18** contrats gelés (contract-first) — ⚠️ non versionnés (`docs/` gitignoré) | Avant de toucher un domaine gelé |
+| `docs/contracts/*.md` | **24** contrats gelés (contract-first) — ⚠️ non versionnés (`docs/` gitignoré) | Avant de toucher un domaine gelé |
 | `docs/kanban_roadmap.html` | Tableau visuel (lecture seule, miroir de `STATUS.md`) | Démonstration / vue d'ensemble |
 | `CHANGELOG.md` (racine, suivi par git) | Historique des livraisons | Après un commit notable |
 
@@ -44,13 +46,33 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 
 ## 2. Les quatre flux de travail
 
-> **▶ Prochaine étape : `MD-2` (comparaison multi-jeux, effort L) ou `MD-3`
-> (pont pseudobulk → `bulk_datasets`, effort S)** — indépendants, au choix.
-> **`MD-1` est ✅ LIVRÉ** (2026-09-12 soir) : conteneur `bulk_datasets`,
-> contrat gelé `docs/contracts/BULK_MULTI_CONTRACT.md`, rapport
-> `docs/ROADMAP_HANDOFF_STAGE_MD_1.md`. Voir `docs/ROADMAP_MULTI_DATASET.md`
-> (fusionne la décision 8 et la décision 5 — la décision 5 se ferme
-> par réutilisation en MD-4, pas de chantier SC séparé).
+> **▶ Étape courante (arbitrage utilisateur du 2026-09-13 — cf.
+> `STATUS.md` §2y)** : le flux multi-dataset est **terminé**
+> (`MD-1` → `MD-4` ✅ + `4F-EXT` ✅). Les prochains jalons, dans l'ordre
+> d'actionnabilité décidé par l'utilisateur :
+>
+> 1. **CCC phase 7–8** (interop OmniPath / LIANA) — **DÉBLOQUÉE** : choisir la
+>    route (a) `OmnipathR`/`liana` = `renv.lock` justifié, ou (b) import de
+>    résultats LIANA externes **sans dépendance** (extension du contrat Stage
+>    11 ; comparaison en **rangs/recouvrement uniquement**, jamais de score
+>    consensus).
+> 2. **CCC phase 9** (rare cells) — **VALIDÉE, à prévoir** : commencer par
+>    l'**audit de chevauchement avec Milo** (Stage 14, règle 3 : aucun moteur
+>    dupliqué) avant toute proposition.
+> 3. **STAT-S2** (réseau d'enrichissement, effort M) — `enrichplot` déjà
+>    présent ; puis **STAT-S3** (clustering de profils, effort L).
+> 4. **NEW-1..3** (dose-réponse, fusion de jeux, PCSF) — le prérequis de
+>    `NEW-2` est levé par STAT-S1.
+> 5. **UX 3B / 4B / 6B** — options jamais tranchées.
+>
+> **CCC phases 5–6 : GELÉES SANS SUITE** (pas d'import fastP côté 4D-3) — ne
+> plus les re-proposer. Détail : `docs/ROADMAP_CCC_ADVANCED.md` §4.
+>
+> **Passe de maintenance du 2026-09-13** (hors jalon produit, déjà faite) :
+> `docs/CONVENTIONS.md` créé + garde `tools/check_conventions.R` (C1..C12),
+> dette i18n soldée (101 clés ajoutées, C7 = 0 manquante) et
+> `R/plotting/complex_heatmap.R` sorti du `.gitignore` (il est sourcé par
+> `app.R` — un clone neuf ne pouvait pas démarrer).
 >
 > Le volet « présentation » (`plot-shared-helpers`) est **terminé et clos** :
 > PLOT-S1..S5 livrés ; **PLOT-S6 était déjà satisfait par l'arbre** (mesure du
@@ -62,10 +84,9 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 > `docs/ROADMAP_BULK_V2.md`. (La fiche `docs/ROADMAP_BULK_V2_STATS.md` du
 > matin, qui parquait M2–M5, est caduque — voir son en-tête.)
 >
-> Restent ensuite `STAT-S2` (réseau d'enrichissement, `emapplot`/`cnetplot`,
-> effort **M** ; `enrichplot` est **déjà présent**), `STAT-S3`, `NEW-1..3`
-> (⚠️ le prérequis de `NEW-2` est **levé** par STAT-S1), ou un arbitrage
-> (`4E-4`, UX 3B/4B/6B — §5).
+> Restent `STAT-S2`/`STAT-S3`, `NEW-1..3` (⚠️ le prérequis de `NEW-2` est
+> **levé** par STAT-S1), ou un arbitrage (`4E-4`, UX 3B/4B/6B — §5). Voir
+> l'ordre d'actionnabilité en tête de ce §2 (décision utilisateur 2026-09-13).
 
 > 📌 **Règle ajoutée le 2026-09-12 — re-mesurer avant de planifier.**
 > **Trois** fiches §3 de `ROADMAP_presentation_stats.md` se sont révélées
@@ -77,6 +98,28 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 Chaque flux a sa roadmap et son avancement dans `STATUS.md`. Ils sont
 **indépendants** sauf mention contraire : on peut en mener un seul à la fois,
 mais rien n'oblige à les séquencer entre eux.
+
+### 2.0 Ordre d'actionnabilité (arbitrage utilisateur du 2026-09-13)
+
+Séquence **recommandée** — elle suit l'arbitrage de l'utilisateur, pas
+l'ancienneté des fiches. Aucune date calendaire n'est imposée : le dépôt
+avance jalon par jalon, un jalon = un commit.
+
+| Rang | Jalon | Effort | Dépend de | État |
+|---|---|---|---|---|
+| 1 | **CCC 7–8** — interop OmniPath / LIANA | M–L | décision 9 (route) | 🟢 prêt (débloqué) |
+| 2 | **CCC 9** — rare-cell annotator | M | audit de chevauchement Milo | 🟡 à prévoir (audit d'abord) |
+| 3 | **STAT-S2** — réseau d'enrichissement (`emapplot`/`cnetplot`) | M | — (`enrichplot` déjà présent) | 🟢 prêt |
+| 4 | **STAT-S3** — clustering de profils (kmeans MVP) | L | — | 🟢 prêt |
+| 5 | **NEW-1** — dose-réponse / time-course | M | — | 🟢 prêt |
+| 6 | **NEW-2** — fusion de jeux | M | ~~STAT-S1~~ ✅ prérequis levé | 🟢 prêt |
+| 7 | **NEW-3** — réseau PCSF | L | interactome local vs contrainte offline | 🔵 backlog conditionnel |
+| 8 | **UX 3B / 4B / 6B** | M | décision 2 | ⏸ en attente d'arbitrage |
+| 9 | **4E-4** — exécution async de la DA | M | décision 1 (pool) | ⏸ en attente d'arbitrage |
+| 10 | Boutons d'export DT sur les ~43 tables restantes + `pageLength` normalisé | M | décision ouverte (changement **visible**) | ⏸ jalon dédié à créer |
+
+Hors séquence, **gelé** : CCC 5–6 (sans suite). Hors séquence, **non demandé** :
+élargissement du cache (règle 8).
 
 ### Flux A — Présentation & statistiques · `ROADMAP_presentation_stats.md`
 Quick wins **tous livrés** : PLOT-Q1..Q5 (`4dee553`) et STAT-Q1..Q4
@@ -93,10 +136,10 @@ indépendants et parallélisables. `NEW-2` dépendait de `STAT-S1` → **préreq
 levé**.
 
 ### Flux B — CCC avancée · `ROADMAP_CCC_ADVANCED.md`
-Phases 1–4 livrées. **Phases 5–10 parkées**, chacune avec sa condition de
-déblocage (§4 de la roadmap). Les phases 5–6 sont bloquées par le contrat
-d'entrée de l'app upstream — voir `STATUS.md` §3 et
-`docs/proposals/CCC_DATA_PATH_ASSESSMENT.md`.
+Phases 1–4 livrées. **Phases 5–6 GELÉES SANS SUITE** (2026-09-13), **7–8
+DÉBLOQUÉES** (route à choisir), **9 VALIDÉE** (audit Milo d'abord), **10**
+toujours parkée — conditions et routes dans `ROADMAP_CCC_ADVANCED.md` §4 ;
+décisions consignées dans `STATUS.md` §2y.
 
 ### Flux C — Propositions V1.x · `docs/release/UPGRADE_AND_COMPATIBILITY.md` §3
 `4D-3` (bloqué upstream) · `4E-4` (décision de pool à prendre) · `4F-ext`
@@ -139,8 +182,12 @@ async (arbitrage 4E-4), caching (règle 8).
 ## 4. Principes de conception transverses
 
 - **Contract-first** : tout nouveau domaine = code + freeze test + doc
-  `docs/contracts/` simultanément. Les 13 contrats gelés ne changent que selon
-  cette règle.
+  `docs/contracts/` simultanément. Les **24** contrats gelés ne changent que
+  selon cette règle.
+- **Conventions vérifiées** : `docs/CONVENTIONS.md` (règles C1..C12) +
+  `tools/check_conventions.R`. Les règles de niveau ERREUR sont à **zéro** et
+  doivent y rester ; les AVERT. sont des **plafonds de dette** qui ne doivent
+  pas augmenter (relevé §12 du doc).
 - **`R/` = logique pure, `modules/` = UI.** Aucun fichier sous `R/modules/`.
 - **Import-only tant que 4D-3 n'est pas levé** pour la CCC : les scores
   importés ne sont jamais recalculés ni mélangés entre sources.
@@ -183,11 +230,13 @@ auto dès ≥ 2 échantillons). Les modes 1 et 2 n'existent pas encore — c'est
 | 1 | **4E-4** : pool mirai dédié SC / pool applicatif unique / rester synchrone | Architecture async de la DA |
 | 2 | **UX** : options 3B, 4B, 6B | Reprise de la refonte UX |
 | 3 | ~~**Bulk V2** : lui créer une roadmap dédiée ?~~ — ✅ **TRANCHÉ le 2026-09-12** : `docs/ROADMAP_BULK_V2.md` créée (Flux E complet M1→M5) | ~~Traçabilité~~ résolue |
-| 4 | **`docs/` gitignoré** : garder local, ou versionner `docs/*.md` + `docs/contracts/*.md` ? | Les 13 contrats ne sont pas versionnés — voir la remarque ci-dessous |
-| 5 | **Modes 1/2 du double jeu SC** : priorité et périmètre | Direction produit du module SC |
+| 4 | **`docs/` gitignoré** : garder local, ou versionner `docs/*.md` + `docs/contracts/*.md` ? | Les **24** contrats ne sont pas versionnés — voir la remarque ci-dessous (⚠️ un fichier **sourcé** ne doit jamais être ignoré : cas corrigé le 2026-09-13, garde C3) |
+| 5 | ~~**Modes 1/2 du double jeu SC** : priorité et périmètre~~ — ✅ **TRANCHÉ par réalisation le 2026-09-13** : `MD-4` livre le conteneur `sc_datasets` + les relations déclarées `standalone` / `shared_params` (mode 1) / `distinct_params` (mode 2), contrat `SC_MULTI_CONTRACT.md` (`STATUS.md` §2w) | ~~Direction produit du module SC~~ résolue — reste l'**usage** des modes dans les panneaux d'analyse (évolution, pas un correctif) |
 | 6 | ~~**PLOT-S6′**~~ — ✅ **TRANCHÉE le 2026-09-12 : PLOT-S6 clos, repli PLOT-S6′ non retenu** | Volet « présentation » **terminé** — voir `docs/ROADMAP_HANDOFF_STAGE_PLOT_S6.md` |
 | 7 | **Outillage MCP** : ~~snapshoter `mcptools`/`btw`/`ellmer` dans `renv.lock`, ou assumer qu'ils restent locaux ?~~ → **recommandation posée le 2026-09-12** (`STATUS.md` §2s) : profil renv `dev` séparé, pas de snapshot dans le lockfile principal — **à valider**. Diagnostic ABI §2p fait le soir : hypothèse d'un décalage massif **réfutée** (seul `jsonlite` est Built 4.4.3) ; template de connexion ZCode posé (`mcp.examples/`) | Un clone neuf ne peut pas démarrer `scripts/mcp_server.R` tant que ce n'est pas tranché |
-| 8 | ~~**Multi-échantillons + pseudobulk « comme Spatial »**~~ — ✅ **CADRÉ le 2026-09-12** : fusionné avec la décision 5, roadmap `docs/ROADMAP_MULTI_DATASET.md` (MD-1..MD-4) ; **MD-1 = prochaine étape** | ~~Chantier neuf~~ résolu — voir décision 5 pour le volet SC |
+| 8 | ~~**Multi-échantillons + pseudobulk « comme Spatial »**~~ — ✅ **LIVRÉ le 2026-09-13** : `MD-1` (conteneur `bulk_datasets`), `MD-2` (comparaison), `MD-3` (pont pseudobulk), `MD-4` (conteneur `sc_datasets`) + `4F-EXT` (rapport consolidé) | ~~Chantier neuf~~ **clos** — voir `docs/ROADMAP_MULTI_DATASET.md` |
+| 9 | **CCC phases 7–8** : route (a) `OmnipathR`/`liana` avec `renv.lock` justifié, ou (b) **import de résultats LIANA externes sans dépendance** ? — **DÉBLOQUÉ le 2026-09-13**, arbitrage utilisateur attendu | Interop inter-méthodes ; (b) n'ajoute aucune dépendance et respecte le périmètre « import-only » |
+| 10 | **Dette de conventions** (relevé 2026-09-13) : C6 = 16 `library()` au top-level de `R/`, C9 = 37 fichiers sans test éponyme, C10 = 270 `stop()` non classés — chantier de réduction, ou statu quo avec plafond ? | Qualité long terme ; les compteurs ne doivent **pas augmenter** (garde `tools/check_conventions.R`) |
 
 > **Remarque sur la décision 4** — garder roadmaps et instructions d'agents
 > locales est un choix défendable. En revanche `docs/contracts/*.md` est un cas
@@ -196,3 +245,11 @@ auto dès ≥ 2 échantillons). Les modes 1 et 2 n'existent pas encore — c'est
 > cette règle est mécaniquement inapplicable (le doc ne peut pas être dans le
 > même commit). C'est le seul point où le `.gitignore` contredit une règle
 > écrite du dépôt.
+>
+> **Précédent concret (2026-09-13)** : le `.gitignore` excluait aussi
+> `R/plotting/complex_heatmap.R`, que `app.R` source — un clone neuf ne
+> pouvait pas démarrer l'application. Corrigé (fichier désormais suivi) et
+> **verrouillé** par la règle **C3** de `tools/check_conventions.R` : toute
+> cible de `source()` doit exister **et** être versionnée. Le risque résiduel
+> se limite donc désormais aux fichiers que l'app ne source pas
+> (`docs/`, `AGENTS.md`, `mcp.examples/`, `scripts/mcp_server.R`).

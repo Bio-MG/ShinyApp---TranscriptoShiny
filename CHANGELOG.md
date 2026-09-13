@@ -10,6 +10,55 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > Leur état fait foi dans **`docs/STATUS.md`** §1 et §2. Ce fichier reprend à
 > partir de `STAT-S1`.
 
+## [V1.x — Maintenance] — 2026-09-13 — Conventions de code, i18n, versionnage
+
+Passe transversale **sans changement de comportement** : aucune méthode
+statistique, aucun paramètre par défaut, aucun tracé modifié.
+
+### Ajouté
+- **`docs/CONVENTIONS.md`** — une seule source de vérité pour les conventions
+  de code : arborescence et responsabilités, `R/` pur (avec l'exception
+  assumée de la couche d'état), nommage, contract-first, erreurs classées,
+  i18n, paramètres déclarés, async/cache/provenance, tests. Chaque règle porte
+  un identifiant **C1..C12**.
+- **`tools/check_conventions.R`** — garde statique en **base R uniquement**
+  (même esprit que `check_duplication.R`, exécutable sans installation) :
+  vérifie C1..C12. État mesuré : **0 erreur**, **324 avertissements** de dette
+  (C6 = 16 `library()` au top-level de `R/`, C9 = 37 fichiers sans test
+  éponyme, C10 = 270 `stop()` non classés, C11 = 1 `MulticoreParam` sous garde
+  Unix). Exit 0 = vert ; `--strict` fait échouer sur la dette.
+
+### Corrigé
+- **🐛 Un fichier sourcé n'avait jamais été commité.** `R/plotting/complex_heatmap.R`
+  (cœur de PLOT-S4, marqué livré) était absent de `HEAD` et exclu par le
+  `.gitignore` local, alors que `app.R:64` le source : **l'application ne
+  démarrait que sur ce poste**. Fichier sorti du `.gitignore` et **commité
+  pour la première fois** ; la règle **C3** interdit toute récidive (toute
+  cible de `source()` doit exister **et** être versionnée).
+- **Dette i18n soldée** : **101 clés** utilisées par `tr()` / `i18n$t()` mais
+  absentes de `i18n/translation.json` ont été ajoutées avec leur traduction
+  anglaise via `tools/add_i18n_keys.R` (idempotent). Total **2367 clés**,
+  **0 clé manquante** (C7), aucune entrée `en` vide — un utilisateur en
+  anglais ne retombe plus sur du français non traduit.
+
+### Documentation
+- `docs/ROADMAP.md` — nouveau **§2.0 « ordre d'actionnabilité »** daté
+  (arbitrage utilisateur 2026-09-13 : CCC 7–8 → CCC 9 → STAT-S2/S3 →
+  NEW-1..3 → UX → 4E-4), contrats **24** (au lieu de 13/18), flux B aligné sur
+  le parking tranché, décisions 4/5/8 mises à jour, **décisions 9 et 10**
+  ajoutées (route CCC 7–8 ; dette de conventions).
+- `docs/ROADMAP_HANDOFF_NEXT.md` — **ré-écrit** : le prompt MD-1 (consommé)
+  est retiré, l'étape courante devient **CCC 7–8 route (b)** (import de
+  résultats LIANA sans dépendance) avec ancres re-vérifiées dans le dépôt.
+- `docs/STATUS.md` — §2g corrigé (le « double jeu SC » n'était plus « non
+  démarré » : **MD-4** l'a livré), §2e parking CCC tranché, **§2z** = cette
+  passe.
+- `AGENTS.md` — règles dures **10** (conventions = doc + garde) et **11**
+  (jamais gitignorer un fichier sourcé).
+
+> Rappel : les jalons `MD-1`→`MD-4`, `4F-EXT`, `PLOT-S1..S5`, Bulk V2 M2–M5
+> n'ont **pas** d'entrée propre ici — leur état fait foi dans `docs/STATUS.md`.
+
 ## [V1.x — STAT-S1] — 2026-09-12 — Correction de batch ComBat-seq
 
 Retrait d'un **effet de lot technique** avant l'analyse différentielle Bulk,
