@@ -849,7 +849,7 @@ build_markers_dt <- function(df) {
 
   )
 
-  ts_datatable(df_display, page_length = 15) %>%
+  ts_datatable(df_display, page_length = 15L, filename_base = "sc_markers_table") %>%
 
     DT::formatStyle(
 
@@ -900,9 +900,9 @@ build_corr_dt <- function(df) {
 
   )
 
-  DT::datatable(df_display, selection = list(mode = "none"), filter = "top", rownames = FALSE,
+  ts_datatable(df_display, page_length = 15L, filename_base = "sc_corr_table",
 
-                options = list(pageLength = 15, scrollX = TRUE)) %>%
+                selection = list(mode = "none")) %>%
 
     DT::formatStyle("Correlation",
 

@@ -2189,19 +2189,19 @@ mod_spatial_viz_server <- function(id, global_data, shared_rv) {
       order_col <- match("p_val_adj", colnames(res))
       if (is.na(order_col)) order_col <- 1L
       
-      tbl <- DT::datatable(
+      tbl <- ts_datatable(
         res,
-        rownames = FALSE,
+        page_length = 15L,
+        filename_base = "spatial_roi_markers",
         class = "compact stripe hover",
-        options = list(
-          pageLength = 15,
+        filter = "none",
+        extra_options = list(
           lengthMenu = c(10, 15, 25, 50),
-          scrollX = TRUE,
-          autoWidth = TRUE,
-          order = list(list(order_col - 1L, "asc"))
+          autoWidth  = TRUE,
+          order      = list(list(order_col - 1L, "asc"))
         )
       )
-      
+
       if (length(effect_cols) > 0L) {
         tbl <- DT::formatRound(tbl, columns = effect_cols, digits = 3)
       }

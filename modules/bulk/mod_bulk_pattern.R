@@ -154,8 +154,7 @@ mod_bulk_pattern_server <- function(id, global_data, shared_rv) {
     output$pattern_table <- renderDT({
       req(shared_rv$pattern_result)
       tab <- build_pattern_table_export(shared_rv$pattern_result)
-      ts_datatable(tab, page_length = 15L, filename_base = "pattern_clusters",
-                   buttons = TRUE)
+      ts_datatable(tab, page_length = 15L, filename_base = "pattern_clusters")
     })
 
     output$dl_pattern <- downloadHandler(

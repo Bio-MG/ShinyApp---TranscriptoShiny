@@ -156,15 +156,19 @@ TS_EXPORT_FORMATS        <- c("png", "pdf", "svg")
 TS_EXPORT_FORMAT_DEFAULT <- NULL
 
 # --- PLOT-S3 : tables de resultats (DT) --------------------------------------
-# ATTENTION : il n'y a PAS de taille de page par defaut. L'application utilise
-# aujourd'hui 10 (x22), 15 (x15), 8 (x5), 20 (x3) et 6 (x1) : aucune valeur
-# n'est neutre (meme situation que base_size en PLOT-S1). C'est pourquoi
-# ts_datatable() exige `page_length` explicitement.
-# TS_DT_BUTTONS_DEFAULT = FALSE : 48 des 49 tables n'ont aucun bouton
-# d'export aujourd'hui — les activer est un choix explicite, pas un effet de
-# bord de la migration.
-TS_DT_PAGE_LENGTHS       <- c(6L, 8L, 10L, 15L, 20L)
-TS_DT_BUTTONS_DEFAULT    <- FALSE
+# HISTORIQUE (migration PLOT-S3, 2026-09-11) : il n'y avait PAS de taille de
+# page par defaut — 10 (x22), 15 (x15), 8 (x5), 20 (x3) et 6 (x1) coexistaient,
+# c'est pourquoi ts_datatable() exigeait `page_length` explicitement.
+# JALON DT-EXPORT (2026-09-14, contrat PLOT_DATATABLE_CONTRACT.md §6, option
+# B) : les tables de RESULTATS sont normalisees a
+# `TS_DT_PAGE_LENGTH_DEFAULT = 15` et gagnent les boutons d'export
+# (TS_DT_BUTTONS_DEFAULT = TRUE). `page_length` reste OBLIGATOIRE dans
+# ts_datatable() : chaque site ecrit sa valeur explicitement (15L pour les
+# tables de resultats, valeur preservee pour les tables d'APERCU — previews
+# `dom = "t"/"tip"` et petites tables QC — ni normalisees ni boutonnees).
+TS_DT_PAGE_LENGTHS        <- c(6L, 8L, 10L, 15L, 20L)
+TS_DT_PAGE_LENGTH_DEFAULT <- 15L
+TS_DT_BUTTONS_DEFAULT     <- TRUE
 
 # --- PLOT-S4 : heatmap ComplexHeatmap unifiee --------------------------------
 # TS_HEATMAP_MAX_NAMES = 60 est la valeur historique PARTAGEE par les trois

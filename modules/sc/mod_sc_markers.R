@@ -281,7 +281,11 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
     output$table_markers <- renderDT({
       req(markers_rv())
       df <- markers_rv()
-      if (!"gene" %in% colnames(df)) return(datatable(data.frame(Message = .tr("Aucun marqueur"))))
+      if (!"gene" %in% colnames(df)) {
+        return(ts_datatable(data.frame(Message = .tr("Aucun marqueur")),
+                            page_length = 10L, buttons = FALSE, filter = "none",
+                            scroll_x = FALSE, rownames = TRUE))
+      }
 
       df_sorted <- if (input$sort_by == "logfc") {
         df[order(-df$avg_log2FC), ]
@@ -299,15 +303,13 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
         stringsAsFactors = FALSE
       )
 
-      datatable(
+      ts_datatable(
         df_display,
+        page_length = 15L,
+        filename_base = "sc_markers_table",
         selection = list(mode = "multiple", target = "row", selected = NULL),
-        filter    = "top",
-        rownames  = FALSE,
-        options   = list(
-          pageLength = 10,
-          scrollX    = TRUE,
-          language   = list(
+        extra_options = list(
+          language = list(
             search = .tr("Filtrer :"),
             info   = .tr("Lignes _START_ à _END_ sur _TOTAL_ (Sélectionnez des lignes)")
           )

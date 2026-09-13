@@ -188,8 +188,8 @@ mod_sc_communication_spatial_server <- function(id, comm_state, global_data, sha
     output$spc_table <- DT::renderDataTable({
       ctx <- spc_ctx()
       req(ctx)
-      DT::datatable(ctx$pair_table, rownames = FALSE,
-                    options = list(pageLength = 8, scrollX = TRUE))
+      ts_datatable(ctx$pair_table, page_length = 15L,
+                   filename_base = "sc_comm_spatial_pair_table", filter = "none")
     })
 
     .selected_pair <- function() {

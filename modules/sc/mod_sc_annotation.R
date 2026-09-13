@@ -307,8 +307,8 @@ mod_sc_annotation_server <- function(id, global_data, shared_rv) {
       tbl <- as.data.frame(table(Cluster=meta$seurat_clusters, CellType=meta[[col_use]]))
       tbl <- tbl[tbl$Freq > 0, ]
       tbl <- tbl[order(tbl$Cluster, -tbl$Freq), ]
-      datatable(tbl, rownames=FALSE, filter="top",
-                options=list(pageLength=15, scrollX=TRUE)) %>%
+      ts_datatable(tbl, page_length = 15L,
+                   filename_base = "sc_annotation_table") %>%
         formatStyle("Freq", background=styleColorBar(range(tbl$Freq),"#18BC9C"),
                     backgroundSize="98% 88%", backgroundRepeat="no-repeat",
                     backgroundPosition="center")

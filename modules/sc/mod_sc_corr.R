@@ -194,9 +194,9 @@ mod_sc_corr_server <- function(id, global_data, shared_rv) {
         P_adj       = format(df$p_adj, scientific=TRUE, digits=2),
         check.names = FALSE
       )
-      datatable(df_display, selection=list(mode="multiple",target="row",selected=NULL),
-                filter="top", rownames=FALSE,
-                options=list(pageLength=15, scrollX=TRUE)) %>%
+      ts_datatable(df_display, page_length = 15L,
+                   filename_base = "sc_corr_table",
+                   selection=list(mode="multiple",target="row",selected=NULL)) %>%
         formatStyle("Correlation",
                     background=styleColorBar(range(df_display$Correlation),"lightblue"),
                     backgroundSize="98% 88%", backgroundRepeat="no-repeat",

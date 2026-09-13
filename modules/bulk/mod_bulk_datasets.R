@@ -131,7 +131,7 @@ mod_bulk_datasets_server <- function(id, global_data, shared_rv) {
       summary_df <- bulk_multi_summary(global_data$bulk_datasets)
       validate(need(nrow(summary_df) > 0,
                     .tr("Aucun dataset enregistré pour l'instant.")))
-      ts_datatable(summary_df, page_length = 6)
+      ts_datatable(summary_df, page_length = 6, buttons = FALSE)
     })
   })
 }

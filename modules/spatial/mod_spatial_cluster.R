@@ -269,7 +269,8 @@ mod_spatial_cluster_server <- function(id, global_data, shared_rv) {
       req(shared_rv$cluster_labels)
       tab <- as.data.frame(table(cluster = shared_rv$cluster_labels), stringsAsFactors = FALSE)
       colnames(tab) <- c(.tr("Cluster"), .tr("Effectif"))
-      DT::datatable(tab, options = list(pageLength = 15), rownames = FALSE)
+      ts_datatable(tab, page_length = 15L, filename_base = "spatial_cluster_sizes",
+                   filter = "none", scroll_x = FALSE)
     })
 
     # ── Regional differential expression: FindAllMarkers, one cluster vs rest ──
@@ -354,7 +355,8 @@ mod_spatial_cluster_server <- function(id, global_data, shared_rv) {
 
     output$markers_table <- DT::renderDT({
       req(shared_rv$cluster_markers)
-      ts_datatable(shared_rv$cluster_markers, page_length = 20) |>
+      ts_datatable(shared_rv$cluster_markers, page_length = 15L,
+                   filename_base = "spatial_cluster_markers") |>
         DT::formatRound(c("avg_log2FC", "pct.1", "pct.2"), 3) |>
         DT::formatSignif(c("p_val", "p_val_adj"), 3)
     })

@@ -548,8 +548,8 @@ mod_import_sc_server <- function(id, global_data) {
           function(x) paste(unique(x), collapse = ", "))[samples]
       }
       df <- as.data.frame(smry, check.names = FALSE, stringsAsFactors = FALSE)
-      DT::datatable(df, rownames = FALSE,
-                    options = list(pageLength = 10, dom = "t", scrollX = TRUE))
+      ts_datatable(df, page_length = 10, buttons = FALSE,
+                   dom = "t", filter = "none")
     })
 
     # ── load_single_cell_data ─────────────────────────────────────────────

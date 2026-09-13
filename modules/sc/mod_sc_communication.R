@@ -463,21 +463,21 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
     output$comm_table <- DT::renderDataTable({
       req(comm_state$result)
       .check_fingerprint()
-      DT::datatable(
+      ts_datatable(
         comm_state$result$canonical_table,
-        rownames = FALSE,
-        options = list(pageLength = 10, scrollX = TRUE),
-        filter = "top"
+        page_length = 15L,
+        filename_base = "sc_comm_canonical_table"
       )
     })
 
     output$comm_table_filtered <- DT::renderDataTable({
       req(comm_state$result)
       .check_fingerprint()
-      DT::datatable(
+      ts_datatable(
         comm_filtered()$table,
-        rownames = FALSE,
-        options = list(pageLength = 10, scrollX = TRUE)
+        page_length = 15L,
+        filename_base = "sc_comm_filtered_table",
+        filter = "none"
       )
     })
 
@@ -514,10 +514,11 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
     output$comm_centrality <- DT::renderDataTable({
       req(comm_state$result)
       .check_fingerprint()
-      DT::datatable(
+      ts_datatable(
         build_communication_centrality(comm_state$result, comm_filtered()$table),
-        rownames = FALSE,
-        options = list(pageLength = 10, scrollX = TRUE)
+        page_length = 15L,
+        filename_base = "sc_comm_centrality",
+        filter = "none"
       )
     })
 
@@ -529,7 +530,8 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
         colonne_source = vapply(cm, paste, character(1), collapse = " / "),
         stringsAsFactors = FALSE
       )
-      DT::datatable(df, rownames = FALSE, options = list(pageLength = 15))
+      ts_datatable(df, page_length = 15L, filename_base = "sc_comm_column_mapping",
+                   filter = "none", scroll_x = FALSE)
     })
 
     output$comm_schema_note <- renderText({
@@ -540,10 +542,10 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
     output$comm_mapping <- DT::renderDataTable({
       req(comm_state$result)
       req(comm_state$result$identity_mapping)
-      DT::datatable(
+      ts_datatable(
         comm_state$result$identity_mapping,
-        rownames = FALSE,
-        options = list(pageLength = 15, scrollX = TRUE)
+        page_length = 15L,
+        filename_base = "sc_comm_identity_mapping"
       )
     })
 

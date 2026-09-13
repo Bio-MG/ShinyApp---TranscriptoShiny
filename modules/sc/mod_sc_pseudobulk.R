@@ -338,7 +338,9 @@ mod_sc_pseudobulk_server <- function(id, global_data, shared_rv) {
 
     output$pb_summary_table <- renderDT({
       req(pb$metadata)
-      datatable(pb$metadata, rownames = TRUE, options = list(pageLength = 10, scrollX = TRUE))
+      ts_datatable(pb$metadata, page_length = 15L,
+                   filename_base = "sc_pseudobulk_metadata", rownames = TRUE,
+                   filter = "none")
     })
 
     output$pb_pca_plot <- renderPlot({

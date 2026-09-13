@@ -736,10 +736,12 @@ mod_import_bulk_server <- function(id, global_data) {
     
     output$ps_preview_table <- DT::renderDT({
       req(input$bulk_import_mode == "per_sample")
-      DT::datatable(
+      ts_datatable(
         ps_preview(),
-        rownames = FALSE,
-        options  = list(pageLength = 8, scrollX = TRUE, dom = "tip")
+        page_length = 8,
+        buttons = FALSE,
+        dom = "tip",
+        filter = "none"
       )
     })
     
@@ -772,11 +774,12 @@ mod_import_bulk_server <- function(id, global_data) {
     
     output$ps_metadata_dt <- DT::renderDT({
       req(rv_ps$metadata)
-      DT::datatable(
+      ts_datatable(
         rv_ps$metadata,
-        rownames = FALSE,
         editable = TRUE,
-        options  = list(pageLength = 8, scrollX = TRUE)
+        page_length = 8,
+        buttons = FALSE,
+        filter = "none"
       )
     })
     

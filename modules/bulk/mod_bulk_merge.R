@@ -267,7 +267,8 @@ mod_bulk_merge_server <- function(id, global_data) {
       res <- last_merge()
       validate(need(!is.null(res),
                     .tr("En attente — lancez d'abord la fusion.")))
-      ts_datatable(res$per_dataset, page_length = 10)
+      ts_datatable(res$per_dataset, page_length = 15L,
+                   filename_base = "bulk_merge_per_dataset")
     })
 
     output$merge_renames_ui <- renderUI({
@@ -289,7 +290,8 @@ mod_bulk_merge_server <- function(id, global_data) {
       global_data$language  # i18n
       res <- last_merge()
       req(res, !is.null(res$renames), nrow(res$renames) > 0L)
-      ts_datatable(res$renames, page_length = 10)
+      ts_datatable(res$renames, page_length = 15L,
+                   filename_base = "bulk_merge_renames")
     })
 
     output$merge_pca_help <- renderUI({

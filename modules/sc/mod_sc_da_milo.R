@@ -255,8 +255,8 @@ mod_sc_da_milo_server <- function(id, global_data, shared_rv = NULL) {
     output$milo_table <- DT::renderDataTable({
       req(milo_state$result)
       .check_fingerprint()
-      DT::datatable(milo_state$result$DA_table, rownames = FALSE,
-                    options = list(pageLength = 10, scrollX = TRUE)) |>
+      ts_datatable(milo_state$result$DA_table, page_length = 15L,
+                   filename_base = "milo_da_table", filter = "none") |>
         DT::formatSignif(columns = c("logFC", "logCPM", "F", "PValue", "FDR",
                                      "SpatialFDR", "identity_fraction"),
                          digits = 4)

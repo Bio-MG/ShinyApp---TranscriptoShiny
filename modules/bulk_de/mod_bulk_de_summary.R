@@ -50,7 +50,8 @@
     df$actif <- NULL
     colnames(df) <- c(.tr("Contraste"), .tr("G\u00e8nes test\u00e9s"), .tr("Significatifs"),
                       "Up", "Down", .tr("Actif"))
-    datatable(df, rownames = FALSE, options = list(pageLength = 10, scrollX = TRUE))
+    ts_datatable(df, page_length = 15L, filename_base = "bulk_de_summary",
+                 filter = "none")
   })
 
   output$dl_updown_csv <- downloadHandler(

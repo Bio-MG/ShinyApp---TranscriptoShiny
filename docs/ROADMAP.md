@@ -131,7 +131,7 @@ avance jalon par jalon, un jalon = un commit.
 | 6 | **NEW-3** — réseau PCSF | L | interactome local vs contrainte offline | 🔵 backlog conditionnel — **le volet flux A est terminé** |
 | 7 | **UX 3B / 4B / 6B** | M | décision 2 | ⏸ en attente d'arbitrage |
 | 8 | **4E-4** — exécution async de la DA | M | décision 1 (pool) | ⏸ en attente d'arbitrage |
-| 9 | Boutons d'export DT sur les ~43 tables restantes + `pageLength` normalisé | M | décision ouverte (changement **visible**) | ⏸ jalon dédié à créer |
+| 9 | ~~Boutons d'export DT sur les ~43 tables restantes + `pageLength` normalisé~~ | M | ~~décision ouverte~~ | ✅ **LIVRÉ le 2026-09-14 (DT-EXPORT)** — contrat `PLOT_DATATABLE_CONTRACT.md` §6 option B, 73 sites via `ts_datatable()`, `pageLength = 15` + boutons nommés sur les tables de résultats, aperçus exclus — `STATUS.md` §2ai |
 
 Hors séquence, **gelé** : CCC 5–6 (sans suite). Hors séquence, **non demandé** :
 élargissement du cache (règle 8).

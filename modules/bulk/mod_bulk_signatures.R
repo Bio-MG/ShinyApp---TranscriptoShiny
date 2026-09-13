@@ -198,8 +198,9 @@ mod_bulk_signatures_server <- function(id, global_data, shared_rv) {
     output$sig_table <- renderDT({
       global_data$language
       req(shared_rv$signature_scores)
-      DT::datatable(as.data.frame(round(shared_rv$signature_scores$scores, 4)),
-                    rownames = TRUE, options = list(pageLength = 15, scrollX = TRUE))
+      ts_datatable(as.data.frame(round(shared_rv$signature_scores$scores, 4)),
+                   page_length = 15L, filename_base = "bulk_signature_scores",
+                   filter = "none", rownames = TRUE)
     })
     output$sig_dropped_ui <- renderUI({
       global_data$language
@@ -211,7 +212,8 @@ mod_bulk_signatures_server <- function(id, global_data, shared_rv) {
       div(class = "alert alert-warning", style = "font-size:0.82em;",
           icon("triangle-exclamation"), " ",
           .t_fmt(.tr("{n} signature(s) rejet\u00e9e(s) :"), n = nrow(sc$qc$dropped)),
-          DT::datatable(sc$qc$dropped, rownames = FALSE, options = list(pageLength = 5)))
+          ts_datatable(sc$qc$dropped, page_length = 5, buttons = FALSE,
+                       filter = "none", scroll_x = FALSE))
     })
 
     output$dl_sig_csv <- downloadHandler(

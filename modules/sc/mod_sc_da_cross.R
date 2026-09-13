@@ -137,8 +137,8 @@ mod_sc_da_cross_server <- function(id, global_data, shared_rv = NULL) {
     output$cross_table <- DT::renderDataTable({
       sm <- .cross_summary()
       req(sm)
-      DT::datatable(sm$concordance, rownames = FALSE,
-                    options = list(pageLength = 10, scrollX = TRUE)) |>
+      ts_datatable(sm$concordance, page_length = 15L,
+                   filename_base = "sc_da_concordance", filter = "none") |>
         DT::formatSignif(columns = c("milo_frac_significant",
                                      "milo_median_logfc", "sccoda_effect",
                                      "sccoda_inclusion_probability"),

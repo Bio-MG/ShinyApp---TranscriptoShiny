@@ -13,6 +13,10 @@
 #                "Bfrtip" (la table pathways). Les 48 autres n'en ont aucun.
 #                => `buttons = FALSE` par defaut : activer les boutons est un
 #                   OPT-IN explicite, jamais un effet de bord de la migration.
+#                [MISE A JOUR jalon DT-EXPORT 2026-09-14] : le defaut est
+#                   desormais TS_DT_BUTTONS_DEFAULT = TRUE (contrat §6, option
+#                   B) — les tables de resultats sont boutonnees ; les tables
+#                   d'APERCU passent buttons = FALSE explicitement.
 #
 # REGLE : ZERO CHANGEMENT DE COMPORTEMENT. Chaque site migre garde ses valeurs
 #         actuelles ecrites explicitement.
@@ -80,8 +84,15 @@ ts_datatable_public_api <- function() {
 #' @param rownames Afficher les noms de lignes.
 #' @param scroll_x Defilement horizontal.
 #' @param buttons Ajouter l'extension Buttons + `dom = "Bfrtip"`.
-#'   **FALSE par defaut** : 48 des 49 tables de l'app n'en ont pas aujourd'hui.
+#'   **Defaut = `TS_DT_BUTTONS_DEFAULT` (TRUE depuis le jalon DT-EXPORT,
+#'   2026-09-14 — contrat §6 option B)** : les tables de resultats sont
+#'   boutonnees par defaut. Les tables d'APERCU (previews `dom = "t"/"tip"`,
+#'   petites tables QC) passent `buttons = FALSE` explicitement.
 #' @param dom,extensions Surcharges manuelles (prioritaires sur `buttons`).
+#' @param extra_options Liste nommee fusionnee dans `options` APRES tout le
+#'   reste (priorite maximale) — canal unique pour les options DT que le
+#'   wrapper n'expose pas (`language`, `lengthMenu`, `order`, `autoWidth`...).
+#'   Ne jamais passer `options =` via `...` : collision avec l'option interne.
 #' @param ... Transmis a `DT::datatable()` (selection, caption, ...).
 #' @return Un objet `DT::datatable()` (htmlwidget).
 #'
@@ -92,7 +103,9 @@ ts_datatable_public_api <- function() {
 #' }
 ts_datatable <- function(df, page_length, filename_base = NULL,
                          filter = "top", rownames = FALSE, scroll_x = TRUE,
-                         buttons = FALSE, dom = NULL, extensions = NULL, ...) {
+                         buttons = .ts_dt_const("TS_DT_BUTTONS_DEFAULT", TRUE),
+                         dom = NULL, extensions = NULL, extra_options = NULL,
+                         ...) {
   # --- Gardes ---
   if (missing(page_length) || is.null(page_length) ||
       length(page_length) != 1L || is.na(page_length) ||
@@ -114,6 +127,13 @@ ts_datatable <- function(df, page_length, filename_base = NULL,
     .ts_dt_stop("invalid_buttons",
                 "ts_datatable() : buttons doit etre TRUE ou FALSE.")
   }
+  if (!is.null(extra_options) &&
+      (!is.list(extra_options) || is.null(names(extra_options)) ||
+       any(!nzchar(names(extra_options))))) {
+    .ts_dt_stop("invalid_extra_options",
+                paste0("ts_datatable() : extra_options doit etre une liste ",
+                       "nommee (options DT fusionnees dans options)."))
+  }
 
   # --- Options : on ne pose `dom` QUE s'il est demande (zero changement) ---
   # page_length est transmis TEL QUEL (pas de coercion) : les sites historiques
@@ -128,6 +148,8 @@ ts_datatable <- function(df, page_length, filename_base = NULL,
   }
   if (!is.null(dom)) opts$dom <- dom
   if (!is.null(filename_base)) opts$buttons <- ts_datatable_buttons(filename_base)
+  # Priorite maximale : extra_options ecrase les cles posees ci-dessus.
+  if (!is.null(extra_options)) opts <- utils::modifyList(opts, extra_options)
 
   # --- Appel ---
   args <- list(data = df, filter = filter, rownames = rownames,

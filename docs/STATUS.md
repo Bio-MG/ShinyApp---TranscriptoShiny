@@ -37,9 +37,9 @@ roadmaps (voir `git log --oneline -- docs/`).
 > satisfait par l'arbre** — le routeur `renderUI` statique/interactif existait
 > déjà (`modules/sc/mod_sc_viz.R:635`) et Spatial est déjà plotly. Le repli
 > **PLOT-S6′** n'est **pas retenu** (§2o). Le volet « présentation » est terminé.
-> ⚠️ **Décision ouverte** : déployer les boutons d'export DT sur les ~43 tables
-> restantes + normaliser `pageLength` = changement **visible** → jalon dédié
-> (`docs/contracts/PLOT_DATATABLE_CONTRACT.md` §6).
+> ✅ **Décision close** (2026-09-14) : boutons d'export DT généralisés +
+> `pageLength = 15` normalisé — jalon **DT-EXPORT livré** (§2ai, contrat
+> `PLOT_DATATABLE_CONTRACT.md` §6 option B ; aperçus/QC exclus).
 >
 > **Commits locaux non poussés (compté 2026-09-12 soir, avant le commit MD-1
 > ci-dessous)** : 10 en avance sur `origin/main` — les 4 cités ici
@@ -1245,6 +1245,33 @@ Séance de reprise — aucune fonctionnalité nouvelle.
   de version** — après accumulation de plusieurs fonctionnalités, avant un
   tag release/RC. Consignée dans `AGENTS.md` §1 (Test policy) et
   `ROADMAP.md` §2.0 (commit `867bb39`).
+
+### 2ai. ✅ DT-EXPORT — boutons d'export DT généralisés + pageLength normalisé (2026-09-14)
+
+Jalon dédié créé conformément au contrat `PLOT_DATATABLE_CONTRACT.md` §6
+(**option B**) et au rang 9 de `ROADMAP.md` §2.0 — **changement visible
+assumé** (boutons + pageLength 15 sur les tables de résultats). Lancé à
+défaut d'arbitrage (l'utilisateur n'a pas tranché entre NEW-3 / UX 3B/4B/6B /
+4E-4 / export DT ; ce jalon était le seul sans décision bloquante ; NEW-3
+reste interdit sans besoin utilisateur concret — sa fiche l'impose).
+
+| Élément | Détail |
+|---|---|
+| **Wrapper** | `R/plotting/datatable.R` — `buttons` par défaut = `TS_DT_BUTTONS_DEFAULT` (**TRUE** désormais) ; **nouveau paramètre `extra_options`** (liste nommée fusionnée dans `options` avec priorité maximale — canal unique pour `language`, `lengthMenu`, `order`… ; nouvelle erreur classée `invalid_extra_options`) |
+| **Config** | `config/defaults.R` — `TS_DT_BUTTONS_DEFAULT = TRUE`, nouvelle constante `TS_DT_PAGE_LENGTH_DEFAULT = 15L` ; `TS_DT_PAGE_LENGTHS` inchangée (historique) |
+| **Migration** | **73 sites** `ts_datatable()` au total : ~47 appels directs `DT::datatable()` migrés dans `modules/` (bulk/import/sc/spatial) + sites canoniques `R/` (`bulk_helpers`, `sc_helpers`, `pathway_helpers`) ; **zéro appel direct restant** (garde ajoutée au test de gel) ; `pageLength = 15L` normalisé sur les tables de résultats |
+| **Exception aperçus** | tables d'aperçu/QC (`dom "t"/"tip"`, tables QC `pageLength 5/6/8`, placeholders) : `buttons = FALSE` explicite, page_length d'origine conservée — écart documenté entre « ~43 tables » et ~49 sites |
+| **Contrat** | `PLOT_DATATABLE_CONTRACT.md` §4 (API + constantes), §5 (`invalid_extra_options`), §6 (décision livrée), §7–§8 mis à jour — code + test de gel + doc simultanés |
+| **Tests** | `test-plot-datatable.R` réécrit : **80 PASS / 0 FAIL** (défaut boutonné, constante suivie, aperçus opt-out, extra_options fusion/erreur, garde zéro appel direct) ; voisines vertes : bulk-helpers 49, sc-helpers 39, pathway-helpers 16, merge-freeze 131, bulk-multi-freeze 168, sc-multi-freeze 110, rarity-freeze 83, i18n 15 |
+| **Gardes** | conventions **0 erreur / 324 avert.** (plafond inchangé) ; duplication **0 erreur / 3 avert.** ; boot headless **HTTP 200** (port 4893) ; grep final : plus aucun `DT::datatable(` vivant hors wrapper |
+| **Traçabilité export** | chaque table de résultat a un `filename_base` stable (ex. `sc_markers_table`, `milo_da_table`, `spatial_roi_markers`…) → fichiers exportés nommés |
+
+**Points d'attention** : (1) `mod_sc_markers.R` — les libellés FR du DT
+(`language`) sont restaurés via `extra_options` (l'ancien `options=` direct
+n'est plus possible sans collision de `formals`) ; (2) `mod_spatial_viz.R`
+(`spatial_roi_markers`) : `lengthMenu`/`autoWidth`/`order` passent par
+`extra_options` ; (3) suite complète **non lancée** (politique du 2026-09-14 :
+full suite en fin de version uniquement).
 
 ---
 

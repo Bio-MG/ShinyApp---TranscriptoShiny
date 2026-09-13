@@ -41,7 +41,8 @@
   # ── DT table ────────────────────────────────────────────────────────────
   output$deconv_table <- DT::renderDT({
     req(shared_rv$deconv_props)
-    DT::datatable(shared_rv$deconv_props, options = list(pageLength = 10, scrollX = TRUE), rownames = FALSE) |>
+    ts_datatable(shared_rv$deconv_props, page_length = 15L,
+                 filename_base = "deconv_outputs_table", filter = "none") |>
       DT::formatRound(setdiff(colnames(shared_rv$deconv_props), "id"), 3)
   })
 

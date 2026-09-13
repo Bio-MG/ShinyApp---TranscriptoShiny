@@ -221,8 +221,8 @@ mod_sc_communication_trajectory_server <- function(id, comm_state, global_data, 
     output$trj_pair_summary <- DT::renderDataTable({
       ctx <- trj_ctx()
       req(ctx)
-      DT::datatable(ctx$pair_summary, rownames = FALSE,
-                    options = list(pageLength = 8, scrollX = TRUE))
+      ts_datatable(ctx$pair_summary, page_length = 15L,
+                   filename_base = "sc_comm_trajectory_pair_summary", filter = "none")
     })
 
     output$dl_trj_csv <- downloadHandler(

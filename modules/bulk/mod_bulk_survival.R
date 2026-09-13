@@ -300,8 +300,8 @@ mod_bulk_survival_server <- function(id, global_data, shared_rv) {
         p = format(df$p, scientific = TRUE, digits = 3),
         `p (BH)` = ifelse(is.na(df$p_adj_BH), "-", format(df$p_adj_BH, scientific = TRUE, digits = 3)),
         C = round(df$concordance, 3), stringsAsFactors = FALSE, check.names = FALSE)
-      DT::datatable(df_disp, rownames = FALSE,
-                    options = list(pageLength = 15, scrollX = TRUE))
+      ts_datatable(df_disp, page_length = 15L,
+                   filename_base = "bulk_survival_results", filter = "none")
     })
 
     output$surv_notes_ui <- renderUI({
