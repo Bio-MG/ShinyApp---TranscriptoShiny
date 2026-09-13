@@ -20,12 +20,14 @@
 roadmaps (voir `git log --oneline -- docs/`).
 
 > **▶ PROCHAINE ÉTAPE** : la roadmap `docs/ROADMAP_MULTI_DATASET.md` est
-> **TOTALEMENT LIVRÉE** (MD-1→MD-4). **MD-4 est ✅ LIVRÉ** (conteneur
-> `sc_datasets` + double jeu SC modes 1/2 de la décision 5 — contrat
-> `SC_MULTI_CONTRACT.md`, cf. §2w). **Retour au point d'entrée** :
-> `docs/ROADMAP_HANDOFF_NEXT.md` (§ « HANDOFF V1.x ») — candidates : audit
-> UX/UI (7 points de friction utilisateur), 4F-ext (consommation de
-> `bulk_multi_comparison` / `sc_datasets` par le rapport consolidé).
+> **TOTALEMENT LIVRÉE** (MD-1→MD-4) et **4F-EXT est ✅ LIVRÉ** (consommation
+> de `bulk_multi_comparison` par le rapport consolidé — 12ᵉ domaine figé,
+> contrat §2 mis à jour, cf. §2x). **Parking V1.x restant** (décisions
+> utilisateur requises) : Phase 5–6 CCC **bloquée** par 4D-3 (contrat
+> d'entrée de l'app upstream fasta/fastq non gelé — demander son statut) ;
+> Phases 7–8 CCC (interop OmnipathR/liana = renv.lock justifié, ou route
+> d'IMPORT LIANA sans dépendance) ; Phase 9 CCC (audit chevauchement Milo
+> d'abord) ; entrée `ROADMAP_HANDOFF_NEXT.md` §« HANDOFF V1.x ».
 >
 > **PLOT-S6 est CLOS** (décision utilisateur du 2026-09-12) : il était **déjà
 > satisfait par l'arbre** — le routeur `renderUI` statique/interactif existait
@@ -51,7 +53,8 @@ roadmaps (voir `git log --oneline -- docs/`).
 > concordance de direction, contrat §10, cf. §2u), **MD-3 ✅** (pont
 > pseudobulk → `bulk_datasets`, producteur `pseudobulk`, cf. §2v), **MD-4 ✅**
 > (conteneur `sc_datasets` — double jeu SC modes 1/2, décision 5 clôturée,
-> cf. §2w), **STAT-S1 ✅**
+> cf. §2w), **4F-EXT ✅** (rapport consolidé consomme `bulk_multi_comparison`
+> — 12ᵉ domaine, cf. §2x), **STAT-S1 ✅**
 > (ComBat-seq — onglet QC Batch du Filtrage, contrat
 > gelé, 126 assertions, cf. §2q), **PLOT-S1 ✅** (`ts_theme()` partagé +
 > propagation Bulk/SC/Spatial, 44 sites), **PLOT-S2 ✅** (`ts_export_plot()`, 25
@@ -921,6 +924,40 @@ sc **5 PASS** (avec le nouveau panneau datasets au boot) / spatial
 **4 PASS**. Correctif e2e en cours de jalon : le résumé du conteneur ne
 doit PAS passer par `validate(need())` (émet un `.shiny-output-error`
 visible au boot — table vide à la place). C'est le **nouveau baseline**.
+
+### 2x. ✅ 4F-EXT — le rapport consolidé consomme `bulk_multi_comparison` (12ᵉ domaine)
+
+**Livré le 2026-09-13** (parking V1.x consommé — promis par le rapport MD-2
+§5.2 : « la structure §10.4 est déjà plate et sérialisable »). Le rapport
+consolidé 4F ajoute une **12ᵉ section figée** `bulk_multi_comparison` :
+résumé descriptif de la dernière comparaison multi-jeux bulk (datasets,
+contraste, seuils, `ran_at`), verdict `valid_legacy` à **libellé dédié**
+« auto-daté (ran_at) », `analysis_id = "bulk-multi-compare"`, et **3 tables**
+de plus dans le bundle (`bulk_multi_per_dataset.csv`,
+`bulk_multi_concordance.csv`, `bulk_multi_intersection.csv`). Contrat
+`CONSOLIDATED_REPORT_CONTRACT.md` mis à jour (code + freeze test + doc
+simultanément). Rapport : `docs/ROADMAP_HANDOFF_STAGE_4F_EXT.md`.
+
+| Rôle | Fichier |
+|---|---|
+| Collecteur | `report_collector.R` — catégorie **domaines "global"** (`.report_global_domains`) : résultat plat lu dans `global_data$bulk_multi_comparison` via le **nouveau paramètre optionnel `global_data`** (défaut NULL = comportement d'origine strictement conservé) ; garde de forme (`per_dataset` + `concordance` non vides + `ran_at` — résultat partiel ⇒ section absente, jamais « réparée ») |
+| Validateur | `report_validator.R` — domaine global ⇒ `valid_legacy` avec libellé dédié (traçabilité par `ran_at`, pas par la provenance partagée) ; **aucun nouvel état** (7 états inchangés) |
+| Rendu + bundle | `report_render.R` (libellé de section) ; `report_bundle.R` (+3 tables, copies fidèles) |
+| Module 9b | `mod_sc_report_consolidated.R` — transmet `global_data` au collecteur (1 ligne) |
+| Tests | freeze (domaines 12, symbole gelé, ancres contrat) + fonctionnel (collecte/verdict/bundle/rendu, comportement d'origine sans `global_data`) — **166 PASS / 0 FAIL** sur le filtre `report` |
+| i18n | aucune clé nouvelle (libellés rapport = texte FR figé, convention du domaine) |
+
+**Choix documentés** : `sc_datasets` (MD-4) n'est **volontairement pas**
+consommé — état de stockage, pas un résultat d'analyse (le rapport compile
+des analyses) ; `bulk_multi_comparison` n'est PAS un domaine « à contrat »
+au sens 4F (pas de provenance partagée ni d'empreinte v2 — résultat
+cross-datasets non lié à l'objet SC courant).
+
+**Portes franchies** : filtre `report` **166 PASS / 0 FAIL** ; duplication
+gate **0 erreur / 3 avertissements** = baseline ; `SMOKE_SOURCED: TRUE` ;
+suite complète : **0 FAIL / 0 ERROR — 4511 PASS / 1 SKIP** (skip = ping LIVE
+conditionnel `test-mod-geo.R`, hors périmètre). C'est le **nouveau
+baseline**.
 
 
 ---

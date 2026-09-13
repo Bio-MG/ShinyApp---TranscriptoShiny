@@ -47,7 +47,8 @@ test_that("the four R/reports files define exactly their frozen symbols", {
   expect_setequal(
     .rep_top_level_assignments("R/reports/report_collector.R"),
     c(".report_analysis_domains", ".report_contract_domains",
-      ".report_legacy_domains", ".report_config_keys", ".rep_stop",
+      ".report_legacy_domains", ".report_global_domains",
+      ".report_config_keys", ".rep_stop",
       ".report_kv_df", ".report_domain_summary",
       "collect_consolidated_report_input", "consolidated_report_analyses",
       "consolidated_report_input_recap", "report_public_api")
@@ -74,10 +75,32 @@ test_that("the frozen domain list and validation states are stable", {
   expect_setequal(consolidated_report_analyses(), c(
     "markers", "pseudobulk", "correlation", "pathways", "trajectory",
     "velocity", "communication",
-    "da_design", "da_milo", "da_sccoda", "da_cross"))
+    "da_design", "da_milo", "da_sccoda", "da_cross",
+    "bulk_multi_comparison"))
   expect_setequal(consolidated_report_validation_states(), c(
     "absent", "valid", "valid_legacy", "stale", "invalid", "unknown",
     "blocked"))
+})
+
+# ── 4F-EXT : domaine global bulk_multi_comparison (contrat §2) ──────────────
+test_that("the global domain bulk_multi_comparison reads global_data additively", {
+  # Catégorie "global" figée : ni contrat (provenance), ni legacy SC.
+  expect_setequal(.report_global_domains, "bulk_multi_comparison")
+  src_col <- .rep_report_src("R/reports/report_collector.R")
+  expect_match(src_col, "global_data$bulk_multi_comparison", fixed = TRUE)
+  expect_match(src_col, "global_data = NULL", fixed = TRUE)
+  # Le module 9b transmet global_data au collecteur.
+  src_mod <- .rep_report_src("modules/sc/mod_sc_report_consolidated.R")
+  expect_match(src_mod, "global_data = global_data", fixed = TRUE)
+  # Le bundle exporte les 3 tables du domaine.
+  src_bdl <- .rep_report_src("R/reports/report_bundle.R")
+  for (f in c("bulk_multi_per_dataset.csv", "bulk_multi_concordance.csv",
+              "bulk_multi_intersection.csv")) {
+    expect_match(src_bdl, f, fixed = TRUE, info = f)
+  }
+  # Le collecteur n'écrit JAMAIS dans global_data (lecture seule, garde §2).
+  expect_false(grepl("global_data\\$bulk_multi_comparison\\s*<-", src_col,
+                     perl = TRUE))
 })
 
 # ── Garde-fous scientifiques figés ──────────────────────────────────────────
@@ -168,6 +191,10 @@ test_that("the contract document stays in sync with the frozen surface", {
   expect_match(doc, "mod_sc_report_consolidated", fixed = TRUE)
   expect_match(doc, "9b", fixed = TRUE)
   expect_match(doc, "TS_REPORT_MAX_TABLE_ROWS", fixed = TRUE)
+  # 4F-EXT : domaine global documenté (code <-> doc simultanés).
+  expect_match(doc, "bulk_multi_comparison", fixed = TRUE)
+  expect_match(doc, "global_data$bulk_multi_comparison", fixed = TRUE)
+  expect_match(doc, "12 domaines figés", fixed = TRUE)
   # Les 7 etats de validation sont documentes
   for (st in consolidated_report_validation_states()) {
     expect_match(doc, paste0("`", st, "`"), fixed = TRUE)

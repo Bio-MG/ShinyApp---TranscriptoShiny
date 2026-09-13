@@ -173,7 +173,7 @@ test_that("empty project renders every section as gracefully absent", {
   expect_true(val$ok_overall)
   expect_identical(nrow(val$counts), 1L)
   expect_identical(val$counts$etat, "absent")
-  expect_identical(val$counts$n_sections, 11L)
+  expect_identical(val$counts$n_sections, 12L)
 
   html_path <- file.path(tempdir(), "rep_empty.html")
   write_consolidated_report_html(ri, val, html_path)
@@ -308,6 +308,86 @@ test_that("bundle writes report, manifest, provenance, tables and README", {
   # Aucune matrice brute n'est exportee : nhood_assignment per-cellule exclu.
   expect_false(file.exists(file.path(bundle_dir, "tables",
                                      "milo_nhood_assignment.csv")))
+})
+
+# ── 6b. 4F-EXT : domaine global bulk_multi_comparison ────────────────────────
+.rep_bulk_multi_result <- function() {
+  list(
+    datasets = c("Jeu_A", "pseudobulk_T2_vs_ctrl"),
+    contrast = "T2_vs_ctrl",
+    lfc_thresh = 1, padj_thresh = 0.05,
+    deg_sets = list(Jeu_A = c("G1", "G2"), pseudobulk_T2_vs_ctrl = "G1"),
+    up_down_sets = list(),
+    intersection_dt = data.frame(gene = "G1", Jeu_A = 1L, pseudo = 1L,
+                                 stringsAsFactors = FALSE),
+    concordance = data.frame(dataset_a = "Jeu_A",
+                             dataset_b = "pseudobulk_T2_vs_ctrl",
+                             jaccard_up = 0.5, jaccard_down = NA_real_,
+                             n_common_sig = 1L, pct_same_direction = 100,
+                             stringsAsFactors = FALSE),
+    volcano_scales = list(x = c(-3, 3), y = c(0, 4)),
+    per_dataset = data.frame(label = c("Jeu_A", "pseudobulk_T2_vs_ctrl"),
+                             n_tested = c(5L, 5L), n_up = c(2L, 1L),
+                             n_down = c(1L, 0L),
+                             stored_lfc_thresh = c(1, 1),
+                             stored_padj_thresh = c(0.05, 0.05),
+                             stringsAsFactors = FALSE),
+    ran_at = Sys.time()
+  )
+}
+
+test_that("4F-EXT: global domain bulk_multi_comparison is collected, validated and bundled", {
+  obj <- .rep_stub_obj()
+  gd <- list(bulk_multi_comparison = .rep_bulk_multi_result())
+
+  # Sans global_data (défaut) : section absente — comportement d'origine.
+  ri0 <- collect_consolidated_report_input(obj)
+  val0 <- validate_consolidated_report_input(ri0)
+  expect_identical(val0$verdicts$bulk_multi_comparison$state, "absent")
+
+  # Avec global_data : present, verdict valid_legacy à libellé dédié.
+  ri <- collect_consolidated_report_input(obj, create_sc_shared_state(),
+                                          global_data = gd)
+  expect_true(ri$analyses$bulk_multi_comparison$present)
+  expect_identical(ri$analyses$bulk_multi_comparison$analysis_ids,
+                   "bulk-multi-compare")
+  expect_false(ri$analyses$bulk_multi_comparison$identity_checked)
+  expect_true(is.na(ri$analyses$bulk_multi_comparison$identity_ok))
+  val <- validate_consolidated_report_input(ri)
+  expect_identical(val$verdicts$bulk_multi_comparison$state, "valid_legacy")
+  expect_match(val$verdicts$bulk_multi_comparison$label, "auto-daté",
+               fixed = TRUE)
+  s <- ri$analyses$bulk_multi_comparison$summary
+  expect_match(s$valeur[s$champ == "contraste"], "T2_vs_ctrl", fixed = TRUE)
+  expect_identical(s$valeur[s$champ == "n_datasets"], "2")
+
+  # Garde de forme : résultat partial -> section absente (jamais "réparé").
+  gd_bad <- list(bulk_multi_comparison = list(datasets = "x"))
+  ri_bad <- collect_consolidated_report_input(obj, global_data = gd_bad)
+  expect_false(ri_bad$analyses$bulk_multi_comparison$present)
+
+  # Bundle : 3 tables, copies fidèles.
+  bundle_dir <- file.path(tempdir(),
+                          paste0("bundle_ext_", as.integer(Sys.time())))
+  on.exit(unlink(bundle_dir, recursive = TRUE), add = TRUE)
+  build_report_bundle(bundle_dir, ri, val)
+  expect_true(file.exists(file.path(bundle_dir, "tables",
+                                    "bulk_multi_per_dataset.csv")))
+  expect_true(file.exists(file.path(bundle_dir, "tables",
+                                    "bulk_multi_concordance.csv")))
+  expect_true(file.exists(file.path(bundle_dir, "tables",
+                                    "bulk_multi_intersection.csv")))
+  per <- utils::read.csv(file.path(bundle_dir, "tables",
+                                   "bulk_multi_per_dataset.csv"))
+  expect_identical(nrow(per), 2L)
+
+  # Rendu HTML : section titrée, analysis_id affiché, jamais bloquée.
+  html_path <- file.path(tempdir(), "rep_ext.html")
+  on.exit(unlink(html_path), add = TRUE)
+  write_consolidated_report_html(ri, val, html_path)
+  txt <- .rep_html_text(html_path)
+  expect_match(txt, "Comparaison multi-jeux Bulk (DEGs)", fixed = TRUE)
+  expect_match(txt, "bulk-multi-compare", fixed = TRUE)
 })
 
 # ── 7. Nommage d'export + recap ──────────────────────────────────────────────

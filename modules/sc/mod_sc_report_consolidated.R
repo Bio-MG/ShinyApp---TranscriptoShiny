@@ -60,7 +60,8 @@ mod_sc_report_consolidated_server <- function(id, global_data, shared_rv = NULL)
         language = isolate(global_data$language) %||% "fr",
         include_tables = isTRUE(input$rep_tables)
       )
-      ri <- collect_consolidated_report_input(obj, shared_rv, options = opts)
+      ri <- collect_consolidated_report_input(obj, shared_rv, options = opts,
+                                              global_data = global_data)
       list(ri = ri, val = validate_consolidated_report_input(ri))
     }
 
