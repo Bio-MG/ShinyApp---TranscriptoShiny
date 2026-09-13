@@ -1034,6 +1034,44 @@ nom), 270 `stop()` non classés (C10), 1 `BiocParallel::MulticoreParam` sous
 garde Unix (C11). Chantier de réduction proposé à l'arbitrage : décision 10
 dans `docs/ROADMAP.md` §5.
 
+### 2aa. ✅ CCC 7–8 route (b) — import de rangs LIANA (`a88577f`, 2026-09-13)
+
+Premier jalon d'**interopération CCC**. L'utilisateur a tranché les 4 décisions
+de la proposition (`docs/proposals/CCC_7_8_LIANA_IMPORT_PROPOSAL.md`) par
+« suis ta recommandation » → options **B+C** appliquées telles quelles.
+
+| Élément | Détail |
+|---|---|
+| **Route** | **(b)** : import d'une table **agrégée LIANA** produite **hors** de l'application. **Aucune dépendance nouvelle, `renv.lock` intouché**, aucun calcul d'inférence dans l'app |
+| **Livrable** | `parse_liana_import(tab, rank_column, aggregation_mode, source_file)` + `communication_rank_fields()` + `communication_rank_aggregation_modes()` ; `"liana"` ajouté à `communication_supported_sources()` |
+| **Sémantique** | `aggregate_rank` (p-value **RRA**) → `p_value` ; `score` reste **`NA`** (un rang n'est pas un score) ; `rank_direction = "lower_is_better"` (dans LIANA rang 1 = meilleur : **l'inverse** de `prob`) |
+| **Champs de rang** | `rank`, `rank_direction`, `rank_aggregation_mode` — surface **séparée** des 12 champs contractuels : ceux-ci sont *exigés* de toute source, un rang n'existe pas chez CellChat/CellPhoneDB → les y mettre forcerait des colonnes `NA` et **modifierait leurs résultats** (règle 1) |
+| **Consensus externe** | `mean_rank`/`aggregate_rank` sont des agrégats **inter-méthodes calculés par LIANA**. L'app n'agrège **jamais** : elle importe et **marque** (`provenance$is_external_consensus`). Nuance écrite au contrat §6.7 |
+| **Mode d'agrégation** | **choix obligatoire**, sans défaut : `specificity` et `magnitude` répondent à des questions différentes et ne sont pas comparables entre elles |
+| **UI** | 4ᵉ route dans le `radioButtons` existante + `conditionalPanel` (**onglet**, jamais un nouveau panneau latéral) ; colonnes de rang proposées depuis l'en-tête du fichier |
+| **Tests** | `test-sc-communication-liana.R` (**73** assertions) + gels étendus ; communication : **684 PASS / 0 FAIL** ; i18n : 15 PASS |
+| **Gardes** | conventions **0 erreur** / 324 avertissements (plafonds inchangés) ; duplication **0 erreur** / 3 avertissements ; `SMOKE_SOURCED: TRUE` |
+| **Contrat** | `docs/contracts/COMMUNICATION_RESULT_CONTRACT.md` §1, §2, §4, §5, §6, §9, §10 — **même commit** que le code et les gels |
+| **Rapport de stage** | `docs/ROADMAP_HANDOFF_STAGE_CCC_7_8.md` (6 sections) |
+
+**Non-régression** : CellChat et CellPhoneDB **ne gagnent aucune colonne de
+rang** et leur résultat est inchangé (test dédié) — les parseurs existants n'ont
+pas été touchés d'une ligne.
+
+**Risque identifié, non traité dans ce jalon** (voir le rapport §4) : les vues
+exploratoires du Stage 12 supposent un score orienté « plus grand = meilleur ».
+Sur une source de **rangs**, les échelles de couleur et le filtre « Score
+minimum » peuvent être **inversés/trompeurs**. À traiter **vue par vue** avant
+d'exposer la route LIANA comme pleinement supportée.
+
+**⚠️ Découverte annexe (pré-existante, non corrigée)** : `git ls-files
+docs/contracts/` renvoie **0** fichier pour **24** contrats sur disque — aucun
+contrat n'est versionné, donc **un clone neuf ne peut pas passer la suite**
+(tous les freeze tests font `expect_true(file.exists("docs/contracts/…"))`).
+Même classe de bug que `complex_heatmap.R` (§2z), mais portant sur les 24
+contrats. Non corrigé : force-ajouter 24 fichiers relève de la **décision
+ouverte n°4** (`docs/` versionné ou non).
+
 
 ---
 

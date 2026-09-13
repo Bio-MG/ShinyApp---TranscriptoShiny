@@ -10,6 +10,55 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > Leur état fait foi dans **`docs/STATUS.md`** §1 et §2. Ce fichier reprend à
 > partir de `STAT-S1`.
 
+## [V1.x — CCC 7–8 route (b)] — 2026-09-13 — Import de rangs LIANA
+
+Premier jalon d'**interopération communication cellule–cellule** (`a88577f`).
+**Aucune dépendance nouvelle, `renv.lock` intouché**, aucun calcul d'inférence
+dans l'application : la route (b) importe une table **agrégée produite par
+LIANA hors de l'app**.
+
+### Ajouté
+- **`parse_liana_import(tab, rank_column, aggregation_mode, source_file)`** —
+  convertit une table agrégée LIANA vers la table canonique de communication.
+  Ni le mode d'agrégation ni la colonne de rang ne sont déduits du fichier :
+  les deux sont **déclarés explicitement** (aucun défaut implicite).
+- **`communication_rank_fields()`** = `rank`, `rank_direction`,
+  `rank_aggregation_mode` ; **`communication_rank_aggregation_modes()`** =
+  `specificity`, `magnitude`. Surface **séparée** des 12 champs contractuels.
+- **`"liana"`** ajouté à `communication_supported_sources()`.
+- **`provenance$is_external_consensus`** — TRUE quand la table porte un agrégat
+  **inter-méthodes** calculé par LIANA (`mean_rank`, `aggregate_rank`).
+- **QC des rangs** : `n_rank_out_of_range`, `n_rank_missing` (0 pour les sources
+  sans rang).
+- **UI** : 4ᵉ route dans le sélecteur de source existant + panneau conditionnel
+  (mode d'agrégation **sans sélection par défaut**, colonne de rang proposée
+  depuis l'en-tête du fichier). **+8** clés i18n (2367 → **2375**).
+- `tests/testthat/test-sc-communication-liana.R` — **73** assertions.
+
+### Modifié
+- `docs/contracts/COMMUNICATION_RESULT_CONTRACT.md` — §1, §2, §4, §5, §6, §9,
+  §10 : source `liana`, champs de mesure de rang, nuance « consensus importé ≠
+  consensus calculé », évolution **additive** documentée. **Même commit** que le
+  code et les tests de gel (contract-first).
+- `tests/testthat/test-communication-contract-freeze.R` — gels étendus +
+  `parse_liana_` ajouté au ban des consommateurs rapport.
+
+### Notes
+- **`aggregate_rank` → `p_value`** : c'est une p-value (*Robust Rank
+  Aggregation*, `min(p) × k`), pas un score de communication.
+- **`score` reste `NA`** sur cette route : un rang n'est pas un score (échelle
+  **et** direction différentes).
+- **`rank_direction = "lower_is_better"`** : dans LIANA, rang 1 = meilleur —
+  c'est l'**inverse** de `prob` (CellChat).
+- **Les colonnes `.complex` ne sont jamais découpées** : un complexe n'a pas de
+  découpage univoque, le deviner serait inventer une donnée.
+- **Non-régression** : CellChat et CellPhoneDB **ne gagnent aucune colonne de
+  rang** et leur résultat est inchangé (test dédié) — les parseurs existants
+  n'ont pas été touchés.
+- **Risque connu, non traité** : les vues exploratoires supposent un score
+  orienté « plus grand = meilleur » ; sur une source de rangs, échelles et
+  filtre « score minimum » peuvent être inversés. À traiter **vue par vue**.
+
 ## [V1.x — Maintenance] — 2026-09-13 — Conventions de code, i18n, versionnage
 
 Passe transversale **sans changement de comportement** : aucune méthode
