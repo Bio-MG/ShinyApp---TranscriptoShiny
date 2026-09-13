@@ -1051,6 +1051,7 @@ de la proposition (`docs/proposals/CCC_7_8_LIANA_IMPORT_PROPOSAL.md`) par
 | **UI** | 4ᵉ route dans le `radioButtons` existante + `conditionalPanel` (**onglet**, jamais un nouveau panneau latéral) ; colonnes de rang proposées depuis l'en-tête du fichier |
 | **Tests** | `test-sc-communication-liana.R` (**73** assertions) + gels étendus ; communication : **684 PASS / 0 FAIL** ; i18n : 15 PASS |
 | **Gardes** | conventions **0 erreur** / 324 avertissements (plafonds inchangés) ; duplication **0 erreur** / 3 avertissements ; `SMOKE_SOURCED: TRUE` |
+| **Suite complète** | **`failed=0 passed=4609 error=0 skipped=1`** (80 fichiers). Référence : 4511 PASS / 1 SKIP → **+98 PASS** = exactement les assertions ajoutées (73 du nouveau fichier + ~25 du freeze étendu). **Aucune régression.** |
 | **Contrat** | `docs/contracts/COMMUNICATION_RESULT_CONTRACT.md` §1, §2, §4, §5, §6, §9, §10 — **même commit** que le code et les gels |
 | **Rapport de stage** | `docs/ROADMAP_HANDOFF_STAGE_CCC_7_8.md` (6 sections) |
 
