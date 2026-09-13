@@ -109,6 +109,13 @@ mais rien n'oblige à les séquencer entre eux.
 
 ### 2.0 Ordre d'actionnabilité (arbitrage utilisateur du 2026-09-13)
 
+> 📌 **Règle ajoutée le 2026-09-14 — politique de tests.**
+> Tests **ciblés par défaut** : à chaque jalon, on ne lance que les fichiers
+> de tests concernés par le changement (+ les gates conventions/duplication).
+> La suite complète (~14 min) ne tourne qu'**en fin de version** — après
+> accumulation de plusieurs fonctionnalités, avant un tag release/RC.
+> Consignée dans `AGENTS.md` §1 (Test policy).
+
 Séquence **recommandée** — elle suit l'arbitrage de l'utilisateur, pas
 l'ancienneté des fiches. Aucune date calendaire n'est imposée : le dépôt
 avance jalon par jalon, un jalon = un commit.
