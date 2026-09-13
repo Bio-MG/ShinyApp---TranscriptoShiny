@@ -49,16 +49,27 @@
 #' Une ligne est-elle un commentaire pur ?
 .is_comment_line <- function(line) grepl("^\\s*#", line)
 
+#' Cache des fichiers annotés (chemin -> data.frame line_no/raw/code).
+.code_cache <- new.env(parent = emptyenv())
+
 .read_code_lines <- function(path) {
+  # Mémoïsation : chaque contrôle relit tous les fichiers. Sans cache, un même
+  # fichier est lu et ré-annoté 8 fois (8 fonctions de contrôle), ce qui
+  # dominait le temps d'exécution (~1 min). Le contenu ne change pas pendant
+  # un run, le cache est donc sûr.
+  cached <- .code_cache[[path]]
+  if (!is.null(cached)) return(cached)
   raw <- tryCatch(readLines(path, warn = FALSE, encoding = "UTF-8"),
                   error = function(e) character(0))
-  data.frame(
+  out <- data.frame(
     line_no = seq_along(raw),
     raw     = raw,
     code    = vapply(raw, .strip_strings_and_comments, character(1),
                      USE.NAMES = FALSE),
     stringsAsFactors = FALSE
   )
+  .code_cache[[path]] <- out
+  out
 }
 
 .collect_files <- function(roots, ext = "R") {
@@ -96,10 +107,33 @@
 #' elle ne peut PAS être injectée dans une expression régulière sans
 #' échappement. D'où startsWith() + substr() au lieu de sub().
 .rel <- function(path) {
+  # Mémoïsation : .rel() est appelé dans des boucles par ligne (plusieurs
+  # dizaines de milliers d'appels) et normalizePath() est un appel système
+  # coûteux sous Windows — à lui seul il représentait ~20 s sur 38 s de
+  # contrôles. Le mapping chemin -> relatif ne change pas pendant un run.
+  cached <- .rel_cache[[path]]
+  if (!is.null(cached)) return(cached)
   p <- normalizePath(path, winslash = "/", mustWork = FALSE)
-  b <- normalizePath(getwd(), winslash = "/", mustWork = FALSE)
-  if (startsWith(p, b)) sub("^/", "", substr(p, nchar(b) + 1L, nchar(p))) else p
+  b <- .root_dir()
+  out <- if (startsWith(p, b)) sub("^/", "", substr(p, nchar(b) + 1L, nchar(p))) else p
+  .rel_cache[[path]] <- out
+  out
 }
+
+#' Cache chemin absolu -> chemin relatif (voir .rel).
+.rel_cache <- new.env(parent = emptyenv())
+
+#' Racine du projet, calculée une seule fois (normalizePath est coûteux et
+#' était appelé des milliers de fois via .rel()).
+.root_dir <- local({
+  cached <- NULL
+  function() {
+    if (is.null(cached)) {
+      cached <<- normalizePath(getwd(), winslash = "/", mustWork = FALSE)
+    }
+    cached
+  }
+})
 
 # =============================================================================
 # C1 — `R/modules/` ne doit pas exister (règle : R/ = logique pure)
@@ -135,6 +169,15 @@
   session = "(?<![A-Za-z0-9_.])session\\$"
 )
 
+#' Pré-filtres vectorisés. `(?:A|B|…)` matche si et seulement si au moins une
+#' branche matche : un seul `grepl()` sur toute la colonne du fichier remplace
+#' donc N appels par ligne. Sans ce filtre, C2 exécutait ~14 `grepl()` par
+#' ligne (~260 000 appels R au total) et représentait à lui seul ~18 s sur les
+#' ~38 s de contrôles.
+.SHINY_HARD_ANY <- paste0("(?:", paste0(.SHINY_HARD, collapse = "|"), ")")
+.SHINY_FACT_ANY <- paste0("(?:", paste0(.SHINY_STATE_FACTORIES, collapse = "|"), ")")
+.SHINY_SOFT_ANY <- paste0("(?:", paste0(unname(.SHINY_SOFT), collapse = "|"), ")")
+
 #' Solde des parenthèses d'un fragment de code (ouvertes - fermées).
 .paren_balance <- function(txt) {
   sum(unlist(gregexpr("\\(", txt, fixed = TRUE)) > 0) -
@@ -162,6 +205,14 @@ check_c2_shiny_in_r <- function(r_files) {
     ann <- .read_code_lines(f)
     if (nrow(ann) == 0) next
     formals <- character(0)
+    rel_f <- .rel(f)
+    is_state_layer <- rel_f %in% .STATE_LAYER
+    # Pré-filtres vectorisés (voir .SHINY_*_ANY) : 3 appels par FICHIER au lieu
+    # de ~14 par ligne. Le détail par motif n'est calculé que sur les lignes
+    # effectivement candidates.
+    hit_hard <- grepl(.SHINY_HARD_ANY, ann$code, perl = TRUE)
+    hit_fact <- grepl(.SHINY_FACT_ANY, ann$code, perl = TRUE)
+    hit_soft <- grepl(.SHINY_SOFT_ANY, ann$code, perl = TRUE)
 
     for (i in seq_len(nrow(ann))) {
       ln <- ann$code[i]
@@ -183,30 +234,32 @@ check_c2_shiny_in_r <- function(r_files) {
         formals <- .parse_formals(sig)
       }
 
-      is_state_layer <- .rel(f) %in% .STATE_LAYER
-
-      for (sym in .SHINY_HARD) {
-        if (grepl(sym, ln, perl = TRUE)) {
-          .add("ERROR", "C2", .rel(f), ann$line_no[i],
-               sprintf("réactivité Shiny dans R/ (`%s`) — la réactivité appartient à modules/ (règle 9).",
-                       gsub("\\\\", "", sym)))
+      if (hit_hard[i]) {
+        for (sym in .SHINY_HARD) {
+          if (grepl(sym, ln, perl = TRUE)) {
+            .add("ERROR", "C2", rel_f, ann$line_no[i],
+                 sprintf("réactivité Shiny dans R/ (`%s`) — la réactivité appartient à modules/ (règle 9).",
+                         gsub("\\\\", "", sym)))
+          }
         }
       }
-      if (!is_state_layer) {
+      if (!is_state_layer && hit_fact[i]) {
         for (sym in .SHINY_STATE_FACTORIES) {
           if (grepl(sym, ln, perl = TRUE)) {
-            .add("ERROR", "C2", .rel(f), ann$line_no[i],
+            .add("ERROR", "C2", rel_f, ann$line_no[i],
                  sprintf("%s hors de la couche d'état — seul %s fabrique des conteneurs réactifs.",
                          gsub("\\\\", "", sym), .STATE_LAYER))
           }
         }
       }
 
-      for (nm in names(.SHINY_SOFT)) {
-        if (grepl(.SHINY_SOFT[[nm]], ln, perl = TRUE) && !(nm %in% formals)) {
-          .add("ERROR", "C2", .rel(f), ann$line_no[i],
-               sprintf("`%s$` utilisé dans R/ sans être un paramètre de la fonction — injecter `%s` en argument (pattern assumé) ou déplacer l'appel dans modules/.",
-                       nm, nm))
+      if (hit_soft[i]) {
+        for (nm in names(.SHINY_SOFT)) {
+          if (grepl(.SHINY_SOFT[[nm]], ln, perl = TRUE) && !(nm %in% formals)) {
+            .add("ERROR", "C2", rel_f, ann$line_no[i],
+                 sprintf("`%s$` utilisé dans R/ sans être un paramètre de la fonction — injecter `%s` en argument (pattern assumé) ou déplacer l'appel dans modules/.",
+                         nm, nm))
+          }
         }
       }
     }
@@ -241,6 +294,29 @@ check_c3_source_targets <- function(use_git = TRUE) {
   keep <- !duplicated(targets)
   targets <- targets[keep]; origins <- origins[keep]
 
+  # Interrogations git GROUPÉES (2 processus au total au lieu de 2 par cible).
+  # Sur Windows, un `system2("git", ...)` par cible coûtait ~2 min : au-delà du
+  # timeout par défaut des shells non interactifs, le garde se faisait tuer
+  # (SIGTERM) avant d'avoir rendu son verdict.
+  tracked_set <- character(0)
+  ignored_set <- character(0)
+  if (use_git) {
+    norm <- function(p) trimws(gsub("\\\\", "/", sub("^\\./", "", p)))
+    tracked_set <- norm(suppressWarnings(
+      system2("git", "ls-files", stdout = TRUE, stderr = FALSE)))
+    # ATTENTION : `git check-ignore --stdin` ne reçoit RIEN quand on le lance
+    # via system2() sous Windows (stdin vide -> 0 chemin signalé), alors que la
+    # même commande fonctionne en shell. On passe donc les chemins en
+    # ARGUMENTS, par lots pour rester sous la limite de ligne de commande.
+    ignored_set <- character(0)
+    chunks <- split(targets, ceiling(seq_along(targets) / 200L))
+    for (ch in chunks) {
+      ignored_set <- c(ignored_set, norm(suppressWarnings(
+        system2("git", c("check-ignore", "--no-index", ch),
+                stdout = TRUE, stderr = FALSE))))
+    }
+  }
+
   for (i in seq_along(targets)) {
     tgt <- targets[i]
     if (!file.exists(tgt)) {
@@ -252,15 +328,8 @@ check_c3_source_targets <- function(use_git = TRUE) {
     # Un fichier ignoré par git ET non suivi est absent d'un clone neuf :
     # l'app ne pourra pas être sourcée. (Cas réel corrigé le 2026-09-13 :
     # R/plotting/complex_heatmap.R était dans .gitignore alors que app.R le source.)
-    ignored <- suppressWarnings(
-      system2("git", c("check-ignore", "--no-index", "-q", shQuote(tgt)),
-              stdout = FALSE, stderr = FALSE)
-    )
-    tracked <- suppressWarnings(
-      system2("git", c("ls-files", "--error-unmatch", shQuote(tgt)),
-              stdout = FALSE, stderr = FALSE)
-    )
-    if (identical(ignored, 0L) && !identical(tracked, 0L)) {
+    n <- norm(tgt)
+    if (n %in% ignored_set && !(n %in% tracked_set)) {
       .add("ERROR", "C3", .rel(tgt), NA_integer_,
            sprintf("sourcé par %s mais EXCLU du versionnage (.gitignore) — un clone neuf ne pourra pas sourcer l'app.",
                    origins[i]))
@@ -335,6 +404,27 @@ check_c6_library_in_r <- function(r_files) {
   }, character(1), USE.NAMES = FALSE)
 }
 
+#' Décode un vecteur de littéraux JSON en un seul `parse()`.
+#'
+#' Un `eval(parse(text = ...))` par élément coûtait ~4400 appels à `parse()` par
+#' exécution (C7), ce qui dominait le temps total. On construit ici
+#' `c("a", "b", ...)` et on ne parse qu'une fois. Si un seul littéral est
+#' invalide, le parse groupé échoue : on retombe alors sur le décodage élément
+#' par élément, ce qui garantit un résultat identique à l'ancienne version.
+.decode_json_literals <- function(lits) {
+  if (!length(lits)) return(character(0))
+  vals <- tryCatch(
+    eval(parse(text = paste0("c(", paste0(lits, collapse = ", "), ")"))),
+    error = function(e) NULL
+  )
+  if (is.null(vals) || length(vals) != length(lits)) {
+    vals <- vapply(lits, function(l) {
+      tryCatch(eval(parse(text = l)), error = function(e) NA_character_)
+    }, character(1), USE.NAMES = FALSE)
+  }
+  as.character(vals)
+}
+
 check_c7_i18n_keys <- function(all_files) {
   json_path <- file.path("i18n", "translation.json")
   if (!file.exists(json_path)) {
@@ -352,32 +442,35 @@ check_c7_i18n_keys <- function(all_files) {
   # produit réellement tr("...") côté R — sinon toute clé contenant une
   # apostrophe échappée ou un guillemet serait faussement signalée manquante.
   fr_literals <- sub('^"fr"\\s*:\\s*', "", fr_matches, perl = TRUE)
-  fr_keys <- unique(vapply(fr_literals, function(lit) {
-    decoded <- tryCatch(eval(parse(text = lit)), error = function(e) NULL)
-    if (is.null(decoded) || length(decoded) != 1L || !is.character(decoded)) {
-      decoded <- .unescape_r(gsub('^"|"$', "", lit))
-    }
-    decoded
-  }, character(1), USE.NAMES = FALSE))
+  decoded_all <- .decode_json_literals(fr_literals)
+  bad <- is.na(decoded_all)
+  if (any(bad)) {
+    decoded_all[bad] <- .unescape_r(gsub('^"|"$', "", fr_literals[bad]))
+  }
+  fr_keys <- unique(decoded_all)
 
-  used <- list()
+  lits <- character(0)
+  locs <- character(0)
   for (f in all_files) {
     ann <- .read_code_lines(f)
     if (nrow(ann) == 0) next
+    rel_f <- .rel(f)
     for (i in seq_len(nrow(ann))) {
       if (.is_comment_line(ann$raw[i])) next
       m <- regmatches(ann$raw[i],
                       gregexpr('\\b(?:tr|i18n\\$t)\\s*\\(\\s*"([^"\\\\]|\\\\.)*"',
                                ann$raw[i], perl = TRUE))[[1]]
-      for (hit in m) {
-        lit <- sub('^\\b(?:tr|i18n\\$t)\\s*\\(\\s*', "", hit, perl = TRUE)
-        key <- tryCatch(.unescape_r(eval(parse(text = lit))),
-                        error = function(e) NA_character_)
-        if (is.na(key)) next
-        if (is.null(used[[key]])) used[[key]] <- character(0)
-        used[[key]] <- c(used[[key]], sprintf("%s:%d", .rel(f), ann$line_no[i]))
-      }
+      if (!length(m)) next
+      lits <- c(lits, sub('^\\b(?:tr|i18n\\$t)\\s*\\(\\s*', "", m, perl = TRUE))
+      locs <- c(locs, rep(sprintf("%s:%d", rel_f, ann$line_no[i]), length(m)))
     }
+  }
+  if (length(lits)) {
+    keys <- .unescape_r(.decode_json_literals(lits))
+    keep <- !is.na(keys)
+    used <- split(locs[keep], keys[keep])
+  } else {
+    used <- list()
   }
   missing_keys <- names(used)[!names(used) %in% fr_keys]
   for (k in missing_keys) {
