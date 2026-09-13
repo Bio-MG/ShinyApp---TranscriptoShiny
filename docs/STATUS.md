@@ -1197,10 +1197,38 @@ planification. **Première dépendance nouvelle depuis l'amendement du
 | **Tests** | `test-bulk-dose-response.R` **38 PASS / 0 FAIL** (Hill synthétique EC50 = 1 retrouvé, montants + descendants, échecs comptabilisés) ; ciblés : e2e shinytest2-bulk 4, freezes app.R 68+80, bulk-pattern 31, wgcna 52, i18n 15 ; gardes : conventions **0 erreur / 324 avert.** (plafond ; 1 avert. C9 transient corrigé au nom de fichier), duplication **0 erreur / 3 avert.** ; boot **HTTP 200** |
 | **Rapport de stage** | `docs/ROADMAP_HANDOFF_STAGE_NEW_1.md` (6 sections) |
 
-**Suivant** : **NEW-2** (fusion de jeux — prérequis STAT-S1 levé), re-mesurer
-la fiche avant planification ; NEW-3 backlog conditionnel ; UX 3B/4B/6B et
-4E-4 en attente d'arbitrage.
+**Suivant** : **NEW-2 ✅ livré le 2026-09-13** (fusion de jeux bulk — cf.
+§2ag) ; NEW-3 backlog conditionnel ; UX 3B/4B/6B et 4E-4 en attente
+d'arbitrage.
 
+### 2ag. ✅ NEW-2 — fusion de jeux bulk (Merge Data) (2026-09-13)
+
+Jalon flux A, rang 5 de l'ordre d'actionnabilité — fiche **re-mesurée** avant
+planification. **Écart assumé documenté** : la fiche §6 proposait d'étendre
+`mod_import_bulk.R` (écrite avant MD-1..MD-4) ; livré dans la famille
+« Multi-jeux » du module Bulk, consommant le conteneur `bulk_datasets`, le
+produit étant chargé comme **jeu actif** (`bulk_obj`) — comportement d'un
+import, sans aucun changement au contrat BULK_MULTI_CONTRACT (pas de nouveau
+producteur). **Aucune dépendance nouvelle, `renv.lock` intouché, aucun seuil
+`TS_` nouveau.** **Tests ciblés uniquement** (consigne utilisateur en
+vigueur ; suite complète non lancée — consigné).
+
+| Élément | Détail |
+|---|---|
+| **Moteur pur** | `R/bulk/bulk_merge.R` — `bulk_merge_run()` : intersection **exacte** des gènes, union-fill des métadonnées, renommage complet des jeux en collision de noms d'échantillons (jamais silencieux), colonne lot déclarée `dataset_origin`, ComBat-seq **optionnel** (STAT-S1 réutilisé : `run_combat_seq` + `bulk_batch_correction_design`, condition préservée via `group=`) |
+| **Contrat** | `docs/contracts/BULK_MERGE_CONTRACT.md` gelé ; 5 états `bulk_merge_error` (`invalid_input`, `insufficient_datasets`, `no_common_genes`, `invalid_metadata`, `design_not_applicable`) ; erreurs des domaines réutilisés propagent avec leur classe d'origine |
+| **Module** | `modules/bulk/mod_bulk_merge.R` — accordion « Multi-jeux — Fusion de jeux » + onglet « Fusion de jeux » : aperçus AVANT exécution (gènes communs, plan ComBat), table par dataset, renommages, **PCA avant/après** colorée par jeu d'origine (chaîne canonique `build_dds`→`estimateSizeFactors`→`get_vst_matrix` + `plot_batch_correction_pca`) |
+| **Câblage** | `app.R` (2 sources), `mod_bulk.R` (`panel_merge` + `tab_bulk_merge` + serveur) ; le module **n'écrit que** `global_data$bulk_obj` (ne reçoit pas `shared_rv` — garde du test de gel) |
+| **Gardes gelés** | pureté Shiny du moteur ; réutilisation stricte (MD-1/STAT-S1 cités, jamais redéfinis) ; module sans écriture conteneur/comparaison ; ancres app.R + mod_bulk.R ; **aucune constante `TS_` nouvelle** ; sync code ↔ contrat ; clés i18n |
+| **Tests** | `test-bulk-merge.R` + freeze : **228 PASS / 0 FAIL / 0 WARN** (dont ComBat réel : R² du lot sur PC1 chute, condition préservée) ; voisines : **716 PASS** (bulk-multi ×4, batch-correction ×2, dose, pattern, provenance, i18n) ; freeze WGCNA 106 ; e2e shinytest2-bulk **4 PASS** |
+| **Gardes** | conventions **0 erreur / 324 avert.** (baseline exacte — 16 C10 introduits puis éliminés par refactor du constructeur d'erreur) ; duplication **0 erreur / 3 avert.** ; boot headless **HTTP 200** ; i18n **2495 entrées** 0 doublon (+37) |
+| **Rapport de stage** | `docs/ROADMAP_HANDOFF_STAGE_NEW_2.md` (6 sections) |
+
+**Reste ouvert** : NEW-3 (backlog conditionnel — interactome local à évaluer
+vs contrainte offline) ; UX 3B/4B/6B et 4E-4 en attente d'arbitrage ; boutons
+d'export DT (~43 tables) = jalon dédié à créer. Le volet flux A
+(`ROADMAP_presentation_stats.md`) est **TERMINÉ** (PLOT-Q/S, STAT-Q/S,
+NEW-1..2 livrés ; NEW-3 non planifié).
 
 ---
 

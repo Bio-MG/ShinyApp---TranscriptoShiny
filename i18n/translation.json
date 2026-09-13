@@ -9836,6 +9836,154 @@
     {
       "fr": "Expression VST",
       "en": "VST expression"
+    },
+    {
+      "fr": "Fusionne >= 2 jeux enregistrés (Multi-jeux — Datasets enregistrés) : gènes communs en intersection exacte, harmonisation ComBat-seq optionnelle (lot = jeu d'origine). Le produit est chargé comme jeu actif, comme un import.",
+      "en": "Merges >= 2 registered datasets (Multi-dataset — Registered datasets): common genes by exact intersection, optional ComBat-seq harmonization (batch = dataset of origin). The product is loaded as the active dataset, like an import."
+    },
+    {
+      "fr": "Datasets à fusionner (>= 2)",
+      "en": "Datasets to merge (>= 2)"
+    },
+    {
+      "fr": "Sélectionnez des datasets...",
+      "en": "Select datasets..."
+    },
+    {
+      "fr": "Colonne condition commune (optionnel)",
+      "en": "Common condition column (optional)"
+    },
+    {
+      "fr": "Aucune — correction à l'aveugle si ComBat",
+      "en": "None — blind correction if ComBat"
+    },
+    {
+      "fr": "Harmonisation ComBat-seq (lot = jeu d'origine)",
+      "en": "ComBat-seq harmonization (batch = dataset of origin)"
+    },
+    {
+      "fr": "Nom du jeu fusionné",
+      "en": "Merged dataset name"
+    },
+    {
+      "fr": "ex : Fusion_GSE123_GSE456",
+      "en": "e.g.: Merge_GSE123_GSE456"
+    },
+    {
+      "fr": "Fusionner et charger comme jeu actif",
+      "en": "Merge and load as the active dataset"
+    },
+    {
+      "fr": "Le jeu actif courant sera remplacé (comme un import). Enregistrez-le d'abord via « Enregistrer l'état courant » si nécessaire.",
+      "en": "The current active dataset will be replaced (like an import). Save it first via “Save current state” if needed."
+    },
+    {
+      "fr": "Résultat de la fusion",
+      "en": "Merge results"
+    },
+    {
+      "fr": "Gènes par dataset",
+      "en": "Genes per dataset"
+    },
+    {
+      "fr": "PCA avant / après",
+      "en": "PCA before / after"
+    },
+    {
+      "fr": "Multi-jeux — Fusion de jeux",
+      "en": "Multi-dataset — Merge datasets"
+    },
+    {
+      "fr": "Fusion de jeux",
+      "en": "Merge datasets"
+    },
+    {
+      "fr": "Sélectionnez au moins 2 datasets enregistrés.",
+      "en": "Select at least 2 registered datasets."
+    },
+    {
+      "fr": "Alignement impossible : ",
+      "en": "Alignment impossible: "
+    },
+    {
+      "fr": "Gènes communs : %d (%s).",
+      "en": "Common genes: %d (%s)."
+    },
+    {
+      "fr": "%d échantillon(s) seront renommés (collision de noms).",
+      "en": "%d sample(s) will be renamed (name collision)."
+    },
+    {
+      "fr": "Harmonisation impossible : ",
+      "en": "Harmonization impossible: "
+    },
+    {
+      "fr": "✓ Harmonisation ComBat-seq possible.",
+      "en": "✓ ComBat-seq harmonization is feasible."
+    },
+    {
+      "fr": "La condition déclarée sera préservée.",
+      "en": "The declared condition will be preserved."
+    },
+    {
+      "fr": "Aucune condition commune déclarée : correction à l'aveugle.",
+      "en": "No common condition declared: blind correction."
+    },
+    {
+      "fr": "Fusion des jeux...",
+      "en": "Merging datasets..."
+    },
+    {
+      "fr": "Transformation VST (diagnostic) ...",
+      "en": "VST transformation (diagnostic)..."
+    },
+    {
+      "fr": "Chargement du jeu fusionné...",
+      "en": "Loading the merged dataset..."
+    },
+    {
+      "fr": "Fusion impossible : %s",
+      "en": "Merge impossible: %s"
+    },
+    {
+      "fr": "✓ Fusion chargée : %d gènes communs × %d échantillons (%s).",
+      "en": "✓ Merge loaded: %d common genes × %d samples (%s)."
+    },
+    {
+      "fr": "Harmonisation ComBat-seq appliquée (lot = jeu d'origine).",
+      "en": "ComBat-seq harmonization applied (batch = dataset of origin)."
+    },
+    {
+      "fr": "En attente — sélectionnez >= 2 datasets puis lancez la fusion.",
+      "en": "Waiting — select >= 2 datasets then run the merge."
+    },
+    {
+      "fr": "En attente — lancez d'abord la fusion.",
+      "en": "Waiting — run the merge first."
+    },
+    {
+      "fr": "Aucun renommage d'échantillon (noms uniques entre les jeux).",
+      "en": "No sample renaming (unique names across datasets)."
+    },
+    {
+      "fr": "Échantillons renommés (collision de noms)",
+      "en": "Renamed samples (name collision)"
+    },
+    {
+      "fr": "Diagnostic descriptif — lancez d'abord la fusion. A : avant correction (jeux attendus séparés) ; B : après ComBat-seq (jeux attendus mélangés).",
+      "en": "Descriptive diagnostic — run the merge first. A: before correction (datasets expected apart); B: after ComBat-seq (datasets expected mixed)."
+    },
+    {
+      "fr": "PCA descriptive colorée par jeu d'origine (pas de correction appliquée, ou diagnostic indisponible).",
+      "en": "Descriptive PCA colored by dataset of origin (no correction applied, or diagnostic unavailable)."
+    },
+    {
+      "fr": "Transformation VST impossible sur la fusion (diagnostic indisponible).",
+      "en": "VST transformation impossible on the merge (diagnostic unavailable)."
+    },
+    {
+      "fr": "sans correction",
+      "en": "no correction"
     }
   ]
 }

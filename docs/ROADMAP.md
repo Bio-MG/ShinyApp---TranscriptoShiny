@@ -68,8 +68,9 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 >    valider** avant implémentation (`STATUS.md` §2ab).
 > 3. **STAT-S2** (réseau d'enrichissement, effort M) — `enrichplot` déjà
 >    présent ; puis **STAT-S3** (clustering de profils, effort L).
-> 4. **NEW-1..3** (dose-réponse, fusion de jeux, PCSF) — le prérequis de
->    `NEW-2` est levé par STAT-S1.
+> 4. **NEW-1..3** (dose-réponse, fusion de jeux, PCSF) — **NEW-1 et NEW-2
+>    LIVRÉS le 2026-09-13** (§2af, §2ag de `STATUS.md`) ; `NEW-3` backlog
+>    conditionnel. **Le volet flux A est terminé.**
 > 5. **UX 3B / 4B / 6B** — options jamais tranchées.
 >
 > **CCC phases 5–6 : GELÉES SANS SUITE** (pas d'import fastP côté 4D-3) — ne
@@ -91,9 +92,9 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 > `docs/ROADMAP_BULK_V2.md`. (La fiche `docs/ROADMAP_BULK_V2_STATS.md` du
 > matin, qui parquait M2–M5, est caduque — voir son en-tête.)
 >
-> Restent `STAT-S2`/`STAT-S3`, `NEW-1..3` (⚠️ le prérequis de `NEW-2` est
-> **levé** par STAT-S1), ou un arbitrage (`4E-4`, UX 3B/4B/6B — §5). Voir
-> l'ordre d'actionnabilité en tête de ce §2 (décision utilisateur 2026-09-13).
+> Restent `NEW-3` (backlog conditionnel — **le volet flux A est terminé**),
+> ou un arbitrage (`4E-4`, UX 3B/4B/6B — §5). Voir l'ordre d'actionnabilité
+> en tête de ce §2 (décision utilisateur 2026-09-13).
 
 > 📌 **Règle ajoutée le 2026-09-12 — re-mesurer avant de planifier.**
 > **Trois** fiches §3 de `ROADMAP_presentation_stats.md` se sont révélées
@@ -119,8 +120,8 @@ avance jalon par jalon, un jalon = un commit.
 | — | ~~**STAT-S2** — réseau d'enrichissement (`emapplot`/`cnetplot`)~~ | M | — | ✅ **LIVRÉ le 2026-09-13** — `STATUS.md` §2ad |
 | — | ~~**STAT-S3** — clustering de profils (kmeans MVP)~~ | L | — | ✅ **LIVRÉ le 2026-09-13** — `STATUS.md` §2ae ; V2 floue (Mfuzz) non retenue |
 | — | ~~**NEW-1** — dose-réponse / time-course~~ | M | — | ✅ **LIVRÉ le 2026-09-13** (`drc`, justification renv.lock au contrat §2) — `STATUS.md` §2af |
-| 5 | **NEW-2** — fusion de jeux | M | ~~STAT-S1~~ ✅ prérequis levé | 🟢 **PROCHAIN** (re-mesurer la fiche §6 avant planification) |
-| 6 | **NEW-3** — réseau PCSF | L | interactome local vs contrainte offline | 🔵 backlog conditionnel |
+| — | ~~**NEW-2** — fusion de jeux~~ | M | ~~STAT-S1~~ ✅ prérequis levé | ✅ **LIVRÉ le 2026-09-13** (fiche re-mesurée : fusion depuis le conteneur `bulk_datasets`, produit chargé comme jeu actif — `STATUS.md` §2ag) |
+| 6 | **NEW-3** — réseau PCSF | L | interactome local vs contrainte offline | 🔵 backlog conditionnel — **le volet flux A est terminé** |
 | 7 | **UX 3B / 4B / 6B** | M | décision 2 | ⏸ en attente d'arbitrage |
 | 8 | **4E-4** — exécution async de la DA | M | décision 1 (pool) | ⏸ en attente d'arbitrage |
 | 9 | Boutons d'export DT sur les ~43 tables restantes + `pageLength` normalisé | M | décision ouverte (changement **visible**) | ⏸ jalon dédié à créer |
@@ -134,16 +135,19 @@ Quick wins **tous livrés** : PLOT-Q1..Q5 (`4dee553`) et STAT-Q1..Q4
 S5 non commités** — décision utilisateur) ; **PLOT-S6 déjà satisfait par
 l'arbre** (mesuré 2026-09-12) et **PLOT-S6′ non retenu** → volet présentation
 **clos**. Côté statistiques : **STAT-S1 ✅ livré le 2026-09-12** (ComBat-seq).
-Restent **STAT-S2..S3**, **NEW-1..3**.
+**Le volet flux A est TERMINÉ** (NEW-1 et NEW-2 livrés le 2026-09-13,
+`STATUS.md` §2af/§2ag) — restent **NEW-3** (backlog conditionnel) et les
+arbitrages.
 
 Ordre conseillé (fondations d'abord) :
 `PLOT-S1 → PLOT-S2 → PLOT-S3 → PLOT-S4 → PLOT-S5` ✅ **fait** ; `PLOT-S6` ✅
 **déjà fait par l'arbre** ; `STAT-S1` ✅ **fait** ; `STAT-S2` ✅ **livré le
 2026-09-13** (réseau d'enrichissement, `STATUS.md` §2ad) ; `STAT-S3` ✅
 **livré le 2026-09-13** (clustering de profils, `STATUS.md` §2ae) ; `NEW-1` ✅
-**livré le 2026-09-13** (dose-réponse, `STATUS.md` §2af). Restent
-`NEW-2` (**prochain**, prérequis STAT-S1 levé) et `NEW-3` (backlog
-conditionnel).
+**livré le 2026-09-13** (dose-réponse, `STATUS.md` §2af) ; `NEW-2` ✅ **livré
+le 2026-09-13** (fusion de jeux, `STATUS.md` §2ag). **Le volet flux A est
+TERMINÉ** — restent `NEW-3` (backlog conditionnel) et les arbitrages
+(`4E-4`, UX 3B/4B/6B — §5).
 
 ### Flux B — CCC avancée · `ROADMAP_CCC_ADVANCED.md`
 Phases 1–4 livrées ; **5–6 GELÉES SANS SUITE** (2026-09-13) ; **7–8 LIVRÉES**

@@ -58,7 +58,11 @@ mod_bulk_ui <- function(id) {
           # MD-1 : conteneur bulk_datasets — enregistrement/gestion des jeux
           # nommés (producteur "pipeline_save") ; la comparaison est MD-2.
           accordion_panel(i18n$t("Multi-jeux — Datasets enregistr\u00e9s"), value = "panel_datasets",
-                          icon = icon("layer-group"), mod_bulk_datasets_ui(ns("datasets")))
+                          icon = icon("layer-group"), mod_bulk_datasets_ui(ns("datasets"))),
+          # NEW-2 : fusion de jeux enregistrés (gènes communs + ComBat-seq
+          # optionnel, produit chargé comme jeu actif).
+          accordion_panel(i18n$t("Multi-jeux — Fusion de jeux"), value = "panel_merge",
+                          icon = icon("object-group"), mod_bulk_merge_ui(ns("merge")))
         )
       ),
       navset_card_underline(
@@ -96,7 +100,11 @@ mod_bulk_ui <- function(id) {
         # MD-2 : comparaison multi-jeux (consomme global_data$bulk_datasets,
         # n'écrit que global_data$bulk_multi_comparison).
         nav_panel(i18n$t("Comparaison multi-jeux"), value = "tab_bulk_multi",
-                  mod_bulk_multi_ui(ns("multi")))
+                  mod_bulk_multi_ui(ns("multi"))),
+        # NEW-2 : fusion de jeux (consomme global_data$bulk_datasets,
+        # n'écrit que global_data$bulk_obj — comportement d'un import).
+        nav_panel(i18n$t("Fusion de jeux"), value = "tab_bulk_merge",
+                  mod_bulk_merge_output_ui(ns("merge")))
       )
     )
   )
@@ -452,6 +460,7 @@ mod_bulk_server <- function(id, global_data) {
     mod_bulk_survival_server("survival", global_data, shared_rv)
     mod_bulk_datasets_server("datasets", global_data, shared_rv)  # MD-1
     mod_bulk_multi_server("multi", global_data)                   # MD-2
+    mod_bulk_merge_server("merge", global_data)                   # NEW-2
     mod_bulk_report_server(  "report",   global_data, shared_rv)
 
   }) # /moduleServer
