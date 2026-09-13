@@ -338,9 +338,9 @@
   output$ref_celltype_table <- DT::renderDT({
     global_data$language  # i18n: re-render on language switch
     tab <- ref_celltype_counts()
-    DT::datatable(stats::setNames(tab, c(.tr("Type cellulaire"), .tr("Effectif"))),
-                  rownames = FALSE,
-                  options = list(pageLength = 6, dom = "tp"))
+    ts_datatable(stats::setNames(tab, c(.tr("Type cellulaire"), .tr("Effectif"))),
+                 page_length = 6, buttons = FALSE, dom = "tp",
+                 filter = "none", scroll_x = FALSE)
   })
 
   # ── Expose state to orchestrator ────────────────────────────────────────

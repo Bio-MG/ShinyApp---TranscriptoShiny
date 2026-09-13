@@ -246,8 +246,8 @@ mod_sc_da_sccoda_server <- function(id, global_data, shared_rv = NULL) {
     output$sccoda_table <- DT::renderDataTable({
       req(sccoda_state$result)
       .check_fingerprint()
-      DT::datatable(sccoda_state$result$effect_table, rownames = FALSE,
-                    options = list(pageLength = 10, scrollX = TRUE)) |>
+      ts_datatable(sccoda_state$result$effect_table, page_length = 15L,
+                   filename_base = "sccoda_table", filter = "none") |>
         DT::formatSignif(columns = c("effect", "hdi_low", "hdi_high", "sd",
                                      "inclusion_probability", "log2_fold_change"),
                          digits = 4)

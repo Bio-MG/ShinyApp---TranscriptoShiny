@@ -180,19 +180,22 @@ mod_bulk_multi_server <- function(id, global_data) {
       res <- req(last_result())
       validate(need(nrow(res$intersection_dt) > 0,
                     .tr("Aucun gène dans les intersections avec ces seuils.")))
-      ts_datatable(res$intersection_dt, page_length = 10)
+      ts_datatable(res$intersection_dt, page_length = 15L,
+                   filename_base = "bulk_multi_intersections")
     })
 
     output$concordance_table <- renderDT({
       global_data$language  # i18n
       res <- req(last_result())
-      ts_datatable(res$concordance, page_length = 10)
+      ts_datatable(res$concordance, page_length = 15L,
+                   filename_base = "bulk_multi_concordance")
     })
 
     output$per_dataset_table <- renderDT({
       global_data$language  # i18n
       res <- req(last_result())
-      ts_datatable(res$per_dataset, page_length = 10)
+      ts_datatable(res$per_dataset, page_length = 15L,
+                   filename_base = "bulk_multi_per_dataset")
     })
 
     output$status <- renderText({

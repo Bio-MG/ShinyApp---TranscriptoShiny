@@ -192,10 +192,11 @@ mod_spatial_lr_server <- function(id, global_data, shared_rv) {
       req(shared_rv$lr_result)
       df <- shared_rv$lr_result$pair_scores
       if (nrow(df) == 0) {
-        return(DT::datatable(data.frame(
+        return(ts_datatable(data.frame(
           from_spot = character(), to_spot = character(), ligand = character(), receptor = character(),
           score = numeric(0), z_score = numeric(0), p_value = numeric(0), signif = character()
-        ), rownames = FALSE, options = list(pageLength = 20)))
+        ), page_length = 15L, filename_base = "spatial_lr_table",
+           filter = "none", scroll_x = FALSE))
       }
 
       # Add composite pair name (ligand-receptor) and sort by |z_score|
@@ -203,8 +204,8 @@ mod_spatial_lr_server <- function(id, global_data, shared_rv) {
       df_sorted <- df[order(-abs(df$z_score)), ]
       head_tbl <- head(df_sorted[, c("from_spot", "to_spot", "pair_name", "score", "z_score", "p_value", "signif")], 50L)
 
-      DT::datatable(head_tbl, rownames = FALSE,
-                    options = list(pageLength = 20, scrollX = TRUE)) |>
+      ts_datatable(head_tbl, page_length = 15L, filename_base = "spatial_lr_table",
+                   filter = "none") |>
         DT::formatColumn("z_score", inline = "cell", format = function(v) sprintf("%.2f", v),
                          class = ifelse(abs(v) > 1.96, "text-danger fw-bold",
                                     ifelse(abs(v) < -1.96, "text-info fw-bold", "muted"))) |>

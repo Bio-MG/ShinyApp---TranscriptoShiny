@@ -127,8 +127,8 @@ mod_sc_communication_velocity_server <- function(id, comm_state, global_data, sh
     output$vel_table <- DT::renderDataTable({
       ctx <- vel_ctx()
       req(ctx)
-      DT::datatable(ctx$pair_table, rownames = FALSE,
-                    options = list(pageLength = 8, scrollX = TRUE))
+      ts_datatable(ctx$pair_table, page_length = 15L,
+                   filename_base = "sc_comm_velocity_pair_table", filter = "none")
     })
 
     output$vel_plot <- renderPlot({

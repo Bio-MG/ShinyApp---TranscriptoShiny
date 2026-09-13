@@ -197,11 +197,13 @@ rdata_picker_server <- function(id, file_rv, commit_fn, expected = NULL,
 
     output$preview_table <- DT::renderDT({
       req(show_picker())
-      DT::datatable(
+      ts_datatable(
         .display_table(info_rv()),
-        rownames = FALSE,
         selection = list(mode = "multiple", selected = NULL),
-        options = list(pageLength = 10, dom = "tip", scrollX = TRUE)
+        page_length = 10,
+        buttons = FALSE,
+        dom = "tip",
+        filter = "none"
       )
     })
 

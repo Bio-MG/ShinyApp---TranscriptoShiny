@@ -264,18 +264,19 @@ mod_sc_da_design_server <- function(id, global_data, shared_rv = NULL) {
       .check_fingerprint()
       cs <- da_state$result$condition_summary
       if (is.null(cs) || nrow(cs) == 0L) {
-        return(DT::datatable(data.frame(Message = .tr("Aucune condition exploitable.")),
-                             rownames = FALSE))
+        return(ts_datatable(data.frame(Message = .tr("Aucune condition exploitable.")),
+                            page_length = 10L, buttons = FALSE, filter = "none",
+                            scroll_x = FALSE))
       }
-      DT::datatable(cs, rownames = FALSE,
-                    options = list(pageLength = 10, scrollX = TRUE))
+      ts_datatable(cs, page_length = 15L,
+                   filename_base = "sc_da_design_conditions", filter = "none")
     })
 
     output$da_samples <- DT::renderDataTable({
       req(da_state$result)
       .check_fingerprint()
-      DT::datatable(da_state$result$sample_summary, rownames = FALSE,
-                    options = list(pageLength = 10, scrollX = TRUE))
+      ts_datatable(da_state$result$sample_summary, page_length = 15L,
+                   filename_base = "sc_da_design_samples", filter = "none")
     })
 
     output$da_batch_ui <- renderUI({
@@ -295,8 +296,9 @@ mod_sc_da_design_server <- function(id, global_data, shared_rv = NULL) {
 
     output$da_batch_table <- DT::renderDataTable({
       req(da_state$result)
-      DT::datatable(da_state$result$condition_batch_table, rownames = FALSE,
-                    options = list(pageLength = 10))
+      ts_datatable(da_state$result$condition_batch_table, page_length = 15L,
+                   filename_base = "sc_da_design_condition_batch", filter = "none",
+                   scroll_x = FALSE)
     })
 
     output$da_identity_ui <- renderUI({
@@ -316,8 +318,8 @@ mod_sc_da_design_server <- function(id, global_data, shared_rv = NULL) {
 
     output$da_identity_table <- DT::renderDataTable({
       req(da_state$result)
-      DT::datatable(da_state$result$identity_coverage, rownames = FALSE,
-                    options = list(pageLength = 10, scrollX = TRUE))
+      ts_datatable(da_state$result$identity_coverage, page_length = 15L,
+                   filename_base = "sc_da_design_identity_coverage", filter = "none")
     })
 
     # ── Exports (traces par analysis_id) ───────────────────────────────────

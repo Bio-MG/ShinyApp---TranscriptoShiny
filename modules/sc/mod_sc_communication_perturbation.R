@@ -173,8 +173,8 @@ mod_sc_communication_perturbation_server <- function(id, comm_state, global_data
     output$pert_table <- DT::renderDataTable({
       ctx <- pert_ctx()
       req(ctx)
-      DT::datatable(ctx$delta_table, rownames = FALSE,
-                    options = list(pageLength = 10, scrollX = TRUE))
+      ts_datatable(ctx$delta_table, page_length = 15L,
+                   filename_base = "sc_comm_perturbation_delta", filter = "none")
     })
 
     output$pert_delta <- renderPlot({

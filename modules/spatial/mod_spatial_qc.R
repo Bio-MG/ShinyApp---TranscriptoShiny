@@ -248,7 +248,8 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
       req(global_data$spatial_obj$sketch)
       meta <- global_data$spatial_obj$sketch@meta.data
       validate(need(ncol(meta) > 0, .tr("Aucune metadata disponible pour ce jeu de donnees.")))
-      DT::datatable(meta, options = list(pageLength = 10, scrollX = TRUE), rownames = TRUE)
+      ts_datatable(meta, page_length = 15L, filename_base = "spatial_qc_metadata",
+                   filter = "none", rownames = TRUE)
     })
 
     # ── Fast, synchronous QC metrics (recomputed whenever the object changes) ──
@@ -434,7 +435,8 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
 
     output$moran_table <- DT::renderDT({
       req(shared_rv$moran_results)
-      DT::datatable(shared_rv$moran_results, options = list(pageLength = 15), rownames = FALSE) |>
+      ts_datatable(shared_rv$moran_results, page_length = 15L, filename_base = "spatial_qc_moran",
+                   filter = "none", scroll_x = FALSE) |>
         DT::formatRound(c("moran_i", "p_value"), 4)
     })
 
@@ -601,11 +603,10 @@ mod_spatial_qc_server <- function(id, global_data, shared_rv) {
     output$hotspot_table <- DT::renderDT({
       req(shared_rv$hotspot_result)
       
-      DT::datatable(
+      ts_datatable(
         shared_rv$hotspot_result,
-        rownames = FALSE,
-        filter = "top",
-        options = list(pageLength = 15, scrollX = TRUE)
+        page_length = 15L,
+        filename_base = "spatial_qc_hotspots"
       ) |>
         DT::formatRound(c("value", "gi_star", "p_value"), 3)
     })

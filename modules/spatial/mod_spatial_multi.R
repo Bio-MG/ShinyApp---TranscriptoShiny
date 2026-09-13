@@ -405,7 +405,8 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
       tab <- as.data.frame.matrix(res$contingency)
       tab <- cbind(Echantillon = rownames(tab), tab)
       colnames(tab)[1] <- .tr("Echantillon")
-      DT::datatable(tab, rownames = FALSE, options = list(pageLength = 10, scrollX = TRUE))
+      ts_datatable(tab, page_length = 15L, filename_base = "spatial_multi_contingency",
+                   filter = "none")
     })
 
     # ── Summary ───────────────────────────────────────────────────────────
@@ -428,7 +429,8 @@ mod_spatial_multi_server <- function(id, global_data, shared_rv) {
       req(res)
       tab <- as.data.frame(res$n_per_dataset)
       colnames(tab) <- c(.tr("Echantillon"), .tr("Elements (sketch)"))
-      DT::datatable(tab, options = list(pageLength = 10), rownames = FALSE)
+      ts_datatable(tab, page_length = 15L, filename_base = "spatial_multi_n_per_dataset",
+                   filter = "none", scroll_x = FALSE)
     })
   })
 }

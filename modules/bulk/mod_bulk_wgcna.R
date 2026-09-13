@@ -247,8 +247,8 @@ mod_bulk_wgcna_server <- function(id, global_data, shared_rv) {
       sizes <- as.data.frame(md$module_sizes)
       colnames(sizes) <- c("Module", "Gènes")
       sizes <- sizes[order(sizes$Module), ]
-      DT::datatable(sizes, rownames = FALSE,
-                    options = list(pageLength = 15, scrollX = TRUE))
+      ts_datatable(sizes, page_length = 15L,
+                   filename_base = "wgcna_module_sizes", filter = "none")
     })
 
     output$dl_wgcna_genes <- downloadHandler(

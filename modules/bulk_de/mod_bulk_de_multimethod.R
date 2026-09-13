@@ -196,7 +196,8 @@
     df_display <- df
     num_cols <- setdiff(colnames(df_display), c("gene", "consistent_sign"))
     for (cl in num_cols) df_display[[cl]] <- round(df_display[[cl]], 4)
-    ts_datatable(df_display, page_length = 15) %>%
+    ts_datatable(df_display, page_length = 15L,
+                 filename_base = "bulk_de_multimethod_consensus") %>%
       formatStyle("n_methods_sig",
                   background = styleColorBar(range(df_display$n_methods_sig), "#F39C12"),
                   backgroundSize = "98% 88%", backgroundRepeat = "no-repeat",

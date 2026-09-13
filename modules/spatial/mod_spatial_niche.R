@@ -264,8 +264,8 @@ mod_spatial_niche_server <- function(id, global_data, shared_rv) {
 
     output$niche_composition_table <- DT::renderDT({
       req(shared_rv$niche_composition)
-      DT::datatable(shared_rv$niche_composition, rownames = FALSE,
-                    options = list(pageLength = 10, scrollX = TRUE)) |>
+      ts_datatable(shared_rv$niche_composition, page_length = 15L,
+                   filename_base = "spatial_niche_composition", filter = "none") |>
         DT::formatRound(setdiff(colnames(shared_rv$niche_composition), "niche"), 3)
     })
 
@@ -274,7 +274,8 @@ mod_spatial_niche_server <- function(id, global_data, shared_rv) {
       req(shared_rv$niche_labels)
       tab <- as.data.frame(table(niche = shared_rv$niche_labels), stringsAsFactors = FALSE)
       colnames(tab) <- c(.tr("Niche"), .tr("Effectif"))
-      DT::datatable(tab, options = list(pageLength = 15), rownames = FALSE)
+      ts_datatable(tab, page_length = 15L, filename_base = "spatial_niche_sizes",
+                   filter = "none", scroll_x = FALSE)
     })
 
     # =========================================================================
@@ -384,7 +385,8 @@ mod_spatial_niche_server <- function(id, global_data, shared_rv) {
       req(shared_rv$enrichment_result)
       df <- shared_rv$enrichment_result$enrichment
       df <- df[order(-abs(df$z_score)), ]
-      DT::datatable(df, rownames = FALSE, options = list(pageLength = 15, scrollX = TRUE)) |>
+      ts_datatable(df, page_length = 15L, filename_base = "spatial_niche_enrichment",
+                   filter = "none") |>
         DT::formatRound("z_score", 2)
     })
 

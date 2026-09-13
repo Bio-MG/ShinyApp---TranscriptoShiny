@@ -252,7 +252,8 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
           icon("triangle-exclamation"), " ",
           .t_fmt(.tr("{n} jeu(x) rejeté(s) — recouvrement < {pct} % ou taille hors bornes. Détail :"),
                  n = nrow(sc$qc$dropped), pct = round(100 * TS_BULK_GSVA_OVERLAP_MIN)),
-          DT::datatable(sc$qc$dropped, rownames = FALSE, options = list(pageLength = 5)))
+          ts_datatable(sc$qc$dropped, page_length = 5, buttons = FALSE,
+                       filter = "none", scroll_x = FALSE))
     })
 
     output$scores_pca <- renderPlot({
@@ -286,8 +287,9 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
       global_data$language
       req(shared_rv$pathway_scores)
       s <- round(shared_rv$pathway_scores$scores, 4)
-      DT::datatable(as.data.frame(s), rownames = TRUE,
-                    options = list(pageLength = 15, scrollX = TRUE))
+      ts_datatable(as.data.frame(s), page_length = 15L,
+                   filename_base = "bulk_pathways_scores", filter = "none",
+                   rownames = TRUE)
     })
 
     output$dl_scores_csv <- downloadHandler(

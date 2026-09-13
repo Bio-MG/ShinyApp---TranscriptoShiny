@@ -151,9 +151,9 @@ mod_sc_datasets_server <- function(id, global_data) {
         # shinytest2-sc l'interdit, cf. helper-app-driver.R). Le message
         # « Aucun dataset enregistré » reste porté par le bloc de
         # suppression ci-dessus.
-        return(ts_datatable(sc_multi_summary(NULL), page_length = 6))
+        return(ts_datatable(sc_multi_summary(NULL), page_length = 6, buttons = FALSE))
       }
-      ts_datatable(summary_df, page_length = 6)
+      ts_datatable(summary_df, page_length = 6, buttons = FALSE)
     })
   })
 }

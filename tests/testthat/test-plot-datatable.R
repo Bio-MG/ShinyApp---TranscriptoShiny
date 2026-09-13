@@ -1,11 +1,15 @@
 # =============================================================================
 # test-plot-datatable.R — PLOT-S3 : wrapper DT harmonise ts_datatable()
 # =============================================================================
-# Objectif central : ZERO CHANGEMENT DE COMPORTEMENT.
-#   - buttons = FALSE par defaut (48 des 49 tables de l'app n'en ont aucun)
-#     => le helper NE pose NI `extensions` NI `dom`
-#   - page_length est OBLIGATOIRE : il n'existe aucune valeur neutre
-#     (10 x22, 15 x15, 8 x5, 20 x3, 6 x1)
+# Objectif central (MISE A JOUR jalon DT-EXPORT 2026-09-14, contrat §6
+# option B) :
+#   - buttons : defaut = TS_DT_BUTTONS_DEFAULT (TRUE) — les tables de
+#     resultats sont boutonnees ; les tables d'APERCU passent
+#     buttons = FALSE explicitement (ni extensions ni dom alors poses)
+#   - page_length est TOUJOURS OBLIGATOIRE dans la signature : la
+#     normalisation a 15 se fait site par site, jamais par un defaut cache
+#   - plus AUCUN appel direct a DT::datatable() dans modules/ et R/
+#     (hors R/plotting/datatable.R lui-meme)
 # =============================================================================
 suppressWarnings(suppressPackageStartupMessages(library(DT)))
 
@@ -73,29 +77,45 @@ test_that("buttons non logique => invalid_buttons", {
   }
 })
 
-# --- 2. GARANTIE zero changement de comportement ------------------------------
+# --- 2. GARANTIE du defaut DT-EXPORT (contrat §6, option B) -------------------
 
-test_that("appel nu = strictement identique au DT::datatable() d'origine", {
+test_that("appel nu = table de resultats boutonnee (defaut TS_DT_BUTTONS_DEFAULT)", {
   df <- .tsd_df()
-  ref <- DT::datatable(df, filter = "top", rownames = FALSE,
-                       options = list(pageLength = 15, scrollX = TRUE))
   got <- ts_datatable(df, page_length = 15)
-
-  # memes options, et RIEN de plus
-  expect_identical(got$x$options$pageLength, ref$x$options$pageLength)
-  expect_identical(got$x$options$scrollX,    ref$x$options$scrollX)
-  expect_null(got$x$options$dom)
+  expect_identical(got$x$options$dom, "Bfrtip")
+  expect_identical(got$x$options$pageLength, 15)
+  expect_identical(got$x$options$scrollX, TRUE)
+  expect_true("Buttons" %in% unlist(got$x$extensions))
+  # aucun jeu de boutons nomme : DT applique ses boutons par defaut
   expect_null(got$x$options$buttons)
-  expect_identical(got$x$options, ref$x$options)
-  # aucune extension
-  expect_true(is.null(got$x$extensions) || length(got$x$extensions) == 0L)
   expect_identical(got$x$filter, "top")
   expect_false(isTRUE(got$x$rownames))
 })
 
-test_that("buttons = FALSE ne pose NI extensions NI dom (48 sites sur 49)", {
+test_that("le defaut buttons suit la constante TS_DT_BUTTONS_DEFAULT", {
   df <- .tsd_df()
-  got <- ts_datatable(df, page_length = 8)
+  old <- if (exists("TS_DT_BUTTONS_DEFAULT", envir = globalenv())) {
+    get("TS_DT_BUTTONS_DEFAULT", envir = globalenv())
+  } else {
+    NULL
+  }
+  assign("TS_DT_BUTTONS_DEFAULT", FALSE, envir = globalenv())
+  on.exit({
+    if (is.null(old)) {
+      if (exists("TS_DT_BUTTONS_DEFAULT", envir = globalenv()))
+        rm("TS_DT_BUTTONS_DEFAULT", envir = globalenv())
+    } else {
+      assign("TS_DT_BUTTONS_DEFAULT", old, envir = globalenv())
+    }
+  }, add = TRUE)
+  got <- ts_datatable(df, page_length = 15)
+  expect_null(got$x$options$dom)
+  expect_true(is.null(got$x$extensions) || length(got$x$extensions) == 0L)
+})
+
+test_that("buttons = FALSE ne pose NI extensions NI dom (tables d'apercu)", {
+  df <- .tsd_df()
+  got <- ts_datatable(df, page_length = 8, buttons = FALSE)
   expect_null(got$x$options$dom)
   expect_true(is.null(got$x$extensions) || length(got$x$extensions) == 0L)
 })
@@ -116,7 +136,7 @@ test_that("buttons = TRUE reproduit exactement le site pathways (dom + Buttons)"
   expect_identical(got$x$options$dom, ref$x$options$dom)
 })
 
-test_that("filename_base ajoute les 4 boutons nommes (opt-in, jamais par defaut)", {
+test_that("filename_base ajoute les 4 boutons nommes (forme recommandee)", {
   df <- .tsd_df()
   got <- ts_datatable(df, page_length = 10, buttons = TRUE,
                       filename_base = "pathways")
@@ -135,6 +155,26 @@ test_that("dom / extensions explicites ont la priorite sur buttons", {
   df <- .tsd_df()
   got <- ts_datatable(df, page_length = 10, buttons = TRUE, dom = "tip")
   expect_identical(got$x$options$dom, "tip")
+})
+
+test_that("extra_options : fusionnee avec priorite maximale, sinon invalid_extra_options", {
+  df <- .tsd_df()
+  got <- ts_datatable(df, page_length = 15, filename_base = "x",
+                      extra_options = list(
+                        language = list(search = "Filtrer :"),
+                        lengthMenu = c(10, 15, 25)))
+  expect_identical(got$x$options$language$search, "Filtrer :")
+  expect_identical(got$x$options$lengthMenu, c(10, 15, 25))
+  # les options posees par le wrapper restent presentes
+  expect_identical(got$x$options$dom, "Bfrtip")
+  # extra_options a la priorite sur le wrapper (ex. surcharger dom)
+  got2 <- ts_datatable(df, page_length = 15, extra_options = list(dom = "t"))
+  expect_identical(got2$x$options$dom, "t")
+  # erreur classee si liste non nommee
+  e <- tryCatch(ts_datatable(df, page_length = 15, extra_options = list(1, 2)),
+                error = function(e) e)
+  expect_s3_class(e, "plot_datatable_error")
+  expect_identical(e$state, "invalid_extra_options")
 })
 
 test_that("les parametres de forme sont respectes et les ... transmis", {
@@ -189,15 +229,42 @@ test_that("PLOT-S3 : les 6 sites canoniques passent par ts_datatable()", {
   }
 })
 
-test_that("les valeurs de pageLength historiques sont preservees", {
-  # 15 / 10 / 15 / 15 / 15 / 20 — aucune normalisation
+test_that("DT-EXPORT : les sites canoniques sont normalises (page 15 + boutons)", {
+  # page_length = 15L + filename_base sur les tables de resultats
   expect_match(paste(readLines(file.path(ts_project_root(),
                                          "R/bulk/bulk_helpers.R")), collapse = "\n"),
-               "ts_datatable\\(df_display, page_length = 15\\)")
+               "ts_datatable\\(df_display, page_length = 15L, filename_base = \"bulk_degenes\"\\)")
   expect_match(paste(readLines(file.path(ts_project_root(),
                                          "R/core/pathway_helpers.R")), collapse = "\n"),
-               "ts_datatable\\(df_display, page_length = 10, buttons = TRUE\\)")
+               "page_length = 15L")
   expect_match(paste(readLines(file.path(ts_project_root(),
                                          "modules/spatial/mod_spatial_cluster.R")), collapse = "\n"),
-               "ts_datatable\\(shared_rv\\$cluster_markers, page_length = 20\\)")
+               "page_length = 15L")
+})
+
+test_that("DT-EXPORT : plus AUCUN appel datatable() direct hors du wrapper", {
+  roots <- c(file.path(ts_project_root(), "modules"),
+             file.path(ts_project_root(), "R"))
+  offenders <- character(0)
+  for (root in roots) {
+    files <- list.files(root, pattern = "\\.R$", recursive = TRUE,
+                        full.names = TRUE, ignore.case = TRUE)
+    for (f in files) {
+      if (normalizePath(f, winslash = "/") ==
+          normalizePath(file.path(ts_project_root(), "R/plotting/datatable.R"),
+                        winslash = "/")) {
+        next
+      }
+      code <- readLines(f, warn = FALSE, encoding = "UTF-8")
+      code <- grep("^\\s*#", code, value = TRUE, invert = TRUE)
+      src <- paste(code, collapse = "\n")
+      # (?<![A-Za-z0-9_]) : exclut ts_datatable( ; casse lowercase = appels reels
+      if (grepl("(?<![A-Za-z0-9_])(?:DT::)?datatable\\s*\\(", src, perl = TRUE)) {
+        offenders <- c(offenders, f)
+      }
+    }
+  }
+  expect_length(offenders, 0L)
+  info <- if (length(offenders)) paste(offenders, collapse = ", ") else ""
+  expect_identical(info, "")
 })

@@ -1279,7 +1279,7 @@ build_de_results_dt <- function(df) {
 
   df_display[["Padj"]]   <- format(df$padj,   scientific = TRUE, digits = 3)
 
-  ts_datatable(df_display, page_length = 15) %>%
+  ts_datatable(df_display, page_length = 15L, filename_base = "bulk_degenes") %>%
 
     DT::formatStyle("Padj", color = DT::styleInterval(c(0.001, 0.01, 0.05),
 

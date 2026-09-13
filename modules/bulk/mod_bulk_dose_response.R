@@ -176,8 +176,7 @@ mod_bulk_dose_response_server <- function(id, global_data, shared_rv) {
       req(shared_rv$dose_result)
       tab <- build_dose_table_export(shared_rv$dose_result)
       tab$message[is.na(tab$message)] <- ""
-      ts_datatable(tab, page_length = 15L, filename_base = "dose_response",
-                   buttons = TRUE)
+      ts_datatable(tab, page_length = 15L, filename_base = "dose_response")
     })
 
     output$dl_dose <- downloadHandler(

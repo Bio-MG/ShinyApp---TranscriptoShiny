@@ -156,8 +156,7 @@ mod_sc_rarity_server <- function(id, global_data, shared_rv) {
     output$rarity_table <- renderDT({
       req(rarity_state$result)
       tab <- build_population_rarity_table_export(rarity_state$result)
-      ts_datatable(tab, page_length = 15L, filename_base = "population_rarity",
-                   buttons = TRUE)
+      ts_datatable(tab, page_length = 15L, filename_base = "population_rarity")
     })
 
     output$rarity_summary <- renderTable({
