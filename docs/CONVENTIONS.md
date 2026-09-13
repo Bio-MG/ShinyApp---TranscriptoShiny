@@ -35,6 +35,24 @@ cd "D:/Data_science/SHINYAPP test (git work)/SHINYAPP test"
 Les deux gardes sont en **base R uniquement** : exécutables sans installer
 quoi que ce soit, ce qui est indispensable pour un contrôle pré-merge.
 
+**Durée** : `check_conventions.R` tourne en ~30 s, dont ~13 s d'activation renv
+incompressibles. C'est délibérément sous le timeout par défaut des shells non
+interactifs (120 s) : au-delà, le garde est tué **avant** de rendre son verdict,
+ce qui donne l'illusion d'un outil instable. Mesurer avec une sonde
+`system.time()` par règle avant d'optimiser — le poste le plus coûteux n'est
+presque jamais celui qu'on imagine.
+
+> **Après toute modification d'une règle, jouer un CAS NÉGATIF.** Créer un
+> fichier qui viole la règle, vérifier qu'elle le signale **et** que le code de
+> sortie vaut 1, puis retirer la sonde. Un garde qui affiche « 0 erreur » peut
+> simplement ne plus rien détecter : le run nominal ne prouve rien.
+>
+> Incident réel du 2026-09-13 : `git check-ignore --stdin` ne reçoit aucun
+> `stdin` via `system2()` sous Windows (stdin vide → aucun chemin signalé),
+> alors que la même commande fonctionne en shell. La règle C3 — la plus
+> importante du garde — était devenue muette tout en restant verte. Les chemins
+> sont désormais passés en **arguments**, par lots de 200.
+
 ---
 
 ## 2. Arborescence et responsabilités
