@@ -27,11 +27,13 @@
 
 # Domaines suivis par le rapport — liste FIGEE (ordre d'affichage du rapport).
 # Post-V1.0 (mandat utilisateur) : pseudobulk + correlation ajoutes (sections
-# tables pures, meme esprit compilateur).
+# tables pures, meme esprit compilateur). 4F-EXT (2026-09-13, parking V1.x
+# consomme — rapport MD-2 §5.2) : bulk_multi_comparison ajoute.
 .report_analysis_domains <- c(
   "markers", "pseudobulk", "correlation", "pathways", "trajectory",
   "velocity", "communication",
-  "da_design", "da_milo", "da_sccoda", "da_cross"
+  "da_design", "da_milo", "da_sccoda", "da_cross",
+  "bulk_multi_comparison"
 )
 
 # Domaines "contrat" : resultats canoniques a identite verifiee (empreinte v2)
@@ -44,6 +46,14 @@
 # traces par la provenance partagee — jamais bloques, jamais drapeautes
 # "valides" au sens contrat.
 .report_legacy_domains <- c("markers", "pseudobulk", "correlation", "pathways", "trajectory")
+
+# Domaines "global" (4F-EXT) : resultats plats AUTO-DATES lus dans global_data
+# (hors etat partage SC) — pas de provenance partagee ni d'empreinte v2
+# possible (resultat cross-datasets, non lie a l'objet SC courant). Le verdict
+# reste valid_legacy mais avec un libelle dedie (voir report_validator.R) ;
+# la tracabilite repose sur l'horodatage ran_at du resultat (contrat
+# BULK_MULTI_CONTRACT §10.4) et l'analysis_id "bulk-multi-compare".
+.report_global_domains <- c("bulk_multi_comparison")
 
 # Constantes TS_* photographiees dans le rapport (snapshot de configuration —
 # consommees, jamais redefinies ici).
@@ -84,10 +94,14 @@
 #' @param domain Un nom de .report_analysis_domains.
 #' @param sc_obj Objet SC courant (ou stub a dimnames).
 #' @param shared_rv Etat partage SC (ou NULL).
+#' @param global_data Etat global applicatif (reactiveValues ou liste, ou
+#'   NULL) — lu UNIQUEMENT pour les domaines "global" (.report_global_domains,
+#'   4F-EXT : bulk_multi_comparison) ; jamais ecrit.
 #' @return list(present, summary (data.frame champ/valeur), analysis_ids,
 #'   provenance_available, identity_checked, identity_ok (TRUE/FALSE/NA),
 #'   identity_note (character), extras (liste libre, p.ex. vues croisées)).
-.report_domain_summary <- function(domain, sc_obj, shared_rv) {
+.report_domain_summary <- function(domain, sc_obj, shared_rv,
+                                   global_data = NULL) {
   out <- list(
     present = FALSE, summary = .report_kv_df(NULL), analysis_ids = character(0),
     provenance_available = FALSE, identity_checked = FALSE,
@@ -360,6 +374,38 @@
     }
     return(out)
   }
+  # ── Domaines "global" (4F-EXT) : resultats plats auto-dates de global_data ─
+  if (domain == "bulk_multi_comparison") {
+    res <- if (!is.null(global_data)) global_data$bulk_multi_comparison else NULL
+    # Garde de forme (contrat BULK_MULTI_CONTRACT §10.4) : liste plate avec
+    # per_dataset + concordance data.frames et ran_at horodaté — on ne
+    # "répare" jamais un résultat partial, il est simplement absent.
+    if (is.list(res) && is.data.frame(res$per_dataset) &&
+        nrow(res$per_dataset) > 0L && is.data.frame(res$concordance) &&
+        !is.null(res$ran_at)) {
+      out$present <- TRUE
+      out$analysis_ids <- "bulk-multi-compare"
+      out$provenance_available <- FALSE
+      out$identity_checked <- FALSE
+      out$identity_ok <- NA
+      out$identity_note <- paste(
+        "Résultat global auto-daté (ran_at) — comparaison CROSS-datasets,",
+        "non liée à l'objet SC courant : pas d'empreinte v2 applicable.")
+      out$summary <- .report_kv_df(c(
+        n_datasets = tryCatch(length(res$datasets), error = function(e) NA_integer_),
+        datasets = tryCatch(paste(res$datasets, collapse = "; "), error = function(e) NA_character_),
+        contraste = tryCatch(as.character(res$contrast), error = function(e) NA_character_),
+        seuil_lfc = tryCatch(as.numeric(res$lfc_thresh), error = function(e) NA_real_),
+        seuil_padj = tryCatch(as.numeric(res$padj_thresh), error = function(e) NA_real_),
+        date_calcul = tryCatch(format(res$ran_at, "%Y-%m-%d %H:%M:%S"),
+                               error = function(e) NA_character_)
+      ))
+      out$extras$per_dataset <- res$per_dataset
+      out$extras$concordance <- res$concordance
+      out$extras$intersection_dt <- res$intersection_dt
+    }
+    return(out)
+  }
   out
 }
 
@@ -372,12 +418,16 @@
 #' @param shared_rv Etat partage SC (create_sc_shared_state) ou NULL.
 #' @param options Liste nommee : \code{title}, \code{subtitle}, \code{notes},
 #'   \code{language} ("fr"/"en"), \code{include_tables} (logical).
+#' @param global_data Etat global applicatif (ou NULL — defaut) : lu pour les
+#'   domaines "global" uniquement (4F-EXT : bulk_multi_comparison), jamais
+#'   ecrit. NULL = comportement d'origine strictement conserve.
 #' @return Liste canonique \code{type = "consolidated_report_input"} (champs
 #'   figes, voir docs/contracts/CONSOLIDATED_REPORT_CONTRACT.md).
 #' @errors \code{report_error} (\code{invalid_input}) si \code{sc_obj} est
 #'   absent — le rapport compile un projet EXISTANT, il n'en fabrique pas.
 collect_consolidated_report_input <- function(sc_obj, shared_rv = NULL,
-                                              options = list()) {
+                                              options = list(),
+                                              global_data = NULL) {
   if (is.null(sc_obj) || is.null(tryCatch(dim(sc_obj), error = function(e) NULL))) {
     .rep_stop(paste0(
       "collect_consolidated_report_input() : aucun objet Single-Cell charge — ",
@@ -445,7 +495,7 @@ collect_consolidated_report_input <- function(sc_obj, shared_rv = NULL,
   # ── Analyses (resumes descriptifs par domaine fige) ────────────────────────
   analyses <- setNames(lapply(.report_analysis_domains, function(dm) {
     entry <- tryCatch(
-      .report_domain_summary(dm, sc_obj, shared_rv),
+      .report_domain_summary(dm, sc_obj, shared_rv, global_data = global_data),
       error = function(e) {
         list(present = TRUE, summary = .report_kv_df(c(
           erreur_resume = conditionMessage(e))),

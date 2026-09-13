@@ -98,6 +98,12 @@ validate_consolidated_report_input <- function(report_input) {
             reason <- unname(.report_state_labels[["unknown"]])
           }
         }
+      } else if (dm %in% .report_global_domains) {
+        # 4F-EXT : résultat global auto-daté (global_data) — même état
+        # valid_legacy (jamais bloqué), libellé dédié (la traçabilité
+        # repose sur ran_at, pas sur la provenance partagée).
+        state <- "valid_legacy"
+        reason <- "Résultat global présent — auto-daté à la production (ran_at), compilé sans re-analyse."
       } else {
         state <- "valid_legacy"
         reason <- unname(.report_state_labels[["valid_legacy"]])

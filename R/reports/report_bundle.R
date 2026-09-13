@@ -19,6 +19,8 @@
 #                         exclue)
 #   da_sccoda          -> sccoda_effect_table.csv / sccoda_composition_table.csv
 #   da_cross           -> da_cross_concordance.csv / da_cross_disagreement.csv
+#   bulk_multi_comparison (4F-EXT) -> bulk_multi_per_dataset.csv /
+#                         bulk_multi_concordance.csv / bulk_multi_intersection.csv
 # =============================================================================
 
 .report_bundle_stop <- function(msg) {
@@ -90,6 +92,13 @@ consolidated_report_export_filename <- function(kind, ext) {
   disa <- A$da_cross$extras$method_summary$disagreement %||% NULL
   add("da_cross_concordance.csv", conc, "da_cross", "concordance par identite")
   add("da_cross_disagreement.csv", disa, "da_cross", "desaccords")
+  # 4F-EXT : comparaison multi-jeux bulk (resultat global auto-date).
+  add("bulk_multi_per_dataset.csv", A$bulk_multi_comparison$extras$per_dataset,
+      "bulk_multi_comparison", "detail par dataset compare")
+  add("bulk_multi_concordance.csv", A$bulk_multi_comparison$extras$concordance,
+      "bulk_multi_comparison", "concordance de direction par paire")
+  add("bulk_multi_intersection.csv", A$bulk_multi_comparison$extras$intersection_dt,
+      "bulk_multi_comparison", "intersection des DEGs")
   out
 }
 

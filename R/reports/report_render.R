@@ -40,7 +40,8 @@
   da_design     = "Abondance différentielle — design expérimental",
   da_milo       = "Abondance différentielle — Milo (voisinages)",
   da_sccoda     = "Abondance différentielle — scCODA (composition)",
-  da_cross      = "Vues croisées Milo × scCODA"
+  da_cross      = "Vues croisées Milo × scCODA",
+  bulk_multi_comparison = "Comparaison multi-jeux Bulk (DEGs)"
 )
 
 .report_banner_colors <- c(
