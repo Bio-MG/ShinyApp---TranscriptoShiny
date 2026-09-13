@@ -38,6 +38,8 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 | `docs/proposals/V1X_UX_REFACTOR_PROPOSAL.md` | Conception des lots UX (⚠️ état corrigé en tête) | Avant toute reprise UX |
 | `docs/proposals/CCC_DATA_PATH_ASSESSMENT.md` | 10X → CellChat : faisabilité et chemins | Avant 4D-3 / phases 5–6 |
 | `docs/proposals/CCC_7_8_LIANA_IMPORT_PROPOSAL.md` | **Proposition CCC 7–8 route (b)** : import de rangs LIANA, 9 éléments V1.x, 4 décisions — ✅ **tranchées et livrées** (`a88577f`) | Référence de conception (état réel : `STATUS.md` §2aa) |
+| `docs/proposals/CCC_9_RARE_CELLS_MILO_AUDIT.md` | **Audit Milo (règle 3) de la phase 9** : aucun moteur à dupliquer, mais Milo ne sert pas la question mono-condition ; périmètre non spécifié dans le dépôt | Avant toute reprise de la phase 9 |
+| `docs/proposals/CCC_9_POPULATION_RARITY_PROPOSAL.md` | **Proposition CCC 9 — question 1** (rareté par population annotée) : jalon descriptif, 9 éléments V1.x, 5 décisions — 🟡 **en attente de validation** | Avant d'implémenter la phase 9 (`STATUS.md` §2ab) |
 | `docs/release/UPGRADE_AND_COMPATIBILITY.md` | §3 = parking officiel V1.x (4D-3, 4E-4, 4F) | Pour les propositions V1.x |
 | `docs/contracts/*.md` | **24** contrats gelés (contract-first) — ⚠️ non versionnés (`docs/` gitignoré) | Avant de toucher un domaine gelé |
 | `docs/kanban_roadmap.html` | Tableau visuel (lecture seule, miroir de `STATUS.md`) | Démonstration / vue d'ensemble |
@@ -57,9 +59,13 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 >    résultats LIANA externes **sans dépendance** (extension du contrat Stage
 >    11 ; comparaison en **rangs/recouvrement uniquement**, jamais de score
 >    consensus).
-> 2. **CCC phase 9** (rare cells) — **VALIDÉE, à prévoir** : commencer par
->    l'**audit de chevauchement avec Milo** (Stage 14, règle 3 : aucun moteur
->    dupliqué) avant toute proposition.
+> 2. **CCC phase 9** (rare cells) — **PÉRIMÈTRE TRANCHÉ (2026-09-13)** : la
+>    phase 9 est la **question 1** (« quelles populations annotées sont
+>    rares ? ») — jalon **descriptif, mono-condition**, donc **sans graphe
+>    kNN** : l'audit Milo (fait, `docs/proposals/CCC_9_RARE_CELLS_MILO_AUDIT.md`)
+>    devient **sans objet** pour ce jalon. **Proposition écrite** :
+>    `docs/proposals/CCC_9_POPULATION_RARITY_PROPOSAL.md` — **5 décisions à
+>    valider** avant implémentation (`STATUS.md` §2ab).
 > 3. **STAT-S2** (réseau d'enrichissement, effort M) — `enrichplot` déjà
 >    présent ; puis **STAT-S3** (clustering de profils, effort L).
 > 4. **NEW-1..3** (dose-réponse, fusion de jeux, PCSF) — le prérequis de
@@ -109,7 +115,7 @@ avance jalon par jalon, un jalon = un commit.
 | Rang | Jalon | Effort | Dépend de | État |
 |---|---|---|---|---|
 | — | ~~**CCC 7–8** — interop OmniPath / LIANA~~ | — | — | ✅ **LIVRÉ le 2026-09-13** (`a88577f`, route (b) sans dépendance) — `STATUS.md` §2aa |
-| 1 | **CCC 9** — rare-cell annotator | M | audit de chevauchement Milo | 🟡 **prochain jalon** (audit d'abord, pas de code) |
+| 1 | **CCC 9** — rare-cell annotator = **question 1 : rareté par population** | M | — (audit Milo fait ; question 1 sans graphe) | 🟡 **périmètre TRANCHÉ 2026-09-13** — **proposition écrite**, 5 décisions à valider (`STATUS.md` §2ab) |
 | 2 | **STAT-S2** — réseau d'enrichissement (`emapplot`/`cnetplot`) | M | — (`enrichplot` déjà présent) | 🟢 prêt |
 | 3 | **STAT-S3** — clustering de profils (kmeans MVP) | L | — | 🟢 prêt |
 | 4 | **NEW-1** — dose-réponse / time-course | M | — | 🟢 prêt |
@@ -137,10 +143,11 @@ indépendants et parallélisables. `NEW-2` dépendait de `STAT-S1` → **préreq
 levé**.
 
 ### Flux B — CCC avancée · `ROADMAP_CCC_ADVANCED.md`
-Phases 1–4 livrées. **Phases 5–6 GELÉES SANS SUITE** (2026-09-13), **7–8
-DÉBLOQUÉES** (route à choisir), **9 VALIDÉE** (audit Milo d'abord), **10**
-toujours parkée — conditions et routes dans `ROADMAP_CCC_ADVANCED.md` §4 ;
-décisions consignées dans `STATUS.md` §2y.
+Phases 1–4 livrées ; **5–6 GELÉES SANS SUITE** (2026-09-13) ; **7–8 LIVRÉES**
+(route (b) sans dépendance, `a88577f`) ; **9 = question 1** (rareté par
+population) — **proposition écrite**, 5 décisions à valider (`STATUS.md` §2ab) ;
+**10** toujours parkée — conditions et routes dans `ROADMAP_CCC_ADVANCED.md`
+§4 ; décisions consignées dans `STATUS.md` §2y et §2ab.
 
 ### Flux C — Propositions V1.x · `docs/release/UPGRADE_AND_COMPATIBILITY.md` §3
 `4D-3` (bloqué upstream) · `4E-4` (décision de pool à prendre) · `4F-ext`
@@ -238,6 +245,7 @@ auto dès ≥ 2 échantillons). Les modes 1 et 2 n'existent pas encore — c'est
 | 8 | ~~**Multi-échantillons + pseudobulk « comme Spatial »**~~ — ✅ **LIVRÉ le 2026-09-13** : `MD-1` (conteneur `bulk_datasets`), `MD-2` (comparaison), `MD-3` (pont pseudobulk), `MD-4` (conteneur `sc_datasets`) + `4F-EXT` (rapport consolidé) | ~~Chantier neuf~~ **clos** — voir `docs/ROADMAP_MULTI_DATASET.md` |
 | 9 | ~~**CCC phases 7–8** : route (a) `OmnipathR`/`liana` avec `renv.lock` justifié, ou (b) **import de résultats LIANA externes sans dépendance** ?~~ — ✅ **TRANCHÉ et LIVRÉ le 2026-09-13** : **route (b)** retenue, implémentée (`a88577f`), contrat étendu. La route (a) reste une décision **séparée**, non demandée | Interop inter-méthodes ; (b) n'ajoute aucune dépendance et respecte le périmètre « import-only » |
 | 10 | **Dette de conventions** (relevé 2026-09-13) : C6 = 16 `library()` au top-level de `R/`, C9 = 37 fichiers sans test éponyme, C10 = 270 `stop()` non classés — chantier de réduction, ou statu quo avec plafond ? | Qualité long terme ; les compteurs ne doivent **pas augmenter** (garde `tools/check_conventions.R`) |
+| 11 | ~~**CCC phase 9** : laquelle des trois questions (rareté par population / par voisinage / × communication) ?~~ — ✅ **TRANCHÉE le 2026-09-13 : question 1 — rareté par population annotée** → proposition `docs/proposals/CCC_9_POPULATION_RARITY_PROPOSAL.md`. Restent **5 décisions de conception** à valider (§12 de la proposition) | Périmètre du jalon CCC 9 — voir `STATUS.md` §2ab |
 
 > **Remarque sur la décision 4** — garder roadmaps et instructions d'agents
 > locales est un choix défendable. En revanche `docs/contracts/*.md` est un cas

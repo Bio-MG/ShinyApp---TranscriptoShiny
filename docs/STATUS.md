@@ -1073,6 +1073,41 @@ Même classe de bug que `complex_heatmap.R` (§2z), mais portant sur les 24
 contrats. Non corrigé : force-ajouter 24 fichiers relève de la **décision
 ouverte n°4** (`docs/` versionné ou non).
 
+### 2ab. 🟡 CCC 9 — périmètre TRANCHÉ (question 1) + proposition écrite (2026-09-13)
+
+Le blocage documenté en §2y (point 4) et dans `ROADMAP_HANDOFF_NEXT.md` §2 est
+levé : la phase 9 (« rare-cell annotator ») n'était **spécifiée nulle part**,
+et l'audit Milo (`docs/proposals/CCC_9_RARE_CELLS_MILO_AUDIT.md`) avait montré
+que trois questions différentes mènent à trois jalons différents.
+
+| Élément | Détail |
+|---|---|
+| **Décision utilisateur (2026-09-13)** | La phase 9 est la **question 1** — « quelles **populations annotées** sont rares ? » |
+| **Nature du jalon** | **Descriptif, mono-condition** — **aucun graphe kNN**, aucune affirmation différentielle. L'audit Milo devient **sans objet** pour ce jalon (l'audit §7.3 l'avait prévu) |
+| **Règle 3 (moteur dupliqué)** | Satisfaite **trivialement** : compter les cellules par niveau d'une colonne est une primitive de base R, pas un moteur. **Rien à réutiliser de miloR** (voisinages non requis) et **rien à dupliquer** |
+| **Recouvrements apparents écartés** | (i) table d'identités du **design DA** (`R/sc/sc_abundance_design.R:464-487`) — portée « design », **gardée par Stage 13**, répond à « testable ? » pas « rare ? » → **ne pas réutiliser** ; (ii) tableau croisé `mod_sc_annotation.R:307` (cluster × type, UI) → **laisser intact** (règle 1) |
+| **Porte Stage 13** | **Inapplicable** — la sortie ne porte **aucune** affirmation différentielle ; motif **écrit dans le contrat** (exigence de l'audit) + champ `descriptive_only` dans la provenance |
+| **Seuil de rareté** | **Choix déclaré obligatoire**, aucun défaut implicite (`config/` ne fournit que les **règles autorisées**) — même discipline que le mode d'agrégation de CCC 7–8. ⚠️ **Interdit** de réutiliser `TS_DA_MIN_IDENTITY_CELLS_PER_SAMPLE` (confusion sémantique + défaut implicite) |
+| **Proposition produite** | `docs/proposals/CCC_9_POPULATION_RARITY_PROPOSAL.md` — **9 éléments V1.x** couverts (§2–§10), **5 décisions** à trancher (§12) |
+| **Rapport de stage** | `docs/ROADMAP_HANDOFF_STAGE_CCC_9_PROPOSAL.md` (6 sections) |
+| **Code / contrat / test** | **Aucun** — session de proposition (condition d'acceptation du handoff §4) |
+
+**Décisions en attente** (à trancher avant toute implémentation, §12 de la
+proposition) : (1) jalon bien descriptif ; (2) seuil = choix déclaré obligatoire ;
+(3) rapport consolidé 4F **inchangé** (12 domaines figés — recommandé) ;
+(4) unification ultérieure de la table cluster × type (tâche séparée) ;
+(5) nom du type canonique `sc_population_rarity` / `analysis_id`
+`sc-population-rarity`.
+
+**Si l'utilisateur préfère un jalon sans arbitrage préalable** : `STAT-S2`
+(réseau d'enrichissement, `enrichplot` déjà présent) est prêt — `ROADMAP.md`
+§2.0, rang 2.
+
+**Rappel de périmètre** : CCC 5–6 restent **gelées sans suite** ; la route (a)
+de CCC 7–8 reste une **décision séparée**, non demandée. Les questions 2
+(rareté par voisinage) et 3 (rareté × communication) de la phase 9 ne sont
+**pas** retenues par la décision du 2026-09-13.
+
 
 ---
 
