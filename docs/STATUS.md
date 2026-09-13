@@ -969,9 +969,14 @@ Consignées dans `docs/ROADMAP_CCC_ADVANCED.md` §4 (parking des phases) et
 dans le HANDOFF V1.x (`docs/ROADMAP_HANDOFF_STAGE_11_20.md`). Décret :
 
 1. **Phase 5–6 CCC (targets / NicheNet-like) : GELÉE et CLASSÉE SANS
-   SUITE** — pas d'import fastP côté 4D-3 ; la voie upstream ne fournira
-   pas ce que la phase exige. Ne plus la re-proposer (sauf demande
-   explicite contraire de l'utilisateur).
+   SUITE** — pas d'import fastP côté 4D-3. PRÉCISION (confirmation
+   utilisateur 2026-09-13) : l'application upstream fastP existe et gère
+   les fichiers bruts (fastq) **côté utilisateur**, mais ses sorties ne
+   sont PAS importées dans Cerberus — la phase n'a donc pas d'alimentation
+   en données ; et pour CCC elle-même, l'entrée démontrée par 4D-3 est la
+   matrice 10X (`CELLCHAT_INPUT_CONTRACT.md`, `6bf18ca`), pas le fastq.
+   Ne plus la re-proposer (sauf demande explicite contraire = NOUVELLE
+   proposition type 4D-3, pas une réouverture).
 2. **Phases 7–8 CCC (interop OmniPath / LIANA) : DÉBLOQUÉES** — deux
    routes possibles : (a) OmnipathR/liana = ajout `renv.lock` justifié ;
    (b) route d'IMPORT de résultats LIANA externes sans dépendance
