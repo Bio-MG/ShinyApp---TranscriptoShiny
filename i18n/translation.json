@@ -9068,6 +9068,410 @@
     {
       "fr": "✓ Jeu SC enregistré sous « %s ».",
       "en": "✓ SC dataset registered as \"%s\"."
+    },
+    {
+      "fr": " Test au niveau ECHANTILLON (pseudobulk), pas au niveau cellule -- evite la pseudo-replication de FindAllMarkers/FindMarkers pour comparer des CONDITIONS (traite/controle, etc.). Necessite au moins 2 echantillons biologiques par condition.",
+      "en": " SAMPLE-level test (pseudobulk), not cell-level — avoids the pseudo-replication of FindAllMarkers/FindMarkers when comparing CONDITIONS (treated/control, etc.). Requires at least 2 biological samples per condition."
+    },
+    {
+      "fr": "1. Agregation Pseudobulk",
+      "en": "1. Pseudobulk aggregation"
+    },
+    {
+      "fr": "2. Analyse Differentielle (pseudobulk)",
+      "en": "2. Differential analysis (pseudobulk)"
+    },
+    {
+      "fr": "Aucun (pseudobulk par echantillon entier)",
+      "en": "None (pseudobulk over the whole sample)"
+    },
+    {
+      "fr": "Chaque point = un pseudo-echantillon (cellules sommees par echantillon). Verifiez qu'il n'y a pas d'outlier/mauvais etiquetage avant d'interpreter le contraste.",
+      "en": "Each point = one pseudo-sample (cells summed per sample). Check for outliers / mislabelling before interpreting the contrast."
+    },
+    {
+      "fr": "QC Pseudobulk (PCA)",
+      "en": "Pseudobulk QC (PCA)"
+    },
+    {
+      "fr": "Pseudobulk DE",
+      "en": "Pseudobulk DE"
+    },
+    {
+      "fr": "Pseudobulk DE — Comparaison de Conditions",
+      "en": "Pseudobulk DE — Condition comparison"
+    },
+    {
+      "fr": "%d valeur(s) disponible(s) dans la table pour cette cible — la perturbation s'applique à une copie d'affichage, la table canonique n'est jamais modifiée.",
+      "en": "%d value(s) available in the table for this target — the perturbation applies to a display copy, the canonical table is never modified."
+    },
+    {
+      "fr": "Assay",
+      "en": "Assay"
+    },
+    {
+      "fr": "Aucun résultat velocity importé : importez d'abord des vecteurs précalculés dans le panneau Vélocité (8.6).",
+      "en": "No imported velocity result: import precomputed vectors in the Velocity panel (8.6) first."
+    },
+    {
+      "fr": "Aucune coordonnée disponible dans le bundle spatial courant.",
+      "en": "No coordinates available in the current spatial bundle."
+    },
+    {
+      "fr": "Bins de pseudo-temps",
+      "en": "Pseudotime bins"
+    },
+    {
+      "fr": "Bundle spatial courant : %d spot(s)/cellule(s) (coordonnées d'import, colonnes id/x/y).",
+      "en": "Current spatial bundle: %d spot(s)/cell(s) (import coordinates, id/x/y columns)."
+    },
+    {
+      "fr": "CSV",
+      "en": "CSV"
+    },
+    {
+      "fr": "Calculer le contexte spatial",
+      "en": "Compute the spatial context"
+    },
+    {
+      "fr": "Calculer le contexte trajectoire",
+      "en": "Compute the trajectory context"
+    },
+    {
+      "fr": "Calculer le contexte vélocité",
+      "en": "Compute the velocity context"
+    },
+    {
+      "fr": "Cible",
+      "en": "Target"
+    },
+    {
+      "fr": "Colonne de pseudo-temps (méta.data)",
+      "en": "Pseudotime column (meta.data)"
+    },
+    {
+      "fr": "Contexte spatial",
+      "en": "Spatial context"
+    },
+    {
+      "fr": "Contexte spatial : %d paire(s) cartographiée(s) sur %d.",
+      "en": "Spatial context: %d pair(s) mapped out of %d."
+    },
+    {
+      "fr": "Contexte trajectoire",
+      "en": "Trajectory context"
+    },
+    {
+      "fr": "Contexte trajectoire : %d combinaison(s) paire/lignée calculée(s) sur %d.",
+      "en": "Trajectory context: %d pair/lineage combination(s) computed out of %d."
+    },
+    {
+      "fr": "Contexte vélocité",
+      "en": "Velocity context"
+    },
+    {
+      "fr": "Contexte vélocité : %d paire(s) cartographiée(s) — recouvrement %.1f%%.",
+      "en": "Velocity context: %d pair(s) mapped — overlap %.1f%%."
+    },
+    {
+      "fr": "Contexte vélocité indisponible (statut : %s) — voir les avertissements.",
+      "en": "Velocity context unavailable (status: %s) — see the warnings."
+    },
+    {
+      "fr": "Défaut consommé de config/thresholds.R (TS_VELOCITY_OVERLAP_MIN).",
+      "en": "Default consumed from config/thresholds.R (TS_VELOCITY_OVERLAP_MIN)."
+    },
+    {
+      "fr": "Erreur contexte spatial :",
+      "en": "Spatial context error:"
+    },
+    {
+      "fr": "Erreur contexte trajectoire :",
+      "en": "Trajectory context error:"
+    },
+    {
+      "fr": "Erreur contexte vélocité :",
+      "en": "Velocity context error:"
+    },
+    {
+      "fr": "Erreur perturbation :",
+      "en": "Perturbation error:"
+    },
+    {
+      "fr": "Exporter bins (CSV)",
+      "en": "Export bins (CSV)"
+    },
+    {
+      "fr": "Exporter deltas (CSV)",
+      "en": "Export deltas (CSV)"
+    },
+    {
+      "fr": "Facteur d'atténuation (0-1)",
+      "en": "Attenuation factor (0-1)"
+    },
+    {
+      "fr": "IN SILICO PERTURBATION — simulation sur le réseau INFÉRÉ : ce n'est PAS une expérience KO, PAS un effet biologique validé. Effets de premier ordre sur les scores importés (aucune propagation modélisée).",
+      "en": "IN SILICO PERTURBATION — simulation on the INFERRED network: this is NOT a knockout experiment, NOT a validated biological effect. First-order effects on the imported scores (no propagation modelled)."
+    },
+    {
+      "fr": "IN SILICO — interactions : %d → %d ; paires affectées : %d ; senders affectés : %s.",
+      "en": "IN SILICO — interactions: %d → %d; affected pairs: %d; affected senders: %s."
+    },
+    {
+      "fr": "La distance est une contrainte spatiale — une compatibilité spatiale n'établit aucune communication biologique. ",
+      "en": "Distance is a spatial constraint — spatial compatibility does not establish any biological communication. "
+    },
+    {
+      "fr": "Lignée",
+      "en": "Lineage"
+    },
+    {
+      "fr": "Lignées (slingshot)",
+      "en": "Lineages (slingshot)"
+    },
+    {
+      "fr": "Mode par lignée : chaque cellule est rattachée à la première colonne pseudotime_slingshot_* finie (point de branchement = première lignée). Les lignées ne sont jamais collapsées.",
+      "en": "Per-lineage mode: each cell is attached to the first finite pseudotime_slingshot_* column (branch point = first lineage). Lineages are never collapsed."
+    },
+    {
+      "fr": "Objet CellChat (.rds) : extraction de resultats deja calcules uniquement — le mapping ligand-receptor vers pathway n'est pas reconstitue.",
+      "en": "CellChat object (.rds): extraction of already computed results only — the ligand-receptor to pathway mapping is not reconstructed."
+    },
+    {
+      "fr": "PDF",
+      "en": "PDF"
+    },
+    {
+      "fr": "PNG",
+      "en": "PNG"
+    },
+    {
+      "fr": "Paire sender → receiver",
+      "en": "Sender → receiver pair"
+    },
+    {
+      "fr": "Permutations (0 = aucune)",
+      "en": "Permutations (0 = none)"
+    },
+    {
+      "fr": "Perturbation (in silico)",
+      "en": "Perturbation (in silico)"
+    },
+    {
+      "fr": "Perturbation in silico : %d interaction(s) supprimée(s), %d atténuée(s) — %d paire(s) affectée(s).",
+      "en": "In silico perturbation: %d interaction(s) removed, %d attenuated — %d pair(s) affected."
+    },
+    {
+      "fr": "Pseudo-temps = ordonnement relatif d'une trajectoire inférée, PAS un temps réel. Le score importé d'une paire est constant — seules les populations et l'expression varient le long du pseudo-temps.",
+      "en": "Pseudotime = relative ordering of an inferred trajectory, NOT real time. The imported score of a pair is constant — only the populations and the expression vary along pseudotime."
+    },
+    {
+      "fr": "Rayon (NA = non calculé)",
+      "en": "Radius (NA = not computed)"
+    },
+    {
+      "fr": "Recouvrement minimal (fraction)",
+      "en": "Minimum overlap (fraction)"
+    },
+    {
+      "fr": "Réduction 2D",
+      "en": "2D reduction"
+    },
+    {
+      "fr": "Résultat de communication périmé : réimportez.",
+      "en": "Stale communication result: re-import."
+    },
+    {
+      "fr": "Résultat velocity consommé : statut « %s », %d cellule(s) alignée(s). Les vecteurs ne sont jamais ré-inférés.",
+      "en": "Velocity result consumed: status \"%s\", %d cell(s) aligned. Vectors are never re-inferred."
+    },
+    {
+      "fr": "Seed fixée : 1 (déterministe).",
+      "en": "Fixed seed: 1 (deterministic)."
+    },
+    {
+      "fr": "Simuler la perturbation",
+      "en": "Simulate the perturbation"
+    },
+    {
+      "fr": "Source de coordonnées",
+      "en": "Coordinate source"
+    },
+    {
+      "fr": "Statut :",
+      "en": "Status:"
+    },
+    {
+      "fr": "Statut : %s — %d cellule(s) appariée(s) ; %d bins (effectif) ; %d combinaison(s) non calculable(s).",
+      "en": "Status: %s — %d cell(s) matched; %d bins (effective); %d combination(s) not computable."
+    },
+    {
+      "fr": "Statut : %s — %d cellule(s) cartographiée(s) ; %d paire(s) non cartographiée(s) (listées dans les avertissements).",
+      "en": "Status: %s — %d cell(s) mapped; %d pair(s) not mapped (listed in the warnings)."
+    },
+    {
+      "fr": "Statut : %s — %d paire(s) cartographiée(s) ; recouvrement %.1f%%.",
+      "en": "Status: %s — %d pair(s) mapped; overlap %.1f%%."
+    },
+    {
+      "fr": "Valeur (exacte, issue de la table)",
+      "en": "Value (exact, taken from the table)"
+    },
+    {
+      "fr": "« Associé à l'état de vitesse » n'établit aucune causalité : la magnitude des vecteurs précalculés est une quantité descriptive par population.",
+      "en": "\"Associated with the velocity state\" establishes no causality: the magnitude of the precomputed vectors is a descriptive per-population quantity."
+    },
+    {
+      "fr": "Accession GEO invalide — format attendu : GSE suivi de chiffres (ex. GSE147507).",
+      "en": "Invalid GEO accession — expected format: GSE followed by digits (e.g. GSE147507)."
+    },
+    {
+      "fr": "Veuillez saisir une accession GEO (ex. GSE147507).",
+      "en": "Please enter a GEO accession (e.g. GSE147507)."
+    },
+    {
+      "fr": "Batch et condition entièrement collinéaires : ",
+      "en": "Batch and condition are fully collinear: "
+    },
+    {
+      "fr": "Cliquez sur Décomposition de variance pour lancer le calcul.",
+      "en": "Click Variance decomposition to run the computation."
+    },
+    {
+      "fr": "Colonne batch",
+      "en": "Batch column"
+    },
+    {
+      "fr": "Colonne batch (optionnel)",
+      "en": "Batch column (optional)"
+    },
+    {
+      "fr": "Colonne condition (optionnel)",
+      "en": "Condition column (optional)"
+    },
+    {
+      "fr": "Colonne identité / cluster (optionnel)",
+      "en": "Identity / cluster column (optional)"
+    },
+    {
+      "fr": "Décomposition de la variance par facteur",
+      "en": "Variance decomposition per factor"
+    },
+    {
+      "fr": "Décomposition de variance",
+      "en": "Variance decomposition"
+    },
+    {
+      "fr": "Décomposition de variance...",
+      "en": "Variance decomposition..."
+    },
+    {
+      "fr": "Erreur variance partition :",
+      "en": "Variance partition error:"
+    },
+    {
+      "fr": "Export CSV (fractions)",
+      "en": "CSV export (fractions)"
+    },
+    {
+      "fr": "Lancez d'abord le Filtrage & VST (étape 1) pour activer les diagnostics batch.",
+      "en": "Run Filtering & VST (step 1) first to enable the batch diagnostics."
+    },
+    {
+      "fr": "Part de variance expliquée par le batch vs la condition, gène par gène (plafond mémoire déterministe, voir contrat).",
+      "en": "Share of variance explained by batch vs condition, gene by gene (deterministic memory cap, see contract)."
+    },
+    {
+      "fr": "Table de contingence (condition x batch)",
+      "en": "Contingency table (condition x batch)"
+    },
+    {
+      "fr": "Vérifie que l'effet lot (batch) n'est pas confondu avec la condition biologique AVANT l'analyse différentielle. Matrice exigée : VST (produite à l'étape 1) — les counts bruts sont refusés.",
+      "en": "Checks that the batch effect is not confounded with the biological condition BEFORE the differential analysis. Required matrix: VST (produced at step 1) — raw counts are rejected."
+    },
+    {
+      "fr": "✓ Plan équilibré : l'effet batch peut être ajusté dans le design.",
+      "en": "✓ Balanced design: the batch effect can be adjusted for in the design."
+    },
+    {
+      "fr": "3b. Signatures cellulaires",
+      "en": "3b. Cellular signatures"
+    },
+    {
+      "fr": "3c. Réseau de co-expression (WGCNA)",
+      "en": "3c. Co-expression network (WGCNA)"
+    },
+    {
+      "fr": "3d. Survie & association clinique",
+      "en": "3d. Survival & clinical association"
+    },
+    {
+      "fr": "Modules <-> Traits",
+      "en": "Modules <-> Traits"
+    },
+    {
+      "fr": "Normalisation (VST)",
+      "en": "Normalisation (VST)"
+    },
+    {
+      "fr": "Parcourir...",
+      "en": "Browse..."
+    },
+    {
+      "fr": "QC Batch",
+      "en": "Batch QC"
+    },
+    {
+      "fr": "Source",
+      "en": "Source"
+    },
+    {
+      "fr": "Table modules",
+      "en": "Modules table"
+    },
+    {
+      "fr": "✓ Power retenu : {p} (R2 = {r}).",
+      "en": "✓ Power retained: {p} (R2 = {r})."
+    },
+    {
+      "fr": "Export MA-Plot (statique)",
+      "en": "MA-Plot export (static)"
+    },
+    {
+      "fr": "Export Volcano (statique)",
+      "en": "Volcano export (static)"
+    },
+    {
+      "fr": "KEGG",
+      "en": "KEGG"
+    },
+    {
+      "fr": "Niveau",
+      "en": "Level"
+    },
+    {
+      "fr": "RNA Velocity — import strict des matrices spliced/unspliced alignees sur l'objet Seurat. ",
+      "en": "RNA Velocity — strict import of spliced/unspliced matrices aligned on the Seurat object. "
+    },
+    {
+      "fr": "Décomposition de la variance (par gène)",
+      "en": "Variance decomposition (per gene)"
+    },
+    {
+      "fr": "Fraction de la variance expliquée",
+      "en": "Fraction of variance explained"
+    },
+    {
+      "fr": "Pseudotemps\n(sans unite)",
+      "en": "Pseudotime\n(no unit)"
+    },
+    {
+      "fr": "Pseudotemps exploratoire (graphe kNN pondere)",
+      "en": "Exploratory pseudotime (weighted kNN graph)"
+    },
+    {
+      "fr": "Scree Plot — Variance Expliquée (QC Batch)",
+      "en": "Scree Plot — Variance Explained (Batch QC)"
     }
   ]
 }
