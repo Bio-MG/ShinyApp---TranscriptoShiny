@@ -10,6 +10,41 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > Leur état fait foi dans **`docs/STATUS.md`** §1 et §2. Ce fichier reprend à
 > partir de `STAT-S1`.
 
+## [V1.x — STAT-S2] — 2026-09-13 — Réseau d'enrichissement (emapplot / cnetplot)
+
+Rang 2 de l'ordre d'actionnabilité. **Aucune dépendance nouvelle** —
+`enrichplot` (1.26.6) était déjà dans `renv.lock`. Visualisation **descriptive**
+des voies : les arêtes codent une similarité de gènes ou une appartenance,
+jamais une causalité.
+
+### Ajouté
+- **`plot_pathway_network(df, db_label, top_n, mode, tr)`**
+  (`R/core/pathway_helpers.R`) — `mode = "emap"` : voies reliées par similarité
+  de gènes (`enrichplot::pairwise_termsim()` + `emapplot()`) ; `mode = "cnet"` :
+  voies reliées à leurs gènes (`cnetplot()`). Erreurs FR classées (`call. =
+  FALSE`) : attribut brut absent, `top_n < 2`, moins de deux voies.
+- **Attribut additif `enrich_obj`** : `run_pathway_enrichment()` (ORA) attache
+  désormais l'objet `enrichResult` brut à son data.frame — même pattern que
+  `attr(., "gsea_obj")` (GSEA) ; le contrat data.frame des appelants existants
+  est inchangé.
+- **Onglet « Réseau »** dans les cartes de sortie pathway **bulk**
+  (`mod_bulk_pathways.R`) et **single-cell** (`mod_sc_pathways.R`) : radio
+  emap/cnet, nombre de voies (2–100), export PNG 300 dpi (bulk), message d'aide
+  quand aucun résultat n'est disponible.
+- Tests : 5 nouveaux blocs dans `test-pathway-helpers.R` (**16 PASS**) — dont
+  un happy path avec un **vrai `enrichGO` hors-ligne** (GO:0007049 depuis
+  `org.Hs.egGO2ALLEGS`), zéro accès réseau.
+- i18n : **8** clés FR/EN (2375 → 2410 entrées cumulées).
+
+### Modifié
+- `R/core/pathway_helpers.R` (attribut + fonction), `modules/bulk/
+  mod_bulk_pathways.R`, `modules/sc/mod_sc_pathways.R`,
+  `tools/add_i18n_keys.R`, `i18n/translation.json`.
+
+### Non modifié
+- Barplot/dotplot/table existants (consomment le même data.frame) ;
+  `renv.lock` ; aucune dépendance nouvelle.
+
 ## [V1.x — CCC 9] — 2026-09-13 — Rareté par population annotée (descriptif)
 
 Implémentation de la **question 1** de la phase 9 (« quelles populations

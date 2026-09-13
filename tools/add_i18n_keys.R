@@ -423,7 +423,17 @@ new_entries <- list(
   c("Nombre de cellules", "Cell count"),
   c("Rareté déclarée", "Declared rarity"),
   c("Champ", "Field"),
-  c("Valeur", "Value")
+  c("Valeur", "Value"),
+  c("R\u00e9seau", "Network"),
+  c("Type de r\u00e9seau", "Network type"),
+  c("Voies \u2194 voies (similarit\u00e9 de g\u00e8nes)", "Pathways \u2194 pathways (gene similarity)"),
+  c("Voies \u2194 g\u00e8nes", "Pathways \u2194 genes"),
+  c("Voies affich\u00e9es (r\u00e9seau)", "Pathways shown (network)"),
+  c("Disponible uniquement apr\u00e8s une analyse de voies \u2014 relancez l'enrichissement (panneau de gauche).",
+    "Available only after a pathway analysis \u2014 re-run the enrichment (left panel)."),
+  c("R\u00e9seau d'enrichissement", "Enrichment network"),
+  c("Voies reli\u00e9es par similarit\u00e9 de g\u00e8nes (descriptif)", "Pathways linked by gene similarity (descriptive)"),
+  c("Voies reli\u00e9es \u00e0 leurs g\u00e8nes (descriptif)", "Pathways linked to their genes (descriptive)")
 )
 
 fr_existing <- vapply(j$translation, function(x) x$fr %||% "", character(1))

@@ -9612,6 +9612,38 @@
     {
       "fr": "Valeur",
       "en": "Value"
+    },
+    {
+      "fr": "Type de réseau",
+      "en": "Network type"
+    },
+    {
+      "fr": "Voies ↔ voies (similarité de gènes)",
+      "en": "Pathways ↔ pathways (gene similarity)"
+    },
+    {
+      "fr": "Voies ↔ gènes",
+      "en": "Pathways ↔ genes"
+    },
+    {
+      "fr": "Voies affichées (réseau)",
+      "en": "Pathways shown (network)"
+    },
+    {
+      "fr": "Disponible uniquement après une analyse de voies — relancez l'enrichissement (panneau de gauche).",
+      "en": "Available only after a pathway analysis — re-run the enrichment (left panel)."
+    },
+    {
+      "fr": "Réseau d'enrichissement",
+      "en": "Enrichment network"
+    },
+    {
+      "fr": "Voies reliées par similarité de gènes (descriptif)",
+      "en": "Pathways linked by gene similarity (descriptive)"
+    },
+    {
+      "fr": "Voies reliées à leurs gènes (descriptif)",
+      "en": "Pathways linked to their genes (descriptive)"
     }
   ]
 }

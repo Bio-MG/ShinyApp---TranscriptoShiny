@@ -115,9 +115,9 @@ avance jalon par jalon, un jalon = un commit.
 | Rang | Jalon | Effort | Dépend de | État |
 |---|---|---|---|---|
 | — | ~~**CCC 7–8** — interop OmniPath / LIANA~~ | — | — | ✅ **LIVRÉ le 2026-09-13** (`a88577f`, route (b) sans dépendance) — `STATUS.md` §2aa |
-| 1 | **CCC 9** — rare-cell annotator = **question 1 : rareté par population** | M | — (audit Milo fait ; question 1 sans graphe) | 🟡 **périmètre TRANCHÉ 2026-09-13** — **proposition écrite**, 5 décisions à valider (`STATUS.md` §2ab) |
-| 2 | **STAT-S2** — réseau d'enrichissement (`emapplot`/`cnetplot`) | M | — (`enrichplot` déjà présent) | 🟢 prêt |
-| 3 | **STAT-S3** — clustering de profils (kmeans MVP) | L | — | 🟢 prêt |
+| — | ~~**CCC 9** — rare-cell annotator = **question 1 : rareté par population**~~ | M | — | ✅ **LIVRÉ le 2026-09-13** (`8c1a969`) — `STATUS.md` §2ac ; questions 2 et 3 non retenues |
+| — | ~~**STAT-S2** — réseau d'enrichissement (`emapplot`/`cnetplot`)~~ | M | — | ✅ **LIVRÉ le 2026-09-13** — `STATUS.md` §2ad |
+| 3 | **STAT-S3** — clustering de profils (kmeans MVP) | L | — | 🟢 **PROCHAIN** (re-mesurer la fiche §3 avant planification) |
 | 4 | **NEW-1** — dose-réponse / time-course | M | — | 🟢 prêt |
 | 5 | **NEW-2** — fusion de jeux | M | ~~STAT-S1~~ ✅ prérequis levé | 🟢 prêt |
 | 6 | **NEW-3** — réseau PCSF | L | interactome local vs contrainte offline | 🔵 backlog conditionnel |
@@ -138,9 +138,9 @@ Restent **STAT-S2..S3**, **NEW-1..3**.
 
 Ordre conseillé (fondations d'abord) :
 `PLOT-S1 → PLOT-S2 → PLOT-S3 → PLOT-S4 → PLOT-S5` ✅ **fait** ; `PLOT-S6` ✅
-**déjà fait par l'arbre** ; `STAT-S1` ✅ **fait**. `STAT-S2` et `STAT-S3` sont
-indépendants et parallélisables. `NEW-2` dépendait de `STAT-S1` → **prérequis
-levé**.
+**déjà fait par l'arbre** ; `STAT-S1` ✅ **fait** ; `STAT-S2` ✅ **livré le
+2026-09-13** (réseau d'enrichissement, `STATUS.md` §2ad). Reste `STAT-S3`
+(**prochain jalon de la séquence**), `NEW-1..3` (prérequis de NEW-2 levé).
 
 ### Flux B — CCC avancée · `ROADMAP_CCC_ADVANCED.md`
 Phases 1–4 livrées ; **5–6 GELÉES SANS SUITE** (2026-09-13) ; **7–8 LIVRÉES**

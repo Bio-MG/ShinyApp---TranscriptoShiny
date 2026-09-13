@@ -87,6 +87,8 @@ mod_bulk_pathways_output_ui <- function(id) {
       id = ns("pathways_tabs"),
       nav_panel(i18n$t("Barplot Top 15"), plotOutput(ns("pathway_barplot"), height = "580px")),
       nav_panel(i18n$t("Dotplot"),        plotOutput(ns("pathway_dotplot"), height = "580px")),
+      # STAT-S2 — réseau d'enrichissement (descriptif : similarité de gènes / appartenance)
+      nav_panel(i18n$t("Réseau"),         uiOutput(ns("network_ui"))),
       nav_panel(i18n$t("Table"),          DTOutput(ns("pathway_table"))),
       nav_panel(i18n$t("Courbe GSEA"),    uiOutput(ns("gsea_curve_ui"))),
       # Bulk V2 M2 — scores par échantillon (voies x échantillons)
@@ -467,6 +469,59 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
       content  = function(file) {
         png(file, width = 9, height = 7, units = "in", res = 300)
         print(.gsea_curve_plot_fn())
+        dev.off()
+      }
+    )
+
+    # ── STAT-S2 : réseau d'enrichissement (emapplot / cnetplot) ─────────────
+    output$network_ui <- renderUI({
+      global_data$language  # i18n
+      if (is.null(attr(shared_rv$pathway_results, "enrich_obj"))) {
+        return(div(class = "alert alert-light", style = "font-size:0.85em;margin:15px;",
+                   icon("info-circle"), " ",
+                   .tr("Disponible uniquement après une analyse de voies — relancez l'enrichissement (panneau de gauche).")))
+      }
+      tagList(
+        fluidRow(
+          column(4, radioButtons(ns("network_mode"), .tr("Type de réseau"),
+                                 choices = c("emap" = .tr("Voies ↔ voies (similarité de gènes)"),
+                                             "cnet" = .tr("Voies ↔ gènes")),
+                                 inline = TRUE)),
+          column(4, numericInput(ns("network_top_n"), .tr("Voies affichées (réseau)"),
+                                 value = 30, min = 2, max = 100, step = 1)),
+          column(4, div(style = "margin-top:25px;",
+                        downloadButton(ns("dl_network_png"), .tr("Export PNG"), class = "btn-sm btn-secondary w-100")))
+        ),
+        plotOutput(ns("network_plot"), height = "600px")
+      )
+    })
+
+    .network_plot_fn <- function() {
+      req(shared_rv$pathway_results)
+      top_n <- input$network_top_n
+      if (is.null(top_n) || is.na(top_n)) top_n <- 30
+      plot_pathway_network(shared_rv$pathway_results,
+                           db_label = input$pathway_db,
+                           top_n = top_n, mode = input$network_mode, tr = .tr)
+    }
+
+    output$network_plot <- renderPlot({
+      global_data$language  # i18n
+      tryCatch(
+        .network_plot_fn(),
+        error = function(e) {
+          ggplot() +
+            annotate("text", x = 1, y = 1, label = paste(.tr("Erreur:"), conditionMessage(e)), color = "red") +
+            theme_void()
+        }
+      )
+    })
+
+    output$dl_network_png <- downloadHandler(
+      filename = function() paste0("pathway_network_", input$network_mode, "_", Sys.Date(), ".png"),
+      content  = function(file) {
+        png(file, width = 10, height = 8, units = "in", res = 300)
+        print(.network_plot_fn())
         dev.off()
       }
     )

@@ -1134,6 +1134,29 @@ retenues ; CCC 5–6 gelées ; route (a) de CCC 7–8 = décision séparée ;
 `POPULATION_RARITY_CONTRACT.md`) ne sont pas versionnés dans git — décision
 ouverte n°4.
 
+### 2ad. ✅ STAT-S2 — réseau d'enrichissement (`emapplot`/`cnetplot`) (2026-09-13)
+
+Jalon flux A, **rang 2** de l'ordre d'actionnabilité (`ROADMAP.md` §2.0) —
+fiche **re-mesurée** avant planification (règle du 2026-09-12) : constats
+confirmés (ORA sans objet brut, `enrichplot` 1.26.6 présent, onglets
+Barplot/Dotplot/Table des deux côtés). Livraison le même jour que CCC 9
+(commits séparés, un jalon = un commit).
+
+| Élément | Détail |
+|---|---|
+| **Moteur** | `plot_pathway_network(df, db_label, top_n, mode, tr)` dans `R/core/pathway_helpers.R` — consomme l'objet brut porté par l'**attribut additif** `enrich_obj` (même pattern que `gsea_obj`) ; `mode = "emap"` (similarité de gènes entre voies, via `pairwise_termsim` + `emapplot`) ou `"cnet"` (voies ↔ gènes). Étiqueté **descriptif** |
+| **Attribut additif** | `run_pathway_enrichment()` attache `attr(res_df, "enrich_obj")` — contrat data.frame des appelants inchangé, zéro comportement modifié |
+| **UI** | onglet **« Réseau »** dans `mod_bulk_pathways.R` ET `mod_sc_pathways.R` (radio emap/cnet, `top_n` 2–100, export PNG 300 dpi côté bulk, messages d'aide quand aucun résultat) |
+| **Dépendance** | **aucune** — `enrichplot` déjà dans `renv.lock` (1.26.6, `pairwise_termsim` présent) |
+| **Tests** | `test-pathway-helpers.R` : **16 PASS / 0 FAIL** dont 5 nouveaux blocs — happy path avec un **vrai `enrichGO` hors-ligne** (GO:0007049 depuis `org.Hs.egGO2ALLEGS`) |
+| **i18n** | 8 clés FR/EN (2375 → 2410 entrées cumulées) ; `test-i18n-integrity.R` vert |
+| **Gardes** | conventions **0 erreur / 324 avert.** ; duplication **0 erreur / 3 avert.** ; suite complète : **0 FAIL / 0 ERROR** (voir §2ac pour le flake chromote documenté) |
+| **Rapport de stage** | `docs/ROADMAP_HANDOFF_STAGE_STAT_S2.md` (6 sections) |
+
+**Suivant dans l'ordre d'actionnabilité** : **STAT-S3** (clustering de profils,
+kmeans MVP, effort L) — fiche à re-mesurer avant planification ; puis NEW-1..3
+prêts, UX 3B/4B/6B et 4E-4 en attente d'arbitrage.
+
 
 ---
 

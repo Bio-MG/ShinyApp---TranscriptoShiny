@@ -294,6 +294,13 @@ run_pathway_enrichment <- function(genes, organism = "human",
 
   res_df <- as.data.frame(enrich_result)
 
+  # STAT-S2 : attach the raw enrichResult S4 object as an attribute (additive —
+  # mirrors the `gsea_obj` pattern of run_gsea_enrichment()). enrichplot network
+  # views (emapplot/cnetplot + pairwise_termsim) need this raw object (gene
+  # sets, GeneRatio, geneID); consumers that only need the table can ignore it —
+  # the data.frame contract for existing callers is unchanged.
+  attr(res_df, "enrich_obj") <- enrich_result
+
   return(res_df)
 
 }
@@ -592,6 +599,66 @@ plot_pathway_dotplot <- function(df, db_label = "", top_n = 20, tr = NULL,
     theme(axis.text.y = element_text(size = 10), plot.title = element_text(face = "bold", size = 14),
 
           legend.position = "right")
+
+}
+
+
+
+#' Pathway enrichment network (emapplot / cnetplot) — STAT-S2
+#'
+#' Pure consumer of the RAW enrichment object (enrichResult/gseaResult) stored
+#' as attribute `enrich_obj` on the results data.frame by
+#' `run_pathway_enrichment()` / `run_gsea_enrichment()` — the same additive
+#' pattern as `gsea_obj`. The network is DESCRIPTIVE: edges encode gene
+#' similarity between pathways (emap) or pathway↔gene membership (cnet),
+#' never causality.
+#'
+#' @param df results data.frame carrying the `enrich_obj` attribute.
+#' @param db_label label of the enrichment database, shown in the title.
+#' @param top_n maximum number of pathways shown (selected on p.adjust).
+#' @param mode "emap" (pathway–pathway similarity network) or "cnet"
+#'   (pathway–gene bipartite network).
+#' @param tr optional translation function.
+#' @return a ggplot object.
+#'
+#' @export
+plot_pathway_network <- function(df, db_label = "", top_n = 30,
+                                 mode = c("emap", "cnet"), tr = NULL) {
+
+  tr <- tr %||% function(x) x
+  mode <- match.arg(mode)
+
+  if (!is.numeric(top_n) || length(top_n) != 1L || is.na(top_n) || top_n < 2) {
+    stop("top_n doit être un nombre >= 2 (un réseau d'une seule voie n'a pas de sens).", call. = FALSE)
+  }
+
+  enrich_obj <- attr(df, "enrich_obj")
+
+  if (is.null(enrich_obj)) {
+    stop("Aucun objet d'enrichissement brut attaché à ce résultat (attribut 'enrich_obj' absent). Relancez l'enrichissement pour produire le réseau.", call. = FALSE)
+  }
+
+  if (!requireNamespace("enrichplot", quietly = TRUE)) {
+    stop("Package 'enrichplot' requis. Installez-le via BiocManager.", call. = FALSE)
+  }
+
+  if (nrow(as.data.frame(enrich_obj)) < 2) {
+    stop("Au moins deux voies enrichies sont nécessaires pour tracer un réseau.", call. = FALSE)
+  }
+
+  if (mode == "emap") {
+    obj <- enrichplot::pairwise_termsim(enrich_obj)
+    p <- enrichplot::emapplot(obj, showCategory = top_n)
+    subtitle <- tr("Voies reliées par similarité de gènes (descriptif)")
+  } else {
+    p <- enrichplot::cnetplot(enrich_obj, showCategory = top_n)
+    subtitle <- tr("Voies reliées à leurs gènes (descriptif)")
+  }
+
+  p + ggplot2::labs(
+    title = paste(tr("Réseau d'enrichissement"), "-", db_label),
+    subtitle = subtitle
+  )
 
 }
 
