@@ -9740,6 +9740,102 @@
     {
       "fr": "k",
       "en": "k"
+    },
+    {
+      "fr": "3f. Dose–réponse / time-course",
+      "en": "3f. Dose–response / time-course"
+    },
+    {
+      "fr": "Dose–réponse",
+      "en": "Dose–response"
+    },
+    {
+      "fr": "Dose–réponse (descriptif)",
+      "en": "Dose–response (descriptive)"
+    },
+    {
+      "fr": "Ajuste une courbe dose-réponse (Hill / log-logistique) par gène et extrait EC50, pente et intervalle de confiance.",
+      "en": "Fits a dose-response curve (Hill / log-logistic) per gene and extracts EC50, slope and confidence interval."
+    },
+    {
+      "fr": "Colonne de dose/temps (numérique)",
+      "en": "Dose/time column (numeric)"
+    },
+    {
+      "fr": "Top N gènes (par p.adjust)",
+      "en": "Top N genes (by p.adjust)"
+    },
+    {
+      "fr": "Modèle",
+      "en": "Model"
+    },
+    {
+      "fr": "Log-logistique (Hill, LL.4)",
+      "en": "Log-logistic (Hill, LL.4)"
+    },
+    {
+      "fr": "Weibull type 1 (W1.4)",
+      "en": "Weibull type 1 (W1.4)"
+    },
+    {
+      "fr": "Weibull type 2 (W2.4)",
+      "en": "Weibull type 2 (W2.4)"
+    },
+    {
+      "fr": "Log-logistique biface (BC.4)",
+      "en": "Brain-Cousens (BC.4)"
+    },
+    {
+      "fr": "Lancer les ajustements",
+      "en": "Run fits"
+    },
+    {
+      "fr": "Courbe",
+      "en": "Curve"
+    },
+    {
+      "fr": "Table EC50",
+      "en": "EC50 table"
+    },
+    {
+      "fr": "Gène (tapez pour rechercher)",
+      "en": "Gene (type to search)"
+    },
+    {
+      "fr": "✓ {g}/{t} ajustements convergés ({m}, colonne '{c}').",
+      "en": "✓ {g}/{t} fits converged ({m}, column '{c}')."
+    },
+    {
+      "fr": "⚠️ Aucun gène significatif — élargissez la source ou les seuils.",
+      "en": "⚠️ No significant gene — widen the source or the thresholds."
+    },
+    {
+      "fr": "Ajustements dose-réponse (drc)...",
+      "en": "Dose-response fits (drc)..."
+    },
+    {
+      "fr": "✓ {g} courbe(s) ajustée(s) sur {t} gène(s).",
+      "en": "✓ {g} curve(s) fitted out of {t} gene(s)."
+    },
+    {
+      "fr": "Erreur dose-réponse:",
+      "en": "Dose-response error:"
+    },
+    {
+      "fr": "Courbe dose-réponse",
+      "en": "Dose-response curve"
+    },
+    {
+      "fr": "modèle",
+      "en": "model"
+    },
+    {
+      "fr": "descriptif",
+      "en": "descriptive"
+    },
+    {
+      "fr": "Expression VST",
+      "en": "VST expression"
     }
   ]
 }

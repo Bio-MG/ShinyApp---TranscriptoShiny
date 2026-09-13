@@ -1179,6 +1179,28 @@ utilisateur : tests ciblés uniquement, pas de suite complète ce jalon.**
 fiche avant planification ; `NEW-2` prérequis levé ; `NEW-3` backlog
 conditionnel ; UX 3B/4B/6B et 4E-4 en attente d'arbitrage.
 
+### 2af. ✅ NEW-1 — dose-réponse / time-course (drc) (2026-09-13)
+
+Jalon flux A, rang 4 de l'ordre d'actionnabilité — fiche re-mesurée avant
+planification. **Première dépendance nouvelle depuis l'amendement du
+2026-09-13** : `drc` 3.0-1, autorisée par l'utilisateur (« ok pour la prochaine
+étape »), justification documentée au contrat §2. **Tests ciblés uniquement**
+(consigne utilisateur en vigueur, pas de suite complète).
+
+| Élément | Détail |
+|---|---|
+| **Moteur pur** | `R/bulk/dose_response.R` — `run_dose_response()` : `drc::drm()` par gène (LL.4/W1.4/W2.4/BC.4), EC50 = exp(e), pseudo-R², grille de courbe + IC 95 % ; descriptif, aucune p-value |
+| **Dépendance** | `drc` + `multcomp`/`sandwich`/`TH.data`/`plotrix`/`mvtnorm` : **419 → 425 entrées renv.lock, insertion chirurgicale** (pas de `renv::snapshot()` — les packages MCP restent exclus) ; JSON revalidé ; `psych`/`magic`/`meboot`/`mctest` (Suggests) non installés |
+| **Contrat** | `docs/contracts/BULK_DOSE_RESPONSE_CONTRACT.md` gelé ; erreurs classées `bulk_dose_error` ; surface publique figée (9 fonctions) |
+| **Gardes métier** | dose numérique **déclarée** ; **strictement positive** (log(dose) — temps à 0 = décalage déclaré requis) ; ≥ 4 doses distinctes ; plafond 200 gènes (troncature signalée) ; échecs par gène comptabilisés (`fit_ok`, `message`), `compute_failed` si aucun convergent |
+| **Module** | `modules/bulk/mod_bulk_dose_response.R` — accordion « 3f. Dose–réponse / time-course » + onglet sortie (courbe + ruban IC, table EC50, exports CSV/PNG) ; sources up/down/all_sig triées par p.adjust ; `shared_rv$dose_result` |
+| **Tests** | `test-bulk-dose-response.R` **38 PASS / 0 FAIL** (Hill synthétique EC50 = 1 retrouvé, montants + descendants, échecs comptabilisés) ; ciblés : e2e shinytest2-bulk 4, freezes app.R 68+80, bulk-pattern 31, wgcna 52, i18n 15 ; gardes : conventions **0 erreur / 324 avert.** (plafond ; 1 avert. C9 transient corrigé au nom de fichier), duplication **0 erreur / 3 avert.** ; boot **HTTP 200** |
+| **Rapport de stage** | `docs/ROADMAP_HANDOFF_STAGE_NEW_1.md` (6 sections) |
+
+**Suivant** : **NEW-2** (fusion de jeux — prérequis STAT-S1 levé), re-mesurer
+la fiche avant planification ; NEW-3 backlog conditionnel ; UX 3B/4B/6B et
+4E-4 en attente d'arbitrage.
+
 
 ---
 
