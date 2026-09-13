@@ -10,6 +10,44 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > Leur état fait foi dans **`docs/STATUS.md`** §1 et §2. Ce fichier reprend à
 > partir de `STAT-S1`.
 
+## [V1.x — NEW-1] — 2026-09-13 — Dose–réponse / time-course (drc)
+
+Rang 4 de l'ordre d'actionnabilité. **Première dépendance nouvelle depuis
+l'amendement du 2026-09-13** : `drc` 3.0-1 (CRAN, pur R, léger) + transitifs
+(`multcomp`, `sandwich`, `TH.data`, `plotrix`, `mvtnorm`) — justification
+documentée au contrat (`docs/contracts/BULK_DOSE_RESPONSE_CONTRACT.md` §2) ;
+`renv.lock` 419 → 425 entrées par insertion chirurgicale (les packages MCP
+restent volontairement exclus). Analyse **descriptive** : aucune p-value de
+comparaison.
+
+### Ajouté
+- **`run_dose_response(vst_mat, metadata, dose_column, genes, model, …)`
+  (`R/bulk/dose_response.R`)** — ajustement `drc::drm()` **par gène** (LL.4
+  Hill par défaut, W1.4/W2.4/BC.4), extraction b/c/d/e (EC50 = exp(e)),
+  pseudo-R², grille de courbe (100 pts) + IC 95 %. Dose numérique **déclarée**
+  et **strictement positive** (les modèles sont en log(dose)) ; ≥ 4 doses
+  distinctes ; plafond 200 gènes ; échecs par gène comptabilisés
+  (`fit_ok`/`message`), `compute_failed` si aucun ne converge.
+- **Module « 3f. Dose–réponse / time-course »** (`mod_bulk_dose_response.R`)
+  côté Bulk : sources up/down/all_sig **triées par p.adjust**, top N déclaré,
+  modèle choisi ; sortie : courbe par gène (points + courbe + ruban IC, axe
+  log10), table EC50/pente/R², exports CSV + PNG.
+- `config/thresholds.R` : `TS_BULK_DOSE_{MIN_DOSES,MAX_GENES,CURVE_POINTS}`.
+- Tests : `test-bulk-dose-response.R` **38 PASS / 0 FAIL** (courbes de Hill
+  synthétiques avec EC50 connu retrouvé, échecs comptabilisés) ; ciblés :
+  e2e `shinytest2-bulk` 4 PASS, freezes app.R 68+80, i18n 15.
+  **Suite complète non lancée ce jalon (consigne utilisateur).**
+- i18n : **24** clés FR/EN (2434 → 2458 entrées cumulées).
+
+### Justification de dépendance (renv.lock)
+- `drc` : curve-fitting Hill/log-logistique/Weibull — aujourd'hui réalisable
+  **sans DRomics complet** (on réutilise filtrage/DE/VST existants).
+- Ajout pur : aucun appel existant modifié, aucune régression mesurée.
+
+### Hors périmètre
+- DRomics complet, modèles 5 paramètres, comparaison de courbes entre groupes,
+  intégration au rapport bulk — non demandés.
+
 ## [V1.x — STAT-S3] — 2026-09-13 — Clustering de profils (kmeans MVP)
 
 Rang 3 de l'ordre d'actionnabilité. **Zéro dépendance nouvelle** — `stats::kmeans`

@@ -53,6 +53,11 @@ TS_PATTERN_KMEANS_MAX_K    <- 12L      # plafond k (au-delà : profils illisible
 TS_PATTERN_KMEANS_ITERMAX  <- 50L      # iter.max kmeans
 TS_PATTERN_KMEANS_SEED     <- 15L      # graine par défaut de l'UI (déclarée, reproductible)
 
+# --- NEW-1 — dose-réponse / time-course (drc) ---------------------------------
+TS_BULK_DOSE_MIN_DOSES     <- 4L       # doses/temps distincts minimum (ajustement 4 paramètres)
+TS_BULK_DOSE_MAX_GENES     <- 200L     # plafond de gènes ajustés (portée v1 : sous-ensemble)
+TS_BULK_DOSE_CURVE_POINTS  <- 100L     # points de la grille de courbe ajustée
+
 # --- MD-1 — conteneur bulk_datasets (jeux nommés) -----------------------------
 TS_BULK_MULTI_MAX_DATASETS <- 20L      # plafond du conteneur (budget RAM 32 Go — chaque entrée duplique counts + filtré + VST)
 
