@@ -29,7 +29,7 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 | `docs/ROADMAP_presentation_stats.md` | Plots & stats : PLOT-Q/S, STAT-Q/S, NEW-1..3 | Pour tout travail présentation/statistique |
 | `docs/ROADMAP_CCC_ADVANCED.md` | CCC avancée, phases 1–10 + conditions de déblocage | Pour tout travail communication |
 | `docs/ROADMAP_HANDOFF_STAGE_11_20.md` | Stages 8–20 (V1.0, livré) + **HANDOFF V1.x** | Historique V1.0 ; entrées V1.x |
-| `docs/ROADMAP_HANDOFF_NEXT.md` | Handoff de session — ⚠️ **CONSOMMÉ** (il pointe sur CCC 7–8 / phase 9, tous deux livrés) : le point d'entrée réel est `STATUS.md` §2aj | Avant de **ré-écrire** un handoff |
+| `docs/ROADMAP_HANDOFF_NEXT.md` | **Prochaine session** : les **3 arbitrages en attente** (4E-4 / UX 3B-4B-6B / NEW-3), ancres re-vérifiées, prompt à coller — ré-écrit le 2026-09-14 | **Au démarrage de la prochaine session** |
 | `docs/ROADMAP_MULTI_DATASET.md` | Design MD-1..MD-4 (multi-pipeline Bulk + pseudobulk + SC double jeu, fusion décisions 8+5) | Avant tout travail multi-dataset |
 | `docs/ROADMAP_HANDOFF_STAGE_PLOT_Q.md` | Rapport de stage PLOT-Q (6 sections) | Exemple du format de rapport attendu |
 | `docs/ROADMAP_HANDOFF_STAGE_STAT_Q.md` | Rapport de stage STAT-Q (6 sections) | Historique du volet statistique |
@@ -43,6 +43,7 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 | `docs/release/UPGRADE_AND_COMPATIBILITY.md` | §3 = parking officiel V1.x (4D-3, 4E-4, 4F) | Pour les propositions V1.x |
 | `docs/contracts/*.md` | **28** contrats gelés (contract-first) — ⚠️ non versionnés (`docs/` gitignoré) | Avant de toucher un domaine gelé |
 | `docs/kanban_roadmap.html` | Tableau visuel (lecture seule, miroir de `STATUS.md`) | Démonstration / vue d'ensemble |
+| `docs/archive/` | **Archives locales** (créé le 2026-09-14) : fiches caduques, handoffs consommés, artefacts de build obsolètes. ⚠️ **Rien n'est supprimé**, seulement déplacé — toute référence pointe le nouveau chemin | Quand une fiche semble manquer |
 | `CHANGELOG.md` (racine, suivi par git) | Historique des livraisons | Après un commit notable |
 
 ---
@@ -91,7 +92,8 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 > **Flux E — Bulk V2 : ✅ COMPLET (M1→M5)**, livré le soir du 2026-09-12
 > (`081bc6a`→`5ae0b8b`, 4 contrats gelés) — référence :
 > `docs/ROADMAP_BULK_V2.md`. (La fiche `docs/ROADMAP_BULK_V2_STATS.md` du
-> matin, qui parquait M2–M5, est caduque — voir son en-tête.)
+> matin, qui parquait M2–M5, est caduque — voir son en-tête ; **archivée** le
+> 2026-09-14 → `docs/archive/ROADMAP_BULK_V2_STATS.md`.)
 >
 > Restent `NEW-3` (backlog conditionnel — **le volet flux A est terminé**),
 > ou un arbitrage (`4E-4`, UX 3B/4B/6B — §5). Voir l'ordre d'actionnabilité

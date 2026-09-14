@@ -1321,15 +1321,20 @@ atteint), puis correction de la dérive documentaire relevée à cette occasion.
 | **Référence cassée** | `BULK_DOSE_RESPONSE_CONTRACT.md` citait `tests/testthat/test-bulk-dose.R` (**inexistant**) → corrigé en `test-bulk-dose-response.R` (idem en-tête du fichier de test ; re-mesuré : **38 PASS / 0 FAIL**) |
 | **`ROADMAP.md`** | bandeau §2 « étape courante » **réécrit** (les 4 items qu'il listait comme à faire sont tous livrés) ; §1 : 3 entrées d'index périmées corrigées (handoff consommé, « dernier rapport livré », proposition CCC 9 « en attente de validation ») ; §5 : **décision 12** ajoutée (travail non commité) |
 | **`AGENTS.md`** | §1 en-tête : point d'entrée de session mis à jour ; §4 : baseline de suite complète remplacée par la mesure du 2026-09-14 |
+| **Archivage** | `docs/archive/` **créé** (2026-09-14) — ⚠️ **rien n'est supprimé**, seulement déplacé : `ROADMAP_HANDOFF_NEXT rev2.md` (auto-déclaré fusionné), `ROADMAP_BULK_V2_STATS.md` (auto-déclaré caduque, **ses 3 références repointées** : `ROADMAP.md`, `ROADMAP_MULTI_DATASET.md` ×2), `app.log`, `app.tex`, `conversation-export.md`, `_e2e_out.txt`. Nouvelle entrée d'index dans `ROADMAP.md` §1 |
+| **Handoff ré-écrit** | `docs/ROADMAP_HANDOFF_NEXT.md` (**3ᵉ** ré-écriture) : il listait CCC 7–8 / phase 9 comme « prochaine étape » alors que **les deux sont livrés**. Nouveau contenu = les **3 arbitrages en attente**, ancres **4E-4 re-vérifiées** (`R/core/jobs.R:50`, `R/spatial/spatial_async.R:112/232/294`, `modules/sc/mod_sc_da_milo.R:185`), critères d'acceptation, prompt à coller. Ancienne version **archivée** (`docs/archive/ROADMAP_HANDOFF_NEXT_2026-09-13_CCC9.md`) |
+| **Kanban remis à jour** | `docs/kanban_roadmap.html` — miroir de ce fichier, **figé au 2026-09-12** : `DEFAULT_STATUS` complété (STAT-S2/S3, NEW-1/2, DT-EXPORT), **carte DT-EXPORT ajoutée**, descriptions datées + références de commit, en-tête/pied corrigés (**22 tâches + 7 baseline**, 17/22 done). Syntaxe JS validée (`node --check`) |
 | **Bloqué / en attente** | **4E-4** (pool), **UX 3B/4B/6B**, **NEW-3** (interdit sans besoin concret) = arbitrages utilisateur ; `.ensure_10x_features` non commité = à coordonner avec son auteur (§2aj) |
 
 **Points d'attention** : (1) le **flake chromote est récurrent** (déjà vu en
 §2ac) — il ne produit pas de FAIL mais ~15 min de stall ; un `skip=1` sur un
 fichier `test-shinytest2-*` doit donc être **repassé seul** avant d'être lu
 comme une régression ; (2) l'arbre **n'est pas propre** (travail d'un autre
-auteur, §2aj + `ROADMAP.md` §5 décision 12) — aucun commit n'a été fait dans
-cette session ; (3) **aucun** code produit n'a changé ici : uniquement des
-corrections documentaires et la baseline.
+auteur, §2aj + `ROADMAP.md` §5 décision 12) — le commit de cette session
+(`63c31a1`) l'**exclut** délibérément ; (3) **aucun** code produit n'a changé
+ici : uniquement de la documentation et la baseline ; (4) le **handoff** et le
+**kanban** restent **non versionnés** (décision ouverte n°4) — un clone neuf ne
+les aura pas, pas plus que les **28** contrats.
 
 ---
 
