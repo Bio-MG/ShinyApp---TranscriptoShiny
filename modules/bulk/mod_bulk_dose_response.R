@@ -44,7 +44,7 @@ mod_bulk_dose_response_output_ui <- function(id) {
       nav_panel(i18n$t("Courbe"),
                 fluidRow(
                   column(8, selectizeInput(ns("dose_gene"), i18n$t("Gène (tapez pour rechercher)"),
-                                           choices = NULL, options = list(placeholder = i18n$t("Gène (tapez pour rechercher)")))),
+                                           choices = NULL, options = list(placeholder = .tr_plain("Gène (tapez pour rechercher)")))),
                   column(4, div(style = "margin-top:25px;",
                                 downloadButton(ns("dl_dose_png"), i18n$t("Export PNG"), class = "btn-sm btn-secondary w-100")))
                 ),

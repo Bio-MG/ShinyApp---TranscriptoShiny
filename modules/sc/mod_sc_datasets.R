@@ -19,7 +19,7 @@ mod_sc_datasets_ui <- function(id) {
         bsicons::bs_icon("info-circle"),
         " ", i18n$t("Enregistrez l'objet SC courant (brut ou traité) sous un label, avec la relation déclarée vis-à-vis du jeu de référence : mode 1 = analyses séparées à paramètres partagés, mode 2 = paramètres distincts. Le jeu actif n'est jamais modifié.")),
     textInput(ns("ds_label"), i18n$t("Label du dataset"),
-              placeholder = i18n$t("ex : Rep2_T2")),
+              placeholder = .tr_plain("ex : Rep2_T2")),
     selectInput(ns("ds_relation"), i18n$t("Relation déclarée (décision 5)"),
                 choices = setNames(
                   c("standalone", "shared_params", "distinct_params"),

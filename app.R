@@ -381,7 +381,7 @@ ui <- page_navbar(
   
   # NB: titles are French-by-default as required; English on switch via the
   # shiny.i18n JS shim (usei18n above + update_lang in the server observer).
-  nav_panel(tagList("🔬 ", i18n$t("Analyse Single-Cell")),
+  nav_panel(tagList("🔬 ", i18n$t("Analyse Single-Cell")), value = "tab_sc",
             
             icon = icon("microscope"),
             
@@ -389,7 +389,7 @@ ui <- page_navbar(
   
   
   
-  nav_panel(tagList("📊 ", i18n$t("Analyse Bulk RNA")),
+  nav_panel(tagList("📊 ", i18n$t("Analyse Bulk RNA")), value = "tab_bulk",
             
             icon = icon("chart-line"),
             
@@ -397,7 +397,7 @@ ui <- page_navbar(
   
   
   
-  nav_panel(tagList("🗺️ ", i18n$t("Analyse Spatiale")),
+  nav_panel(tagList("🗺️ ", i18n$t("Analyse Spatiale")), value = "tab_spatial",
             
             icon = icon("layer-group"),
             

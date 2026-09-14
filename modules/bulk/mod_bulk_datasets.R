@@ -19,7 +19,7 @@ mod_bulk_datasets_ui <- function(id) {
         bsicons::bs_icon("info-circle"),
         " ", i18n$t("Enregistrez l'état courant (import + filtrage + DE + voies) sous un label, pour le comparer plus tard à d'autres jeux. Le jeu actif n'est jamais modifié.")),
     textInput(ns("ds_label"), i18n$t("Label du dataset"),
-              placeholder = i18n$t("ex : GSE123_T2")),
+              placeholder = .tr_plain("ex : GSE123_T2")),
     actionButton(ns("ds_save"), i18n$t("Enregistrer l'état courant"),
                  icon = icon("floppy-disk"), class = "btn-outline-primary w-100 mb-2"),
     hr(),
