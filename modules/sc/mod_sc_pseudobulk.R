@@ -207,7 +207,7 @@ mod_sc_pseudobulk_ui <- function(id) {
     div(class = "small text-muted mb-1",
         i18n$t("Enregistre le résultat DE pseudobulk (comptages agrégés + contraste) dans le conteneur bulk_datasets pour le comparer aux jeux Bulk (onglet « Comparaison multi-jeux » du module Bulk). Le jeu actif n'est jamais modifié.")),
     textInput(ns("pb_send_label"), i18n$t("Label du dataset"),
-              placeholder = i18n$t("ex : pseudobulk_T2_vs_ctrl")),
+              placeholder = .tr_plain("ex : pseudobulk_T2_vs_ctrl")),
     actionButton(ns("pb_send"), i18n$t("Envoyer vers comparaison Bulk"),
                  class = "btn-outline-primary w-100", icon = icon("paper-plane")),
     div(class = "small text-muted mt-1", textOutput(ns("pb_send_status"))),

@@ -186,7 +186,7 @@ mod_import_bulk_ui <- function(id) {
             # global_data$bulk_datasets (producteur "import") sans toucher
             # bulk_obj (contrat docs/contracts/BULK_MULTI_CONTRACT.md §6).
             textInput(ns("multi_label"), i18n$t("Label multi-datasets (optionnel)"),
-                      placeholder = i18n$t("ex : GSE123_T2")),
+                      placeholder = .tr_plain("ex : GSE123_T2")),
             helpText(i18n$t("Si renseigné, le jeu importé est aussi enregistré sous ce nom pour la comparaison multi-jeux (Bulk > Multi-jeux).")),
 
             conditionalPanel(
@@ -332,7 +332,7 @@ mod_import_bulk_server <- function(id, global_data) {
     observeEvent(input$goto_mapping, {
       sess <- global_data$session
       req(!is.null(sess))
-      nav_select(id = "main_nav", selected = "Analyse Bulk RNA", session = sess)
+      nav_select(id = "main_nav", selected = "tab_bulk", session = sess)
       try(accordion_panel_open(id = "bulk-acc_bulk", values = "panel_mapping", session = sess), silent = TRUE)
     })
 

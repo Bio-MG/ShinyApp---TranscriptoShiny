@@ -92,7 +92,7 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
     observeEvent(input$goto_mapping, {
       sess <- global_data$session
       req(!is.null(sess))
-      nav_select(id = "main_nav", selected = "Analyse Bulk RNA", session = sess)
+      nav_select(id = "main_nav", selected = "tab_bulk", session = sess)
       try(accordion_panel_open(id = "bulk-acc_bulk", values = "panel_mapping", session = sess), silent = TRUE)
     })
 

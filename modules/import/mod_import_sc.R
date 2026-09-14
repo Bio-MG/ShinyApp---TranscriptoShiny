@@ -190,7 +190,7 @@ mod_import_sc_ui <- function(id) {
                 bsicons::bs_icon("info-circle"), " ",
                 i18n$t("Renseignez un label pour enregistrer une copie du jeu importé dans le conteneur sc_datasets (le jeu actif reste l'objet importé). Relation : mode 1 = traiter avec les mêmes réglages que le jeu de référence ; mode 2 = réglages propres au jeu.")),
             textInput(ns("multi_label"), i18n$t("Label multi-datasets SC"),
-                      placeholder = i18n$t("ex : Rep2_T2")),
+                      placeholder = .tr_plain("ex : Rep2_T2")),
             selectInput(ns("multi_relation"), i18n$t("Relation déclarée (décision 5)"),
                         choices = setNames(
                           c("standalone", "shared_params", "distinct_params"),
@@ -313,7 +313,7 @@ mod_import_sc_server <- function(id, global_data) {
     observeEvent(input$goto_mapping, {
       sess <- global_data$session
       req(!is.null(sess))
-      nav_select(id = "main_nav", selected = "Analyse Single-Cell", session = sess)
+      nav_select(id = "main_nav", selected = "tab_sc", session = sess)
       try(accordion_panel_open(id = "sc-acc_workflow", values = "grp_prep", session = sess), silent = TRUE)
       try(accordion_panel_open(id = "sc-acc_prep", values = "0_mapping", session = sess), silent = TRUE)
     })

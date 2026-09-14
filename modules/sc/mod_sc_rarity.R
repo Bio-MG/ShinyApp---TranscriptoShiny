@@ -177,24 +177,41 @@ mod_sc_rarity_server <- function(id, global_data, shared_rv) {
     }, striped = TRUE, bordered = TRUE)
 
     # Figure DESCRIPTIVE (jamais causale) : composition du jeu analyse.
-    output$rarity_plot <- renderPlot({
-      req(rarity_state$result)
-      r <- rarity_state$result
-      tab <- r$population_table
-      tab$rarete <- ifelse(is.na(tab$is_rare), .tr("non qualifiée"),
-                           ifelse(tab$is_rare, .tr("rare"), .tr("non rare")))
-      ggplot2::ggplot(tab, ggplot2::aes(x = stats::reorder(population, -n_cells),
-                                        y = n_cells, fill = rarete)) +
-        ggplot2::geom_col() +
-        ggplot2::labs(
-          title = .tr("Composition par population (descriptif)"),
-          subtitle = sprintf("%s — %s", r$summary$declared_rule_label,
-                             .tr("règle déclarée par l'utilisateur")),
-          x = r$identity_column, y = .tr("Nombre de cellules"),
-          fill = .tr("Rareté déclarée")) +
-        ts_theme() +
-        ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
-    })
+    # width/height clamps : l'ouverture du device PNG par Shiny appelle
+    # plot.new() AVANT d'evaluer l'expression — si l'output est rendu dans un
+    # conteneur replie/masque (taille rapportee ~0), le device est trop petit
+    # pour les marges par defaut et Shiny logge "figure margins too large".
+    # Les fonctions de taille imposent un plancher (200px) : l'erreur
+    # disparait, le comportement a l'ecran reste identique (tailles >= plancher
+    # utilisees telles quelles), et req() suspend l'output sans donnees.
+    output$rarity_plot <- renderPlot(
+      {
+        req(rarity_state$result)
+        r <- rarity_state$result
+        tab <- r$population_table
+        tab$rarete <- ifelse(is.na(tab$is_rare), .tr("non qualifiée"),
+                             ifelse(tab$is_rare, .tr("rare"), .tr("non rare")))
+        ggplot2::ggplot(tab, ggplot2::aes(x = stats::reorder(population, -n_cells),
+                                          y = n_cells, fill = rarete)) +
+          ggplot2::geom_col() +
+          ggplot2::labs(
+            title = .tr("Composition par population (descriptif)"),
+            subtitle = sprintf("%s — %s", r$summary$declared_rule_label,
+                               .tr("règle déclarée par l'utilisateur")),
+            x = r$identity_column, y = .tr("Nombre de cellules"),
+            fill = .tr("Rareté déclarée")) +
+          ts_theme() +
+          ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
+      },
+      width = function() {
+        w <- session$clientData[["output_sc-rarity-rarity_plot_width"]]
+        max(w %||% 0, 200)
+      },
+      height = function() {
+        h <- session$clientData[["output_sc-rarity-rarity_plot_height"]]
+        max(h %||% 0, 200)
+      }
+    )
 
     output$dl_rarity <- downloadHandler(
       filename = function() {
