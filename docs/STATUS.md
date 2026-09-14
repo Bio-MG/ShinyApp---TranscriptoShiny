@@ -1303,6 +1303,34 @@ parqué sans besoin concret) ; 3) baseline DT-EXPORT enregistrée : wrapper
 `buttons = TRUE` par défaut, `extra_options`, `page_length = 15L`, garde
 « zéro appel direct » dans `test-plot-datatable.R` (80 PASS).
 
+### 2ak. 🔎 Reprise de session — suite complète de fin de version + dérive documentaire corrigée (2026-09-14)
+
+Session de reprise : **aucune fonctionnalité nouvelle**. Exécution de la
+première action consignée en §2aj (suite complète, seuil « fin de version »
+atteint), puis correction de la dérive documentaire relevée à cette occasion.
+
+| Élément | Détail |
+|---|---|
+| **Suite complète** | `tools/run_full_suite.R` — **87 fichiers**, `BILAN: failed=0 passed=5101 error=0 skipped=2` (19:31:49 → 20:08:53). Le code de sortie **139 est le segfault de teardown documenté** (§2l), **pas** un échec : le runner flushe par fichier et le BILAN est bien écrit |
+| **SKIP 1 (attendu)** | `test-mod-geo.R` — smoke GEO live, **identique** à la référence §2ac (même fichier, même compte) |
+| **SKIP 2 (flake)** | `test-shinytest2-import.R` — `skip=1 pass=3` : **flake chromote** (`handle_read_frame error: websocketpp.transport:7 (End of File)`, ~15 min de stall sur ce seul fichier) ; **repassé seul → `fail=0 pass=5 err=0 skip=0`**, exactement la référence |
+| **Baseline effective** | **5103 PASS / 0 FAIL / 0 ERROR / 1 SKIP** — référence §2ac = 4790 PASS / 0 FAIL / 1 SKIP → **+313 PASS, 0 régression** (le SKIP restant est le smoke GEO live) |
+| **Gates** | conventions **0 erreur / 324 avert.** (plafond inchangé) ; duplication **0 erreur / 3 avert.** (les 3 préexistants) |
+| **Dérive « contrats »** | `docs/contracts/` contient **28** contrats ; `ROADMAP.md` (§1, §4, §5), `CONVENTIONS.md` §6 et cette §7 annonçaient **24** — et §7 disait encore **13** (chiffre du 2026-09-10). Les quatre sites sont corrigés à **28** |
+| **Nommage des freeze tests** | **24** contrats ont un `test-<sujet>-contract-freeze.R` éponyme ; **5** (`BULK_DOSE_RESPONSE`, `BULK_PATTERN`, `PLOT_DATATABLE`, `PLOT_EXPORT`, `PLOT_HEATMAP`) portent leurs assertions de gel **dans le test principal** du domaine. Écart de **nommage** documenté (`ROADMAP.md` §4, `CONVENTIONS.md` §6) ; garde **C8 = 0** → aucun contrat sans test |
+| **Référence cassée** | `BULK_DOSE_RESPONSE_CONTRACT.md` citait `tests/testthat/test-bulk-dose.R` (**inexistant**) → corrigé en `test-bulk-dose-response.R` (idem en-tête du fichier de test ; re-mesuré : **38 PASS / 0 FAIL**) |
+| **`ROADMAP.md`** | bandeau §2 « étape courante » **réécrit** (les 4 items qu'il listait comme à faire sont tous livrés) ; §1 : 3 entrées d'index périmées corrigées (handoff consommé, « dernier rapport livré », proposition CCC 9 « en attente de validation ») ; §5 : **décision 12** ajoutée (travail non commité) |
+| **`AGENTS.md`** | §1 en-tête : point d'entrée de session mis à jour ; §4 : baseline de suite complète remplacée par la mesure du 2026-09-14 |
+| **Bloqué / en attente** | **4E-4** (pool), **UX 3B/4B/6B**, **NEW-3** (interdit sans besoin concret) = arbitrages utilisateur ; `.ensure_10x_features` non commité = à coordonner avec son auteur (§2aj) |
+
+**Points d'attention** : (1) le **flake chromote est récurrent** (déjà vu en
+§2ac) — il ne produit pas de FAIL mais ~15 min de stall ; un `skip=1` sur un
+fichier `test-shinytest2-*` doit donc être **repassé seul** avant d'être lu
+comme une régression ; (2) l'arbre **n'est pas propre** (travail d'un autre
+auteur, §2aj + `ROADMAP.md` §5 décision 12) — aucun commit n'a été fait dans
+cette session ; (3) **aucun** code produit n'a changé ici : uniquement des
+corrections documentaires et la baseline.
+
 ---
 
 ## 3. 4D-3 — décision et contrat d'entrée upstream
@@ -1470,7 +1498,8 @@ Contradictions relevées le 2026-09-10 et leur résolution :
 instructions d'agents restent locales et non suivies. C'est défendable pour la
 documentation de pilotage.
 
-**Exception à considérer** : `docs/contracts/*.md` (13 contrats gelés). La
+**Exception à considérer** : `docs/contracts/*.md` (**28** contrats gelés au
+2026-09-14 — le chiffre « 13 » de cette section datait du 2026-09-10). La
 règle du dépôt (`AGENTS.md`) impose qu'un changement de contrat soit livré
 **code + freeze test + doc simultanément**. Si le contrat n'est pas versionné,
 cette règle est mécaniquement inapplicable. C'est le seul endroit où le

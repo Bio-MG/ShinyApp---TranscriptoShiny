@@ -29,19 +29,19 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 | `docs/ROADMAP_presentation_stats.md` | Plots & stats : PLOT-Q/S, STAT-Q/S, NEW-1..3 | Pour tout travail présentation/statistique |
 | `docs/ROADMAP_CCC_ADVANCED.md` | CCC avancée, phases 1–10 + conditions de déblocage | Pour tout travail communication |
 | `docs/ROADMAP_HANDOFF_STAGE_11_20.md` | Stages 8–20 (V1.0, livré) + **HANDOFF V1.x** | Historique V1.0 ; entrées V1.x |
-| `docs/ROADMAP_HANDOFF_NEXT.md` | **Prochaine session** : périmètre MD-1, ancres vérifiées, prompt à coller | **Au démarrage de la prochaine session** |
+| `docs/ROADMAP_HANDOFF_NEXT.md` | Handoff de session — ⚠️ **CONSOMMÉ** (il pointe sur CCC 7–8 / phase 9, tous deux livrés) : le point d'entrée réel est `STATUS.md` §2aj | Avant de **ré-écrire** un handoff |
 | `docs/ROADMAP_MULTI_DATASET.md` | Design MD-1..MD-4 (multi-pipeline Bulk + pseudobulk + SC double jeu, fusion décisions 8+5) | Avant tout travail multi-dataset |
 | `docs/ROADMAP_HANDOFF_STAGE_PLOT_Q.md` | Rapport de stage PLOT-Q (6 sections) | Exemple du format de rapport attendu |
 | `docs/ROADMAP_HANDOFF_STAGE_STAT_Q.md` | Rapport de stage STAT-Q (6 sections) | Historique du volet statistique |
 | `docs/ROADMAP_HANDOFF_STAGE_PLOT_S6.md` | Mesure PLOT-S6 (6 sections) — **prémisse périmée, jalon déjà satisfait par l'arbre** | Avant de planifier PLOT-S6 / PLOT-S6′ |
-| `docs/ROADMAP_HANDOFF_STAGE_STAT_S1.md` | Rapport de stage STAT-S1 (6 sections) — **ComBat-seq** | **Dernier rapport livré (2026-09-12)** |
+| `docs/ROADMAP_HANDOFF_STAGE_STAT_S1.md` | Rapport de stage STAT-S1 (6 sections) — **ComBat-seq** | Historique — le rapport de stage le plus récent est `ROADMAP_HANDOFF_STAGE_NEW_2.md` (2026-09-14) |
 | `docs/proposals/V1X_UX_REFACTOR_PROPOSAL.md` | Conception des lots UX (⚠️ état corrigé en tête) | Avant toute reprise UX |
 | `docs/proposals/CCC_DATA_PATH_ASSESSMENT.md` | 10X → CellChat : faisabilité et chemins | Avant 4D-3 / phases 5–6 |
 | `docs/proposals/CCC_7_8_LIANA_IMPORT_PROPOSAL.md` | **Proposition CCC 7–8 route (b)** : import de rangs LIANA, 9 éléments V1.x, 4 décisions — ✅ **tranchées et livrées** (`a88577f`) | Référence de conception (état réel : `STATUS.md` §2aa) |
 | `docs/proposals/CCC_9_RARE_CELLS_MILO_AUDIT.md` | **Audit Milo (règle 3) de la phase 9** : aucun moteur à dupliquer, mais Milo ne sert pas la question mono-condition ; périmètre non spécifié dans le dépôt | Avant toute reprise de la phase 9 |
-| `docs/proposals/CCC_9_POPULATION_RARITY_PROPOSAL.md` | **Proposition CCC 9 — question 1** (rareté par population annotée) : jalon descriptif, 9 éléments V1.x, 5 décisions — 🟡 **en attente de validation** | Avant d'implémenter la phase 9 (`STATUS.md` §2ab) |
+| `docs/proposals/CCC_9_POPULATION_RARITY_PROPOSAL.md` | **Proposition CCC 9 — question 1** (rareté par population annotée) : jalon descriptif, 9 éléments V1.x, 5 décisions — ✅ **livrée** (`8c1a969`) : les 5 décisions §12 ont été appliquées telles quelles | Référence de conception (état réel : `STATUS.md` §2ac) |
 | `docs/release/UPGRADE_AND_COMPATIBILITY.md` | §3 = parking officiel V1.x (4D-3, 4E-4, 4F) | Pour les propositions V1.x |
-| `docs/contracts/*.md` | **24** contrats gelés (contract-first) — ⚠️ non versionnés (`docs/` gitignoré) | Avant de toucher un domaine gelé |
+| `docs/contracts/*.md` | **28** contrats gelés (contract-first) — ⚠️ non versionnés (`docs/` gitignoré) | Avant de toucher un domaine gelé |
 | `docs/kanban_roadmap.html` | Tableau visuel (lecture seule, miroir de `STATUS.md`) | Démonstration / vue d'ensemble |
 | `CHANGELOG.md` (racine, suivi par git) | Historique des livraisons | Après un commit notable |
 
@@ -49,29 +49,30 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 
 ## 2. Les quatre flux de travail
 
-> **▶ Étape courante (arbitrage utilisateur du 2026-09-13 — cf.
-> `STATUS.md` §2y)** : le flux multi-dataset est **terminé**
-> (`MD-1` → `MD-4` ✅ + `4F-EXT` ✅). Les prochains jalons, dans l'ordre
-> d'actionnabilité décidé par l'utilisateur :
+> **▶ Étape courante (mise à jour 2026-09-14 — cf. `STATUS.md` §2aj/§2ak)** :
+> le flux multi-dataset est **terminé** (`MD-1` → `MD-4` ✅ + `4F-EXT` ✅) et
+> **tous les jalons débloqués** de l'ordre d'actionnabilité du 2026-09-13 sont
+> **livrés** : CCC 7–8 route (b) (`a88577f`), CCC 9 question 1 (`8c1a969`),
+> STAT-S2 (`1555283`), STAT-S3 (`e832ec7`), NEW-1 (`b7e0379`), NEW-2
+> (`5a64855`), puis **DT-EXPORT** (`f644b55`) et les **correctifs du retour
+> feedback** (`4ed66ba`).
 >
-> 1. **CCC phase 7–8** (interop OmniPath / LIANA) — **DÉBLOQUÉE** : choisir la
->    route (a) `OmnipathR`/`liana` = `renv.lock` justifié, ou (b) import de
->    résultats LIANA externes **sans dépendance** (extension du contrat Stage
->    11 ; comparaison en **rangs/recouvrement uniquement**, jamais de score
->    consensus).
-> 2. **CCC phase 9** (rare cells) — **PÉRIMÈTRE TRANCHÉ (2026-09-13)** : la
->    phase 9 est la **question 1** (« quelles populations annotées sont
->    rares ? ») — jalon **descriptif, mono-condition**, donc **sans graphe
->    kNN** : l'audit Milo (fait, `docs/proposals/CCC_9_RARE_CELLS_MILO_AUDIT.md`)
->    devient **sans objet** pour ce jalon. **Proposition écrite** :
->    `docs/proposals/CCC_9_POPULATION_RARITY_PROPOSAL.md` — **5 décisions à
->    valider** avant implémentation (`STATUS.md` §2ab).
-> 3. **STAT-S2** (réseau d'enrichissement, effort M) — `enrichplot` déjà
->    présent ; puis **STAT-S3** (clustering de profils, effort L).
-> 4. **NEW-1..3** (dose-réponse, fusion de jeux, PCSF) — **NEW-1 et NEW-2
->    LIVRÉS le 2026-09-13** (§2af, §2ag de `STATUS.md`) ; `NEW-3` backlog
->    conditionnel. **Le volet flux A est terminé.**
-> 5. **UX 3B / 4B / 6B** — options jamais tranchées.
+> **Il ne reste AUCUN jalon débloqué.** Les trois derniers items de la séquence
+> exigent un **arbitrage utilisateur** (voir §5) :
+>
+> 1. **4E-4** — exécution async de la DA : choix du pool (`STATUS.md` §4) ;
+> 2. **UX 3B / 4B / 6B** — options jamais tranchées ;
+> 3. **NEW-3** (réseau PCSF) — backlog conditionnel : sa fiche **interdit de le
+>    lancer sans besoin utilisateur concret**.
+>
+> Deux points **hors arbitrage** restent ouverts :
+>
+> - **Travail non commité d'un autre auteur** — `.ensure_10x_features()`
+>   (`modules/import/mod_import_sc.R` + `tests/manual/`) : à mettre au point
+>   **avec son auteur** avant tout commit ; ne pas l'écraser, ne pas le
+>   committer aveuglément (`STATUS.md` §2aj).
+> - **Suite complète de fin de version** — seuil atteint (cf. §2.0, « politique
+>   de tests ») ; référence mesurée consignée en `STATUS.md` §2ak.
 >
 > **CCC phases 5–6 : GELÉES SANS SUITE** (pas d'import fastP côté 4D-3) — ne
 > plus les re-proposer. Détail : `docs/ROADMAP_CCC_ADVANCED.md` §4.
@@ -204,8 +205,13 @@ async (arbitrage 4E-4), caching (règle 8).
 ## 4. Principes de conception transverses
 
 - **Contract-first** : tout nouveau domaine = code + freeze test + doc
-  `docs/contracts/` simultanément. Les **24** contrats gelés ne changent que
-  selon cette règle.
+  `docs/contracts/` simultanément. Les **28** contrats gelés ne changent que
+  selon cette règle. Le gel est porté par un freeze test **éponyme**
+  (`test-<sujet>-contract-freeze.R`) pour 24 d'entre eux ; les 5 autres
+  (`BULK_DOSE_RESPONSE`, `BULK_PATTERN`, `PLOT_DATATABLE`, `PLOT_EXPORT`,
+  `PLOT_HEATMAP`) portent leurs assertions de gel **dans le test principal** du
+  domaine — écart de **nommage** uniquement, aucun contrat n'est sans test
+  (garde **C8** = 0).
 - **Conventions vérifiées** : `docs/CONVENTIONS.md` (règles C1..C12) +
   `tools/check_conventions.R`. Les règles de niveau ERREUR sont à **zéro** et
   doivent y rester ; les AVERT. sont des **plafonds de dette** qui ne doivent
@@ -252,14 +258,15 @@ auto dès ≥ 2 échantillons). Les modes 1 et 2 n'existent pas encore — c'est
 | 1 | **4E-4** : pool mirai dédié SC / pool applicatif unique / rester synchrone | Architecture async de la DA |
 | 2 | **UX** : options 3B, 4B, 6B | Reprise de la refonte UX |
 | 3 | ~~**Bulk V2** : lui créer une roadmap dédiée ?~~ — ✅ **TRANCHÉ le 2026-09-12** : `docs/ROADMAP_BULK_V2.md` créée (Flux E complet M1→M5) | ~~Traçabilité~~ résolue |
-| 4 | **`docs/` gitignoré** : garder local, ou versionner `docs/*.md` + `docs/contracts/*.md` ? | Les **24** contrats ne sont pas versionnés — voir la remarque ci-dessous (⚠️ un fichier **sourcé** ne doit jamais être ignoré : cas corrigé le 2026-09-13, garde C3) |
+| 4 | **`docs/` gitignoré** : garder local, ou versionner `docs/*.md` + `docs/contracts/*.md` ? | Les **28** contrats ne sont pas versionnés — voir la remarque ci-dessous (⚠️ un fichier **sourcé** ne doit jamais être ignoré : cas corrigé le 2026-09-13, garde C3) |
 | 5 | ~~**Modes 1/2 du double jeu SC** : priorité et périmètre~~ — ✅ **TRANCHÉ par réalisation le 2026-09-13** : `MD-4` livre le conteneur `sc_datasets` + les relations déclarées `standalone` / `shared_params` (mode 1) / `distinct_params` (mode 2), contrat `SC_MULTI_CONTRACT.md` (`STATUS.md` §2w) | ~~Direction produit du module SC~~ résolue — reste l'**usage** des modes dans les panneaux d'analyse (évolution, pas un correctif) |
 | 6 | ~~**PLOT-S6′**~~ — ✅ **TRANCHÉE le 2026-09-12 : PLOT-S6 clos, repli PLOT-S6′ non retenu** | Volet « présentation » **terminé** — voir `docs/ROADMAP_HANDOFF_STAGE_PLOT_S6.md` |
 | 7 | **Outillage MCP** : ~~snapshoter `mcptools`/`btw`/`ellmer` dans `renv.lock`, ou assumer qu'ils restent locaux ?~~ → **recommandation posée le 2026-09-12** (`STATUS.md` §2s) : profil renv `dev` séparé, pas de snapshot dans le lockfile principal — **à valider**. Diagnostic ABI §2p fait le soir : hypothèse d'un décalage massif **réfutée** (seul `jsonlite` est Built 4.4.3) ; template de connexion ZCode posé (`mcp.examples/`) | Un clone neuf ne peut pas démarrer `scripts/mcp_server.R` tant que ce n'est pas tranché |
 | 8 | ~~**Multi-échantillons + pseudobulk « comme Spatial »**~~ — ✅ **LIVRÉ le 2026-09-13** : `MD-1` (conteneur `bulk_datasets`), `MD-2` (comparaison), `MD-3` (pont pseudobulk), `MD-4` (conteneur `sc_datasets`) + `4F-EXT` (rapport consolidé) | ~~Chantier neuf~~ **clos** — voir `docs/ROADMAP_MULTI_DATASET.md` |
 | 9 | ~~**CCC phases 7–8** : route (a) `OmnipathR`/`liana` avec `renv.lock` justifié, ou (b) **import de résultats LIANA externes sans dépendance** ?~~ — ✅ **TRANCHÉ et LIVRÉ le 2026-09-13** : **route (b)** retenue, implémentée (`a88577f`), contrat étendu. La route (a) reste une décision **séparée**, non demandée | Interop inter-méthodes ; (b) n'ajoute aucune dépendance et respecte le périmètre « import-only » |
 | 10 | **Dette de conventions** (relevé 2026-09-13) : C6 = 16 `library()` au top-level de `R/`, C9 = 37 fichiers sans test éponyme, C10 = 270 `stop()` non classés — chantier de réduction, ou statu quo avec plafond ? | Qualité long terme ; les compteurs ne doivent **pas augmenter** (garde `tools/check_conventions.R`) |
-| 11 | ~~**CCC phase 9** : laquelle des trois questions (rareté par population / par voisinage / × communication) ?~~ — ✅ **TRANCHÉE le 2026-09-13 : question 1 — rareté par population annotée** → proposition `docs/proposals/CCC_9_POPULATION_RARITY_PROPOSAL.md`. Restent **5 décisions de conception** à valider (§12 de la proposition) | Périmètre du jalon CCC 9 — voir `STATUS.md` §2ab |
+| 11 | ~~**CCC phase 9** : laquelle des trois questions (rareté par population / par voisinage / × communication) ?~~ — ✅ **TRANCHÉE et LIVRÉE le 2026-09-13** : **question 1 — rareté par population annotée** (`8c1a969` ; les 5 décisions de conception §12 de la proposition ont été **appliquées telles quelles**) | Périmètre du jalon CCC 9 — voir `STATUS.md` §2ac |
+| 12 | **Travail non commité d'un autre auteur** : `.ensure_10x_features()` (`modules/import/mod_import_sc.R`, **indexé** ; `tests/manual/test_ensure_10x_features.R`, **non suivi**) — compat CellRanger `genes.tsv` à colonne unique | L'arbre n'est pas propre : à réviser puis committer, ou à écarter — **ne pas l'écraser, ne pas le committer aveuglément** (`STATUS.md` §2aj) |
 
 > **Remarque sur la décision 4** — garder roadmaps et instructions d'agents
 > locales est un choix défendable. En revanche `docs/contracts/*.md` est un cas

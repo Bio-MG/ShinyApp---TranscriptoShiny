@@ -145,8 +145,13 @@ nouvelle** n'est acceptée.
 
 Tout nouveau domaine = **code + freeze test + `docs/contracts/*.md`
 simultanément**. Un contrat ne change que si les trois bougent dans le même
-commit. État au 2026-09-13 : **24 contrats gelés**, tous référencés par au
-moins un test (C8 = 0).
+commit. État au **2026-09-14** : **28 contrats gelés**, tous référencés par au
+moins un test (**C8 = 0**). Le **nommage** du freeze test n'est pas uniforme :
+**24** contrats ont un fichier éponyme `test-<sujet>-contract-freeze.R` ; **5**
+(`BULK_DOSE_RESPONSE`, `BULK_PATTERN`, `PLOT_DATATABLE`, `PLOT_EXPORT`,
+`PLOT_HEATMAP`) portent leurs assertions de gel **dans le test principal** du
+domaine. C'est un écart de nommage, **pas** une exception à la règle : aucun
+contrat n'est sans test.
 
 Conséquence pratique : avant de modifier un objet « gelé », ouvrir son
 contrat, puis le freeze test correspondant — jamais l'inverse.

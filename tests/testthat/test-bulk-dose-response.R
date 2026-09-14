@@ -1,5 +1,5 @@
 # =============================================================================
-# test-bulk-dose.R — Dose-réponse / time-course (NEW-1, MVP drc)
+# test-bulk-dose-response.R — Dose-réponse / time-course (NEW-1, MVP drc)
 # =============================================================================
 # Couvre : gel de la surface publique + des champs contractuels, validations
 # (colonne de dose, positivité stricte, nombre de doses distinctes, modèle),
