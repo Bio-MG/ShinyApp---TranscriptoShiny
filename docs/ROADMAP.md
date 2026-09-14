@@ -66,9 +66,10 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 >    partagé**, *avec réserve* : un pool mirai **dédié** reste pertinent pour
 >    plusieurs **échantillons** en parallèle (3 réplicats × 2 conditions) —
 >    `STATUS.md` §2am.1 ;
-> 2. **UX 3B / 4B / 6B** → 🟡 **4B retenue** (⚠️ **mesurée non livrée** : c'est
->    **4A** qui l'est — écart à confirmer) ; **3B jugée non nécessaire** (3A
->    suffit) ; **6B non tranchée** — `STATUS.md` §2am.2 ;
+> 2. **UX 3B / 4B / 6B** → 🧊 **TOUT LE VOLET UX EST GELÉ** (décision
+>    2026-09-14) : 3A/4A/6A livrées, **3B/4B/6B gelées**, 4A elle-même
+>    « gelée, non prioritaire ». L'écart 4A/4B est **sans objet** —
+>    `STATUS.md` §2am.2 ;
 > 3. ~~**NEW-3** (réseau PCSF)~~ → 🟢 **interactome embarqué** ; téléchargement
 >    en ligne acceptable **si local-first** — `STATUS.md` §2am.3. Le besoin
 >    utilisateur est exprimé ⇒ le backlog conditionnel est **levé**.
@@ -145,7 +146,7 @@ avance jalon par jalon, un jalon = un commit.
 | — | ~~**NEW-1** — dose-réponse / time-course~~ | M | — | ✅ **LIVRÉ le 2026-09-13** (`drc`, justification renv.lock au contrat §2) — `STATUS.md` §2af |
 | — | ~~**NEW-2** — fusion de jeux~~ | M | ~~STAT-S1~~ ✅ prérequis levé | ✅ **LIVRÉ le 2026-09-13** (fiche re-mesurée : fusion depuis le conteneur `bulk_datasets`, produit chargé comme jeu actif — `STATUS.md` §2ag) |
 | 6 | **NEW-3** — réseau PCSF | L | ~~interactome local vs contrainte offline~~ ✅ **tranché le 2026-09-14** : **interactome embarqué**, téléchargement en ligne en complément **si local-first** | 🟢 **DÉBLOQUÉ** — backlog conditionnel **levé** (besoin exprimé) — `STATUS.md` §2am.3 |
-| 7 | **UX 3B / 4B / 6B** | M | ~~décision 2~~ 🟡 **partiellement tranchée le 2026-09-14** | **4B retenue** (⚠️ mesurée non livrée = 4A l'est) ; **3B non nécessaire** ; **6B reste ouverte** — `STATUS.md` §2am.2 |
+| 7 | **UX 3B / 4B / 6B** | M | ~~décision 2~~ ✅ **tranchée le 2026-09-14** | 🧊 **GELÉ** — 3A/4A/6A livrées, 3B/4B/6B gelées. La refonte UX **ne reprend pas** sans décision nouvelle — `STATUS.md` §2am.2 |
 | 8 | **4E-4** — exécution async de la DA | M | ~~décision 1 (pool)~~ ✅ **tranchée le 2026-09-14** : **(b) pool applicatif partagé** + réserve « pool dédié » multi-échantillons | 🟢 **DÉBLOQUÉ** — `STATUS.md` §2am.1 |
 | 9 | ~~Boutons d'export DT sur les ~43 tables restantes + `pageLength` normalisé~~ | M | ~~décision ouverte~~ | ✅ **LIVRÉ le 2026-09-14 (DT-EXPORT)** — contrat `PLOT_DATATABLE_CONTRACT.md` §6 option B, 73 sites via `ts_datatable()`, `pageLength = 15` + boutons nommés sur les tables de résultats, aperçus exclus — `STATUS.md` §2ai |
 
@@ -271,7 +272,7 @@ auto dès ≥ 2 échantillons). Les modes 1 et 2 n'existent pas encore — c'est
 | # | Décision | Impact |
 |---|---|---|
 | 1 | ~~**4E-4** : pool mirai dédié SC / pool applicatif unique / rester synchrone~~ — ✅ **TRANCHÉ le 2026-09-14** : **(b) pool applicatif partagé**, *avec réserve* — un pool mirai **dédié** reste pertinent pour plusieurs **échantillons** en parallèle (3 réplicats × 2 conditions) ⇒ ne pas fermer la porte au parallélisme par échantillon (`STATUS.md` §2am.1) | Architecture async de la DA — **jalon DÉBLOQUÉ** |
-| 2 | **UX** : options 3B, 4B, 6B — 🟡 **PARTIELLEMENT TRANCHÉ le 2026-09-14** : **4B retenue** (⚠️ **mesurée non livrée** — c'est **4A** qui l'est) ; **3B jugée non nécessaire** (3A suffit) ; **6B reste non tranchée** (`STATUS.md` §2am.2) | Reprise de la refonte UX — **écart 4A/4B à confirmer** |
+| 2 | **UX** : options 3B, 4B, 6B — ✅ **TRANCHÉ le 2026-09-14 : TOUT LE VOLET UX EST GELÉ.** 3A/4A/6A livrées ; **3B, 4B, 6B gelées** (« aucune idée pour 4B → gèle » ; « 4A pourquoi pas mais gèle aussi, non prioritaire »). L'écart 4A/4B est **sans objet** : aucune des deux ne sera faite. Rappel des définitions (A = sans risque, B = structurelle) en `STATUS.md` §2am.2 | Refonte UX **ne reprend pas** — ne pas re-proposer 3B/4B/6B sans décision nouvelle |
 | 3 | ~~**Bulk V2** : lui créer une roadmap dédiée ?~~ — ✅ **TRANCHÉ le 2026-09-12** : `docs/ROADMAP_BULK_V2.md` créée (Flux E complet M1→M5) | ~~Traçabilité~~ résolue |
 | 4 | **`docs/` gitignoré** : garder local, ou versionner `docs/*.md` + `docs/contracts/*.md` ? | Les **28** contrats ne sont pas versionnés — voir la remarque ci-dessous (⚠️ un fichier **sourcé** ne doit jamais être ignoré : cas corrigé le 2026-09-13, garde C3) |
 | 5 | ~~**Modes 1/2 du double jeu SC** : priorité et périmètre~~ — ✅ **TRANCHÉ par réalisation le 2026-09-13** : `MD-4` livre le conteneur `sc_datasets` + les relations déclarées `standalone` / `shared_params` (mode 1) / `distinct_params` (mode 2), contrat `SC_MULTI_CONTRACT.md` (`STATUS.md` §2w) | ~~Direction produit du module SC~~ résolue — reste l'**usage** des modes dans les panneaux d'analyse (évolution, pas un correctif) |

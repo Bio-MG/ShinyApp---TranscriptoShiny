@@ -1458,17 +1458,28 @@ L'utilisateur écrit : « UX 3B (ok réellement nécessaire ?) ou 4B (ok, FAIT) 
 | **UX 4B** | ⬜ **Non livrée** | l'accordéon de mapping est toujours `modules/sc/mod_sc.R:50-52` |
 | **UX 6B** | ⬜ Non livrée | — |
 
-⚠️ **Écart à signaler** : l'utilisateur indique « 4B (ok, FAIT) », or **4B
-n'est pas dans l'arbre** — ce qui est livré est **4A**. Deux
-interprétations possibles : (i) 4A était visée et la décision est de
-**confirmer 4A sans faire 4B** ; (ii) 4B est réellement voulue et reste à
-faire. **Cet écart est soumis à confirmation** avant toute modification de la
-chaîne réactive (cf. §2ak, points d'attention).
+⚠️ **Écart levé le 2026-09-14 (même jour)** : l'utilisateur indique « aucune
+idée pour 4B, je ne sais plus ce que c'est → **gèle** », et « 4A pourquoi pas
+mais **gèle aussi, non prioritaire** ». **Décision finale : tout le volet UX
+est GELÉ**, l'écart 4A/4B devient **sans objet** (aucune des deux ne sera
+faite dans la vague en cours).
 
-**Réponse à « 3B est-elle réellement nécessaire ? »** → **Non, a priori.** La
-proposition elle-même conditionnait 3B à « si 3A ne suffit pas » ; 3A est
-livrée et couvre le besoin. **Recommandation : ne pas faire 3B**, sauf retour
-utilisateur concret. **6B reste non tranchée**.
+**Rappel de ce que sont ces options** (consigné ici pour ne pas avoir à le
+redemander — source `docs/proposals/V1X_UX_REFACTOR_PROPOSAL.md` §LOTS 3/4/6) :
+
+| Option | Contenu | État |
+|---|---|---|
+| **3A** | Section « Livrables » mise en scène dans chaque domaine | ✅ Livrée |
+| **3B** | `nav_menu` global « 📄 Rapports » dans `app.R` (re-câblage serveur, e2e lourds) | 🧊 **GELÉE** — non nécessaire (3A suffit) |
+| **4A** | Rappel contextuel + bouton de saut dans les onglets d'import (mapping = étape 0) | ✅ Livrée — 🧊 **gelée, non prioritaire** |
+| **4B** | **Migration réelle** de l'accordéon mapping vers `mod_import_sc` / `mod_import_bulk` (chaînage réactif modifié = zone à risque règle 1) | 🧊 **GELÉE** |
+| **6A** | Onglet GEO renommé « Source publique (GEO) », placé en tête du menu Import | ✅ Livrée |
+| **6B** | UI GEO intégrée comme accordéon DANS les onglets SC/Bulk (l'onglet GEO disparaît) | 🧊 **GELÉE** |
+
+**Conséquence** : la refonte UX **ne reprend pas**. Les lots 3/4/6 sont clos
+en l'état (A livrées, B gelées). Toute reprise exigera une **décision
+utilisateur explicite et nouvelle** — ne pas re-proposer 3B/4B/6B de sa propre
+initiative (règle déjà appliquée à CCC 5–6).
 
 #### 2am.3 — NEW-3 : interactome embarqué, **local-first**
 
