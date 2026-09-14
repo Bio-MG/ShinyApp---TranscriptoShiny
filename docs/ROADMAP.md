@@ -44,6 +44,7 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 | `docs/contracts/*.md` | **28** contrats gelés (contract-first) — ⚠️ non versionnés (`docs/` gitignoré) | Avant de toucher un domaine gelé |
 | `docs/kanban_roadmap.html` | Tableau visuel (lecture seule, miroir de `STATUS.md`) | Démonstration / vue d'ensemble |
 | `docs/archive/` | **Archives locales** (créé le 2026-09-14) : fiches caduques, handoffs consommés, artefacts de build obsolètes. ⚠️ **Rien n'est supprimé**, seulement déplacé — toute référence pointe le nouveau chemin | Quand une fiche semble manquer |
+| `docs/AUDIT_VERIFICATION_BULK_SC.md` | **Audit externe Bulk/SC VÉRIFIÉ contre le code** (2026-09-14) : 20 confirmées, 4 nuancées, 0 infirmée, **5 trouvées en vérifiant**. Bilan + ordre en 8 jalons — `STATUS.md` §2an | **Avant tout travail Bulk DE / pseudobulk / multi** |
 | `CHANGELOG.md` (racine, suivi par git) | Historique des livraisons | Après un commit notable |
 
 ---
@@ -74,9 +75,14 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 >    en ligne acceptable **si local-first** — `STATUS.md` §2am.3. Le besoin
 >    utilisateur est exprimé ⇒ le backlog conditionnel est **levé**.
 >
-> ⚠️ **Audit annoncé absent** : l'utilisateur annonce un « audit sc
-> multi-échantillon et bulk » pour la suite — **aucun tel fichier n'existe dans
-> le dépôt** (`STATUS.md` §2am.4) : **à fournir** avant toute planification.
+> ✅ **Audit reçu et VÉRIFIÉ le 2026-09-14** (« audit sc multi échantillon et
+> bulk », annoncé plus tôt) : deux passages, confrontés au code
+> affirmations par affirmations → **20 confirmées / 4 nuancées / 0 infirmée /
+> 5 problèmes supplémentaires trouvés**. Rapport :
+> `docs/AUDIT_VERIFICATION_BULK_SC.md` ; bilan : `STATUS.md` **§2an**.
+> **Le correctif P0 le plus coûteux est en fait déjà écrit** :
+> `bulk_assert_raw_counts()` existe et n'est pas câblé sur le DE — **étendre,
+> ne pas dupliquer** (règle 3).
 >
 > Deux points **hors arbitrage** restent ouverts :
 >

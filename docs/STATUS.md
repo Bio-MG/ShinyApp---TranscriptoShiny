@@ -1512,8 +1512,86 @@ multi-échantillon / bulk n'existe dans le dépôt.** Le seul audit présent est
 `docs/ROADMAP_HANDOFF_STAGE_CCC_9_AUDIT.md`, qui porte sur la rareté par
 population (CCC 9) et **ne concerne pas** ce sujet.
 
-⇒ **En attente de fourniture** par l'utilisateur. Aucune planification ne sera
-engagée sur la base d'un audit non lu (règle : ne pas supposer).
+➡️ **Fourni par l'utilisateur le 2026-09-14 au soir** (deux textes en texte
+libre). **Vérifié affirmations par affirmations contre le code** →
+`docs/AUDIT_VERIFICATION_BULK_SC.md` et **`§2an`** ci-dessous.
+
+### 2an. 🔎 Audit externe Bulk/SC — VÉRIFIÉ contre le code (2026-09-14)
+
+Deux textes d'audit externe reçus le 2026-09-14 (passage 1 : SC / pseudobulk /
+bulk multi / comparaison ; passage 2 : Bulk DE / import / logique d'erreur).
+**Vérification affirmations par affirmations**, avec `fichier:ligne` :
+rapport complet → **`docs/AUDIT_VERIFICATION_BULK_SC.md`**.
+
+| Verdict | Nb |
+|---|---:|
+| ✅ Confirmée | **20** |
+| ⚠️ Confirmée + nuance | **4** |
+| ❌ Infirmée | **0** |
+| ➕ Trouvée en vérifiant (absente de l'audit) | **5** |
+
+**L'audit est fiable** — aucune affirmation inventée, et ses P0 sont les bons.
+
+#### Les 4 P0 confirmés
+
+1. **`merged_matrix` laisse entrer une matrice non-counts dans le DE** —
+   aucune garde (`modules/import/mod_import_bulk.R:881-930`) alors que
+   `per_sample` a `.validate_design()` stricte
+   (`R/bulk/bulk_import_engine.R:135-163`) ; `build_dds()` se contente d'un
+   `warning()` + `round()` (`R/bulk/bulk_helpers.R:129-135`).
+2. **`merged_matrix` remplace des métadonnées non alignées par des métadonnées
+   artificielles** — test unidirectionnel `all(sample %in% metadata)` puis
+   repli destructeur, **sans notification Shiny** (`mod_import_bulk.R:910-917`).
+3. **`dds_full` peut devenir stale** — la clé de cache est la **formule seule**
+   (« cheap heuristic », commentaire du code) :
+   `mod_bulk_de_multimethod.R:72-85`.
+4. **NA `sample_id` silencieusement exclus du pseudobulk** — le commentaire
+   l'avoue : `mod_sc_pseudobulk.R:110`.
+
+#### ⚠️ Les 4 nuances (là où l'audit est incomplet)
+
+1. **Le correctif existe déjà.** L'audit veut créer
+   `assert_raw_count_matrix_for_de()` → **`bulk_assert_raw_counts()` existe**
+   (`R/bulk/batch_correction.R:67-104`, bloque NA / négatif / `frac_int <=
+   0.95`). Elle n'est simplement **pas câblée sur le DE**. Idem pour
+   `analysis_id` / `input_fingerprint` → **`new_provenance_entry()`**
+   (`R/core/provenance.R:115`) porte déjà `analysis_id`, `dataset_hash`,
+   `hash_exact`, `dataset_dims`, `parameters`, `versions`, `seed`. → **étendre,
+   ne pas dupliquer** (règle 3 ; même conclusion que CellChat, §2al).
+2. **L'invalidation n'est pas totalement absente.** `re-filtrage → contrastes`
+   (`mod_bulk_filter.R:281-289`, avec notification), `auto-pipeline →
+   contrastes` (`mod_bulk.R:325`) et `pseudobulk → de_result`
+   (`mod_sc_pseudobulk.R:320`) **sont** câblées. Ce qui manque :
+   **mapping → aval** et **vst → WGCNA/pathways/signatures**. Le défaut réel
+   est l'**irrégularité**, pas l'inexistence.
+3. **`rankConsensus()` est documenté, pas accidentel** — le roxygen dit
+   explicitement que les `padj` NA sont exclus (`bulk_helpers.R:546-548`). Le
+   défaut est de **traçabilité dans le résultat**, pas d'ignorance.
+4. **Le type de gène est déjà détecté** — `detect_gene_id_type()`
+   (`R/core/io_helpers.R:1016`) est utilisé à 4 endroits. Ce qui manque est le
+   **contrôle au moment de la comparaison**, pas la détection.
+
+#### ➕ Les 5 problèmes trouvés en vérifiant (absents de l'audit)
+
+| # | Constat | Preuve | Gravité |
+|---|---|---|---|
+| N1 | `round()` silencieux **aussi** côté edgeR/limma, **sans `warning`** | `R/bulk/bulk_helpers.R:300` | 🔴 |
+| N2 | **Aucun contrôle de design n'est bloquant** — simple bannière ; le bouton s'active dès que `filtered_counts` existe | `mod_bulk_de_engine.R:217-229` + `mod_bulk_de_run.R:32` | 🔴 |
+| N3 | Colonne de condition absente ⇒ **zéro problème remonté** | `R/core/validation.R:52` | 🟠 |
+| N4 | Le chemin DE ne produit **aucune provenance** (0 occurrence dans `modules/bulk_de/`) | grep | 🔴 |
+| N5 | Le bug `intersect(covariates, …)` est en **3** endroits, pas 2 | `validation.R:70`, edgeR, limma | 🟠 |
+
+#### Position
+
+L'audit recommande un **thin vertical slice sur Bulk DE** (pas de gros
+refactor) — **accord total**, cohérent avec la règle 1. Ordre proposé en 8
+jalons (DE-GUARD → META-IDENTITY → COVARIATES-BLOCK → RANK-BLOCK →
+SHRINK-TRACE → CONTRAST-IDENTITY → INVALIDATION-GRAPH → PSEUDOBULK-FIX) :
+`docs/AUDIT_VERIFICATION_BULK_SC.md` §5.
+
+⚠️ **Réserve de méthode** : vérification **statique**. Avant toute correction,
+**écrire le test qui échoue** — sinon on risque de « corriger » une branche
+inatteignable en pratique.
 
 ---
 
