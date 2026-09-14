@@ -10,6 +10,49 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > Leur état fait foi dans **`docs/STATUS.md`** §1 et §2. Ce fichier reprend à
 > partir de `STAT-S1`.
 
+## [V1.x — CC-2/3/4] — 2026-09-15 — Moteur CellChat natif (Path B)
+
+Décision utilisateur du 2026-09-14 (`docs/STATUS.md` §2al) : **choix B retenu**,
+**Path A (import CSV/TSV externe) impérativement conservé** et export conservé.
+Jalons **CC-2** (contrat), **CC-3** (moteur) et **CC-4** (tests + gardes) livrés
+ensemble — la règle contract-first exige code + test + doc dans le même commit.
+⚠️ **CC-1 (épinglage de la dépendance) n'est pas abouti** : le moteur est livré
+mais **non exécutable** tant que `CellChat` n'est pas installé
+(`run_cellchat()` lève `missing_dependency` avec guidage). L'application démarre
+et Path A continue de fonctionner — détail : `docs/STATUS.md` **§2ao**.
+
+### Ajouté
+- **`R/sc/sc_communication_engine.R`** — `run_cellchat(cellchat_input, seed,
+  nboot, …)` : `createCellChat()` → `subsetData()` →
+  `identifyOverExpressedGenes/Interactions()` → `computeCommunProb()` →
+  `computeCommunProbPathway()` → extraction → `finalize_communication_result()`
+  avec `computation = "engine"`. Réduction **immédiate** aux **12 champs
+  canoniques** du contrat Stage 11 ; objet moteur **éphémère** (jamais stocké).
+- **`cellchat_analysis_identity()`** — identité d'analyse **dérivée** de
+  `new_provenance_entry()` (jamais dupliquée, règle 3) + les deux seuls champs
+  réellement nouveaux : `engine_sha` et `database_version`.
+- `cellchat_engine_available()` / `cellchat_engine_states()` /
+  `cellchat_engine_error_state()` / `cellchat_engine_summary()`.
+- **29ᵉ contrat gelé** : `docs/contracts/CELLCHAT_ENGINE_CONTRACT.md`.
+- `config/defaults.R` : `TS_CELLCHAT_NBOOT_DEFAULT` (100),
+  `TS_CELLCHAT_SEED_DEFAULT` (1), `TS_CELLCHAT_MIN_GROUPS` (2). **Aucun** seuil
+  de RAM / cellules / clusters : benchmark d'abord (proposition §9.3).
+
+### Modifié
+- `R/sc/sc_communication.R` : **un seul** argument additif,
+  `computation = c("import", "engine")` (défaut `"import"`), qui bascule
+  `provenance$method` et `provenance$import_only`. **Aucun appel existant ne
+  change de comportement** — le freeze test Stage 11 qui assère
+  `import_only = TRUE` continue de passer.
+- `app.R` : `source()` du moteur **après** `R/sc/sc_communication_input.R`.
+- `docs/contracts/COMMUNICATION_RESULT_CONTRACT.md` : §1 et §5 requalifiés.
+
+### Corrigé au passage (documentation)
+- La proposition annonçait « +8 à +12 » entrées de lockfile : **mesuré**, 39
+  dépendances directes dont **32 déjà au lock** et **11 à installer**. Et le
+  paramètre de permutation s'appelle **`nboot`**, pas `nPerm` — piège signalé
+  par la proposition §9.4, désormais verrouillé par un test.
+
 ## [V1.x — NEW-1] — 2026-09-13 — Dose–réponse / time-course (drc)
 
 Rang 4 de l'ordre d'actionnabilité. **Première dépendance nouvelle depuis

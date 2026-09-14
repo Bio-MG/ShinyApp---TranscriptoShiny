@@ -77,6 +77,7 @@ source("R/sc/sc_communication_spatial.R")  # V1.x-A (CCC avancée Phase 1) : con
 source("R/sc/sc_communication_trajectory.R")  # V1.x-B (CCC avancée Phase 3) : contexte trajectoire/pseudo-temps, APRES sc_communication_spatial.R
 source("R/sc/sc_communication_velocity.R")  # V1.x-C (CCC avancée Phase 2) : contexte vélocité, APRES sc_communication_trajectory.R
 source("R/sc/sc_communication_perturbation.R")  # V1.x-D (CCC avancée Phase 4) : perturbation IN SILICO du réseau importé, APRES sc_communication_velocity.R
+source("R/sc/sc_communication_engine.R")  # Moteur CellChat natif (Path B) : APRES sc_communication_input.R (consomme build_cellchat_input). CellChat est une dependance PARESSeUSE : l'app demarre sans.
 source("R/sc/sc_abundance_design.R")  # Stage 13 (4E-0) : validation du design DA (reutilise check_design_confounding)
 source("R/sc/sc_abundance_milo.R")  # Stage 14 (4E-1) : Milo, GATED sur le design Stage 13
 source("R/sc/sc_abundance_milo_views.R")  # Stage 14 : vues pures du resultat Milo

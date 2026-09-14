@@ -41,7 +41,8 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 | `docs/proposals/CCC_9_RARE_CELLS_MILO_AUDIT.md` | **Audit Milo (règle 3) de la phase 9** : aucun moteur à dupliquer, mais Milo ne sert pas la question mono-condition ; périmètre non spécifié dans le dépôt | Avant toute reprise de la phase 9 |
 | `docs/proposals/CCC_9_POPULATION_RARITY_PROPOSAL.md` | **Proposition CCC 9 — question 1** (rareté par population annotée) : jalon descriptif, 9 éléments V1.x, 5 décisions — ✅ **livrée** (`8c1a969`) : les 5 décisions §12 ont été appliquées telles quelles | Référence de conception (état réel : `STATUS.md` §2ac) |
 | `docs/release/UPGRADE_AND_COMPATIBILITY.md` | §3 = parking officiel V1.x (4D-3, 4E-4, 4F) | Pour les propositions V1.x |
-| `docs/contracts/*.md` | **28** contrats gelés (contract-first) — ⚠️ non versionnés (`docs/` gitignoré) | Avant de toucher un domaine gelé |
+| `docs/contracts/*.md` | **29** contrats gelés (contract-first) — ⚠️ non versionnés (`docs/` gitignoré) | Avant de toucher un domaine gelé |
+| `docs/contracts/CELLCHAT_ENGINE_CONTRACT.md` | **29ᵉ** contrat (2026-09-15) — moteur CellChat natif, jalons **CC-1..CC-5** ; ⚠️ **CC-1 (pin) non abouti** : moteur livré mais non exécutable | Avant tout travail sur le moteur CellChat |
 | `docs/kanban_roadmap.html` | Tableau visuel (lecture seule, miroir de `STATUS.md`) | Démonstration / vue d'ensemble |
 | `docs/archive/` | **Archives locales** (créé le 2026-09-14) : fiches caduques, handoffs consommés, artefacts de build obsolètes. ⚠️ **Rien n'est supprimé**, seulement déplacé — toute référence pointe le nouveau chemin | Quand une fiche semble manquer |
 | `docs/AUDIT_VERIFICATION_BULK_SC.md` | **Audit externe Bulk/SC VÉRIFIÉ contre le code** (2026-09-14) : 20 confirmées, 4 nuancées, 0 infirmée, **5 trouvées en vérifiant**. Bilan + ordre en 8 jalons — `STATUS.md` §2an | **Avant tout travail Bulk DE / pseudobulk / multi** |
@@ -155,6 +156,40 @@ avance jalon par jalon, un jalon = un commit.
 | 7 | **UX 3B / 4B / 6B** | M | ~~décision 2~~ ✅ **tranchée le 2026-09-14** | 🧊 **GELÉ** — 3A/4A/6A livrées, 3B/4B/6B gelées. La refonte UX **ne reprend pas** sans décision nouvelle — `STATUS.md` §2am.2 |
 | 8 | **4E-4** — exécution async de la DA | M | ~~décision 1 (pool)~~ ✅ **tranchée le 2026-09-14** : **(b) pool applicatif partagé** + réserve « pool dédié » multi-échantillons | 🟢 **DÉBLOQUÉ** — `STATUS.md` §2am.1 |
 | 9 | ~~Boutons d'export DT sur les ~43 tables restantes + `pageLength` normalisé~~ | M | ~~décision ouverte~~ | ✅ **LIVRÉ le 2026-09-14 (DT-EXPORT)** — contrat `PLOT_DATATABLE_CONTRACT.md` §6 option B, 73 sites via `ts_datatable()`, `pageLength = 15` + boutons nommés sur les tables de résultats, aperçus exclus — `STATUS.md` §2ai |
+
+#### 2.0bis Chantier courant — moteur CellChat natif (décision §2al, `STATUS.md` §2ao)
+
+Découpé en jalons **CC-1 → CC-5**, un jalon = un commit. Source de conception :
+`docs/proposals/V1X_CELLCHAT_ENGINE_PROPOSAL.md` §7.
+
+| Rang | Jalon | Effort | Dépend de | État |
+|---|---|---|---|---|
+| 10 | **CC-1** — épinglage `CellChat` par SHA + insertion **chirurgicale** dans `renv.lock` | S | décision §2al | 🔴 **NON ABOUTI** — les **11 dépendances sont installées**, le C++ de CellChat **compile**, mais `R CMD INSTALL` échoue au *lazy loading* (message R non affiché sous Windows). ⚠️ `renv::install("<user>/<repo>")` **se bloque** sur ce poste (prompt d'identifiants git) — passer par un tarball épinglé par SHA. Détail et pistes : `STATUS.md` §2ao.4 |
+| 11 | ~~**CC-2** — contrat gelé `CELLCHAT_ENGINE_CONTRACT.md`~~ | S | ~~CC-1~~ | ✅ **LIVRÉ** — 29ᵉ contrat, `STATUS.md` §2ao.4 |
+| 12 | ~~**CC-3** — moteur `R/sc/sc_communication_engine.R` (12 champs, moteur éphémère)~~ | M | CC-2 | ✅ **LIVRÉ** |
+| 13 | ~~**CC-4** — test + gardes (conventions, duplication)~~ | S | CC-3 | ✅ **LIVRÉ** — 53 assertions, gardes à la baseline (0/324, 0/3) |
+| 14 | **CC-5** — module UI « calculer dans l'app » (Path B) + export conservé | M | **CC-1** | ⬜ **bloqué par CC-1** — inutile d'exposer une action qui lève `missing_dependency` |
+
+⚠️ **Deux mesures préalables qui corrigent la proposition** (détail `STATUS.md`
+§2ao) :
+
+1. **Empreinte réelle ≠ estimation §2.2.** La proposition annonçait « +8 à +12 »
+   en ne listant que `NMF` + transitifs + `collapse` + `ggalluvial`. Mesuré
+   contre le `DESCRIPTION` amont réel (CellChat 2.2.0.9001) : **39 dépendances
+   directes**, dont **32 déjà dans le lock** (la chaîne lourde —
+   `ComplexHeatmap`, `circlize`, `igraph`, `RcppEigen`, `RSpectra`, `FNN`,
+   `BiocNeighbors`… — est bien déjà payée) et **7 manquantes** → fermeture
+   transitive = **17 paquets hors lock**, dont **6 déjà installés mais non
+   enregistrés** (`corrplot`, `ggpubr`, `ggsci`, `ggsignif`, `polynom`,
+   `rstatix`). **11 à installer** + `CellChat`. L'estimation initiale était donc
+   juste… pour les mauvaises raisons (4ᵉ occurrence de la règle « re-mesurer
+   avant de planifier »).
+2. **Ne jamais lancer `renv::snapshot()` globalement.** Le projet est
+   **désynchronisé** : 20 paquets en dérive de version (`igraph` 2.2.1 vs 2.3.3,
+   `future` 1.75.0 vs 1.70.0…) et **48 paquets « utilisés mais non enregistrés »**
+   (`WGCNA`, `GSVA`, `sva`, `survminer`…). Un `snapshot()` aval capturerait
+   toute cette dette étrangère au jalon. ⇒ **insertion chirurgicale**, comme
+   NEW-1 (`drc`).
 
 Hors séquence, **gelé** : CCC 5–6 (sans suite). Hors séquence, **non demandé** :
 élargissement du cache (règle 8).

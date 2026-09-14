@@ -181,3 +181,25 @@ TS_DT_BUTTONS_DEFAULT     <- TRUE
 TS_HEATMAP_MAX_NAMES     <- 60L
 TS_HEATMAP_DISTANCES     <- c("euclidean", "pearson", "spearman")
 TS_HEATMAP_METHODS       <- c("complete", "ward.D2", "average")
+
+# --- Moteur CellChat natif (CC-1..CC-5) --------------------------------------
+# Aucun seuil « de confort » ici : seuls les parametres que le moteur exige ou
+# que l'utilisateur doit DECLARER. Les plafonds RAM / nombre de cellules /
+# nombre de clusters sont VOLONTAIREMENT ABSENTS : la proposition
+# (V1X_CELLCHAT_ENGINE_PROPOSAL.md §9.3) l'impose — « benchmark d'abord,
+# contrat ensuite ». Aucun ETA ni plafond ne sera ajoute avant mesure.
+#
+# TS_CELLCHAT_NBOOT_DEFAULT : nombre de permutations de `computeCommunProb()`
+# (parametre REEL = `nboot` ; le nom `nPerm` n'existe PAS dans la signature —
+# piege signale par la proposition §9.4 et verifie sur le code amont).
+# C'est la valeur par defaut de CellChat elle-meme ; ce n'est pas un choix
+# scientifique de l'application, et il est TRACE en provenance.
+# TS_CELLCHAT_SEED_DEFAULT : graine proposee par l'UI. Elle est un PARAMETRE
+# DU CALCUL (jamais un `set.seed()` global en session Shiny) : run_cellchat()
+# exige une graine explicite, cette constante ne fait que la proposer.
+# TS_CELLCHAT_MIN_GROUPS : CellChat ne peut rien inferer avec moins de deux
+# populations (deja bloquant dans CELLCHAT_INPUT_CONTRACT.md §3.3) ; re-verifie
+# ici car le moteur consomme l'entree sans la reconstruire.
+TS_CELLCHAT_NBOOT_DEFAULT <- 100L
+TS_CELLCHAT_SEED_DEFAULT  <- 1L
+TS_CELLCHAT_MIN_GROUPS    <- 2L

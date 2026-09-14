@@ -1595,6 +1595,176 @@ inatteignable en pratique.
 
 ---
 
+### 2ao. 🟡 Moteur CellChat natif — jalon OUVERT, découpé CC-1..CC-5 (2026-09-14)
+
+Ouverture du chantier décidé en §2al (choix **B** retenu, Path A **conservé**).
+Ordre de travail : `docs/proposals/V1X_CELLCHAT_ENGINE_PROPOSAL.md` §7. Suivi
+opérationnel : `docs/ROADMAP.md` **§2.0bis**.
+
+#### 2ao.1 — Mesure préalable : l'empreinte réelle corrige l'estimation §2.2
+
+La proposition annonçait « **+8 à +12** » entrées de lockfile. **Mesuré contre
+le `DESCRIPTION` amont réel** (`jinworks/CellChat` master, version
+**2.2.0.9001** — ligne v2, conforme à la décision §8 point 5 ; `v3
+SpatialCellChat` bien exclu) :
+
+| Mesure | Valeur |
+|---|---|
+| Dépendances directes réelles (`Depends` + `Imports` + `LinkingTo`) | **39** |
+| Déjà dans `renv.lock` | **32** ✅ |
+| Manquantes (directes) | **7** — `collapse`, `ggalluvial`, `ggnetwork`, `ggpubr`, `NMF`, `sna`, `methods` |
+| Fermeture transitive hors lock | **+10** — `coda`, `corrplot`, `ggsci`, `ggsignif`, `gridBase`, `network`, `polynom`, `registry`, `rngtools`, `rstatix`, `statnet.common` |
+| **Total hors lock** | **17** (dont 9 paquets **base/recommendés** — `graphics`, `grDevices`, `grid`, `methods`, `parallel`, `splines`, `stats`, `tools`, `utils` — que renv n'enregistre jamais) |
+
+**Deux lectures, et elles ne disent pas la même chose :**
+
+1. **La thèse de fond de la proposition est CONFIRMÉE** — la chaîne lourde est
+   déjà payée : `ComplexHeatmap` 2.22.0, `circlize`, `igraph`, `Rcpp`,
+   **`RcppEigen`**, `RSpectra`, `FNN`, `BiocNeighbors`, `future`/
+   `future.apply`, `reticulate`, `plotly`, `shiny`, `bslib`… sont **déjà** au
+   lock. « Dépendance lourde » était bien une nuance juste.
+2. **Le chiffre, lui, était faux** — et pour une raison instructive : il ne
+   comptait que les paquets *que l'auteur connaissait*. À périmètre mesuré,
+   **11 paquets à installer** + `CellChat`. Parmi les 17 manquants, **6 sont
+   déjà installés dans la bibliothèque mais non enregistrés** (`corrplot`,
+   `ggpubr`, `ggsci`, `ggsignif`, `polynom`, `rstatix`) — ils arrivent avec
+   `GSVA`/`WGCNA`/`survminer`, pas avec CellChat.
+   ⇒ **4ᵉ occurrence de la règle « re-mesurer avant de planifier »**
+   (`base_size`, `pageLength`, `plotly`, maintenant `CellChat`).
+
+⚠️ **Point d'attention reporté** : `LinkingTo: Rcpp, RcppEigen` ⇒ **CellChat
+doit être compilé** (Rtools requis). Rtools **4.4** est présent
+(`C:\RBuildTools\4.4`, `x86_64-w64-mingw32.static.posix`), mais **n'est pas dans
+le `PATH`** au démarrage de R — à positionner avant tout `renv::install()`.
+
+#### 2ao.2 — ⛔ Interdiction nouvelle : jamais de `renv::snapshot()` global
+
+`renv::status()` mesuré le 2026-09-14 → **`synchronized = FALSE`** :
+
+- **20 paquets en dérive de version** lockfile ≠ bibliothèque (`igraph` 2.2.1 vs
+  **2.3.3**, `future` 1.75.0 vs 1.70.0, `bit64`, `bslib`, `xml2`, `sf`…) ;
+- **48 paquets « utilisés mais non enregistrés »** — `WGCNA`, `GSVA`, `sva`,
+  `survminer`, `Hmisc`, `msigdbr`, `decoupleR`, `variancePartition`… ;
+- 1 paquet GitHub en dérive de référence (`spacexr` : `HEAD` vs `master`).
+
+Un `renv::snapshot()` capturerait **toute cette dette**, étrangère au jalon, dans
+le commit du moteur CellChat. **Règle du jalon : insertion chirurgicale**
+(précédent NEW-1 / `drc`, insertion manuelle 419 → 425). La dérive constatée est
+consignée ici ; elle **n'est pas** corrigée dans ce jalon.
+
+#### 2ao.3 — Jalons
+
+| # | Contenu | État |
+|---|---|---|
+| **CC-1** | Épinglage `CellChat` par **SHA** + insertion chirurgicale au lockfile | 🟡 **non abouti** — voir §2ao.4 |
+| **CC-2** | Contrat gelé `docs/contracts/CELLCHAT_ENGINE_CONTRACT.md` | ✅ **LIVRÉ** |
+| **CC-3** | `R/sc/sc_communication_engine.R` — `run_cellchat()`, réduction immédiate aux 12 champs | ✅ **LIVRÉ** |
+| **CC-4** | Test `tests/testthat/test-sc-communication-engine.R` (éponyme C9 + assertions de gel) + gardes | ✅ **LIVRÉ** |
+| **CC-5** | Module UI Path B + export conservé (**jalon suivant**, non entamé) | ⬜ |
+
+#### 2ao.4 — Bilan de la session (2026-09-14 → 2026-09-15)
+
+**Livré dans le même commit** (contract-first : code + test + doc) :
+
+| Fichier | Rôle |
+|---|---|
+| `R/sc/sc_communication_engine.R` | moteur natif, ~470 lignes |
+| `tests/testthat/test-sc-communication-engine.R` | 53 assertions + 1 skip (run réel, exige CellChat) |
+| `docs/contracts/CELLCHAT_ENGINE_CONTRACT.md` | **29ᵉ contrat gelé** |
+| `config/defaults.R` | `TS_CELLCHAT_NBOOT_DEFAULT`, `TS_CELLCHAT_SEED_DEFAULT`, `TS_CELLCHAT_MIN_GROUPS` |
+| `app.R` | `source()` du moteur **après** `sc_communication_input.R` |
+| `R/sc/sc_communication.R` | **un** argument additif `computation = c("import","engine")` (défaut `"import"`) |
+| `docs/contracts/COMMUNICATION_RESULT_CONTRACT.md` | §1 et §5 requalifiés (le calcul dans l'app existe, l'import ne génère toujours rien) |
+
+📌 **Application minimale de la décision ouverte n°4** (`ROADMAP.md` §5) :
+`docs/` reste non versionné **sauf** `STATUS.md`, `ROADMAP.md`,
+`CONVENTIONS.md` — et, dans ce commit, les **deux contrats concernés par le
+jalon** (`CELLCHAT_ENGINE_CONTRACT.md`, `COMMUNICATION_RESULT_CONTRACT.md`),
+ajoutés en `git add -f`. Sans cela la règle contract-first serait
+mécaniquement inapplicable (le doc ne peut pas être dans le même commit).
+Précédent : `PLOT_DATATABLE_CONTRACT.md` est déjà suivi. **Réversible** :
+`git rm --cached` suffit à revenir en arrière.
+
+**Gardes au vert, à la baseline exacte** : conventions **0 erreur / 324 avert.**
+(C9 revenues à **37** après correction — voir ci-dessous) ; duplication
+**0 erreur / 3 avert.** ; tests ciblés **270 assertions, 0 échec**.
+
+**Trois pièges payés en chemin** :
+
+1. **`nboot`, pas `nPerm`.** La proposition §9.4 signalait le risque sans le
+   lever ; vérifié sur la signature amont de `computeCommunProb()` : le
+   paramètre de permutation s'appelle **`nboot`** (défaut 100) et la graine
+   **`seed.use`** (défaut 1L). CellChat appelle lui-même `set.seed(seed.use)` en
+   interne ⇒ la graine est bien un **paramètre du calcul**. Le test de gel
+   interdit désormais l'apparition de `nPerm`.
+2. **Le nom d'interaction n'est pas découpable.** Les colonnes
+   `ligand`/`receptor`/`pathway` sont lues dans `object@LR$LRsig` (appariement
+   exact sur `interaction_name`), jamais par `strsplit()` — un
+   `interaction_name` peut contenir plusieurs sous-unités (`L_R1_R2`).
+3. **C9 a augmenté à 38** au premier passage : le fichier moteur n'avait pas de
+   test **éponyme**. Corrigé en adoptant le motif déjà documenté pour 5
+   contrats (assertions de gel dans le test éponyme du domaine) — le fichier
+   s'appelle donc `test-sc-communication-engine.R`, pas
+   `test-cellchat-engine-contract-freeze.R`.
+
+**🔎 Constat annexe (à traiter hors jalon).** `parse_cellchat_object()`
+(`R/sc/sc_communication.R:342`) suppose que `net$prob` est indexé
+`[ligand, receptor, "sender|receiver"]`. La structure **réelle** de CellChat
+est `[source, target, interaction_name]` (vérifié : `dimnames(Prob) <-
+list(levels(group), levels(group), rownames(pairLRsig))`). La route « objet S4 »
+de Path A échouerait donc sur un vrai objet CellChat (les noms de paires ne
+contiennent pas `|`). Non corrigé ici — c'est un gel de Stage 11, à ouvrir
+comme jalon distinct avec son test qui échoue d'abord.
+
+**CC-1 non abouti — état précis (important pour la reprise).**
+
+| Étape | Résultat |
+|---|---|
+| Rtools 4.4 | ✅ présent et détecté (`C:\RBuildTools\4.4`, `has_build_tools = TRUE`) — ⚠️ **absent du `PATH`** au démarrage de R : à ajouter `…\x86_64-w64-mingw32.static.posix\bin` **et** `…\usr\bin` |
+| Les **11 dépendances** à installer | ✅ **installées** dans la bibliothèque du projet (`collapse` 2.1.8 — compilé depuis les sources en 2,3 min ; `NMF` 0.28, `sna` 2.8, `network` 1.20.0, `statnet.common` 4.13.0, `ggnetwork` 0.5.14, `ggalluvial` 0.12.6, `gridBase` 0.4-7, `registry` 0.5-1, `rngtools` 1.5.2, `coda` 0.19-4.1) |
+| Compilation de **CellChat** | ✅ le C++ (Rcpp/RcppEigen) **compile** — `CellChat.dll` produite |
+| Installation de **CellChat** | ❌ **échec** : `ERROR: lazy loading failed for package 'CellChat'` après « moving datasets to lazyload DB » |
+| `renv.lock` | **intact** (425 entrées) — volontairement non touché |
+
+**Deux causes écartées, une reste ouverte :**
+
+1. ❌ Ce n'est **pas** la résolution des dépendances : installées une par une,
+   elles aboutissent en 2,5 min. ❌ Ce n'est **pas** un import manquant : les
+   **38 imports** de CellChat se chargent tous (`loadNamespace` OK sur chacun).
+2. ⚠️ **Non diagnostiqué** : `R CMD INSTALL` **n'affiche pas** le message
+   d'erreur R sous Windows (seul « ERROR: lazy loading failed » apparaît ; ni
+   `stdout=TRUE, stderr=TRUE`, ni `--verbose` ne le capturent). La piste à
+   ouvrir est donc l'exécution manuelle de l'étape de lazy-load
+   (`tools:::.install_packages` / `loadNamespace` sur le répertoire `00new`).
+
+**Trois pièges d'outillage à retenir** (coût réel : ~1 h) :
+
+- `renv::install("<user>/<repo>")` **se bloque sans aucune activité disque** sur
+  ce poste — deux tentatives, ~30 min chacune, rien d'installé. La cause est
+  vraisemblablement le **prompt d'identifiants git** (`gitcreds` : un
+  `gitcreds-stderr-*` apparaît puis plus rien) : `remotes` passe par git, qui
+  attend une saisie impossible en `Rscript` non interactif.
+- `capture.output(..., file = log)` **bufferise tout** : une installation longue
+  paraît « bloquée » alors qu'elle progresse. Toujours laisser la sortie visible.
+- `R.home("bin")` vaut `…/bin/x64` sous Windows : `file.path(R.home("bin"),
+  "Rcmd.exe")` est correct, `…/bin/Rcmd.exe` n'existe pas.
+
+**Conséquence produit** : le moteur est livré mais **non exécutable** —
+`run_cellchat()` lève `missing_dependency` (état prévu, avec guidage
+d'installation), l'application démarre normalement et **Path A continue de
+fonctionner**. Les dépendances déjà installées ne sont **pas** enregistrées dans
+`renv.lock` : on n'épingle pas des orphelins sans le paquet qui les requiert.
+
+**Invariants à ne pas perdre** (proposition §3, §9, §10) : Path A **conservé** ·
+export **conservé** · `build_cellchat_input()` **inchangé** · 12 champs
+canoniques = **contrat commun aux deux voies** · objet moteur **jamais** dans un
+`reactiveValues` · `future::plan("sequential")` **à l'intérieur** du job mirai ·
+graine **explicite et tracée** · `database_version` **tracée** ·
+`updateCellChatDB()` **interdit** · comparaison inter-condition **hors moteur**
+(porte DA) · aucun ETA ni seuil de clusters **avant benchmark**.
+
+---
+
 ## 3. 4D-3 — décision et contrat d'entrée upstream
 
 > **✅ Question du format : TRANCHÉE DANS LE CODE (2026-09-10, `6bf18ca`).**
