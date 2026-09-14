@@ -1535,9 +1535,15 @@ finalize_communication_result <- function(
     seurat_obj = NULL,
     extra_warnings = character(0),
     external_consensus = FALSE,
-    analysis_id = "sc-communication-import"
+    analysis_id = "sc-communication-import",
+    computation = c("import", "engine")
 ) {
   source_method <- match.arg(source_method)
+  # ADDITIF (moteur CellChat, CC-3) : "import" = valeur historique, aucun
+  # appel existant ne change de comportement. "engine" marque un resultat
+  # CALCULE dans l'application par R/sc/sc_communication_engine.R (Path B).
+  computation <- match.arg(computation)
+  is_engine <- identical(computation, "engine")
 
   if (!is.data.frame(canonical_table) || nrow(canonical_table) == 0L) {
     .communication_stop(
@@ -1597,7 +1603,7 @@ finalize_communication_result <- function(
 
   entry <- new_provenance_entry(
     analysis_id = analysis_id,
-    method = paste0("import_", source_method),
+    method = if (is_engine) source_method else paste0("import_", source_method),
     parameters = list(
       source_method = source_method,
       source_files = source_files,
@@ -1621,7 +1627,8 @@ finalize_communication_result <- function(
   )
   entry$analysis_type <- "cell_cell_communication"
   entry$status <- "valid"
-  entry$import_only <- TRUE
+  entry$import_only <- !is_engine
+  entry$computation_path <- if (is_engine) "B" else "A"
   # Marqueur de nature de la valeur (route LIANA) : l'application n'agrege
   # jamais, mais elle doit DIRE quand la valeur importee est un agregat
   # inter-methodes calcule par la source.
