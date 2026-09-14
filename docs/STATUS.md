@@ -1324,7 +1324,7 @@ atteint), puis correction de la dérive documentaire relevée à cette occasion.
 | **Archivage** | `docs/archive/` **créé** (2026-09-14) — ⚠️ **rien n'est supprimé**, seulement déplacé : `ROADMAP_HANDOFF_NEXT rev2.md` (auto-déclaré fusionné), `ROADMAP_BULK_V2_STATS.md` (auto-déclaré caduque, **ses 3 références repointées** : `ROADMAP.md`, `ROADMAP_MULTI_DATASET.md` ×2), `app.log`, `app.tex`, `conversation-export.md`, `_e2e_out.txt`. Nouvelle entrée d'index dans `ROADMAP.md` §1 |
 | **Handoff ré-écrit** | `docs/ROADMAP_HANDOFF_NEXT.md` (**3ᵉ** ré-écriture) : il listait CCC 7–8 / phase 9 comme « prochaine étape » alors que **les deux sont livrés**. Nouveau contenu = les **3 arbitrages en attente**, ancres **4E-4 re-vérifiées** (`R/core/jobs.R:50`, `R/spatial/spatial_async.R:112/232/294`, `modules/sc/mod_sc_da_milo.R:185`), critères d'acceptation, prompt à coller. Ancienne version **archivée** (`docs/archive/ROADMAP_HANDOFF_NEXT_2026-09-13_CCC9.md`) |
 | **Kanban remis à jour** | `docs/kanban_roadmap.html` — miroir de ce fichier, **figé au 2026-09-12** : `DEFAULT_STATUS` complété (STAT-S2/S3, NEW-1/2, DT-EXPORT), **carte DT-EXPORT ajoutée**, descriptions datées + références de commit, en-tête/pied corrigés (**22 tâches + 7 baseline**, 17/22 done). Syntaxe JS validée (`node --check`) |
-| **Bloqué / en attente** | **4E-4** (pool), **UX 3B/4B/6B**, **NEW-3** (interdit sans besoin concret) = arbitrages utilisateur ; `.ensure_10x_features` non commité = à coordonner avec son auteur (§2aj) |
+| **Bloqué / en attente** | **4E-4** (pool), **UX 3B/4B/6B**, **NEW-3** (interdit sans besoin concret) = arbitrages utilisateur ; `.ensure_10x_features` non commité = à coordonner avec son auteur (§2aj). ➡️ **Les trois arbitrages ont été rendus le même jour : voir §2am** |
 
 **Points d'attention** : (1) le **flake chromote est récurrent** (déjà vu en
 §2ac) — il ne produit pas de FAIL mais ~15 min de stall ; un `skip=1` sur un
@@ -1334,7 +1334,175 @@ auteur, §2aj + `ROADMAP.md` §5 décision 12) — le commit de cette session
 (`63c31a1`) l'**exclut** délibérément ; (3) **aucun** code produit n'a changé
 ici : uniquement de la documentation et la baseline ; (4) le **handoff** et le
 **kanban** restent **non versionnés** (décision ouverte n°4) — un clone neuf ne
-les aura pas, pas plus que les **28** contrats.
+les aura pas, pas plus que les **28** contrats ; (5) l'**audit sc
+multi-échantillon / bulk** annoncé par l'utilisateur **n'existe pas dans le
+dépôt** (§2am.4) — à fournir avant toute planification sur ce sujet.
+
+### 2al. 🟢 DÉCISION — Moteur CellChat : choix B retenu, état A **conservé** (2026-09-14)
+
+**Arbitrage utilisateur rendu le 2026-09-14** — met fin à l'incertitude notée en
+§2ak et tranche la proposition
+`docs/proposals/V1X_CELLCHAT_ENGINE_PROPOSAL.md`.
+
+| # | Point | Décision |
+|---|---|---|
+| 1 | **Choix B** — exécuter CellChat dans l'application | ✅ **Retenue** |
+| 2 | Nouvelle dépendance | ✅ **Acceptée** si justifiée (amendement 2026-09-13) |
+| 3 | **Conserver l'import CSV/TSV externe (état A)** | ✅ **Impératif** — B est un **ajout**, pas un remplacement |
+| 4 | **Conserver l'export** des résultats après calcul | ✅ **Impératif** |
+| 5 | Version | v1/v2 (`jinworks/CellChat`) ; **v3 `SpatialCellChat` exclu** |
+
+L'utilisateur indique que le calcul dans l'application était **sa volonté
+initiale** pour CellChat ; l'import externe reste la voie de secours et
+l'interopérabilité avec des résultats produits ailleurs.
+
+**Règle des deux voies** (à ne pas perdre) : les **12 champs canoniques** du
+contrat Stage 11 restent la **cible commune**. Le moteur doit produire
+**exactement** ce que l'import produit — toute divergence entre les deux voies
+est un **bug**, pas une variante.
+
+**Corrections factuelles établies en préparant la décision** :
+
+| Affirmation | Verdict |
+|---|---|
+| « `CellChat` = dépendance Bioconductor » | ❌ **Faux** — GitHub-only (`devtools::install_github("jinworks/CellChat")`). Corrigé dans **3 docs** le 2026-09-14 |
+| « Ce serait la première dépendance GitHub du projet » | ❌ **Faux** — `renv.lock` en a déjà **5** : `BPCells` 0.3.1, `spacexr` 2.2.1, `STdeconvolve` 1.3.2, `SeuratDisk` 0.0.0.9021, `schard` 1.1.0 |
+| « Dépendance lourde » | ⚠️ **À nuancer** — `ComplexHeatmap`, `circlize`, `igraph`, `future`/`future.apply`, `cluster`/`doParallel`/`foreach` **déjà présents** ; manquent `NMF` + transitifs, `collapse`, `ggalluvial` → **+8 à +12** sur 425 |
+| « Les tableaux 3-D de l'objet sont le goulot RAM » | ❌ **Faux** — `net$prob` est indexé par **groupes** : 20 clusters × ~2 000 LR ≈ **6 Mo** par tableau. Le goulot est la **matrice d'entrée**, pas le résultat |
+| « Sous-ensemble LR » présenté comme astuce | ⚠️ **Déjà une étape officielle** — `CellChat::subsetData()`. À **réutiliser**, pas à réimplémenter |
+| GPU 5070 Ti | ⛔ **Inutile** — CellChat est 100 % CPU, sans support CUDA |
+
+⚠️ **Deux expertises externes se contredisent sur la RAM** (facteur ~3 à 60 000
+cellules : « > 16 Go, risque d'OOM » contre « 32 Go confortables jusqu'à ~100 000
+cellules »). **Aucun chiffre ne doit être figé dans le contrat** : le jalon
+comporte une **étape de mesure** (durée + RAM sur un jeu 10X public, puis un jeu
+moyen) **avant** tout seuil — `max_clusters`, mode RAM-safe, plafond de cellules.
+Règle du dépôt déjà payée trois fois (`base_size`, `pageLength`, `plotly`) :
+**re-mesurer avant de planifier.**
+
+**Suite** : contraintes d'ingénierie, ordre de travail et arbitrage complet des
+trois expertises dans `docs/proposals/V1X_CELLCHAT_ENGINE_PROPOSAL.md` §3, §7,
+§9, §10.
+
+**Renforcement (audit externe n°3, même date)** :
+
+1. **Terminologie** : **Path A** (import externe) / **Path B** (moteur natif) —
+   « état A / état B » sous-entendait un remplacement, ce que la décision exclut.
+2. **`analysis_identity` : déjà couverte à ~80 %** — vérifié dans
+   `R/core/provenance.R:115` : `new_provenance_entry()` porte déjà `analysis_id`,
+   `seed` (**paramètre natif**), `parameters` (→ `nPerm`, `database_version`),
+   `dataset_hash`/`hash_exact`/`dataset_dims` (= **l'`input_fingerprint`**) et
+   `versions`. ⇒ **étendre, ne pas dupliquer** (règle 3). Seuls **`engine_sha`**
+   et **`database_fingerprint`** sont réellement nouveaux ; le second est
+   **reporté en V2** (non bloquant pour le MVP). CellChat devient ainsi le
+   **premier cas d'implémentation** de l'identité d'analyse transversale.
+3. **Aucun ETA, aucun seuil arbitraire** (« clusters > X ») avant benchmark :
+   afficher des **faits** (`n_cells`, `n_groups`, interactions candidates), pas
+   des prédictions.
+4. Ne **jamais** écrire « CellChat est compatible BPCells » : BPCells = stockage
+   **résident**, jusqu'au point où CellChat exige une matrice en mémoire.
+
+---
+
+### 2am. ⚖️ Arbitrages utilisateur — 4E-4, UX, NEW-3 (2026-09-14)
+
+**Arbitrages rendus le 2026-09-14** sur les trois points restés ouverts en
+§2ak. Ils **débloquent** le jalon 4E-4 et le jalon NEW-3, et **tranchent**
+partiellement le volet UX.
+
+| # | Point | Décision de l'utilisateur | Effet |
+|---|---|---|---|
+| 1 | **4E-4** — exécution async de la DA | **(b) pool applicatif partagé** | 🟢 **DÉBLOQUÉ** |
+| 2 | **UX 3B / 4B / 6B** | **4B retenue** ; 3B mise en doute ; 6B non tranchée | 🟡 voir ci-dessous |
+| 3 | **NEW-3** — réseau PCSF / interactome | **Interactome embarqué** ; téléchargement en ligne acceptable **si local-first** | 🟢 **DÉBLOQUÉ** |
+
+#### 2am.1 — 4E-4 : pool applicatif partagé, **avec réserve explicite**
+
+Décision : **(b) pool applicatif**. Un seul pool mirai partagé par
+l'application (conformité avec la règle « un seul pool de workers : mirai »).
+
+⚠️ **Réserve de l'utilisateur, à ne pas perdre** — citation :
+
+> « même si le pool mirai est pas mal si l'on a à gérer plusieurs échantillons
+> exemple, 3 réplicats × 2 conditions (CONTRÔLE et traitement) »
+
+**Conséquence d'ingénierie** : l'implémentation **(b) ne doit pas fermer la
+porte au parallélisme par échantillon**. Le cas d'usage nommé est
+**6 échantillons** (3 réplicats × 2 conditions Contrôle / Traitement) traités
+**en parallèle**. La conception doit donc :
+
+1. router la DA par le pool **partagé** (choix par défaut, règle du dépôt) ;
+2. **réserver** la possibilité d'un **pool dédié** (dimensionné, cycle de vie
+   propre) pour les exécutions multi-échantillons — sans l'implémenter dans le
+   même jalon si elle n'est pas nécessaire ;
+3. ne **pas** introduire de second mécanisme de workers (jamais
+   `MulticoreParam`, jamais `enableWGCNAThreads()` — règles dures inchangées).
+
+**Point d'ancrage déjà vérifié** (`docs/ROADMAP_HANDOFF_NEXT.md`) :
+`R/core/jobs.R:50` `run_job()` ; `R/spatial/spatial_async.R:112,232,294` ;
+`modules/sc/mod_sc_da_milo.R:185` ; `R/sc/sc_abundance_milo.R:277`.
+Exclusion maintenue : **scCODA** reste hors du périmètre async tant que
+reticulate/TensorFlow s'exécute dans le processus appelant.
+
+#### 2am.2 — UX : 4B retenue, 3B jugée non nécessaire — **état MESURÉ**
+
+L'utilisateur écrit : « UX 3B (ok réellement nécessaire ?) ou 4B (ok, FAIT) ».
+**Mesure faite dans l'arbre le 2026-09-14** (pas d'hypothèse) :
+
+| Item | État mesuré | Preuve |
+|---|---|---|
+| **UX 3A** | ✅ **Livrée** | `modules/import/mod_geo.R:25-30` |
+| **UX 4A** | ✅ **Livrée** | `modules/import/mod_geo.R:90-96` (bouton de saut LOT 4A) |
+| **UX 6A** | ✅ **Livrée** | — |
+| **UX 3B** | ⬜ Non livrée | — |
+| **UX 4B** | ⬜ **Non livrée** | l'accordéon de mapping est toujours `modules/sc/mod_sc.R:50-52` |
+| **UX 6B** | ⬜ Non livrée | — |
+
+⚠️ **Écart à signaler** : l'utilisateur indique « 4B (ok, FAIT) », or **4B
+n'est pas dans l'arbre** — ce qui est livré est **4A**. Deux
+interprétations possibles : (i) 4A était visée et la décision est de
+**confirmer 4A sans faire 4B** ; (ii) 4B est réellement voulue et reste à
+faire. **Cet écart est soumis à confirmation** avant toute modification de la
+chaîne réactive (cf. §2ak, points d'attention).
+
+**Réponse à « 3B est-elle réellement nécessaire ? »** → **Non, a priori.** La
+proposition elle-même conditionnait 3B à « si 3A ne suffit pas » ; 3A est
+livrée et couvre le besoin. **Recommandation : ne pas faire 3B**, sauf retour
+utilisateur concret. **6B reste non tranchée**.
+
+#### 2am.3 — NEW-3 : interactome embarqué, **local-first**
+
+Décision : **interactome embarqué** dans l'application. Le téléchargement en
+ligne (« comme GEO ») est **acceptable en complément**, « du moment qu'une
+solution **local first** existe ».
+
+**Contraintes dérivées** :
+
+1. Un chemin **100 % hors ligne** doit exister : l'interactome est livré avec
+   l'application (données/paquet), **aucun réseau n'est requis** pour produire
+   un résultat.
+2. Le téléchargement en ligne, s'il est ajouté, est un **enrichissement
+   optionnel** : échec réseau ⇒ repli silencieux sur l'embarqué, jamais
+   d'erreur bloquante.
+3. **Mesurer le poids** de l'interactome avant de l'embarquer (règle du dépôt :
+   re-mesurer avant de planifier). Le choix de la source (STRING, BioGRID,
+   OmniPath…) dépend du volume et de la licence — **à arbitrer sur chiffres**,
+   pas à l'intuition.
+4. Le backlog conditionnel est levé : NEW-3 n'est plus « interdit sans besoin
+   utilisateur concret » — le besoin est exprimé.
+
+#### 2am.4 — Point ouvert : audit annoncé, **absent du dépôt**
+
+L'utilisateur annonce : « POUR LA SUITE j'ai un audit sc multi échantillon et
+bulk. »
+
+**Vérification faite le 2026-09-14** : **aucun fichier d'audit sc
+multi-échantillon / bulk n'existe dans le dépôt.** Le seul audit présent est
+`docs/ROADMAP_HANDOFF_STAGE_CCC_9_AUDIT.md`, qui porte sur la rareté par
+population (CCC 9) et **ne concerne pas** ce sujet.
+
+⇒ **En attente de fourniture** par l'utilisateur. Aucune planification ne sera
+engagée sur la base d'un audit non lu (règle : ne pas supposer).
 
 ---
 
@@ -1375,12 +1543,21 @@ réponse **oui, démontrée** :
 |---|---|
 | Format 10X → CellChat | ✅ **Résolu dans le code** |
 | Étiquettes de population | ✅ Gérées (garde-fou + `min_cells_per_group`) |
-| Dépendance CellChat dans `renv.lock` | ⛔ Toujours absente — **aucun appel CellChat n'est fait** |
+| Dépendance CellChat dans `renv.lock` | ⛔ Toujours absente — **aucun appel CellChat n'est fait** — 🟢 mais **décision rendue** (§2al, 2026-09-14) : à ajouter, épinglée par **SHA** (GitHub, **pas** Bioconductor) |
 | Contrat d'entrée de l'app upstream | ⛔ Toujours non gelé — voir ci-dessous |
 
 **Décision (2026-09-10)** : l'application upstream (fasta/fastq bruts → données
 pour Cerberus) est **en cours de développement par l'utilisateur**. Décision
 retenue : **ne pas démarrer les phases CCC 5–6 ni 4D-3 maintenant.**
+
+> ⚠️ **Qualification du 2026-09-14 (décision §2al).** Cette interdiction est
+> **exacte pour la voie « ingestion d'artefacts upstream »** — on y lit des
+> fichiers produits par l'app upstream, son contrat est donc décisif — et
+> **inopérante pour la voie « moteur »** : `build_cellchat_input(obj)` consomme
+> l'**objet Seurat déjà en mémoire**, aucun artefact upstream n'entre en jeu.
+> Le moteur est donc débloqué par la **décision de dépendance** (§2al), **pas**
+> par le contrat upstream. Lire le paragraphe ci-dessus comme visant la voie
+> ingestion.
 
 *Raison* : ce qui bloque n'est pas l'avancement de l'upstream mais le fait que
 son **contrat d'entrée n'est pas gelé**. Construire contre une cible mouvante
@@ -1413,13 +1590,21 @@ parking.
 
 ## 4. 4E-4 — décision de pool à prendre (pas technique, décisionnelle)
 
-Trois options, aucune tranchée :
+> ⚖️ **TRANCHÉ LE 2026-09-14 — voir §2am.1.** Option retenue : **(b) pool
+> applicatif unique partagé**, avec la **réserve explicite** de l'utilisateur :
+> un **pool mirai dédié** reste pertinent pour traiter **plusieurs échantillons
+> en parallèle** (ex. **3 réplicats × 2 conditions** = 6 échantillons
+> Contrôle / Traitement). ⇒ L'implémentation ne doit **pas fermer la porte** au
+> parallélisme par échantillon, mais n'introduit **pas** de second mécanisme de
+> workers (jamais `MulticoreParam`, jamais `enableWGCNAThreads()`).
 
-| Option | Coût | Risque |
-|---|---|---|
-| Pool mirai dédié au SC (non-Spatial) | Moyen | Deux pools à gérer |
-| Pool applicatif unique partagé | Faible | Contention avec Spatial |
-| Rester synchrone (V1.0, assumé) | Nul | DA longue bloque l'UI |
+Trois options, l'une tranchée :
+
+| Option | Coût | Risque | Verdict |
+|---|---|---|---|
+| Pool mirai dédié au SC (non-Spatial) | Moyen | Deux pools à gérer | 🟡 **Réserve** — reste pertinent pour le multi-échantillons |
+| Pool applicatif unique partagé | Faible | Contention avec Spatial | ✅ **RETENUE** |
+| Rester synchrone (V1.0, assumé) | Nul | DA longue bloque l'UI | ❌ Écartée |
 
 Contrainte actée : **scCODA exclu** de l'async tant que reticulate/TensorFlow
 tourne dans le processus appelant (chaque daemon = processus Python

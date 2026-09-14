@@ -29,7 +29,7 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 | `docs/ROADMAP_presentation_stats.md` | Plots & stats : PLOT-Q/S, STAT-Q/S, NEW-1..3 | Pour tout travail présentation/statistique |
 | `docs/ROADMAP_CCC_ADVANCED.md` | CCC avancée, phases 1–10 + conditions de déblocage | Pour tout travail communication |
 | `docs/ROADMAP_HANDOFF_STAGE_11_20.md` | Stages 8–20 (V1.0, livré) + **HANDOFF V1.x** | Historique V1.0 ; entrées V1.x |
-| `docs/ROADMAP_HANDOFF_NEXT.md` | **Prochaine session** : les **3 arbitrages en attente** (4E-4 / UX 3B-4B-6B / NEW-3), ancres re-vérifiées, prompt à coller — ré-écrit le 2026-09-14 | **Au démarrage de la prochaine session** |
+| `docs/ROADMAP_HANDOFF_NEXT.md` | **Prochaine session** : les **3 arbitrages** (4E-4 / UX 3B-4B-6B / NEW-3) — ⚖️ **tous rendus le 2026-09-14** (`STATUS.md` §2am) ; ancres re-vérifiées, prompt à coller. ➡️ **Périmé sur son objet** : voir désormais **§2am.1 (4E-4)** et **§2am.3 (NEW-3)** | **Au démarrage de la prochaine session** — à ré-écrire sur les jalons **débloqués** |
 | `docs/ROADMAP_MULTI_DATASET.md` | Design MD-1..MD-4 (multi-pipeline Bulk + pseudobulk + SC double jeu, fusion décisions 8+5) | Avant tout travail multi-dataset |
 | `docs/ROADMAP_HANDOFF_STAGE_PLOT_Q.md` | Rapport de stage PLOT-Q (6 sections) | Exemple du format de rapport attendu |
 | `docs/ROADMAP_HANDOFF_STAGE_STAT_Q.md` | Rapport de stage STAT-Q (6 sections) | Historique du volet statistique |
@@ -58,13 +58,24 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 > (`5a64855`), puis **DT-EXPORT** (`f644b55`) et les **correctifs du retour
 > feedback** (`4ed66ba`).
 >
-> **Il ne reste AUCUN jalon débloqué.** Les trois derniers items de la séquence
-> exigent un **arbitrage utilisateur** (voir §5) :
+> **⚖️ Arbitrages rendus le 2026-09-14 — `STATUS.md` §2am** : les trois items
+> ci-dessous sont **tranchés**. Deux jalons sont donc **débloqués** (4E-4,
+> NEW-3) ; le volet UX reste partiellement ouvert :
 >
-> 1. **4E-4** — exécution async de la DA : choix du pool (`STATUS.md` §4) ;
-> 2. **UX 3B / 4B / 6B** — options jamais tranchées ;
-> 3. **NEW-3** (réseau PCSF) — backlog conditionnel : sa fiche **interdit de le
->    lancer sans besoin utilisateur concret**.
+> 1. ~~**4E-4** — exécution async de la DA~~ → 🟢 **(b) pool applicatif
+>    partagé**, *avec réserve* : un pool mirai **dédié** reste pertinent pour
+>    plusieurs **échantillons** en parallèle (3 réplicats × 2 conditions) —
+>    `STATUS.md` §2am.1 ;
+> 2. **UX 3B / 4B / 6B** → 🟡 **4B retenue** (⚠️ **mesurée non livrée** : c'est
+>    **4A** qui l'est — écart à confirmer) ; **3B jugée non nécessaire** (3A
+>    suffit) ; **6B non tranchée** — `STATUS.md` §2am.2 ;
+> 3. ~~**NEW-3** (réseau PCSF)~~ → 🟢 **interactome embarqué** ; téléchargement
+>    en ligne acceptable **si local-first** — `STATUS.md` §2am.3. Le besoin
+>    utilisateur est exprimé ⇒ le backlog conditionnel est **levé**.
+>
+> ⚠️ **Audit annoncé absent** : l'utilisateur annonce un « audit sc
+> multi-échantillon et bulk » pour la suite — **aucun tel fichier n'existe dans
+> le dépôt** (`STATUS.md` §2am.4) : **à fournir** avant toute planification.
 >
 > Deux points **hors arbitrage** restent ouverts :
 >
@@ -95,9 +106,11 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 > matin, qui parquait M2–M5, est caduque — voir son en-tête ; **archivée** le
 > 2026-09-14 → `docs/archive/ROADMAP_BULK_V2_STATS.md`.)
 >
-> Restent `NEW-3` (backlog conditionnel — **le volet flux A est terminé**),
-> ou un arbitrage (`4E-4`, UX 3B/4B/6B — §5). Voir l'ordre d'actionnabilité
-> en tête de ce §2 (décision utilisateur 2026-09-13).
+> Les trois arbitrages (`NEW-3`, `4E-4`, UX 3B/4B/6B) ont été **rendus le
+> 2026-09-14** — voir le bandeau en tête de ce §2 et `STATUS.md` §2am.
+> **Jalons désormais débloqués : `4E-4` et `NEW-3`** (le volet flux A reste
+> terminé). Voir l'ordre d'actionnabilité en tête de ce §2 (décision
+> utilisateur 2026-09-13).
 
 > 📌 **Règle ajoutée le 2026-09-12 — re-mesurer avant de planifier.**
 > **Trois** fiches §3 de `ROADMAP_presentation_stats.md` se sont révélées
@@ -131,9 +144,9 @@ avance jalon par jalon, un jalon = un commit.
 | — | ~~**STAT-S3** — clustering de profils (kmeans MVP)~~ | L | — | ✅ **LIVRÉ le 2026-09-13** — `STATUS.md` §2ae ; V2 floue (Mfuzz) non retenue |
 | — | ~~**NEW-1** — dose-réponse / time-course~~ | M | — | ✅ **LIVRÉ le 2026-09-13** (`drc`, justification renv.lock au contrat §2) — `STATUS.md` §2af |
 | — | ~~**NEW-2** — fusion de jeux~~ | M | ~~STAT-S1~~ ✅ prérequis levé | ✅ **LIVRÉ le 2026-09-13** (fiche re-mesurée : fusion depuis le conteneur `bulk_datasets`, produit chargé comme jeu actif — `STATUS.md` §2ag) |
-| 6 | **NEW-3** — réseau PCSF | L | interactome local vs contrainte offline | 🔵 backlog conditionnel — **le volet flux A est terminé** |
-| 7 | **UX 3B / 4B / 6B** | M | décision 2 | ⏸ en attente d'arbitrage |
-| 8 | **4E-4** — exécution async de la DA | M | décision 1 (pool) | ⏸ en attente d'arbitrage |
+| 6 | **NEW-3** — réseau PCSF | L | ~~interactome local vs contrainte offline~~ ✅ **tranché le 2026-09-14** : **interactome embarqué**, téléchargement en ligne en complément **si local-first** | 🟢 **DÉBLOQUÉ** — backlog conditionnel **levé** (besoin exprimé) — `STATUS.md` §2am.3 |
+| 7 | **UX 3B / 4B / 6B** | M | ~~décision 2~~ 🟡 **partiellement tranchée le 2026-09-14** | **4B retenue** (⚠️ mesurée non livrée = 4A l'est) ; **3B non nécessaire** ; **6B reste ouverte** — `STATUS.md` §2am.2 |
+| 8 | **4E-4** — exécution async de la DA | M | ~~décision 1 (pool)~~ ✅ **tranchée le 2026-09-14** : **(b) pool applicatif partagé** + réserve « pool dédié » multi-échantillons | 🟢 **DÉBLOQUÉ** — `STATUS.md` §2am.1 |
 | 9 | ~~Boutons d'export DT sur les ~43 tables restantes + `pageLength` normalisé~~ | M | ~~décision ouverte~~ | ✅ **LIVRÉ le 2026-09-14 (DT-EXPORT)** — contrat `PLOT_DATATABLE_CONTRACT.md` §6 option B, 73 sites via `ts_datatable()`, `pageLength = 15` + boutons nommés sur les tables de résultats, aperçus exclus — `STATUS.md` §2ai |
 
 Hors séquence, **gelé** : CCC 5–6 (sans suite). Hors séquence, **non demandé** :
@@ -257,8 +270,8 @@ auto dès ≥ 2 échantillons). Les modes 1 et 2 n'existent pas encore — c'est
 
 | # | Décision | Impact |
 |---|---|---|
-| 1 | **4E-4** : pool mirai dédié SC / pool applicatif unique / rester synchrone | Architecture async de la DA |
-| 2 | **UX** : options 3B, 4B, 6B | Reprise de la refonte UX |
+| 1 | ~~**4E-4** : pool mirai dédié SC / pool applicatif unique / rester synchrone~~ — ✅ **TRANCHÉ le 2026-09-14** : **(b) pool applicatif partagé**, *avec réserve* — un pool mirai **dédié** reste pertinent pour plusieurs **échantillons** en parallèle (3 réplicats × 2 conditions) ⇒ ne pas fermer la porte au parallélisme par échantillon (`STATUS.md` §2am.1) | Architecture async de la DA — **jalon DÉBLOQUÉ** |
+| 2 | **UX** : options 3B, 4B, 6B — 🟡 **PARTIELLEMENT TRANCHÉ le 2026-09-14** : **4B retenue** (⚠️ **mesurée non livrée** — c'est **4A** qui l'est) ; **3B jugée non nécessaire** (3A suffit) ; **6B reste non tranchée** (`STATUS.md` §2am.2) | Reprise de la refonte UX — **écart 4A/4B à confirmer** |
 | 3 | ~~**Bulk V2** : lui créer une roadmap dédiée ?~~ — ✅ **TRANCHÉ le 2026-09-12** : `docs/ROADMAP_BULK_V2.md` créée (Flux E complet M1→M5) | ~~Traçabilité~~ résolue |
 | 4 | **`docs/` gitignoré** : garder local, ou versionner `docs/*.md` + `docs/contracts/*.md` ? | Les **28** contrats ne sont pas versionnés — voir la remarque ci-dessous (⚠️ un fichier **sourcé** ne doit jamais être ignoré : cas corrigé le 2026-09-13, garde C3) |
 | 5 | ~~**Modes 1/2 du double jeu SC** : priorité et périmètre~~ — ✅ **TRANCHÉ par réalisation le 2026-09-13** : `MD-4` livre le conteneur `sc_datasets` + les relations déclarées `standalone` / `shared_params` (mode 1) / `distinct_params` (mode 2), contrat `SC_MULTI_CONTRACT.md` (`STATUS.md` §2w) | ~~Direction produit du module SC~~ résolue — reste l'**usage** des modes dans les panneaux d'analyse (évolution, pas un correctif) |
@@ -269,6 +282,7 @@ auto dès ≥ 2 échantillons). Les modes 1 et 2 n'existent pas encore — c'est
 | 10 | **Dette de conventions** (relevé 2026-09-13) : C6 = 16 `library()` au top-level de `R/`, C9 = 37 fichiers sans test éponyme, C10 = 270 `stop()` non classés — chantier de réduction, ou statu quo avec plafond ? | Qualité long terme ; les compteurs ne doivent **pas augmenter** (garde `tools/check_conventions.R`) |
 | 11 | ~~**CCC phase 9** : laquelle des trois questions (rareté par population / par voisinage / × communication) ?~~ — ✅ **TRANCHÉE et LIVRÉE le 2026-09-13** : **question 1 — rareté par population annotée** (`8c1a969` ; les 5 décisions de conception §12 de la proposition ont été **appliquées telles quelles**) | Périmètre du jalon CCC 9 — voir `STATUS.md` §2ac |
 | 12 | **Travail non commité d'un autre auteur** : `.ensure_10x_features()` (`modules/import/mod_import_sc.R`, **indexé** ; `tests/manual/test_ensure_10x_features.R`, **non suivi**) — compat CellRanger `genes.tsv` à colonne unique | L'arbre n'est pas propre : à réviser puis committer, ou à écarter — **ne pas l'écraser, ne pas le committer aveuglément** (`STATUS.md` §2aj) |
+| 13 | ~~**NEW-3** : interactome embarqué / téléchargé en ligne / les deux ?~~ — ✅ **TRANCHÉ le 2026-09-14** : **embarqué** ; l'en ligne est accepté **en complément**, « du moment qu'une solution **local first** existe ». ⚠️ **Mesurer le poids** avant d'embarquer ; le choix de la source (STRING / BioGRID / OmniPath…) se fera **sur chiffres** (licence + volume) — échec réseau ⇒ repli silencieux sur l'embarqué, jamais d'erreur bloquante (`STATUS.md` §2am.3) | ~~Backlog conditionnel NEW-3~~ **levé** — jalon **débloqué** |
 
 > **Remarque sur la décision 4** — garder roadmaps et instructions d'agents
 > locales est un choix défendable. En revanche `docs/contracts/*.md` est un cas

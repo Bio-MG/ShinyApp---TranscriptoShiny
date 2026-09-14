@@ -1,6 +1,8 @@
 # modules/mod_import_sc.R
 # Step-3.6 fixes:
-#   - .ensure_10x_features(): writes features.tsv.GZ (Seurat prefers it over genes.tsv.gz)
+#   - .ensure_10x_features(): pads single-column genes.tsv/features.tsv into a 3-column
+#     features.tsv.gz and deactivates the offending genes.tsv (Read10X prefers genes.tsv
+#     and crashes with "undefined columns selected" when it has <2 columns)
 #   - load_single_cell_data(): checks matrix.mtx exists before Read10X(); fixes add_log&& bug
 #   - prepare_seurat_object(): handles SCE, list, sparse/dense matrix
 # Step-3.8 fix:
@@ -18,49 +20,104 @@
 
 `%||%` <- function(a, b) if (is.null(a)) b else a
 
-# ── Helper: CellRanger v2 compat — creates features.tsv.gz from genes.tsv(.gz) ──────────────
+# ── Helper: CellRanger v2 / single-column compat ────────────────────────────────────────────
+# Seurat::Read10X prefers genes.tsv whenever it exists (pre_ver_3 <- file.exists(genes.tsv))
+# and then evaluates feature.names[, gene.column] with gene.column = 2 — a 1-column
+# genes.tsv (symbols only, e.g. GSE176078 Wu2021) throws "undefined columns selected".
+# Writing a padded features.tsv.gz is NOT enough while genes.tsv is still present, so it
+# must be deactivated (renamed) after the repair. Same repair applies to a features file
+# that itself has a single column.
 .ensure_10x_features <- function(dir_path, log_fn = NULL) {
   log <- function(msg) if (!is.null(log_fn)) log_fn(msg)
 
-  # Already fine if any features file exists
-  if (any(file.exists(file.path(dir_path, c("features.tsv", "features.tsv.gz"))))) {
+  feat_tsv  <- file.path(dir_path, "features.tsv")
+  feat_gz   <- file.path(dir_path, "features.tsv.gz")
+  gene_tsv  <- file.path(dir_path, "genes.tsv")
+  gene_gz   <- file.path(dir_path, "genes.tsv.gz")
+
+  read_cols <- function(path) {
+    tryCatch({
+      if (grepl("\\.gz$", path)) {
+        con <- gzfile(path, "rt"); on.exit(close(con)); lines <- readLines(con)
+      } else {
+        lines <- readLines(path)
+      }
+      length(read.table(text = lines, sep = "\t", header = FALSE,
+                        quote = "", nrows = 1))
+    }, error = function(e) 0L)
+  }
+
+  ncol_genes  <- if (file.exists(gene_tsv)) read_cols(gene_tsv) else 0L
+  ncol_featgz <- if (file.exists(feat_gz))  read_cols(feat_gz)  else 0L
+  ncol_featts <- if (file.exists(feat_tsv)) read_cols(feat_tsv) else 0L
+
+  # Already importable by Read10X (genes.tsv wins if present, else features.tsv.gz,
+  # else features.tsv): nothing to do
+  if (ncol_genes >= 2 ||
+      (ncol_genes == 0 && (ncol_featgz >= 2 ||
+                           (ncol_featgz == 0 && ncol_featts >= 2)))) {
     return(invisible(NULL))
   }
 
-  gene_gz  <- file.path(dir_path, "genes.tsv.gz")
-  gene_tsv <- file.path(dir_path, "genes.tsv")
+  # Pick the best repair source: genes.tsv(.gz), then an existing features file
+  src <- c(gene_tsv, gene_gz, feat_tsv, feat_gz)
+  src <- src[file.exists(src)]
+  if (length(src) == 0L) return(invisible(NULL))
+  src <- src[1]
 
-  # Read source genes file
-  src <- if (file.exists(gene_gz)) {
-    tmp <- tempfile(fileext = ".tsv")
-    tryCatch({
-      con <- gzfile(gene_gz, "rt"); lines <- readLines(con); close(con)
-      writeLines(lines, tmp); tmp
-    }, error = function(e) { log(paste("  ⚠ Décompression genes.tsv.gz:", e$message)); NULL })
-  } else if (file.exists(gene_tsv)) {
-    gene_tsv
-  } else {
-    return(invisible(NULL))   # nothing we can do
-  }
-
+  gdf <- tryCatch({
+    if (grepl("\\.gz$", src)) {
+      con <- gzfile(src, "rt"); on.exit(close(con)); readLines(con)
+    } else readLines(src)
+  }, error = function(e) { log(paste("  ⚠ Lecture", basename(src), ":", e$message)); NULL })
   gdf <- tryCatch(
-    read.table(src, sep = "\t", header = FALSE, stringsAsFactors = FALSE, quote = ""),
-    error = function(e) { log(paste("  ⚠ Lecture genes.tsv:", e$message)); NULL }
+    read.table(text = gdf, sep = "\t", header = FALSE, stringsAsFactors = FALSE, quote = ""),
+    error = function(e) { log(paste("  ⚠ Lecture", basename(src), ":", e$message)); NULL }
   )
-  if (is.null(gdf)) return(invisible(NULL))
+  if (is.null(gdf) || ncol(gdf) == 0) return(invisible(NULL))
 
-  # Ensure 3 columns: ID, Symbol, Type
+  # Pad to 3 columns: ID, Symbol, Type
   if      (ncol(gdf) == 1) { gdf$V2 <- gdf$V1; gdf$V3 <- "Gene Expression" }
   else if (ncol(gdf) == 2) { gdf$V3 <- "Gene Expression" }
 
-  # Write as .gz — Seurat's Read10X looks for features.tsv.gz BEFORE genes.tsv.gz
-  feat_gz <- file.path(dir_path, "features.tsv.gz")
-  tryCatch({
+  wrote <- tryCatch({
     gz_con <- gzfile(feat_gz, "wt")
     write.table(gdf, gz_con, sep = "\t", col.names = FALSE, row.names = FALSE, quote = FALSE)
     close(gz_con)
-    log("  ✓ CellRanger v2: genes.tsv → features.tsv.gz créé automatiquement")
-  }, error = function(e) log(paste("  ⚠ Création features.tsv.gz:", e$message)))
+    TRUE
+  }, error = function(e) { log(paste("  ⚠ Création features.tsv.gz:", e$message)); FALSE })
+  if (!wrote) return(invisible(NULL))
+  log("  ✓ CellRanger v2: features.tsv.gz (id\tsymbol\ttype) généré automatiquement")
+
+  # Deactivate a 1-column genes.tsv — Read10X would still pick it and crash on [, 2]
+  if (ncol_genes == 1) {
+    bak <- paste(gene_tsv, "bak", sep = ".")
+    if (file.rename(gene_tsv, bak)) {
+      log(paste0("  ✓ genes.tsv à 1 colonne désactivé (→ ", basename(bak), "), ",
+                 "features.tsv.gz sera utilisé"))
+    } else {
+      # rename can fail on locked files (Windows): overwrite in place with 2 columns
+      tryCatch({
+        write.table(gdf[, 1:2], gene_tsv, sep = "\t", col.names = FALSE,
+                    row.names = FALSE, quote = FALSE)
+        log("  ✓ genes.tsv à 1 colonne réécrit sur 2 colonnes (id\\tsymbol)")
+      }, error = function(e) log(paste("  ⚠ Désactivation genes.tsv:", e$message)))
+    }
+
+    # With genes.tsv gone Read10X takes its v3 branch, which expects the
+    # .gz forms of barcodes/matrix — compress them if only plain ones exist
+    for (nm in c("barcodes.tsv", "matrix.mtx")) {
+      plain <- file.path(dir_path, nm)
+      gzf   <- paste0(plain, ".gz")
+      if (file.exists(plain) && !file.exists(gzf)) {
+        tryCatch({
+          con_in <- file(plain, "rt"); lines <- readLines(con_in); close(con_in)
+          con_out <- gzfile(gzf, "wt"); writeLines(lines, con_out); close(con_out)
+          log(paste0("  ✓ ", nm, " compressé en ", basename(gzf), " (attendu par la branche v3 de Read10X)"))
+        }, error = function(e) log(paste("  ⚠ Compression", nm, ":", e$message)))
+      }
+    }
+  }
 
   invisible(feat_gz)
 }
