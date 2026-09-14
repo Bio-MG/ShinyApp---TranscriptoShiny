@@ -1273,6 +1273,36 @@ n'est plus possible sans collision de `formals`) ; (2) `mod_spatial_viz.R`
 `extra_options` ; (3) suite complète **non lancée** (politique du 2026-09-14 :
 full suite en fin de version uniquement).
 
+### 2aj. 🔧 Retour feedback utilisateur + consignation session (2026-09-14)
+
+Trois correctifs issus du retour utilisateur (commit `4ed66ba`) :
+
+| # | Symptôme | Cause racine | Correctif |
+|---|---|---|---|
+| 1 | Littéral `<span class="i18n" data-key="ex : ...">` affiché sous « Label multi-datasets SC » (et 11 sites cousins) | `placeholder = i18n$t(...)` : hors session, `i18n$t()` retourne un **tag HTML** (shim client), échappé comme valeur d'attribut | `placeholder = .tr_plain(...)` sur 12 sites (import SC/Bulk, merge, datasets, dose-response, communication, pseudobulk) — placeholders restent FR (pas de live-switch, philosophie `.tr_plain`) |
+| 2 | Boutons « Aller au mapping des IDs » sans effet (import SC / import bulk / GEO) | nav_panels d'analyse titrés `tagList(emoji, i18n$t(...))` **sans `value` explicite** ⇒ bslib génère une valeur interne (`"🔬 \nAnalyse Single-Cell"`) que `nav_select(selected=)` ne matchait jamais | `value = "tab_sc" / "tab_bulk" / "tab_spatial"` sur les 3 nav_panels (app.R) + retarget des 3 handlers ; e2e `click_nav_by_text` inchangé (clique par texte) |
+| 3 | Console (app sans données) : `Error in graphics::plot.new: figure margins too large` sur `output$sc-rarity-rarity_plot` | `shiny:::startPNG()` appelle **lui-même** `plot.new()` à l'ouverture du device, AVANT d'évaluer l'expression — device rendu dans un conteneur replié (taille ≈ 0) ⇒ erreur indépendante du `req()` | plancher 200px sur les fonctions `width`/`height` du `renderPlot` de `mod_sc_rarity.R` (affichage inchangé) |
+
+Vérifications : parse OK (11 fichiers), i18n 15 / rarity-freeze 83 /
+merge-freeze 131 PASS, boot headless **HTTP 200** (port 4895).
+
+**⚠️ Travail EN COURS non commité (apparu après `4ed66ba`, PAS de cette
+session — user ou session agent parallèle) :** `modules/import/
+mod_import_sc.R` diff ~85 lignes (`.ensure_10x_features()` — compat
+CellRanger / genes.tsv colonne unique) + `tests/manual/
+test_ensure_10x_features.R` (non suivi). **Non poussé.** La prochaine
+session doit le mettre au point avec son auteur avant tout commit (ne pas
+l'écraser, ne pas le commitifier aveuglément).
+
+**PROCHAINE SESSION (consignation) :** 1) **suite complète** (~14 min,
+`test_dir("tests/testthat")`) — seuil « fin de version » atteint : CCC 9,
+STAT-S2/S3, NEW-1/2, DT-EXPORT et ces correctifs se sont accumulés depuis la
+référence Stage 18 ; 2) arbitrages restants : **4E-4 (DA async, pool mirai
+partagé recommandé)**, UX **6B** éventuel (3B/4B non recommandés, NEW-3
+parqué sans besoin concret) ; 3) baseline DT-EXPORT enregistrée : wrapper
+`buttons = TRUE` par défaut, `extra_options`, `page_length = 15L`, garde
+« zéro appel direct » dans `test-plot-datatable.R` (80 PASS).
+
 ---
 
 ## 3. 4D-3 — décision et contrat d'entrée upstream
