@@ -10,7 +10,7 @@
 # Ce que ce fichier fait : il rend MECANIQUES les conventions écrites dans
 # `docs/CONVENTIONS.md` (qui fait elle-même référence aux règles dures de
 # `AGENTS.md`). Une convention non vérifiable n'est qu'un vœu : chaque règle
-# documentée porte donc un ID C1..C12 repris ci-dessous et dans le doc.
+# documentée porte donc un ID C1..C13 repris ci-dessous et dans le doc.
 #
 # USAGE
 #   Rscript tools/check_conventions.R [--strict] [--no-git]
@@ -368,6 +368,7 @@ check_c5_browser <- function(files) {
 # C10 — erreurs : errorCondition(class=<domaine>_error) ou call. = FALSE
 # C11 — primitives parallèles interdites
 # C12 — en-tête de fichier documentaire
+# C13 — `choices` nommé : la valeur n'est jamais un appel traduit
 # =============================================================================
 check_c6_library_in_r <- function(r_files) {
   for (f in r_files) {
@@ -635,6 +636,69 @@ check_c12_headers <- function(r_files) {
   }
 }
 
+# =============================================================================
+# C13 — `choices` nommé : la valeur ne doit jamais être un appel traduit
+# =============================================================================
+#' Appels de traduction reconnus. `.tr_plain` est placé AVANT `.tr` : l'alternance
+#' est ordonnée, et `.tr` matcherait le préfixe de `.tr_plain` avant d'échouer sur
+#' `\s*\(` (le `_` suit) sans jamais revenir sur la branche correcte.
+.C13_TRANSLATED_CALL <- "\\.tr_plain|\\.tr|tr_plain|i18n\\$t|tr"
+
+#' Le motif `"nom" = <appel traduit>` est-il présent sur cette ligne de CODE ?
+#'
+#' On travaille sur `ann$code` — chaînes déjà remplacées par `""` — et non sur le
+#' texte brut : le nom devient `""`, ce qui suffit à reconnaître la FORME sans
+#' dépendre du libellé, et surtout sans lire un seul caractère non-ASCII, donc
+#' sans dépendre de la locale (même exigence que C7).
+.c13_line_hit <- function(code_line) {
+  grepl(sprintf('"\\s*=\\s*(%s)\\s*\\(', .C13_TRANSLATED_CALL),
+        code_line, perl = TRUE)
+}
+
+#' Numéros de ligne en infraction dans un fichier (entiers ; vide = conforme).
+#'
+#' Extrait de `check_c13_choices_named_values()` pour être testable sur une
+#' FIXTURE — un garde vert dont on n'a jamais vu le rouge ne prouve rien :
+#' voir tests/testthat/test-conventions-c13-choices.R.
+#'
+#' Périmètre : uniquement l'intérieur d'un `choices = c(` (équilibre des
+#' parenthèses suivi depuis le `c(`). Un vecteur nommé ailleurs —
+#' `c("EN" = .tr("Hello"))` — est légitime : le nom y est une clé stable et la
+#' valeur est le texte affiché. La règle ne vise que le contrat de `choices`.
+.c13_find_hits <- function(path) {
+  ann <- .read_code_lines(path)
+  if (nrow(ann) == 0L) return(integer(0))
+  hits <- integer(0)
+  depth <- 0L
+  for (i in seq_len(nrow(ann))) {
+    ln <- ann$code[i]
+    m <- regexpr("choices\\s*=\\s*c\\s*\\(", ln, perl = TRUE)
+    if (m > 0L) {
+      # Entrée dans un `choices = c(` : le libellé peut contenir des
+      # parenthèses, mais elles sont parties avec la chaîne.
+      depth <- max(0L, .paren_balance(substring(ln, m)))
+    } else if (depth > 0L) {
+      depth <- max(0L, depth + .paren_balance(ln))
+    } else {
+      next
+    }
+    if (.c13_line_hit(ln)) hits <- c(hits, ann$line_no[i])
+  }
+  hits
+}
+
+check_c13_choices_named_values <- function(files) {
+  for (f in files) {
+    for (i in .c13_find_hits(f)) {
+      .add("ERROR", "C13", .rel(f), i,
+           paste0("`choices` nommé : le libellé traduit est du côté VALEUR — ",
+                  "Shiny AFFICHE le nom et RENVOIE la valeur, donc `input$` ",
+                  "recevra le texte traduit au lieu de la valeur attendue. ",
+                  "Écrire setNames(c(\"valeur\"), c(.tr(\"libellé\")))."))
+    }
+  }
+}
+
 # ---------------------------------------------------------------------------
 # Rapport final
 # ---------------------------------------------------------------------------
@@ -659,8 +723,9 @@ run_check <- function(strict = FALSE, use_git = TRUE) {
   check_c10_error_style(r_files)
   check_c11_parallel(all_code)
   check_c12_headers(r_files)
+  check_c13_choices_named_values(c(r_files, m_files))
 
-  rules <- c("C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12")
+  rules <- c("C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11", "C12", "C13")
 
   cat("\n--------------------------------------------------------------------\n")
   cat(sprintf("%-5s %-8s %s\n", "RÈGLE", "NIVEAU", "DESCRIPTION"))
@@ -677,7 +742,8 @@ run_check <- function(strict = FALSE, use_git = TRUE) {
     C9  = "chaque fichier de R/ a son fichier de test (dette)",
     C10 = "stop() classé (errorCondition) ou call. = FALSE (dette)",
     C11 = "primitives parallèles à vérifier (mirai uniquement)",
-    C12 = "en-tête commenté dans chaque fichier de R/ (dette)"
+    C12 = "en-tête commenté dans chaque fichier de R/ (dette)",
+    C13 = "choices nommé : la valeur n'est jamais un appel traduit"
   )
   lvl <- setNames(rep("ERREUR", length(rules)), rules)
   lvl[c("C6", "C8", "C9", "C10", "C11", "C12")] <- "AVERT."

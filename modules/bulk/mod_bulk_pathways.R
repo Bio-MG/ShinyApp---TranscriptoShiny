@@ -486,8 +486,10 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
       tagList(
         fluidRow(
           column(4, radioButtons(ns("network_mode"), .tr("Type de réseau"),
-                                 choices = c("emap" = .tr("Voies ↔ voies (similarité de gènes)"),
-                                             "cnet" = .tr("Voies ↔ gènes")),
+                                 choices = stats::setNames(
+                                   c("emap", "cnet"),
+                                   c(.tr("Voies ↔ voies (similarité de gènes)"),
+                                     .tr("Voies ↔ gènes"))),
                                  inline = TRUE)),
           column(4, numericInput(ns("network_top_n"), .tr("Voies affichées (réseau)"),
                                  value = 30, min = 2, max = 100, step = 1)),
