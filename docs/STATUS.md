@@ -2397,19 +2397,29 @@ Contradictions relevées le 2026-09-10 et leur résolution :
    périmé pourrait masquer une mise à jour de `STATUS.md`. « Réinitialiser »
    restaure l'état du dépôt.
 
-## 7. Structure documentaire — point à trancher
+## 7. Structure documentaire — ✅ DÉCISION TRANCHÉE (2026-09-15)
 
-`docs/` est **volontairement gitignoré** (décision utilisateur) : roadmaps et
-instructions d'agents restent locales et non suivies. C'est défendable pour la
-documentation de pilotage.
+**`docs/` ne doit PAS être poussé sur GitHub.** Les documents qu'il contient
+sont **exclusivement pour l'agent et le développement**, jamais pour le dépôt
+public. Décision utilisateur confirmée le 2026-09-15 (à l'occasion du correctif
+`35ae9e1`, où `docs/contracts/CELLCHAT_INPUT_CONTRACT.md` avait été modifié sans
+apparaître dans le commit).
 
-**Exception à considérer** : `docs/contracts/*.md` (**28** contrats gelés au
-2026-09-14 — le chiffre « 13 » de cette section datait du 2026-09-10). La
-règle du dépôt (`AGENTS.md`) impose qu'un changement de contrat soit livré
-**code + freeze test + doc simultanément**. Si le contrat n'est pas versionné,
-cette règle est mécaniquement inapplicable. C'est le seul endroit où le
-`.gitignore` contredit une règle écrite du dépôt. Décision en attente.
+- `docs/` est **volontairement gitignoré** (`.gitignore:36`).
+- **Seules exceptions**, forcées dans le suivi (`git add -f`) : `docs/STATUS.md`
+  et `docs/ROADMAP.md` — l'index et l'état.
+- `docs/contracts/*.md` (**28** contrats gelés) restent **non suivis**, comme
+  `docs/CONVENTIONS.md` (suivie par accident historique) et
+  `docs/kanban_roadmap.html`.
 
-Note : `docs/STATUS.md` et `docs/ROADMAP.md` ont été **forcés** dans le suivi
-git (`git add -f`) car ils constituent l'index et l'état — mais tout le reste
-de `docs/` reste ignoré. `docs/kanban_roadmap.html` reste **non suivi**.
+**Conséquence assumée.** La règle « un changement de contrat = code + freeze
+test + doc **simultanément** » n'est vérifiable **que localement**. Sur un clone
+neuf, les tests de gel qui lisent un contrat (ex.
+`test-cellchat-input-contract-freeze.R`) échoueraient faute de fichier. Accepté
+tel quel : ces tests sont des garde-fous de **développement local**, pas de CI.
+(Option si on veut lever l'ambiguïté un jour : `skip_if(!file.exists(doc))`
+dans les tests de gel — *non fait*, la décision est de laisser en l'état.)
+
+> Rappel pratique pour l'agent : après avoir modifié un contrat,
+> `git status` ne le montrera **jamais**. Ne pas en déduire que le fichier est
+> inchangé, et ne pas tenter `git add -f` sur `docs/contracts/`.
