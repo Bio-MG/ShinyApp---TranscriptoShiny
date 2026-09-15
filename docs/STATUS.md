@@ -2282,6 +2282,73 @@ c'est le couple `parse(file=)` + locale non-UTF-8 qui échoue. **Conséquence :
 toute exécution de la suite depuis Git Bash est impossible en l'état** — c'est
 un point d'environnement à traiter, indépendant de ce jalon.
 
+### 2at. 🐛 MOTEUR CellChat — `createCellChat()` recevait une colonne ABSENTE de `meta` (2026-09-15)
+
+Symptôme remonté (moteur neuf, CellChat + dépendances tout juste installés) :
+
+    Erreur calcul communication : Moteur CellChat — createCellChat() a echoue :
+    The 'group.by' is not a column name in the `meta`, which will be used for
+    cell grouping. [etat : engine_failure]
+
+**Cause racine.** `build_cellchat_input()` **normalise** la colonne d'identités
+du Seurat en `meta$labels` (contrat 4D-3) mais conserve le nom **d'origine** dans
+le champ `group_by` (`celltype`, `seurat_clusters`…) pour la provenance et le
+rapport. Le moteur passait `group.by = cellchat_input$group_by` : ce nom
+n'existe **pas** dans `$meta` (qui ne contient que `Cell` et `labels`).
+⇒ Le moteur ne fonctionnait **que** si la colonne d'identités s'appelait
+littéralement `labels` — jamais en pratique. **Path B était cassé pour tout
+usage réel**, alors que CC-1..CC-6 étaient annoncés livrés.
+
+**Pourquoi les tests ne l'ont pas vu — le point important.** Le test
+« objet CellChat réel » construisait son entrée avec
+`cellchat_input_from_matrix(...)` **sans** `group_by`, donc avec la valeur par
+défaut `"labels"` : exactement le seul cas qui marche. Le test validait
+l'accident, pas le contrat.
+
+**Correctif.** `cellchat_group_by_column()` (nouvelle fonction publique, ajoutée
+à `cellchat_input_public_api()` et au contrat) est la **seule** source de vérité
+du regroupement : elle rend `"labels"` et valide la présence de la colonne. Le
+moteur l'appelle **avant** le `tryCatch`, pour qu'une entrée non conforme garde
+son état `cellchat_input_error` au lieu d'être requalifiée `engine_failure`.
+
+**Contrat corrigé** — `CELLCHAT_INPUT_CONTRACT.md` énonçait l'erreur :
+`group_by` = « nom de la colonne d'étiquettes à passer à
+`createCellChat(group.by=)` » → « nom **d'origine** … **jamais** une colonne de
+`$meta` ».
+⚠️ Ce contrat **n'est pas versionné** (`.gitignore:36` couvre `docs/`) — comme
+25 des 28 contrats gelés (cf. §7, décision en attente).
+
+**Vérifications.**
+- `test-sc-communication-engine.R` : **81 PASS / 0 FAIL / 0 SKIP** — le bloc
+  « objet CellChat réel » n'est **plus skippé** (paquet installé) et utilise
+  désormais `group_by = "celltype"`, c'est-à-dire la vraie dissymétrie.
+- `test-cellchat-input.R` 90 PASS · `test-cellchat-input-contract-freeze.R`
+  34 PASS · `test-sc-communication-engine-ui.R` 55 PASS · aucun échec.
+- **Cas négatif** : en réintroduisant `group_by` dans
+  `cellchat_group_by_column()`, le nouveau test **échoue** (« Expected grouping
+  column must exist in $meta to be TRUE ») ; le fichier a ensuite été restauré
+  octet pour octet.
+- Gardes : conventions **0 err / 324 avert.**, duplication **0 err / 3 avert.**
+
+### 2au. ⚠️ NON RÉSOLU — réseaux de voies : `'arg' doit être un de "emap", …` (2026-09-15)
+
+Second symptôme remonté (Pathways → onglet Réseaux). **Non reproduit.**
+- `plot_pathway_network()` est saine : `mode = c("emap", "cnet")` depuis sa
+  création (`1555283`), jamais modifié.
+- La chaîne **`licnet` n'existe nulle part** : ni dans les sources, ni dans
+  l'historique git (`git log --all -S`), ni ailleurs sur le disque. Le message
+  réel est `'arg' doit être un de “emap”, “cnet”` — les guillemets courbes de
+  `dQuote()` ont été altérés au copier-coller.
+- `i18n$t()` renvoie une chaîne **sans nom** (vérifié) : les `radioButtons`
+  produisent donc bien les valeurs `emap` / `cnet`.
+- Les deux appelants (bulk et SC) passent `mode = input$network_mode`, sans
+  variante.
+
+⇒ `match.arg()` a reçu une valeur hors `{"emap","cnet"}`, vraisemblablement un
+`input$network_mode` transitoire (UI re-rendue par un changement de langue).
+**À confirmer** : relancer l'app, et si l'erreur persiste, relever le texte
+**exact** affiché dans le plot.
+
 ### 5bis. Pourquoi Bulk V2 était « verrouillé » — et ce qui restait
 
 Question posée le 2026-09-11. Réponse : il y avait **trois** raisons, dont une

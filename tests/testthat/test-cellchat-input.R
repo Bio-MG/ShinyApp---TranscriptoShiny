@@ -264,6 +264,26 @@ test_that("build_cellchat_input extracts a Seurat object's data layer + metadata
   invisible(assert_cellchat_input(x))
 })
 
+test_that("the grouping column handed to createCellChat is a REAL column of $meta", {
+  skip_if_not_installed("Seurat")
+  m <- .mk_counts()
+  so <- Seurat::CreateSeuratObject(counts = m)
+  so <- Seurat::NormalizeData(so, verbose = FALSE)
+  so$celltype <- c("T", "T", "B", "B", "NK", "NK")
+
+  x <- build_cellchat_input(so, group_by = "celltype", species = "human")
+
+  # Piege deja paye en production : CellChat::createCellChat(group.by = ...)
+  # exige une COLONNE de `meta`. build_cellchat_input() normalise les
+  # identites en `meta$labels`, donc le nom d'origine ($group_by = "celltype")
+  # n'existe PAS dans $meta — le passer tel quel fait echouer le run avec
+  # « The 'group.by' is not a column name in the `meta` ».
+  expect_true(cellchat_group_by_column(x) %in% colnames(x$meta),
+              label = "grouping column must exist in $meta")
+  # ...et le nom d'origine reste disponible pour la provenance / le rapport.
+  expect_identical(x$group_by, "celltype")
+})
+
 test_that("build_cellchat_input fails cleanly on a bad object or a missing column", {
   e1 <- tryCatch(build_cellchat_input(list(), group_by = "x", species = "human"),
                  error = function(e) e)

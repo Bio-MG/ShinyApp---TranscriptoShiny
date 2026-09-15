@@ -365,12 +365,16 @@ test_that("parse_cellchat_object reads a REAL CellChat object (regression)", {
   mat[lig, iA] <- mat[lig, iA] + rpois(length(lig) * length(iA), 25)
   mat[rec, iB] <- mat[rec, iB] + rpois(length(rec) * length(iB), 25)
 
+  # group_by VOLONTAIREMENT different de "labels" : c'est le cas REEL (la
+  # colonne d'identites d'un Seurat s'appelle celltype / seurat_clusters...).
+  # Avec `group.by = input$group_by` ce test passait alors que le moteur
+  # cassait en production ; il exerce desormais la vraie dissymetrie.
   input <- cellchat_input_from_matrix(
     data = mat, features = feats, labels = factor(grp), species = "human",
-    log_normalize = TRUE
+    group_by = "celltype", log_normalize = TRUE
   )
   object <- CellChat::createCellChat(object = input$data, meta = input$meta,
-                                     group.by = input$group_by)
+                                     group.by = cellchat_group_by_column(input))
   object@DB <- .cellchat_engine_db("human")$db
   object <- CellChat::subsetData(object)
   object <- CellChat::identifyOverExpressedGenes(object)
