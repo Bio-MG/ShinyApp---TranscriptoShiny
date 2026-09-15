@@ -10,6 +10,29 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > Leur état fait foi dans **`docs/STATUS.md`** §1 et §2. Ce fichier reprend à
 > partir de `STAT-S1`.
 
+## [V1.x — HOTFIX `ns`] — 2026-09-15 — « impossible de trouver la fonction "ns" » dans deux serveurs
+
+### Corrigé
+- `modules/sc/mod_sc_pathways.R` (`mod_sc_pathways_server`) : le `renderUI`
+  `network_ui` (réseau d'enrichissement STAT-S2) appelait `ns(...)` alors que
+  `ns` n'est lié **que** dans les fonctions UI (`NS(id)`), jamais dans le
+  serveur ⇒ `impossible de trouver la fonction "ns"` à l'affichage du panneau,
+  après une analyse de voies.
+- `modules/sc/mod_sc.R` (`mod_sc_server`) : **même bug**, trouvé par balayage
+  systématique, dans le `renderUI` `multisample_overview_ui` (4 appels `ns()`).
+- Correctif : `ns <- session$ns` en tête des deux serveurs.
+
+### Pourquoi c'était invisible
+L'erreur n'est levée **que** quand la branche `renderUI` s'affiche : elle passe
+à travers le démarrage de l'application et à travers tout test qui ne rend pas
+l'UI. `session$ns(...)` (déjà utilisé ailleurs dans le dépôt) y échappe.
+
+### Ajouté
+- Garde **statique** `C15` dans `test-release-hardening.R` : tout serveur de
+  module qui appelle `ns()` doit le lier. Elle attrape la **classe** entière,
+  pas seulement ces deux occurrences — **vérifié sur cas négatif** : elle
+  détecte bien les deux versions committées d'avant correctif.
+
 ## [V1.x — CC-6] — 2026-09-15 — Import d'un objet CellChat (.rds) : lis enfin un VRAI objet
 
 ### Corrigé (défaut bloquant, trouvé à l'exécution — hors proposition)

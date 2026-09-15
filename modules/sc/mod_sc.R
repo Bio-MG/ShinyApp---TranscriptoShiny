@@ -219,6 +219,12 @@ mod_sc_ui <- function(id) {
 
 mod_sc_server <- function(id, global_data) {
   moduleServer(id, function(input, output, session) {
+    # OBLIGATOIRE : `ns` n'est lie que dans la fonction UI (NS(id)), pas dans le
+    # serveur. Sans cette ligne, un renderUI qui appelle ns() leve « impossible
+    # de trouver la fonction "ns" » — et seulement quand la branche s'affiche,
+    # donc invisible au demarrage. Garde : test-release-hardening.R.
+    ns <- session$ns
+
     .tr <- function(key) { tr <- isolate(global_data$i18n); if (is.null(tr)) return(key); tryCatch(.strip_i18n_html(tr$t(key)), error=function(e) key) }
 
     shared_rv <- create_sc_shared_state()

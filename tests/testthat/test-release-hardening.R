@@ -290,3 +290,44 @@ test_that("stress many-results: inline provenance capped, bundle export complete
   prov_csv <- utils::read.csv(file.path(bd, "provenance.csv"))
   expect_identical(nrow(prov_csv), 1200L)  # l'export n'est JAMAIS plafonné
 })
+
+# ── C15 (ajout 2026-09-15) : portée de `ns` dans les serveurs de modules ────
+# Bug rencontré en production : `mod_sc_pathways.R` appelait `ns(...)` dans un
+# renderUI alors que `ns` n'est lié QUE dans les fonctions UI (`NS(id)`). Le
+# serveur ne le liait pas ⇒ « impossible de trouver la fonction "ns" », levé
+# uniquement quand la branche s'affiche (donc invisible au démarrage, et
+# invisible aux tests qui ne rendent pas l'UI). Même bug dans `mod_sc.R`.
+# Cette garde est STATIQUE : elle attrape la classe entière, pas ces deux cas.
+test_that("C15 module scope: any server calling ns() must bind it (session$ns)", {
+  root <- ts_project_root()
+  files <- sort(list.files(file.path(root, "modules"), pattern = "\\.R$",
+                           recursive = TRUE, full.names = TRUE))
+  expect_true(length(files) > 0L)
+
+  # `ns(` nu — exclut volontairement `session$ns(`, qui EST le bon motif.
+  ns_call <- "(^|[^A-Za-z0-9_.$])ns\\s*\\("
+  ns_bind <- "(^|[^A-Za-z0-9_.$])ns\\s*<-"
+
+  offenders <- character(0)
+  for (f in files) {
+    e <- tryCatch(parse(f, keep.source = FALSE), error = function(e) NULL)
+    if (is.null(e)) next
+    for (top in as.list(e)) {
+      if (!(is.call(top) && identical(deparse(top[[1L]]), "<-") &&
+            is.symbol(top[[2L]]))) next
+      rhs <- top[[3L]]
+      if (!(is.call(rhs) && identical(deparse(rhs[[1L]]), "function"))) next
+      body <- paste(deparse(rhs), collapse = "\n")
+      if (!grepl("moduleServer", body, fixed = TRUE)) next
+      if (!grepl(ns_call, body)) next
+      # Soit `ns` est lié dans la fonction, soit aucun appel nu n'existe.
+      if (grepl(ns_bind, body)) next
+      offenders <- c(offenders, paste0(basename(f), "::", as.character(top[[2L]])))
+    }
+  }
+  expect_identical(
+    offenders, character(0),
+    label = paste0("serveur(s) de module appelant ns() sans le lier ",
+                   "(ajouter `ns <- session$ns` en tête du serveur)")
+  )
+})

@@ -2043,6 +2043,44 @@ relecture de `net$prob` hors du moteur.
 « testable » + « testé » peut être **faux** tant qu'aucun test ne l'exerce
 contre le **réel**. Une fixture est une assertion de plus, pas une preuve.
 
+### 2ap. 🐛 HOTFIX — `ns` introuvable dans deux serveurs de modules (2026-09-15)
+
+**Symptôme** (console, à l'affichage du panneau Réseau) :
+
+```text
+116: renderUI [modules/sc/mod_sc_pathways.R#231]
+=> impossible de trouver la fonction "ns"
+```
+
+**Cause** : `ns` est lié par `NS(id)` dans les fonctions **UI** uniquement. Un
+serveur `moduleServer(id, function(input, output, session) {...})` évalue son
+corps dans l'environnement de la fonction englobante, où `ns` **n'existe pas**.
+Un `renderUI` qui appelle `ns()` lève donc à l'exécution — **et seulement quand
+la branche s'affiche** : invisible au démarrage, invisible aux tests qui ne
+rendent pas l'UI.
+
+**Deux occurrences** (la seconde trouvée par balayage systématique, pas par le
+rapport de bug) :
+
+| Fichier | Serveur | `renderUI` fautif |
+|---|---|---|
+| `modules/sc/mod_sc_pathways.R` | `mod_sc_pathways_server` | `network_ui` (réseau STAT-S2), 3 appels |
+| `modules/sc/mod_sc.R` | `mod_sc_server` | `multisample_overview_ui`, 4 appels |
+
+**Correctif** : `ns <- session$ns` en tête des deux serveurs. Le motif
+`session$ns(...)` (déjà employé ailleurs dans le dépôt, ex.
+`mod_sc_da_design.R`) y échappe également — il reste donc valide.
+
+**Garde ajoutée** — `C15` dans `test-release-hardening.R` : balayage **statique**
+de `modules/` ; tout serveur appelant `ns()` doit le lier. Elle attrape la
+**classe** entière, pas ces deux occurrences. **Cas négatif vérifié** : la garde
+détecte bien les deux versions committées d'avant correctif.
+
+**Leçon** — même famille que §2ao.7 : ce qui n'est pas exercé **au moment où ça
+casse** passe inaperçu, quel que soit le nombre de tests verts. Ici le
+déclencheur est l'affichage d'une branche d'UI ; là c'était un objet réel. Un
+test statique de la classe est le seul filet qui tienne dans les deux cas.
+
 ### 5bis. Pourquoi Bulk V2 était « verrouillé » — et ce qui restait
 
 Question posée le 2026-09-11. Réponse : il y avait **trois** raisons, dont une
