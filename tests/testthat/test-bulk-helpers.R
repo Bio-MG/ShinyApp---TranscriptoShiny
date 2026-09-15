@@ -27,6 +27,10 @@
 source_project_file("R/core/io_helpers.R")   # defines %||%, sourced first in app.R
 source_project_file("R/core/validation.R")     # canonical guards (app.R loads before bulk_helpers)
 source_project_file("R/bulk/bulk_helpers.R")
+# PLOT-S6c (P0) : build_dds() et run_bulk_de_dispatch() appellent la garde de
+# counts de bulk_assert_raw_counts() (domaine correction de batch) — le
+# fichier doit donc être chargé ici aussi.
+source_project_file("R/bulk/batch_correction.R")
 source_project_file("R/plotting/palettes.R")   # sourced last in app.R — wins on name clashes
 source_project_file("R/plotting/datatable.R")   # PLOT-S3 : build_de_results_dt() -> ts_datatable()
 
@@ -288,4 +292,61 @@ test_that("bulk_role_colors 'manual' overrides only the supplied roles", {
 
 test_that("bulk_role_colors falls back to 'default' for an unknown palette name", {
   expect_equal(bulk_role_colors("not_a_real_palette"), bulk_role_colors("default"))
+})
+
+# =============================================================================
+# PLOT-S6c (P0) — counts non entiers : plus d'arrondi SILENCIEUX dans le DE
+# =============================================================================
+# Défaut mesuré (audit externe, STATUS §2an) : `round()` était appliqué sans
+# trace sur le chemin DE — avec un simple warning dans build_dds(), et SANS
+# aucun avertissement dans les branches edgeR / limma (DGEList(counts = round(...))).
+# Les chiffres analysés n'étaient donc plus ceux fournis.
+.plots6c_counts <- function(seed = 11, genes = 40, samples = 6) {
+  set.seed(seed)
+  m <- matrix(rpois(genes * samples, lambda = 200), genes, samples,
+              dimnames = list(paste0("G", seq_len(genes)), paste0("s", seq_len(samples))))
+  meta <- data.frame(condition = rep(c("A", "B"), each = samples %/% 2),
+                     row.names = colnames(m))
+  list(counts = m, meta = meta)
+}
+
+test_that("build_dds refuse des counts non entiers au lieu de les arrondir (P0)", {
+  d <- .plots6c_counts()
+
+  # counts entiers : inchangé (DESeqDataSet est un objet S4)
+  expect_s4_class(build_dds(d$counts, d$meta, "~ condition", run_deseq = FALSE),
+                  "DESeqDataSet")
+
+  # quelques valeurs continues : REFUS CLASSÉ (avant : warning + arrondi muet)
+  mixed <- d$counts
+  mixed[1:3, 1] <- mixed[1:3, 1] + 0.4
+  err <- tryCatch(build_dds(mixed, d$meta, "~ condition", run_deseq = FALSE),
+                  error = function(e) e)
+  expect_s3_class(err, "bulk_batch_correction_error")
+  expect_identical(err$state, "not_raw_counts")
+
+  # opt-in EXPLICITE : l'arrondi redevient possible, mais il est annoncé
+  expect_warning(
+    dds <- build_dds(mixed, d$meta, "~ condition", run_deseq = FALSE,
+                     allow_non_integer = TRUE),
+    "non-enti"
+  )
+  expect_true(all(DESeq2::counts(dds) == round(mixed)))
+})
+
+test_that("run_bulk_de_dispatch (edgeR/limma) refuse aussi les counts non entiers (P0)", {
+  d <- .plots6c_counts()
+  mixed <- d$counts
+  mixed[1:2, 2] <- mixed[1:2, 2] + 0.25
+
+  for (engine in c("edger", "limma")) {
+    err <- tryCatch(
+      run_bulk_de_dispatch(engine, mixed, d$meta, "condition", "B", "A"),
+      error = function(e) e)
+    expect_s3_class(err, "bulk_batch_correction_error")
+    expect_identical(err$state, "not_raw_counts")
+  }
+  # des counts entiers passent toujours
+  expect_true(is.data.frame(
+    run_bulk_de_dispatch("edger", d$counts, d$meta, "condition", "B", "A")))
 })

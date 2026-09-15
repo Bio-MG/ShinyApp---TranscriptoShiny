@@ -78,7 +78,7 @@ filter_bulk_counts <- function(counts_matrix, min_count = 10,
 
 build_dds <- function(counts_matrix, metadata, design_formula = "~ condition",
 
-                       run_deseq = TRUE) {
+                       run_deseq = TRUE, allow_non_integer = FALSE) {
 
   if (!requireNamespace("DESeq2", quietly = TRUE)) {
 
@@ -125,6 +125,16 @@ build_dds <- function(counts_matrix, metadata, design_formula = "~ condition",
     stop("La matrice de counts contient des valeurs négatives — DESeq2 requiert des counts bruts.")
 
   }
+
+  # PLOT-S6c (P0, audit §2an) — GARDE DE COUNTS ENFIN CÂBLÉE SUR LE CHEMIN DE.
+  # Avant : build_dds() arrondissait les valeurs non entières avec un simple
+  # warning, et les branches edgeR/limma le faisaient SANS aucun avertissement
+  # (`DGEList(counts = round(...))`) : les chiffres analysés n'étaient plus
+  # ceux fournis. La garde canonique du dépôt (domaine correction de batch)
+  # refuse désormais par défaut ; l'arrondi reste possible mais doit être
+  # DÉCLARÉ (allow_non_integer = TRUE) — et il est alors annoncé ci-dessous.
+  bulk_assert_raw_counts(counts_matrix, "analyse différentielle (counts)",
+                         allow_non_integer = allow_non_integer)
 
   if (any(counts_matrix != round(counts_matrix), na.rm = TRUE)) {
 
@@ -425,7 +435,17 @@ run_bulk_de_dispatch <- function(engine, counts_matrix, metadata, condition_col,
 
                                   group_target, group_ref, dds = NULL, shrink = TRUE,
 
-                                  covariates = character(0), p_adjust_method = "BH") {
+                                  covariates = character(0), p_adjust_method = "BH",
+
+                                  allow_non_integer = FALSE) {
+
+  # PLOT-S6c (P0, audit §2an) — les moteurs edgeR et limma faisaient
+  # `round(counts)` SANS le moindre avertissement (DGEList(counts = round(...))).
+  # La garde est posée ici, une seule fois, pour les trois moteurs : le moteur
+  # deseq2 consomme un dds déjà construit par build_dds(), qui applique la même
+  # garde — les deux chemins sont donc couverts.
+  bulk_assert_raw_counts(counts_matrix, paste0("analyse différentielle (", engine, ")"),
+                         allow_non_integer = allow_non_integer)
 
   switch(engine,
 

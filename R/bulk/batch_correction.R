@@ -63,8 +63,13 @@ bulk_batch_correction_public_api <- function() {
 #'
 #' @param mat Matrice numérique (gènes x échantillons), counts bruts.
 #' @param context Contexte cité dans le message d'erreur.
+#' @param allow_non_integer Autoriser EXPLICITEMENT des valeurs non entières
+#'   (l'appelant assume alors l'arrondi). Défaut FALSE : toute valeur non
+#'   entière est refusée, parce que l'arrondir changerait les chiffres analysés.
+#'   Avec TRUE, l'ancienne règle s'applique (>= 95 % d'entiers requis).
 #' @return La matrice, invisible — sinon stop classé `bulk_batch_correction_error`.
-bulk_assert_raw_counts <- function(mat, context = "correction de batch") {
+bulk_assert_raw_counts <- function(mat, context = "correction de batch",
+                                   allow_non_integer = FALSE) {
   if (is.null(mat) || !is.matrix(mat) || !is.numeric(mat)) {
     stop(errorCondition(sprintf("Échec %s : une matrice numérique de counts bruts est requise (reçu : %s).",
                  context, if (is.null(mat)) "NULL" else paste(class(mat), collapse = "/")),
@@ -92,7 +97,28 @@ bulk_assert_raw_counts <- function(mat, context = "correction de batch") {
                  class = "bulk_batch_correction_error", state = "invalid_input"))
   }
   frac_int <- mean(abs(fin - round(fin)) < 1e-8)
-  if (frac_int <= 0.95) {
+
+  # PLOT-S6c (P0, audit §2an) — par DÉFAUT, aucune valeur non entière n'est
+  # tolérée. L'ancienne règle (>= 95 % d'entiers) laissait passer une matrice
+  # « presque entière », et l'appelant (build_dds) arrondissait alors ces
+  # quelques valeurs avec un simple warning — dans les branches edgeR/limma,
+  # SANS même un avertissement. Les chiffres analysés n'étaient donc plus ceux
+  # fournis, sans trace. `allow_non_integer = TRUE` rétablit explicitement
+  # l'ancienne tolérance : l'arrondi redevient possible, mais il est DÉCLARÉ.
+  if (!isTRUE(allow_non_integer)) {
+    if (frac_int < 1) {
+      n_bad <- sum(abs(fin - round(fin)) >= 1e-8)
+      dev   <- max(abs(fin - round(fin)))
+      stop(errorCondition(paste0(
+        "Échec ", context, " : ", n_bad, " valeur(s) non entière(s) sur ",
+        length(fin), " (écart maximal ", format(dev, digits = 3), "). ",
+        "Arrondir modifierait les chiffres analysés sans qu'ils soient ceux ",
+        "fournis. Fournissez des counts BRUTS (une matrice normalisée / VST ",
+        "n'a pas de sens pour un test de comptage). Si l'arrondi est ",
+        "réellement voulu, passez allow_non_integer = TRUE."),
+        class = "bulk_batch_correction_error", state = "not_raw_counts"))
+    }
+  } else if (frac_int <= 0.95) {
     stop(errorCondition(paste0("Échec ", context, " : cette matrice ne ressemble PAS à des counts bruts ",
                  "(valeurs continues — seule ", sprintf("%.1f%%", 100 * frac_int),
                  " des valeurs sont entières). ComBat-seq s'applique sur les counts BRUTS, ",

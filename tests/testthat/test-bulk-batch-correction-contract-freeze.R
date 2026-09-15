@@ -40,7 +40,8 @@ test_that("public API surface is frozen (names + signatures)", {
   )
   expected_api <- list(
     bulk_batch_correction_public_api = list(),
-    bulk_assert_raw_counts           = list(mat = NULL, context = NULL),
+    bulk_assert_raw_counts           = list(mat = NULL, context = NULL,
+                                            allow_non_integer = NULL),
     bulk_batch_correction_design     = list(metadata = NULL, batch_col = NULL,
                                             condition_col = NULL),
     bulk_batch_correction_label      = list(batch_col = NULL, condition_col = NULL,

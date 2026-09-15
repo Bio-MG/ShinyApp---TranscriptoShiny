@@ -106,6 +106,31 @@ test_that("bulk_assert_raw_counts accepts counts and rejects transformed input",
                    "invalid_input")
 })
 
+# ── PLOT-S6c (P0) : une matrice PRESQUE entière n'est plus tolérée ─────────
+test_that("bulk_assert_raw_counts refuse une matrice presque entière (P0)", {
+  fx <- .bc_fixture()
+  # 1 % de valeurs continues. L'ANCIENNE règle (>= 95 % d'entiers) laissait
+  # passer, puis build_dds() arrondissait CES valeurs avec un simple warning —
+  # les chiffres analysés n'étaient plus ceux fournis, sans trace.
+  mixed <- fx$counts
+  idx <- seq_len(max(1L, floor(0.01 * length(mixed))))
+  mixed[idx] <- mixed[idx] + 0.37
+
+  err <- tryCatch(bulk_assert_raw_counts(mixed), error = function(e) e)
+  expect_s3_class(err, "bulk_batch_correction_error")
+  expect_identical(err$state, "not_raw_counts")
+  expect_match(conditionMessage(err), "non enti")
+  expect_match(conditionMessage(err), "allow_non_integer")
+
+  # L'échappatoire doit être DÉCLARÉE explicitement (et reste l'ancienne règle)
+  expect_invisible(bulk_assert_raw_counts(mixed, allow_non_integer = TRUE))
+
+  # Une matrice franchement continue reste refusée même avec l'échappatoire
+  expect_error(bulk_assert_raw_counts(log2(fx$counts + 1) + 0.123456,
+                                      allow_non_integer = TRUE),
+               class = "bulk_batch_correction_error")
+})
+
 # ── Contrôle du plan ───────────────────────────────────────────────────────
 test_that("bulk_batch_correction_design flags feasibility and group usage", {
   fx <- .bc_fixture()
