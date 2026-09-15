@@ -10,6 +10,75 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > Leur état fait foi dans **`docs/STATUS.md`** §1 et §2. Ce fichier reprend à
 > partir de `STAT-S1`.
 
+## [V1.x — FERMETURE renv] — 2026-09-15 — fermeture de dépendances complète (447 → 482) + garde §4
+
+### Le problème mesuré
+Un lockfile n'est restaurable que si la **fermeture** `Depends`/`Imports`/
+`LinkingTo` de ses paquets y figure aussi. Mesure : elle ne l'était pas.
+
+| État | Paquets | Trous de fermeture |
+|---|---|---|
+| `HEAD` | 438 | **10** (pré-existants) |
+| après enregistrement des 9 | 447 | **35** (+24, leurs dépendances) |
+| après fermeture | **482** | **0** |
+
+Les 10 trous pré-existants venaient de paquets **déjà** dans le lock :
+`ggpubr` → `ggsci`, `ggsignif`, `polynom`, `rstatix` ; `miloR` →
+`ggbeeswarm`, `pracma` ; `jsonlite` → `RcppML`. **Le lock était donc déjà non
+restaurable avant ce jalon** — le défaut n'a pas été introduit ici.
+
+### Ajouté
+- **`tools/check_renv_hermeticity.R` §4 — fermeture de dépendances** : remonte
+  `Depends`/`Imports`/`LinkingTo` récursivement depuis les `DESCRIPTION`
+  installés (via `read.dcf`, base R, aucun paquet chargé) et compte comme
+  **erreur** tout paquet de la fermeture absent du lock. Le garde mesure
+  désormais la vraie propriété — *« `restore()` tient-il ? »* — et non plus
+  seulement *« chaque entrée existe-t-elle ? »*.
+  **Vérifié sur un cas négatif** : le lock de `HEAD` est bien signalé à 10 trous.
+
+### Corrigé
+- **44 paquets enregistrés** (447 → 482) : les 9 utilisés mais non déclarés
+  (`decoupleR`, `GSVA`, `msigdbr`, `survminer`, `sva`, `variancePartition`,
+  `WGCNA`, `sceasy`, `loomR`) puis les **35** de la fermeture (`GSEABase`,
+  `dynamicTreeCut`, `impute`, `preprocessCore`, `lmerTest`, `Hmisc`,
+  `SpatialExperiment`, `fastcluster`, `genefilter`, …).
+- **15 paquets** ramenés de `R-4.4.2/library` vers la bibliothèque du projet
+  (copie, pas déplacement) : `beeswarm`, `corrplot`, `ggbeeswarm`, `ggsci`,
+  `ggsignif`, `Hmisc`, `htmlTable`, `litedown`, `markdown`, `polynom`,
+  `preprocessCore`, `RcppML`, `rstatix`, `SpatialExperiment`, `vipor`.
+- Les 4 paquets Bioconductor enregistrés via `renv::record()` (`GSVA`,
+  `decoupleR`, `sva`, `variancePartition`) passés à la forme **canonique**
+  `Source: Bioconductor` + `Repository: "Bioconductor 3.20"` (celle des 67
+  entrées existantes, et celle qu'écrit `renv::snapshot()`), au lieu de la forme
+  minoritaire `Source: Repository` + `Repository: BioCsoft`.
+- Après correction : **470 / 470 hermétiques, 0 hors projet, 0 trou de
+  fermeture, 0 erreur** (2 avertissements = `dorothea`, `progeny`, optionnels).
+
+### Note technique — enregistrer un paquet GitHub **hors réseau**
+`renv::record("owner/repo@sha")` échoue ou **bloque** (résolution de remote
+distante ; 4 min 27 sans résultat), et `renv::record("sceasy")` répond
+`failed to resolve remote 'sceasy'`. Solution retenue : appeler la fonction que
+renv emploie **lui-même** pour enregistrer un paquet installé,
+`renv:::renv_snapshot_description(<chemin>)` — hors réseau, et garanti identique
+à ce qu'un `snapshot()` écrirait.
+
+### Note technique — `git diff --numstat` peut mentir
+Insérer un gros bloc fait mal aligner le diff de **Myers** : ce jalon affichait
+`1631 23` (23 « suppressions ») alors qu'**aucun** bloc pré-existant n'était
+modifié. Vérification fiable, dans cet ordre :
+1. `git diff --diff-algorithm=patience --numstat` → `1608 0` ;
+2. comparaison **bloc par bloc** des `Packages` (nom → lignes) entre `HEAD` et
+   le fichier : 438 → 482, **0 disparu, 0 modifié**.
+
+### ⚠️ Reste ouvert (jalon distinct)
+**14 dérives de version** lock ↔ bibliothèque — `bbotk`, `bit64`, `bslib`,
+`class`, `future`, `hexbin`, `igraph` (lock 2.2.1 / installé 2.3.3),
+`mlr3learners`, `nnet`, `sf`, `spatstat.explore`, `spatstat.geom`,
+`spatstat.random`, `xml2`. **Toutes pré-existantes** (versions identiques à
+`HEAD`, vérifié). C'est ce que `renv::status()` signale encore
+(`synchronized: FALSE`). Les corriger suppose de **réinstaller** ces paquets aux
+versions du lock — donc re-mesurer la suite complète ensuite.
+
 ## [V1.x — HERMÉTICITÉ renv] — 2026-09-15 — 7 paquets hors bibliothèque projet + garde
 
 ### Ajouté
@@ -39,6 +108,10 @@ teardown déjà documenté en CC-1. Contournement identique :
 `loomR`, `msigdbr`, `sceasy`, `survminer`, `sva`, `variancePartition`,
 `WGCNA`, et **`dorothea` / `progeny` non installés du tout**.
 `renv::restore()` sur une machine propre ne les poserait pas.
+
+> ✅ **Traité par le jalon suivant** — `[V1.x — FERMETURE renv]` (ci-dessus) :
+> les 9 sont enregistrés, et la **fermeture de dépendances** complète l'est
+> aussi (482 paquets, 0 trou).
 
 ## [V1.x — HOTFIX `ns`] — 2026-09-15 — « impossible de trouver la fonction "ns" » dans deux serveurs
 
