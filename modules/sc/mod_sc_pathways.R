@@ -88,6 +88,12 @@ mod_sc_pathways_output_ui <- function(id) {
 
 mod_sc_pathways_server <- function(id, global_data, shared_rv) {
   moduleServer(id, function(input, output, session) {
+    # OBLIGATOIRE : `ns` n'est lie que dans les fonctions UI (NS(id)), pas dans
+    # le serveur. Sans cette ligne, un renderUI qui appelle ns() leve
+    # « impossible de trouver la fonction "ns" » — et seulement quand la branche
+    # s'affiche, donc invisible au demarrage. Garde : test-release-hardening.R.
+    ns <- session$ns
+
     # ── i18n proxy ──────────────────────────────────────────────────────────
     .tr <- function(key) {
       tr <- isolate(global_data$i18n)
