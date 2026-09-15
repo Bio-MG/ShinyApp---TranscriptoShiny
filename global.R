@@ -38,6 +38,46 @@ options(future.globals.maxSize = 10000 * 1024^2)
 
 options(shiny.maxRequestSize = 5000 * 1024^2)
 
+# --- 1bis. RENDU DES PLOTS : backend PNG EPINGLE + dimension MINIMALE -------
+# PLOT-S6. Deux defauts distincts, MESURES le 2026-09-15 ; le detail des mesures
+# et la raison d'etre des planchers sont dans R/plotting/plot_dims.R.
+#
+# (1) BACKEND PNG NON DECLARE.
+#     `shiny:::startPNG()` choisit son device par `is_installed("ragg")` ->
+#     `Cairo::CairoPNG` -> `grDevices::png`. Ni ragg ni Cairo ne sont des
+#     entrees de renv.lock : le rendu dependait donc de paquets presents ou non
+#     dans la bibliotheque SYSTEME, sans le dire — et c'est le libelle de
+#     l'erreur (« figure margins too large » avec ragg/Cairo, « invalid 'width'
+#     or 'height' » avec grDevices::png) qui trahissait le choix. On epingle :
+#     ragg s'il est declare, sinon grDevices::png (base R) ; JAMAIS Cairo, qui
+#     n'est pas declare. Le choix devient reproductible d'une machine a l'autre.
+options(shiny.usecairo = FALSE)
+options(shiny.useragg  = requireNamespace("ragg", quietly = TRUE))
+#
+# (2) DEVICE DE SURFACE NULLE -> « figure margins too large ».
+#     Le client n'envoie la taille d'un output que si `width != 0 || height != 0`
+#     (shiny.js, doSendSize) : un element dont UNE SEULE dimension est nulle
+#     passe donc tel quel, et `startPNG()` ouvre un device 0 x N ou son
+#     `plot.new()` echoue. Le plot n'est jamais fautif.
+#     Correctif : `renderPlot()` est enveloppe pour que le mode "auto" — le seul
+#     pilote par le client — passe par des dimensions BORNEES. Les 92 sites de
+#     modules/ sont couverts sans etre touches : tous appellent `renderPlot()`
+#     sans qualification, aucun n'ecrit `shiny::renderPlot()`.
+#     `ts_render_plot_args()` vit dans R/plotting/plot_dims.R, source plus loin
+#     par app.R : resolu a l'APPEL, pas au chargement de ce fichier.
+renderPlot <- function(expr, width = "auto", height = "auto", res = 72, ...,
+                       alt = NA, env = parent.frame(), quoted = FALSE,
+                       execOnResize = FALSE, outputArgs = list()) {
+  expr_q <- if (isTRUE(quoted)) expr else substitute(expr)
+  dims   <- ts_render_plot_args(width, height)
+  shiny::renderPlot(
+    expr_q,
+    width = dims$width, height = dims$height,
+    res = res, ..., alt = alt, env = env, quoted = TRUE,
+    execOnResize = execOnResize, outputArgs = outputArgs
+  )
+}
+
 
 
 # --- 2. PACKAGES (CRAN / Bioconductor — installables via install.packages()/BiocManager) ---
