@@ -42,7 +42,7 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 | `docs/proposals/CCC_9_POPULATION_RARITY_PROPOSAL.md` | **Proposition CCC 9 — question 1** (rareté par population annotée) : jalon descriptif, 9 éléments V1.x, 5 décisions — ✅ **livrée** (`8c1a969`) : les 5 décisions §12 ont été appliquées telles quelles | Référence de conception (état réel : `STATUS.md` §2ac) |
 | `docs/release/UPGRADE_AND_COMPATIBILITY.md` | §3 = parking officiel V1.x (4D-3, 4E-4, 4F) | Pour les propositions V1.x |
 | `docs/contracts/*.md` | **29** contrats gelés (contract-first) — ⚠️ non versionnés (`docs/` gitignoré) | Avant de toucher un domaine gelé |
-| `docs/contracts/CELLCHAT_ENGINE_CONTRACT.md` | **29ᵉ** contrat (2026-09-15) — moteur CellChat natif, jalons **CC-1..CC-5** ; **CC-1..CC-4 livrés** (CellChat 2.2.0.9001 épinglé par SHA, moteur exécutable), reste **CC-5** (UI Path B) | Avant tout travail sur le moteur CellChat |
+| `docs/contracts/CELLCHAT_ENGINE_CONTRACT.md` | **29ᵉ** contrat (2026-09-15) — moteur CellChat natif, jalons **CC-1..CC-5** : **TOUS LIVRÉS** (CellChat 2.2.0.9001 épinglé par SHA, moteur exécutable, UI « calculer dans l'app ») — chantier **CLOS** | Avant tout travail sur le moteur CellChat |
 | `docs/kanban_roadmap.html` | Tableau visuel (lecture seule, miroir de `STATUS.md`) | Démonstration / vue d'ensemble |
 | `docs/archive/` | **Archives locales** (créé le 2026-09-14) : fiches caduques, handoffs consommés, artefacts de build obsolètes. ⚠️ **Rien n'est supprimé**, seulement déplacé — toute référence pointe le nouveau chemin | Quand une fiche semble manquer |
 | `docs/AUDIT_VERIFICATION_BULK_SC.md` | **Audit externe Bulk/SC VÉRIFIÉ contre le code** (2026-09-14) : 20 confirmées, 4 nuancées, 0 infirmée, **5 trouvées en vérifiant**. Bilan + ordre en 8 jalons — `STATUS.md` §2an | **Avant tout travail Bulk DE / pseudobulk / multi** |
@@ -157,7 +157,7 @@ avance jalon par jalon, un jalon = un commit.
 | 8 | **4E-4** — exécution async de la DA | M | ~~décision 1 (pool)~~ ✅ **tranchée le 2026-09-14** : **(b) pool applicatif partagé** + réserve « pool dédié » multi-échantillons | 🟢 **DÉBLOQUÉ** — `STATUS.md` §2am.1 |
 | 9 | ~~Boutons d'export DT sur les ~43 tables restantes + `pageLength` normalisé~~ | M | ~~décision ouverte~~ | ✅ **LIVRÉ le 2026-09-14 (DT-EXPORT)** — contrat `PLOT_DATATABLE_CONTRACT.md` §6 option B, 73 sites via `ts_datatable()`, `pageLength = 15` + boutons nommés sur les tables de résultats, aperçus exclus — `STATUS.md` §2ai |
 
-#### 2.0bis Chantier courant — moteur CellChat natif (décision §2al, `STATUS.md` §2ao)
+#### 2.0bis ✅ Chantier CLOS — moteur CellChat natif (décision §2al, `STATUS.md` §2ao)
 
 Découpé en jalons **CC-1 → CC-5**, un jalon = un commit. Source de conception :
 `docs/proposals/V1X_CELLCHAT_ENGINE_PROPOSAL.md` §7.
@@ -168,7 +168,7 @@ Découpé en jalons **CC-1 → CC-5**, un jalon = un commit. Source de conceptio
 | 11 | ~~**CC-2** — contrat gelé `CELLCHAT_ENGINE_CONTRACT.md`~~ | S | ~~CC-1~~ | ✅ **LIVRÉ** — 29ᵉ contrat, `STATUS.md` §2ao.4 |
 | 12 | ~~**CC-3** — moteur `R/sc/sc_communication_engine.R` (12 champs, moteur éphémère)~~ | M | CC-2 | ✅ **LIVRÉ** |
 | 13 | ~~**CC-4** — test + gardes (conventions, duplication)~~ | S | CC-3 | ✅ **LIVRÉ** — **74 assertions, 0 échec, 0 skip** (le run réel n'est plus skippé) ; gardes à la baseline (0/324, 0/3) |
-| 14 | **CC-5** — module UI « calculer dans l'app » (Path B) + export conservé | M | **CC-1** | ⬜ **PROCHAIN JALON — débloqué par CC-1.** Le moteur s'exécute réellement ; exposer l'action a maintenant du sens. |
+| 14 | ~~**CC-5** — module UI « calculer dans l'app » (Path B) + export conservé~~ | M | **CC-1** | ✅ **LIVRÉ** (2026-09-15) — 5ᵉ source `cellchat_engine` dans `mod_sc_communication.R` : espèce **déclarée** (sans défaut), graine, permutations, bouton `comm_compute` dédié. Les deux voies déposent leur résultat via le **même** `.store_result()` ⇒ **aucune vue ni aucun export n'a eu à changer** — preuve mécanique de la règle des deux voies. Chantier **CLOS**. |
 
 ⚠️ **Deux mesures préalables qui corrigent la proposition** (détail `STATUS.md`
 §2ao) :

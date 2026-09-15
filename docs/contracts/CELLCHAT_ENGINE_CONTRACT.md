@@ -281,6 +281,43 @@ Helpers internes (préfixés d'un point) : `.CELLCHAT_ENGINE_STATES`,
   l'application existe désormais, en plus de l'import).
 - `config/defaults.R` : `TS_CELLCHAT_NBOOT_DEFAULT`,
   `TS_CELLCHAT_SEED_DEFAULT`, `TS_CELLCHAT_MIN_GROUPS`.
-- **Aucun module modifié** dans ce jalon (l'UI Path B est le jalon **CC-5**).
+- **UI Path B = jalon CC-5** : `modules/sc/mod_sc_communication.R` gagne une
+  source `cellchat_engine` (voir §10). Aucune vue ni aucun export n'a eu à
+  changer — c'est la preuve mécanique de la règle des deux voies.
 - Le cache (`cerberus_cache_*`) n'est **pas** étendu : `communication` n'est
   pas une portée autorisée (règle 8).
+
+---
+
+## 10. Exposition UI (CC-5)
+
+Le module `modules/sc/mod_sc_communication.R` gagne une **cinquième source** :
+`cellchat_engine` — « Calculer dans l'application (CellChat) ».
+
+| Élément | Valeur | Règle |
+|---|---|---|
+| `comm_engine_species` | `human` / `mouse`, **sans défaut** | La base LR en découle et **ne se devine pas** à partir des données ⇒ choix **déclaré**, bloquant si absent (même motif que le mode LIANA). |
+| `comm_engine_seed` | `TS_CELLCHAT_SEED_DEFAULT` | Visible et tracé : la graine est un paramètre du calcul, pas un effet de bord. |
+| `comm_engine_nboot` | `TS_CELLCHAT_NBOOT_DEFAULT` | Nombre de permutations. |
+| `comm_compute` | bouton dédié | Le bouton « Importer et valider » est **masqué** pour cette source (il exigerait un fichier qui n'existe pas). |
+| `comm_import` | inchangé | La branche import **se protège** explicitement contre `cellchat_engine`. |
+
+**Règle des deux voies, côté UI** : les deux chemins déposent leur résultat via
+le **même** appel `.store_result(<resultat>, obj)` — `comm_state$result`,
+`comm_state$object_fingerprint`, `shared_rv$communication_result`,
+`provenance_append()`, puis remise à zéro des filtres. Aucune vue (DotPlot,
+heatmap pathways, réseau, centralité) ni aucun export (CSV/RDS) n'a eu à être
+modifié : c'est la **preuve mécanique** que le moteur produit bien la forme
+canonique. Toute divergence future entre les deux voies est un **bug**.
+
+**Dépendance paresseuse, côté UI** : si `cellchat_engine_available()` est
+`FALSE`, le calcul est refusé avec un message qui donne le remède
+(`remotes::install_github("jinworks/CellChat")`) et rappelle que l'import reste
+disponible. Jamais une erreur brute.
+
+**Erreurs du moteur** : affichées **avec leur état**
+(`cellchat_engine_error_state()`), par exemple
+`[etat : no_interactions]` — les six états gelés au §5 ne se devinent pas dans
+un message générique.
+
+Test de gel : `tests/testthat/test-sc-communication-engine-ui.R`.

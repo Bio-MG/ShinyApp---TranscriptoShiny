@@ -1595,7 +1595,7 @@ inatteignable en pratique.
 
 ---
 
-### 2ao. 🟡 Moteur CellChat natif — jalon OUVERT, découpé CC-1..CC-5 (2026-09-14)
+### 2ao. ✅ Moteur CellChat natif — CHANTIER CLOS, CC-1..CC-5 livrés (2026-09-14 → 2026-09-15)
 
 Ouverture du chantier décidé en §2al (choix **B** retenu, Path A **conservé**).
 Ordre de travail : `docs/proposals/V1X_CELLCHAT_ENGINE_PROPOSAL.md` §7. Suivi
@@ -1660,7 +1660,7 @@ consignée ici ; elle **n'est pas** corrigée dans ce jalon.
 | **CC-2** | Contrat gelé `docs/contracts/CELLCHAT_ENGINE_CONTRACT.md` | ✅ **LIVRÉ** |
 | **CC-3** | `R/sc/sc_communication_engine.R` — `run_cellchat()`, réduction immédiate aux 12 champs | ✅ **LIVRÉ** |
 | **CC-4** | Test `tests/testthat/test-sc-communication-engine.R` (éponyme C9 + assertions de gel) + gardes | ✅ **LIVRÉ** |
-| **CC-5** | Module UI Path B + export conservé (**jalon suivant**, non entamé) | ⬜ |
+| **CC-5** | Module UI Path B + export conservé | ✅ **LIVRÉ** — voir §2ao.6 |
 
 #### 2ao.4 — Bilan de la session (2026-09-14 → 2026-09-15)
 
@@ -1963,6 +1963,41 @@ Anciennement non commité au 2026-09-10 (chantier Bulk V2 / batch-QC, cf. §2h) 
 
 `docs/kanban_roadmap.html` est **non suivi par git** (nouveau, ajouté par
 l'utilisateur) — à ajouter au suivi quand souhaité.
+
+#### 2ao.6 — CC-5 LIVRÉ : UI « calculer dans l'application » (2026-09-15)
+
+Le moteur était exécutable mais **inexposable** : aucune action ne permettait
+de lancer un calcul. `modules/sc/mod_sc_communication.R` gagne une **5ᵉ
+source** : `cellchat_engine` — « Calculer dans l'application (CellChat) ».
+
+| Élément | Choix | Raison |
+|---|---|---|
+| `comm_engine_species` | **sans défaut** (`selected = character(0)`) | La base LR en découle et ne se devine pas ⇒ choix **déclaré**, bloquant si absent. Même motif que le mode LIANA. |
+| `comm_engine_seed` / `comm_engine_nboot` | valeurs `TS_CELLCHAT_*` | Visibles et tracées : la graine est un paramètre du calcul. |
+| `comm_compute` | bouton dédié | Le bouton « Importer et valider » est **masqué** pour cette source (il exigerait un fichier inexistant) ; la branche import s'en protège aussi explicitement. |
+
+**Règle des deux voies, côté UI** : les deux chemins déposent leur résultat via
+le **même** `.store_result()`. Aucune vue (DotPlot, heatmap pathways, réseau,
+centralité) ni aucun export (CSV/RDS) n'a eu à changer — **c'est la preuve
+mécanique que le moteur produit bien la forme canonique**.
+
+**Dépendance paresseuse** : si `cellchat_engine_available()` est `FALSE`, le
+message donne le remède et rappelle que l'import reste disponible. Les erreurs
+du moteur sont affichées **avec leur état** (`[etat : no_interactions]`…).
+
+⚠️ **Invariant gelé reformulé, pas affaibli.**
+`test-communication-contract-freeze.R` interdisait `CellChatDB` dans le module :
+ce grep interdisait aussi le simple **libellé** du choix d'espèce
+(« Humain (CellChatDB.human) »). Reformulé en énumérant les vrais interdits
+(`library(`, `computeCommunProb`, `CellChatDB$`, `CellChat::`) et en vérifiant
+que le nom de la base n'apparaît que dans des libellés (**2 occurrences**).
+
+**Vérifications** : 388 tests du domaine communication (dont **53 assertions UI
+nouvelles**), 0 échec, 0 skip ; i18n **intègre** (13 clés, aucune dupliquée) ;
+gardes **0 erreur / 324 avert.** et **0 erreur / 3 avert.** — et surtout
+« aucun bloc dupliqué détecté », qui valide la factorisation `.store_result()`.
+
+**Chantier CLOS** : CC-1 → CC-5 tous livrés.
 
 ### 5bis. Pourquoi Bulk V2 était « verrouillé » — et ce qui restait
 

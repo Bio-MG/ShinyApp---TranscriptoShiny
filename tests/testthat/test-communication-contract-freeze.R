@@ -156,9 +156,23 @@ test_that("communication module defines exactly its three orchestration function
   expect_match(src, "communication_status_labels(", fixed = TRUE)
   expect_match(src, "communication_export_filename(", fixed = TRUE)
   expect_match(src, "provenance_append(", fixed = TRUE)
-  # Import uniquement : aucun appel CellChat/CellPhoneDB (aucun calcul).
-  expect_false(grepl("library\\(|CellChatDB|computeCommunProb|::run",
-                     src))
+  # Import ET calcul (CC-5) : le module ORCHESTRE, il n'IMPLEMENTE rien.
+  # L'invariant d'origine (« aucun appel CellChat ») reste entier sous une
+  # forme plus precise : aucun acces au paquet, seulement un appel au moteur
+  # public run_cellchat() et a son test de disponibilite.
+  expect_false(grepl("library\\(", src))
+  expect_false(grepl("computeCommunProb", src, fixed = TRUE))
+  expect_false(grepl("CellChatDB$", src, fixed = TRUE))   # acces a une base
+  expect_false(grepl("CellChat::", src, fixed = TRUE))    # appel qualifie
+  expect_false(grepl("::run", src, fixed = TRUE))
+  expect_match(src, "run_cellchat(", fixed = TRUE)
+  expect_match(src, "cellchat_engine_available(", fixed = TRUE)
+  # Le nom de la base n'apparait que dans des LIBELLES utilisateur (les deux
+  # choix d'espece) — jamais dans du code.
+  expect_identical(
+    lengths(regmatches(src, gregexpr("CellChatDB", src, fixed = TRUE))),
+    2L
+  )
 })
 
 # ── Isolation des consommateurs rapport/export ──────────────────────────────

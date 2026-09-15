@@ -9984,6 +9984,58 @@
     {
       "fr": "sans correction",
       "en": "no correction"
+    },
+    {
+      "fr": "Communication cellule-cellule — import de resultats externes (CellChat / CellPhoneDB / LIANA) ou calcul CellChat dans l'application. ",
+      "en": "Cell-cell communication — import external results (CellChat / CellPhoneDB / LIANA) or compute CellChat in the app. "
+    },
+    {
+      "fr": "Aucun score recompose. Les scores de sources differentes ne sont pas comparables.",
+      "en": "No score is recomposed. Scores from different sources are not comparable."
+    },
+    {
+      "fr": "Calculer dans l'application (CellChat)",
+      "en": "Compute in the app (CellChat)"
+    },
+    {
+      "fr": "Espece (base ligand-recepteur)",
+      "en": "Species (ligand-receptor database)"
+    },
+    {
+      "fr": "Humain (CellChatDB.human)",
+      "en": "Human (CellChatDB.human)"
+    },
+    {
+      "fr": "Souris (CellChatDB.mouse)",
+      "en": "Mouse (CellChatDB.mouse)"
+    },
+    {
+      "fr": "Choix OBLIGATOIRE : la base ligand-recepteur en decoule, elle ne se devine pas a partir des donnees.",
+      "en": "REQUIRED choice: the ligand-receptor database follows from it and cannot be guessed from the data."
+    },
+    {
+      "fr": "Nombre de permutations",
+      "en": "Number of permutations"
+    },
+    {
+      "fr": "Les p-values viennent d'une permutation : la graine est un parametre du calcul, elle est tracee dans la provenance. Plus de permutations = calcul plus long.",
+      "en": "p-values come from a permutation: the seed is a computation parameter and is traced in the provenance. More permutations means a longer computation."
+    },
+    {
+      "fr": "Lancer le calcul CellChat",
+      "en": "Run CellChat computation"
+    },
+    {
+      "fr": "Calcul CellChat en cours...",
+      "en": "Running CellChat..."
+    },
+    {
+      "fr": "Calcul CellChat termine.",
+      "en": "CellChat computation finished."
+    },
+    {
+      "fr": "Erreur calcul communication :",
+      "en": "Communication computation error:"
     }
   ]
 }
