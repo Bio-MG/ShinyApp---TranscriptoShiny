@@ -10,6 +10,43 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > Leur état fait foi dans **`docs/STATUS.md`** §1 et §2. Ce fichier reprend à
 > partir de `STAT-S1`.
 
+## [V1.x — CC-1] — 2026-09-15 — CellChat épinglé par SHA (moteur exécutable)
+
+Le moteur Path B livré au jalon précédent était **non exécutable** faute de
+dépendance installée. `CellChat` 2.2.0.9001 est désormais **épinglé par SHA**
+(`75253cd0…358f`) et inséré au lockfile avec les **12 dépendances manquantes**
+mesurées : 425 → **438** entrées, **+535 / −0 lignes**, **0 changement de
+version**. Le bloc « run réel » des tests n'est plus skippé.
+Détail : `docs/STATUS.md` **§2ao.5**.
+
+### Ajouté
+- `renv.lock` : `CellChat` (`Source: GitHub` + SHA) et `coda`, `collapse`,
+  `ggalluvial`, `ggnetwork`, `ggpubr`, `gridBase`, `network`, `NMF`, `registry`,
+  `rngtools`, `sna`, `statnet.common`.
+- Garde amont dans `run_cellchat()` : si `nrow(LR$LRsig) == 0`, état
+  **`no_interactions`** avec un message qui dit ce qui manque — au lieu du
+  « subscript out of bounds » opaque remonté par CellChat.
+- Test « aucune paire LR exploitable » (jeu jouet mesuré : 0 paire).
+
+### Corrigé
+- **`database_version` restait `NA`** : `CellChatDB.human$version` n'existe pas.
+  La version est lue dans `interaction$version` — base **mixte** `v1` + `v2`,
+  valeurs distinctes rapportées, jamais un choix arbitraire.
+- **`engine_sha` restait `NA`** : `utils::packageDescription()` lit
+  `Meta/package.rds`, qui ne porte pas les champs `Remote*`. Repli sur
+  `read.dcf()` du `DESCRIPTION` lui-même.
+
+### ⚠️ Réserve assumée
+- Installation de `CellChat` **incomplète sur ce poste** : `R CMD INSTALL`
+  échoue au lazy-load à cause du **segfault de teardown** (tout processus R
+  chargeant `dplyr` / `ggplot2` / `igraph` sort en 139 — documenté `STATUS.md`
+  §2l). Contournement `--no-clean-on-error --no-test-load` puis
+  `Meta/nsInfo.rds` régénéré : le paquet **fonctionne**, mais son arbre `Meta/`
+  reste partiel (`data.rds`, index d'aide).
+- `ggpubr` (dépendance directe) est résolu depuis la bibliothèque **système**
+  `R-4.4.2/library`, pas depuis celle du projet : enregistré au lockfile, mais
+  l'isolation renv n'est pas totale tant qu'il n'est pas installé côté projet.
+
 ## [V1.x — CC-2/3/4] — 2026-09-15 — Moteur CellChat natif (Path B)
 
 Décision utilisateur du 2026-09-14 (`docs/STATUS.md` §2al) : **choix B retenu**,

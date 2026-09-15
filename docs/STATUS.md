@@ -1656,7 +1656,7 @@ consignée ici ; elle **n'est pas** corrigée dans ce jalon.
 
 | # | Contenu | État |
 |---|---|---|
-| **CC-1** | Épinglage `CellChat` par **SHA** + insertion chirurgicale au lockfile | 🟡 **non abouti** — voir §2ao.4 |
+| **CC-1** | Épinglage `CellChat` par **SHA** + insertion chirurgicale au lockfile | ✅ **LIVRÉ** (réserve d'installation : §2ao.5) |
 | **CC-2** | Contrat gelé `docs/contracts/CELLCHAT_ENGINE_CONTRACT.md` | ✅ **LIVRÉ** |
 | **CC-3** | `R/sc/sc_communication_engine.R` — `run_cellchat()`, réduction immédiate aux 12 champs | ✅ **LIVRÉ** |
 | **CC-4** | Test `tests/testthat/test-sc-communication-engine.R` (éponyme C9 + assertions de gel) + gardes | ✅ **LIVRÉ** |
@@ -1748,6 +1748,77 @@ comme jalon distinct avec son test qui échoue d'abord.
   paraît « bloquée » alors qu'elle progresse. Toujours laisser la sortie visible.
 - `R.home("bin")` vaut `…/bin/x64` sous Windows : `file.path(R.home("bin"),
   "Rcmd.exe")` est correct, `…/bin/Rcmd.exe` n'existe pas.
+
+#### 2ao.5 — CC-1 ABOUTI : pin, installation tolérée, insertion lockfile (2026-09-15)
+
+**Cause racine trouvée** (elle manquait au §2ao.4) : sur ce poste, **tout**
+processus R qui charge `dplyr`, `ggplot2`, `igraph`, `NMF` ou `ggnetwork` sort
+en **139** — mais **au teardown**, c'est-à-dire **après** avoir fait son travail
+(contrôle : `stats`, `Matrix` et `circlize` sortent en 0). Or `R CMD INSTALL`
+lance un **sous-processus R** pour le lazy-load ; celui-ci écrit
+`R/CellChat.rdb`, puis meurt en 139 ⇒ INSTALL conclut « lazy loading failed » et
+**supprime** un paquet pourtant complet.
+
+| Hypothèse | Verdict |
+|---|---|
+| Paquets construits sous R 4.4.3 alors que R tourne en 4.4.2 | ❌ **infirmée** : `Matrix` est construit sous 4.4.3 **et** sort en 0 ; `igraph` est construit sous 4.4.2 **et** sort en 139 |
+
+**Contournement retenu** : `R CMD INSTALL --no-lock --no-clean-on-error
+--no-test-load` conserve le paquet complet ; `tools:::.install_package_namespace_info()`
+écrit ensuite le `Meta/nsInfo.rds` manquant (imports/exports/dynlibs/S3methods).
+
+⚠️ **Réserve assumée** : l'arbre `Meta/` reste incomplet (`data.rds`, index
+d'aide). Le paquet **fonctionne** — version 2.2.0.9001, 19 formals de
+`computeCommunProb` dont `nboot` et `seed.use`, base LR 3 233 interactions, S4
+`new("CellChat")` + `slotNames` OK — mais une réinstallation propre suppose de
+lever le segfault de teardown.
+
+**Verrouillage par SHA** : `git ls-remote` → `75253cd0…358f`, téléchargé en
+tarball (`CellChat` est absent de `available.packages()` : ni CRAN ni
+Bioconductor, confirmé). Les champs `Remote*`/`GithubSHA1` ont été reportés dans
+le `DESCRIPTION` installé — ce que `remotes` aurait écrit — pour que
+`engine_sha` soit traçable. Valeur lue par le moteur :
+`75253cd0c9e68410e6e721a6d3a0419a1d7e358f`.
+
+**Insertion lockfile PUREMENT ADDITIVE** : 425 → **438** entrées, **+535 / −0
+lignes**, 0 changement de version.
+
+⚠️ **Piège payé — `renv::record()` n'est pas chirurgical** : il ajoute bien les
+13 entrées **mais réécrit** 10 entrées préexistantes (`colorspace`, `drc`,
+`mgcv`, `multcomp`, `mvtnorm`, `nanonext`, `plotrix`, `sandwich`, `shinyFiles`,
+`shinycssloaders`) — du churn sur le travail d'un jalon antérieur. Procédure
+retenue : récupérer le **texte** produit par renv pour les 13 entrées,
+restaurer `renv.lock` depuis HEAD, puis réinsérer les blocs à leur position
+alphabétique. Bilan final : **0 suppression**.
+
+⚠️ **Isolation** : `ggpubr` (dépendance directe) est résolu depuis la
+bibliothèque **système** `R-4.4.2/library`, pas depuis la bibliothèque renv du
+projet. Enregistré au lockfile, mais l'isolation n'est pas totale tant qu'il
+n'est pas installé côté projet.
+
+**Trois pièges de plus, découverts en exécutant ENFIN le moteur :**
+
+1. **`CellChatDB.human$version` n'existe pas** (NULL, vérifié). La version est
+   portée par **chaque ligne** de `interaction$version`, et la base est
+   **mixte** (`CellChatDB v1` **+** `CellChatDB v2`). `.cellchat_engine_db()`
+   lisait `db[["version"]]` ⇒ `database_version` serait resté **NA** sans que
+   rien ne l'indique. Corrigé : valeurs distinctes réellement présentes,
+   jointes par `"; "`.
+2. **`utils::packageDescription()` ne voit pas les champs `Remote*`** : il lit
+   de préférence `Meta/package.rds`, alors que `read.dcf()` sur le
+   `DESCRIPTION` en voit 29 dont `RemoteSha`. Corrigé par un repli `read.dcf()`.
+3. **Un jeu trop pauvre fait échouer CellChat** sur « subscript out of bounds »,
+   parce qu'il annonce « 0 highly variable ligand-receptor pairs ». Le moteur
+   détecte désormais `nrow(LR$LRsig) == 0` **avant** l'appel et lève
+   `no_interactions` avec un message qui dit ce qui manque. Le test jouet
+   correspondant a été ajouté — un fixture de 47 gènes ne produit **aucune**
+   paire, un fixture avec de vrais gènes de signalisation en produit **109**.
+
+**Vérifications** : `renv::lockfile_read()` → 438 entrées, CellChat
+`Source: GitHub` + SHA ; gardes **0 erreur / 324 avert.** et **0 erreur /
+3 avert.** ; `test-sc-communication-engine.R` : **74 assertions, 0 échec,
+0 skip** — le bloc « run réel » n'est plus skippé et valide
+`net$prob = [source, target, interaction_name]`.
 
 **Conséquence produit** : le moteur est livré mais **non exécutable** —
 `run_cellchat()` lève `missing_dependency` (état prévu, avec guidage

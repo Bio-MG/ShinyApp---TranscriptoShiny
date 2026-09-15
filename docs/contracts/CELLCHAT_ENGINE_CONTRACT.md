@@ -57,12 +57,29 @@ Hors périmètre, explicitement :
 | Compilation | **oui** — `LinkingTo: Rcpp, RcppEigen` ⇒ Rtools requis à l'installation |
 | Démarrage de l'app | **jamais requis** — `requireNamespace("CellChat")` paresseux + erreur classée `missing_dependency` avec guidage d'installation |
 
-⚠️ **Statut du pin au 2026-09-15** : **non abouti** (jalon **CC-1**).
-`renv::install("jinworks/CellChat")` n'a rien installé après ~30 min bien que
-Rtools 4.4 soit détecté. Le moteur est donc livré mais **non exécutable** :
-`run_cellchat()` lève `missing_dependency`, l'application démarre normalement et
-Path A continue de fonctionner. La présente section décrit la **cible** ; CC-1
-viendra la satisfaire (détail : `STATUS.md` §2ao.4).
+✅ **Statut du pin au 2026-09-15** : **abouti** (jalon **CC-1**), avec une
+réserve d'installation décrite en `STATUS.md` §2ao.5.
+
+- `CellChat` **2.2.0.9001** épinglé par SHA `75253cd0…358f`, inséré au lockfile
+  (`Source: GitHub`) avec les **12 dépendances manquantes** mesurées (`coda`,
+  `collapse`, `ggalluvial`, `ggnetwork`, `ggpubr`, `gridBase`, `network`,
+  `NMF`, `registry`, `rngtools`, `sna`, `statnet.common`) : 425 → **438**
+  entrées, **0 suppression**, **0 changement de version** (insertion
+  chirurgicale — jamais de `renv::snapshot()` global).
+- ⚠️ **Réserve — installation incomplète sur ce poste** : `R CMD INSTALL`
+  échoue à l'étape « preparing package for lazy loading » parce que *tout*
+  processus R chargeant `dplyr` / `ggplot2` / `igraph` / `NMF` sort en **139**
+  au teardown (documenté `STATUS.md` §2l). L'installation a été conservée avec
+  `--no-clean-on-error --no-test-load`, puis complétée (`Meta/nsInfo.rds`).
+  **Le paquet fonctionne** — version lue, signature de `computeCommunProb`
+  vérifiée (19 formals, `nboot`, `seed.use`), base LR chargée (3 233
+  interactions), objets S4 utilisables — mais son arbre `Meta/` reste
+  incomplet (`data.rds`, index d'aide). Une réinstallation propre suppose de
+  lever ce segfault.
+- ⚠️ **Isolation** : `ggpubr` (dépendance directe) est résolu depuis la
+  bibliothèque **système** `R-4.4.2/library`, pas depuis la bibliothèque renv
+  du projet. Il est désormais enregistré au lockfile, mais l'isolation
+  n'est pas totale tant qu'il n'est pas installé côté projet.
 
 Précédent de pin par SHA : déjà **5 paquets GitHub** au lockfile (`BPCells`,
 `spacexr`, `STdeconvolve`, `SeuratDisk`, `schard`). Ce n'est donc pas une
@@ -90,14 +107,31 @@ lui serait propre : la forme de l'objet est **identique** des deux voies.
 | `engine` | `list(engine, engine_version, engine_sha, database, database_version, seed, nboot, n_populations, n_pathways_significant, n_interactions)` |
 | `engine_path` | `"B"` |
 
+⚠️ **Deux pièges mesurés** — découverts en **exécutant** le moteur, pas en
+lisant le code amont :
+
+1. **`database_version`** : `CellChatDB.human$version` **n'existe pas**
+   (NULL — vérifié). La version est portée par **chaque ligne** de
+   `interaction$version`, et la base livrée est **mixte** : valeurs distinctes
+   `CellChatDB v1` **et** `CellChatDB v2`. Le champ rapporte les valeurs
+   distinctes réellement présentes, jointes par `"; "` — ni choix arbitraire,
+   ni valeur inventée.
+2. **`engine_sha`** : `utils::packageDescription()` lit de préférence
+   `Meta/package.rds` (cache écrit à l'installation), qui ne porte **pas** les
+   champs `Remote*`/`Github*` — vérifié : `read.dcf()` voit 29 champs dont
+   `RemoteSha`, `packageDescription()` n'en voit aucun. Le SHA est donc relu
+   dans le `DESCRIPTION` lui-même.
+
 ### 3.1 Les 12 champs canoniques — cible commune
 
 `sender` · `receiver` · `ligand` · `receptor` · `interaction` · `pathway` ·
 `score` · `p_value` · `p_adjusted` · `source_method` · `source_file` ·
 `source_cell_identity_level`
 
-Extraction depuis l'objet CellChat (**structure réelle**, vérifiée sur le code
-amont `R/modeling.R`) :
+Extraction depuis l'objet CellChat (**structure réelle**, vérifiée **à
+l'exécution** sur CellChat 2.2.0.9001 : `net$prob` = 3 × 3 × 109 pour
+3 populations et 109 paires, `dimnames[[3]]` = noms d'interaction tels que
+`CXCL1_ACKR1` ; `LR$LRsig` porte bien `ligand`, `receptor`, `pathway_name`) :
 
 | Champ canonique | Source dans l'objet CellChat |
 |---|---|

@@ -106,14 +106,32 @@ cellchat_engine_available <- function() {
     return(list(engine = "CellChat", engine_version = NA_character_,
                 engine_sha = NA_character_))
   }
-  sha <- desc[["RemoteSha"]]
-  if (is.null(sha) || is.na(sha) || !nzchar(as.character(sha))) {
-    sha <- desc[["GithubSHA1"]]
+  # packageDescription() lit de PREFERENCE Meta/package.rds (cache ecrit a
+  # l'installation), qui ne porte PAS les champs Remote*/Github*. Verifie sur le
+  # paquet installe : read.dcf voit 29 champs dont RemoteSha,
+  # packageDescription() n'en voit aucun. Comme un remote GitHub n'est
+  # reproductible QUE par son SHA, on le relit dans le DESCRIPTION lui-meme.
+  dcf <- tryCatch(
+    read.dcf(file.path(find.package("CellChat"), "DESCRIPTION"))[1L, ],
+    error = function(e) NULL
+  )
+  get_field <- function(name) {
+    v <- desc[[name]]
+    if (!is.null(v) && length(v) == 1L && !is.na(v) && nzchar(as.character(v)))
+      return(as.character(v))
+    if (!is.null(dcf) && name %in% names(dcf)) {
+      v2 <- dcf[[name]]
+      if (length(v2) == 1L && !is.na(v2) && nzchar(as.character(v2)))
+        return(as.character(v2))
+    }
+    NA_character_
   }
+  sha <- get_field("RemoteSha")
+  if (is.na(sha)) sha <- get_field("GithubSHA1")
   list(
     engine         = "CellChat",
-    engine_version = as.character(desc[["Version"]]),
-    engine_sha     = if (is.null(sha) || is.na(sha)) NA_character_ else as.character(sha)
+    engine_version = get_field("Version"),
+    engine_sha     = sha
   )
 }
 
@@ -132,19 +150,34 @@ cellchat_engine_available <- function() {
               paste(as.character(species), collapse = ","))
     )
   }
-  if (!exists(db_name, where = asNamespace("CellChat"), inherits = FALSE)) {
+  # Un jeu de donnees paresseux (LazyData) n'est PAS une liaison du namespace :
+  # get(db_name, envir = asNamespace("CellChat")) echoue des qu'on s'est contente
+  # de requireNamespace() — verifie sur le paquet installe (et reverifye sur un
+  # paquet sain : le comportement est identique, ce n'est donc pas un symptome
+  # d'installation incomplete). utils::data() est la voie DOCUMENTEE et elle ne
+  # demande pas l'attachement du paquet.
+  db <- tryCatch(suppressWarnings({
+    env <- new.env(parent = emptyenv())
+    utils::data(list = db_name, package = "CellChat", envir = env)
+    get(db_name, envir = env, inherits = FALSE)
+  }), error = function(e) NULL)
+  if (is.null(db)) {
     .cellchat_engine_stop(
       "invalid_input",
       sprintf("base '%s' absente du package CellChat installe.", db_name)
     )
   }
-  db <- get(db_name, envir = asNamespace("CellChat"))
-  version <- tryCatch(db[["version"]], error = function(e) NULL)
+  # CellChatDB n'expose PAS de champ `version` (verifie : db$version est NULL).
+  # La version est portee par chaque ligne de `interaction`, et la base livree
+  # est MIXTE (v1 + v2). On ne choisit pas, on n'invente rien : on rapporte les
+  # valeurs distinctes reellement presentes.
+  ver <- tryCatch(db[["interaction"]][["version"]], error = function(e) NULL)
+  version <- if (is.null(ver) || !length(ver)) NA_character_ else
+    paste(sort(unique(as.character(ver))), collapse = "; ")
   list(
     db           = db,
     name         = as.character(db_name),
-    version      = if (is.null(version) || length(version) != 1L)
-      NA_character_ else as.character(version)
+    version      = version
   )
 }
 
@@ -389,6 +422,22 @@ run_cellchat <- function(cellchat_input, seed, nboot = TS_CELLCHAT_NBOOT_DEFAULT
                   function(o) CellChat::identifyOverExpressedGenes(o))
   ran_oi <- .step("interactions surexprimées",
                   function(o) CellChat::identifyOverExpressedInteractions(o))
+
+  # Un jeu sans aucune paire LR exploitable fait echouer computeCommunProb() sur
+  # une erreur opaque (« subscript out of bounds ») — verifie sur un jeu jouet.
+  # On detecte le cas AVANT l'appel et on le traduit en etat `no_interactions`,
+  # avec un message qui dit ce qui manque au lieu d'un indice de tableau.
+  lrsig0 <- tryCatch(object@LR$LRsig, error = function(e) NULL)
+  if (!is.null(lrsig0) && is.data.frame(lrsig0) && nrow(lrsig0) == 0L) {
+    .cellchat_engine_stop(
+      "no_interactions",
+      paste0("aucune paire ligand–récepteur exploitable : CellChat n'a retenu ",
+             "aucune interaction surexprimée sur ce jeu (gènes de signalisation ",
+             "absents de la matrice, ou expression non différentielle entre les ",
+             "populations). Le calcul est impossible ; aucun résultat n'est ",
+             "fabriqué à partir de rien.")
+    )
+  }
 
   .progress(sprintf("inférence des communications (%d permutations)", nboot))
   object <- tryCatch(

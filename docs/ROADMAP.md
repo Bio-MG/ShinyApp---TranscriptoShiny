@@ -42,7 +42,7 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 | `docs/proposals/CCC_9_POPULATION_RARITY_PROPOSAL.md` | **Proposition CCC 9 — question 1** (rareté par population annotée) : jalon descriptif, 9 éléments V1.x, 5 décisions — ✅ **livrée** (`8c1a969`) : les 5 décisions §12 ont été appliquées telles quelles | Référence de conception (état réel : `STATUS.md` §2ac) |
 | `docs/release/UPGRADE_AND_COMPATIBILITY.md` | §3 = parking officiel V1.x (4D-3, 4E-4, 4F) | Pour les propositions V1.x |
 | `docs/contracts/*.md` | **29** contrats gelés (contract-first) — ⚠️ non versionnés (`docs/` gitignoré) | Avant de toucher un domaine gelé |
-| `docs/contracts/CELLCHAT_ENGINE_CONTRACT.md` | **29ᵉ** contrat (2026-09-15) — moteur CellChat natif, jalons **CC-1..CC-5** ; ⚠️ **CC-1 (pin) non abouti** : moteur livré mais non exécutable | Avant tout travail sur le moteur CellChat |
+| `docs/contracts/CELLCHAT_ENGINE_CONTRACT.md` | **29ᵉ** contrat (2026-09-15) — moteur CellChat natif, jalons **CC-1..CC-5** ; **CC-1..CC-4 livrés** (CellChat 2.2.0.9001 épinglé par SHA, moteur exécutable), reste **CC-5** (UI Path B) | Avant tout travail sur le moteur CellChat |
 | `docs/kanban_roadmap.html` | Tableau visuel (lecture seule, miroir de `STATUS.md`) | Démonstration / vue d'ensemble |
 | `docs/archive/` | **Archives locales** (créé le 2026-09-14) : fiches caduques, handoffs consommés, artefacts de build obsolètes. ⚠️ **Rien n'est supprimé**, seulement déplacé — toute référence pointe le nouveau chemin | Quand une fiche semble manquer |
 | `docs/AUDIT_VERIFICATION_BULK_SC.md` | **Audit externe Bulk/SC VÉRIFIÉ contre le code** (2026-09-14) : 20 confirmées, 4 nuancées, 0 infirmée, **5 trouvées en vérifiant**. Bilan + ordre en 8 jalons — `STATUS.md` §2an | **Avant tout travail Bulk DE / pseudobulk / multi** |
@@ -164,11 +164,11 @@ Découpé en jalons **CC-1 → CC-5**, un jalon = un commit. Source de conceptio
 
 | Rang | Jalon | Effort | Dépend de | État |
 |---|---|---|---|---|
-| 10 | **CC-1** — épinglage `CellChat` par SHA + insertion **chirurgicale** dans `renv.lock` | S | décision §2al | 🔴 **NON ABOUTI** — les **11 dépendances sont installées**, le C++ de CellChat **compile**, mais `R CMD INSTALL` échoue au *lazy loading* (message R non affiché sous Windows). ⚠️ `renv::install("<user>/<repo>")` **se bloque** sur ce poste (prompt d'identifiants git) — passer par un tarball épinglé par SHA. Détail et pistes : `STATUS.md` §2ao.4 |
+| 10 | ~~**CC-1** — épinglage `CellChat` par SHA + insertion **chirurgicale** dans `renv.lock`~~ | S | décision §2al | ✅ **LIVRÉ** (2026-09-15) — `CellChat` 2.2.0.9001 épinglé par SHA `75253cd0…358f` ; lockfile 425 → **438** entrées (**+535 / −0**, 0 changement de version). Cause racine du précédent échec trouvée : **segfault de teardown** (tout R chargeant `dplyr`/`ggplot2`/`igraph` sort en 139) tuant le sous-processus de lazy-load. Contournement `--no-clean-on-error --no-test-load` + `Meta/nsInfo.rds`. ⚠️ **Réserve** : `Meta/` incomplet, et `ggpubr` résolu côté bibliothèque système. Détail : `STATUS.md` §2ao.5 |
 | 11 | ~~**CC-2** — contrat gelé `CELLCHAT_ENGINE_CONTRACT.md`~~ | S | ~~CC-1~~ | ✅ **LIVRÉ** — 29ᵉ contrat, `STATUS.md` §2ao.4 |
 | 12 | ~~**CC-3** — moteur `R/sc/sc_communication_engine.R` (12 champs, moteur éphémère)~~ | M | CC-2 | ✅ **LIVRÉ** |
-| 13 | ~~**CC-4** — test + gardes (conventions, duplication)~~ | S | CC-3 | ✅ **LIVRÉ** — 53 assertions, gardes à la baseline (0/324, 0/3) |
-| 14 | **CC-5** — module UI « calculer dans l'app » (Path B) + export conservé | M | **CC-1** | ⬜ **bloqué par CC-1** — inutile d'exposer une action qui lève `missing_dependency` |
+| 13 | ~~**CC-4** — test + gardes (conventions, duplication)~~ | S | CC-3 | ✅ **LIVRÉ** — **74 assertions, 0 échec, 0 skip** (le run réel n'est plus skippé) ; gardes à la baseline (0/324, 0/3) |
+| 14 | **CC-5** — module UI « calculer dans l'app » (Path B) + export conservé | M | **CC-1** | ⬜ **PROCHAIN JALON — débloqué par CC-1.** Le moteur s'exécute réellement ; exposer l'action a maintenant du sens. |
 
 ⚠️ **Deux mesures préalables qui corrigent la proposition** (détail `STATUS.md`
 §2ao) :
