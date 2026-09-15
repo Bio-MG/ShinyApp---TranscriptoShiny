@@ -2124,9 +2124,76 @@ tout**.
 impose la procédure chirurgicale (§2ao.2 : jamais de `renv::snapshot()`
 global ; `renv::record()` n'est **pas** chirurgical).
 
-À noter : `renv::status()` liste aussi **22 paquets en dérive de version**
+À noter : `renv::status()` liste aussi des paquets en **dérive de version**
 (bibliothèque ≠ lock, ex. `igraph`, `bslib`, `future`, `sf`) et un
-`CellChat [ref: main != master]` — la référence et non le SHA.
+`CellChat [ref: main != master]` — la référence et non le SHA. Compte
+**re-mesuré à 14** au §2ar (le « 22 » antérieur était périmé).
+
+### 2ar. Fermeture de dépendances du lock — 10 trous pré-existants, puis 35, puis 0 (2026-09-15)
+
+**Le défaut n'a pas été introduit ici : il était déjà là.** Un lockfile n'est
+restaurable que si la **fermeture** `Depends`/`Imports`/`LinkingTo` de ses
+paquets y figure aussi. Mesure, à chaque étape :
+
+| État | Paquets | Trous de fermeture |
+|---|---|---|
+| `HEAD` | 438 | **10** |
+| après enregistrement des 9 utilisés-non-déclarés | 447 | **35** (+24) |
+| après fermeture complète | **482** | **0** |
+
+Les **10 trous de `HEAD`** venaient de paquets **déjà** dans le lock :
+`ggpubr` → `ggsci`, `ggsignif`, `polynom`, `rstatix` ; `miloR` →
+`ggbeeswarm`, `pracma` ; `jsonlite` → `RcppML`. Autrement dit
+**`renv::restore()` ne tenait pas déjà sur une machine propre avant ce jalon**.
+Enregistrer les 9 paquets a mécaniquement ajouté **24** trous (leurs propres
+dépendances) : c'est le comportement attendu, pas une régression.
+
+**Corrigé** — 44 paquets enregistrés (447 → 482) et **15 ramenés** de
+`R-4.4.2/library` vers la bibliothèque du projet (`beeswarm`, `corrplot`,
+`ggbeeswarm`, `ggsci`, `ggsignif`, `Hmisc`, `htmlTable`, `litedown`,
+`markdown`, `polynom`, `preprocessCore`, `RcppML`, `rstatix`,
+`SpatialExperiment`, `vipor`). Les 4 paquets Bioconductor passés de la forme
+minoritaire `Source: Repository` + `Repository: BioCsoft` (4 occurrences,
+écrite par `renv::record()`) à la forme **canonique** `Source: Bioconductor` +
+`Repository: "Bioconductor 3.20"` (67 occurrences, et ce qu'écrit
+`renv::snapshot()`).
+👉 **470 / 470 hermétiques, 0 hors projet, 0 trou de fermeture, 0 erreur**
+(2 avertissements = `dorothea`, `progeny`, optionnels non installés).
+
+**Garde étendu (§4)** — `tools/check_renv_hermeticity.R` remonte désormais la
+fermeture via `read.dcf` (base R, **aucun paquet chargé** ⇒ échappe au 139) et
+compte comme erreur tout paquet de la fermeture absent du lock. Il mesure la
+vraie propriété — *« `restore()` tient-il ? »* — au lieu de *« chaque entrée
+existe-t-elle ? »*. **Vérifié sur un cas négatif** : le lock de `HEAD` est
+signalé à 10 trous.
+
+**Deux notes techniques réutilisables :**
+1. **Enregistrer un paquet GitHub hors réseau.** `renv::record("owner/repo@sha")`
+   **bloque** (4 min 27 sans résultat, résolution de remote distante) et
+   `renv::record("sceasy")` répond `failed to resolve remote`. Solution :
+   `renv:::renv_snapshot_description(<chemin du paquet installé>)` — la fonction
+   que renv emploie lui-même, hors réseau, et **garantie identique** à ce qu'un
+   `snapshot()` écrirait. Elle **écarte** les champs hérités `Github*`
+   (`GithubRepo`, `GithubUsername`, `GithubRef`, `GithubSHA1`, `GithubHost`) et
+   ne garde que les `Remote*`.
+2. **`git diff --numstat` peut mentir sur les suppressions.** Insérer un gros
+   bloc fait mal aligner le diff de **Myers** : ce jalon affichait `1631 23`
+   alors qu'**aucun** bloc pré-existant n'était modifié. Vérification fiable :
+   `git diff --diff-algorithm=patience --numstat` (`1608 0`), **puis**
+   comparaison **bloc par bloc** des `Packages` entre `HEAD` et le fichier
+   (438 → 482, **0 disparu, 0 modifié**). La règle « 0 suppression » du §2ao.2
+   reste bonne mais **le moyen de la vérifier** doit être le diff `patience` ou
+   la comparaison de blocs, pas le diff par défaut.
+
+**⚠️ Reste ouvert (jalon distinct) — 14 dérives de version, TOUTES pré-existantes.**
+`bbotk`, `bit64`, `bslib`, `class`, `future`, `hexbin`, `igraph` (lock 2.2.1 /
+installé 2.3.3), `mlr3learners`, `nnet`, `sf`, `spatstat.explore`,
+`spatstat.geom`, `spatstat.random`, `xml2`. Vérifié : leur version au lock est
+**identique à `HEAD`** — ce jalon n'en a touché aucune. C'est ce que
+`renv::status()` signale encore (`synchronized: FALSE`), et non plus un paquet
+manquant. Les corriger suppose de **réinstaller** ces 14 aux versions du lock
+(ou de mettre le lock à jour), donc **re-mesurer la suite complète** ensuite :
+jalon distinct, non ouvert.
 
 ### 5bis. Pourquoi Bulk V2 était « verrouillé » — et ce qui restait
 
