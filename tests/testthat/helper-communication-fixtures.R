@@ -29,6 +29,9 @@ source_project_file("R/core/state.R")
 source_project_file("R/core/provenance.R")
 source_project_file("R/sc/sc_velocity.R")
 source_project_file("R/sc/sc_communication.R")
+# parse_cellchat_object() DELEGUE l'extraction a .cellchat_engine_extract() :
+# une SEULE fonction connait la structure interne de CellChat (regle 3).
+source_project_file("R/sc/sc_communication_engine.R")
 source_project_file("R/sc/sc_communication_views.R")
 
 # ── Fixture CellChat : table exportee (subsetCommunication-like) ────────────
@@ -171,25 +174,54 @@ source_project_file("R/sc/sc_communication_views.R")
   )
 }
 
-# ── Stub objet CellChat (contrat documente : liste avec net$prob/net$pval) ──
-# net$prob : array 3D ligands x recepteurs x paires "sender|receiver". Les
-# valeurs nulles ne donnent pas de ligne (extraction fidele des non-nuls).
-.comm_cellchat_object_stub <- function(with_pval = TRUE) {
+# ── Objet CellChat : forme REELLE de net$prob (MESUREE, pas supposee) ───────
+# net$prob = array 3D [groupe SOURCE, groupe CIBLE, interaction_name], et
+# LR$LRsig (rownames = interaction_name) porte ligand/receptor/pathway_name.
+#
+# MESURE du 2026-09-15 sur un objet CellChat 2.2.0.9001 reel : dim = 3 x 3 x
+# 109, dimnames[[3]] = "CXCL1_ACKR1", "TGFB1_TGFBR1_TGFBR2"... et 0/109 de ces
+# noms ne contiennent '|'. La forme [ligand, recepteur, "sender|receiver"]
+# historiquement documentee est donc FICTIVE : aucune version de CellChat ne la
+# produit. Elle est conservee ci-dessous UNIQUEMENT pour verifier qu'elle est
+# refusee (jamais interpretee a tort).
+.comm_cellchat_object_real <- function(with_pval = TRUE) {
+  src <- c("CD4 T", "B")
+  tgt <- c("CD4 T", "B")
+  inter <- c("IL7_IL7R", "CCL5_CCR5")
+  prob <- array(0, dim = c(2L, 2L, 2L), dimnames = list(src, tgt, inter))
+  prob["CD4 T", "B", "IL7_IL7R"]   <- 0.5
+  prob["B", "CD4 T", "CCL5_CCR5"]  <- 0.7
+  prob["B", "B", "IL7_IL7R"]       <- 0.3
+  net <- list(prob = prob)
+  if (with_pval) {
+    pv <- array(NA_real_, dim = c(2L, 2L, 2L), dimnames = list(src, tgt, inter))
+    pv["CD4 T", "B", "IL7_IL7R"]   <- 0.01
+    pv["B", "CD4 T", "CCL5_CCR5"]  <- 0.02
+    pv["B", "B", "IL7_IL7R"]       <- 0.03
+    net$pval <- pv
+  }
+  lrsig <- data.frame(
+    interaction_name = inter,
+    pathway_name     = c("IL7 signaling", "CCL signaling"),
+    ligand           = c("IL7", "CCL5"),
+    receptor         = c("IL7R", "CCR5"),
+    row.names        = inter,
+    stringsAsFactors = FALSE
+  )
+  list(net = net, LR = list(LRsig = lrsig))
+}
+
+# Forme FICTIVE historique : [ligand, recepteur, "sender|receiver"], sans LR.
+# Aucun objet CellChat reel ne la produit — elle doit etre REFUSEE.
+.comm_cellchat_object_legacy_shape <- function() {
   lig <- c("IL7", "CCL5")
   rec <- c("IL7R", "CCR5")
   prs <- c("CD4 T|B", "B|CD4 T")
-  prob <- array(c(0.5, 0.0, 0.0, 0.3,   # paire CD4 T|B
-                  0.2, 0.4, 0.0, 0.1),  # paire B|CD4 T
+  prob <- array(c(0.5, 0.0, 0.0, 0.3,
+                  0.2, 0.4, 0.0, 0.1),
                 dim = c(2, 2, 2),
                 dimnames = list(lig, rec, prs))
-  net <- list(prob = prob)
-  if (with_pval) {
-    net$pval <- array(c(0.01, 0.5, 0.9, 0.02,
-                        0.03, 0.2, 0.8, 0.01),
-                      dim = c(2, 2, 2),
-                      dimnames = list(lig, rec, prs))
-  }
-  list(net = net)
+  list(net = list(prob = prob))
 }
 
 # ── Resultat canonique riche (vues Stage 12) ────────────────────────────────

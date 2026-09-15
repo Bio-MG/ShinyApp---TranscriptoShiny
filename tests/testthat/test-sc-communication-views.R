@@ -9,44 +9,46 @@
 # =============================================================================
 
 # ── Route objet CellChat : extraction sans recalcul ─────────────────────────
-test_that("Fixture O1 - CellChat object stub extracts non-zero interactions only", {
-  parsed <- parse_cellchat_object(.comm_cellchat_object_stub(),
+test_that("Fixture O1 - real net$prob shape [source, target, interaction] is parsed", {
+  parsed <- parse_cellchat_object(.comm_cellchat_object_real(),
                                   source_file = "cellchat_obj.rds")
   tab <- parsed$table
-  # 8 valeurs dont 3 nulles -> 5 lignes extraites (fidele, sans agregation).
-  expect_identical(nrow(tab), 5L)
-  expect_identical(parsed$n_input_rows, 2L)   # 2 paires
+  # 3 valeurs non nulles -> 3 lignes extraites (fidele, sans agregation).
+  expect_identical(nrow(tab), 3L)
+  expect_identical(parsed$n_input_rows, 2L)   # 2 interactions
   expect_identical(sort(unique(tab$sender)), c("B", "CD4 T"))
   expect_identical(sort(unique(tab$receiver)), c("B", "CD4 T"))
-  expect_identical(tab$source_method, rep("cellchat", 5L))
-  # p-values extraites de net$pval (meme forme) par indices.
-  sel <- tab[tab$sender == "CD4 T" & tab$ligand == "IL7", ]
+  expect_identical(tab$source_method, rep("cellchat", 3L))
+  sel <- tab[tab$sender == "CD4 T" & tab$receiver == "B", ]
+  expect_identical(nrow(sel), 1L)
   expect_identical(sel$score, 0.5)
+  # p-values extraites de net$pval (meme forme) par indices.
   expect_identical(sel$p_value, 0.01)
-  sel2 <- tab[tab$sender == "B" & tab$ligand == "CCL5" & tab$receptor == "CCR5", ]
-  expect_identical(nrow(sel2), 1L)
-  expect_identical(sel2$score, 0.1)
-  expect_identical(sel2$p_value, 0.01)
-  # Route objet : pathway jamais reconstitue, avertissement explicite.
-  expect_true(all(is.na(tab$pathway)))
-  expect_true(any(grepl("pathway", parsed$warnings)))
+  # ligand/receptor/pathway sont RESOLUS via @LR$LRsig (appariement exact sur
+  # interaction_name) — jamais devines, jamais laisses a NA quand la base est
+  # presente (regle des deux voies : meme sortie que le moteur).
+  expect_identical(sel$ligand, "IL7")
+  expect_identical(sel$receptor, "IL7R")
+  expect_identical(sel$pathway, "IL7 signaling")
+  expect_identical(sel$interaction, "IL7 -> IL7R")
   expect_true(all(is.na(tab$p_adjusted)))
-  expect_identical(parsed$column_mapping$ligand, "dimnames(net$prob)[[1]]")
+  expect_identical(parsed$column_mapping$ligand,
+                   "object@LR$LRsig$ligand (apparie par interaction_name)")
 })
 
 test_that("Fixture O2 - CellChat object route works through an .rds file", {
   path <- tempfile(fileext = ".rds")
-  saveRDS(.comm_cellchat_object_stub(), path)
+  saveRDS(.comm_cellchat_object_real(), path)
   parsed <- parse_cellchat_object(path, source_file = basename(path))
-  expect_identical(nrow(parsed$table), 5L)
+  expect_identical(nrow(parsed$table), 3L)
   expect_true(all(parsed$table$source_file == basename(path)))
 })
 
 test_that("Fixture O3 - CellChat object without pval (or wrong pval shape) keeps p NA", {
-  parsed <- parse_cellchat_object(.comm_cellchat_object_stub(with_pval = FALSE))
+  parsed <- parse_cellchat_object(.comm_cellchat_object_real(with_pval = FALSE))
   expect_true(all(is.na(parsed$table$p_value)))
   # Forme incompatible : p NA + avertissement, jamais de fabrication.
-  bad <- .comm_cellchat_object_stub()
+  bad <- .comm_cellchat_object_real()
   bad$net$pval <- array(1, dim = c(2, 2))
   parsed2 <- parse_cellchat_object(bad)
   expect_true(all(is.na(parsed2$table$p_value)))
@@ -61,14 +63,13 @@ test_that("Fixture O4 - CellChat object failure modes are explicit and classed",
   bad <- list(net = list(prob = array(1, dim = c(2, 2, 2))))
   e2 <- tryCatch(parse_cellchat_object(bad), error = function(e) e)
   expect_identical(communication_error_state(e2), "invalid_schema")
-  # Paire sans separateur unique.
-  bad2 <- .comm_cellchat_object_stub()
-  dimnames(bad2$net$prob)[[3]] <- c("CD4 T-B", "B|CD4 T")
-  e3 <- tryCatch(parse_cellchat_object(bad2), error = function(e) e)
+  # Forme FICTIVE historique [ligand, recepteur, "sender|receiver"] : REFUSEE,
+  # jamais interpretee — la lire ferait croire que "CD4 T" est un ligand.
+  e3 <- tryCatch(parse_cellchat_object(.comm_cellchat_object_legacy_shape()),
+                 error = function(e) e)
   expect_identical(communication_error_state(e3), "invalid_schema")
-  expect_match(conditionMessage(e3), "CD4 T-B")
   # Tout nul : rien a importer.
-  zero <- .comm_cellchat_object_stub()
+  zero <- .comm_cellchat_object_real()
   zero$net$prob[] <- 0
   e4 <- tryCatch(parse_cellchat_object(zero), error = function(e) e)
   expect_identical(communication_error_state(e4), "invalid_input")

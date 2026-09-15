@@ -1999,6 +1999,50 @@ gardes **0 erreur / 324 avert.** et **0 erreur / 3 avert.** — et surtout
 
 **Chantier CLOS** : CC-1 → CC-5 tous livrés.
 
+#### 2ao.7 — DÉFAUT CORRIGÉ : `parse_cellchat_object()` ne savait pas lire un VRAI objet (2026-09-15)
+
+**Découverte** : après CC-5, deux extracteurs de `net$prob` coexistaient avec
+des **hypothèses incompatibles** — `.cellchat_engine_extract()`
+(`[source, target, interaction_name]`, la forme réelle) et
+`parse_cellchat_object()` (`[ligand, récepteur, "sender|receiver"]`).
+
+**Mesuré** sur un objet CellChat 2.2.0.9001 réel (jamais supposé) :
+
+| Mesure | Valeur |
+|---|---|
+| `dim(net$prob)` | **3 × 3 × 109** = `[groupe source, groupe cible, interaction_name]` |
+| noms de dim3 contenant `\|` | **0 / 109** (`CXCL1_ACKR1`, `TGFB1_TGFBR1_TGFBR2`…) |
+| `parse_cellchat_object()` sur cet objet | ❌ `invalid_schema` — « 109 nom(s) de paire sans separateur '\|' unique » |
+| `.cellchat_engine_extract()` sur le **même** objet | ✅ 981 lignes, senders/receivers/ligands/pathways corrects |
+
+**Conséquence** : la route « importer un objet CellChat (.rds) » était cassée
+pour **tout objet réel**. Elle échouait bruyamment (aucune donnée fabriquée)
+mais en accusant le fichier de l'utilisateur. Aucun test ne l'avait vu : ils
+passaient tous par un **stub de la forme fictive**, jamais par un objet réel —
+la forme fictive était même **acceptée silencieusement**.
+
+**Correctif (règle 3 — étendre, ne pas dupliquer)** : `parse_cellchat_object()`
+**délègue** l'extraction à `.cellchat_engine_extract()`, qui devient la SEULE
+lecture de `net$prob` de l'application. Un accesseur tolérant
+(`.cellchat_engine_slot()`) permet de traiter l'objet S4 **ou** une liste
+nommée `net`/`LR` (route de test, forme désormais identique à la réalité). Les
+états du moteur sont **traduits** dans le vocabulaire d'import
+(`no_interactions` → `invalid_input`, sinon `invalid_schema`).
+
+**Changement de comportement assumé** : `pathway` n'est plus systématiquement
+NA sur cette route (résolu via `@LR$LRsig`). C'est un alignement des deux
+voies : `COMMUNICATION_RESULT_CONTRACT.md` §5 a donc été modifié **dans le
+même commit** que le code et que son test de gel.
+
+**Garde ajoutée** : `test-communication-contract-freeze.R` interdit le retour
+du découpage fictif (`pairs_split`, `dimnames(prob)[[`). Le découpage sur `|`
+reste **légitime** pour CellPhoneDB (`interacting_pair`) — l'interdit vise la
+relecture de `net$prob` hors du moteur.
+
+**Piège récurrent confirmé (3ᵉ occurrence)** : un contrat « documenté » +
+« testable » + « testé » peut être **faux** tant qu'aucun test ne l'exerce
+contre le **réel**. Une fixture est une assertion de plus, pas une preuve.
+
 ### 5bis. Pourquoi Bulk V2 était « verrouillé » — et ce qui restait
 
 Question posée le 2026-09-11. Réponse : il y avait **trois** raisons, dont une

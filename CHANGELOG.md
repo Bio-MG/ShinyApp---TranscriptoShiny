@@ -10,6 +10,36 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > Leur état fait foi dans **`docs/STATUS.md`** §1 et §2. Ce fichier reprend à
 > partir de `STAT-S1`.
 
+## [V1.x — CC-6] — 2026-09-15 — Import d'un objet CellChat (.rds) : lis enfin un VRAI objet
+
+### Corrigé (défaut bloquant, trouvé à l'exécution — hors proposition)
+- `parse_cellchat_object()` lisait `net$prob` comme
+  `[ligand, récepteur, "sender|receiver"]` : une forme **fictive** qu'aucune
+  version de CellChat ne produit. Mesuré sur un objet CellChat 2.2.0.9001
+  réel : `net$prob` est **3 × 3 × 109** = `[groupe source, groupe cible,
+  interaction_name]`, et **0/109** noms d'interaction ne contiennent `|`.
+  La route « importer un objet CellChat (.rds) » échouait donc pour **tout
+  objet réel**, avec un message accusant le fichier de l'utilisateur
+  (« sans separateur '|' unique »). Aucun test ne l'avait vu : tous passaient
+  par un stub de la forme fictive — qui était même acceptée silencieusement.
+
+### Modifié
+- L'extraction est **déléguée** à `.cellchat_engine_extract()` (règle 3 :
+  étendre, ne pas dupliquer) : il n'existe plus qu'**une seule** lecture de
+  `net$prob` dans l'application, commune au moteur Path B et à l'import.
+- `ligand`, `receptor` et **`pathway`** sont désormais **résolus** via
+  `@LR$LRsig` sur cette route (ils ne sont plus systématiquement `NA`) —
+  alignement des deux voies. `docs/contracts/COMMUNICATION_RESULT_CONTRACT.md`
+  §5 mis à jour **dans le même commit** (code + contrat + test de gel).
+- Les états du moteur sont **traduits** dans le vocabulaire d'import
+  (`no_interactions` → `invalid_input`, sinon `invalid_schema`).
+
+### Ajouté
+- Un test de non-régression qui **construit un véritable objet CellChat** et
+  vérifie que l'import le lit (c'est lui qui manquait).
+- Garde de gel : interdiction du retour du découpage fictif
+  (`pairs_split`, `dimnames(prob)[[`) dans `R/sc/sc_communication.R`.
+
 ## [V1.x — CC-5] — 2026-09-15 — Calcul CellChat dans l'application (UI Path B)
 
 Le moteur était **exécutable mais inexposable** : aucune action ne permettait

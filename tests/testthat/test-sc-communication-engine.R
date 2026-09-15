@@ -332,3 +332,68 @@ test_that("a run with no usable LR pair fails as no_interactions, not as a crash
   expect_identical(cellchat_engine_error_state(err), "no_interactions")
   expect_true(grepl("ligand", conditionMessage(err), fixed = TRUE))
 })
+
+test_that("parse_cellchat_object reads a REAL CellChat object (regression)", {
+  skip_if_not(cellchat_engine_available(), "CellChat absent (dependance GitHub)")
+
+  # REGRESSION. Jusqu'au 2026-09-15, parse_cellchat_object() lisait net$prob
+  # comme [ligand, recepteur, "sender|receiver"] : une forme FICTIVE qu'aucune
+  # version de CellChat ne produit. Tout objet reel (mesure : 3 x 3 x 109, et
+  # 0/109 noms d'interaction ne contiennent '|') faisait donc echouer la route
+  # en accusant le fichier de l'utilisateur. Aucun test ne construisait de
+  # VRAI objet — ils passaient tous par un stub de la forme fictive. Celui-ci
+  # en construit un (meme fixture que le parcours reel ci-dessus).
+  set.seed(20260914)
+  cc_env <- new.env(parent = emptyenv())
+  utils::data(list = "CellChatDB.human", package = "CellChat", envir = cc_env)
+  cc_db <- get("CellChatDB.human", envir = cc_env)
+  cc_pw <- c("TGFb", "MIF", "MHC-I", "MHC-II", "GALECTIN", "CD99",
+             "ANNEXIN", "VISFATIN", "COMPLEMENT", "CXCL")
+  cc_sel <- cc_db$interaction[cc_db$interaction$pathway_name %in% cc_pw,
+                              c("ligand", "receptor")]
+  genes <- sort(unique(c(cc_sel$ligand, cc_sel$receptor)))
+  genes <- genes[nzchar(genes)]
+
+  cells <- 240L
+  feats <- c(genes, paste0("FILL", seq_len(60L)))
+  grp <- rep(c("A", "B", "C"), length.out = cells)
+  mat <- matrix(rpois(length(feats) * cells, 2), nrow = length(feats),
+                dimnames = list(feats, paste0("k", seq_len(cells))))
+  lig <- intersect(cc_sel$ligand, feats)
+  rec <- intersect(cc_sel$receptor, feats)
+  iA <- which(grp == "A"); iB <- which(grp == "B")
+  mat[lig, iA] <- mat[lig, iA] + rpois(length(lig) * length(iA), 25)
+  mat[rec, iB] <- mat[rec, iB] + rpois(length(rec) * length(iB), 25)
+
+  input <- cellchat_input_from_matrix(
+    data = mat, features = feats, labels = factor(grp), species = "human",
+    log_normalize = TRUE
+  )
+  object <- CellChat::createCellChat(object = input$data, meta = input$meta,
+                                     group.by = input$group_by)
+  object@DB <- .cellchat_engine_db("human")$db
+  object <- CellChat::subsetData(object)
+  object <- CellChat::identifyOverExpressedGenes(object)
+  object <- CellChat::identifyOverExpressedInteractions(object)
+  object <- CellChat::computeCommunProb(object, nboot = 5L, seed.use = 1L)
+
+  # La forme reelle EST la specification de l'extraction : on la re-assert ici
+  # pour qu'un upgrade de CellChat qui la changerait casse CE test.
+  prob <- methods::slot(object, "net")$prob
+  expect_identical(length(dim(prob)), 3L)
+  expect_identical(dimnames(prob)[[1L]], dimnames(prob)[[2L]])
+  expect_false(any(grepl("|", dimnames(prob)[[3L]], fixed = TRUE)))
+
+  parsed <- parse_cellchat_object(object, source_file = "real.rds")
+  tab <- parsed$table
+  expect_true(nrow(tab) > 0L)
+  expect_true(all(communication_contract_fields() %in% colnames(tab)))
+  expect_setequal(unique(tab$sender), c("A", "B", "C"))
+  expect_setequal(unique(tab$receiver), c("A", "B", "C"))
+  # ligand/receptor/pathway sont RESOLUS via @LR$LRsig, pas laisses a NA.
+  expect_false(any(is.na(tab$ligand)))
+  expect_false(any(is.na(tab$receptor)))
+  expect_false(any(is.na(tab$pathway)))
+  # p_adjusted reste NA sur les deux voies (jamais fabrique).
+  expect_true(all(is.na(tab$p_adjusted)))
+})

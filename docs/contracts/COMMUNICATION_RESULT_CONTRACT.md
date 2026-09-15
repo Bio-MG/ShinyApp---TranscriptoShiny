@@ -125,11 +125,22 @@ positif sur un fichier valide.
   CellChat sauvegardé (.rds) produit HORS de l'application et **extrait** ses
   résultats déjà calculés (`net$prob`, `net$pval` optionnel) — **aucune
   méthode CellChat n'est relancée, aucun score ré-agrégé** au-delà du
-  remodelage déterministe des valeurs non nulles par paire `sender|receiver`.
-  Accepte l'objet S4 (package CellChat requis, sinon erreur explicite avec
-  guidage d'installation) ou une liste nommée au contrat documenté (route
-  testable). `pathway` reste NA sur cette route (mapping netP non reconstitué)
-  avec avertissement explicite.
+  remodelage déterministe des valeurs non nulles.
+  Forme de `net$prob` : array 3-D **[groupe source, groupe cible,
+  `interaction_name`]** — mesurée sur CellChat 2.2.0.9001 (3 × 3 × 109, et
+  0/109 noms d'interaction ne contiennent `|`).
+  **Délégation (règle 3)** : l'extraction est faite par
+  `.cellchat_engine_extract()`, la SEULE fonction qui connaît la structure
+  interne de CellChat — commune au moteur Path B et à cet import. Il n'existe
+  donc pas de seconde lecture de `net$prob` dans l'application.
+  `ligand`, `receptor` et `pathway` sont **résolus** via `@LR$LRsig` quand
+  l'objet le porte (ils ne sont plus systématiquement NA : changement de
+  comportement assumé au 2026-09-15, il aligne les deux voies) ;
+  `p_adjusted` reste NA (non produit par CellChat au niveau net).
+  Accepte l'objet S4 ou une liste nommée `net`/`LR` de forme identique (route
+  testable). La forme `[ligand, récepteur, "sender|receiver"]` documentée
+  avant le 2026-09-15 était **fictive** — aucune version de CellChat ne la
+  produit — elle est désormais **refusée**, jamais interprétée à tort.
 - `cellphonedb` : `means.txt` (requis) + `pvalues.txt` (optionnel), format v2 :
   colonne `interacting_pair` (`ligand|receptor`, séparateur `|` **exactement
   une fois**) et une colonne par paire `sender|receiver` (convention

@@ -42,7 +42,7 @@ roadmaps et avec le `.gitignore` : la documentation de pilotage reste locale).
 | `docs/proposals/CCC_9_POPULATION_RARITY_PROPOSAL.md` | **Proposition CCC 9 — question 1** (rareté par population annotée) : jalon descriptif, 9 éléments V1.x, 5 décisions — ✅ **livrée** (`8c1a969`) : les 5 décisions §12 ont été appliquées telles quelles | Référence de conception (état réel : `STATUS.md` §2ac) |
 | `docs/release/UPGRADE_AND_COMPATIBILITY.md` | §3 = parking officiel V1.x (4D-3, 4E-4, 4F) | Pour les propositions V1.x |
 | `docs/contracts/*.md` | **29** contrats gelés (contract-first) — ⚠️ non versionnés (`docs/` gitignoré) | Avant de toucher un domaine gelé |
-| `docs/contracts/CELLCHAT_ENGINE_CONTRACT.md` | **29ᵉ** contrat (2026-09-15) — moteur CellChat natif, jalons **CC-1..CC-5** : **TOUS LIVRÉS** (CellChat 2.2.0.9001 épinglé par SHA, moteur exécutable, UI « calculer dans l'app ») — chantier **CLOS** | Avant tout travail sur le moteur CellChat |
+| `docs/contracts/CELLCHAT_ENGINE_CONTRACT.md` | **29ᵉ** contrat (2026-09-15) — moteur CellChat natif, jalons **CC-1..CC-6** : **TOUS LIVRÉS** (CellChat 2.2.0.9001 épinglé par SHA, moteur exécutable, UI « calculer dans l'app ») — chantier **CLOS** | Avant tout travail sur le moteur CellChat |
 | `docs/kanban_roadmap.html` | Tableau visuel (lecture seule, miroir de `STATUS.md`) | Démonstration / vue d'ensemble |
 | `docs/archive/` | **Archives locales** (créé le 2026-09-14) : fiches caduques, handoffs consommés, artefacts de build obsolètes. ⚠️ **Rien n'est supprimé**, seulement déplacé — toute référence pointe le nouveau chemin | Quand une fiche semble manquer |
 | `docs/AUDIT_VERIFICATION_BULK_SC.md` | **Audit externe Bulk/SC VÉRIFIÉ contre le code** (2026-09-14) : 20 confirmées, 4 nuancées, 0 infirmée, **5 trouvées en vérifiant**. Bilan + ordre en 8 jalons — `STATUS.md` §2an | **Avant tout travail Bulk DE / pseudobulk / multi** |
@@ -159,7 +159,7 @@ avance jalon par jalon, un jalon = un commit.
 
 #### 2.0bis ✅ Chantier CLOS — moteur CellChat natif (décision §2al, `STATUS.md` §2ao)
 
-Découpé en jalons **CC-1 → CC-5**, un jalon = un commit. Source de conception :
+Découpé en jalons **CC-1 → CC-6**, un jalon = un commit. Source de conception :
 `docs/proposals/V1X_CELLCHAT_ENGINE_PROPOSAL.md` §7.
 
 | Rang | Jalon | Effort | Dépend de | État |
@@ -169,6 +169,7 @@ Découpé en jalons **CC-1 → CC-5**, un jalon = un commit. Source de conceptio
 | 12 | ~~**CC-3** — moteur `R/sc/sc_communication_engine.R` (12 champs, moteur éphémère)~~ | M | CC-2 | ✅ **LIVRÉ** |
 | 13 | ~~**CC-4** — test + gardes (conventions, duplication)~~ | S | CC-3 | ✅ **LIVRÉ** — **74 assertions, 0 échec, 0 skip** (le run réel n'est plus skippé) ; gardes à la baseline (0/324, 0/3) |
 | 14 | ~~**CC-5** — module UI « calculer dans l'app » (Path B) + export conservé~~ | M | **CC-1** | ✅ **LIVRÉ** (2026-09-15) — 5ᵉ source `cellchat_engine` dans `mod_sc_communication.R` : espèce **déclarée** (sans défaut), graine, permutations, bouton `comm_compute` dédié. Les deux voies déposent leur résultat via le **même** `.store_result()` ⇒ **aucune vue ni aucun export n'a eu à changer** — preuve mécanique de la règle des deux voies. Chantier **CLOS**. |
+| 15 | ~~**CC-6** — `parse_cellchat_object()` : lire un **VRAI** objet CellChat (.rds)~~ | M | CC-5 | ✅ **LIVRÉ** (2026-09-15) — défaut trouvé **en exécutant**, hors proposition : la route lisait `net$prob` comme `[ligand, récepteur, "sender|receiver"]`, une forme **fictive** qu'aucune version de CellChat ne produit. Mesuré sur un objet réel : forme **3 × 3 × 109** = `[source, target, interaction_name]`, **0/109** noms contenant `\|` ⇒ la route échouait pour **tout objet réel** en accusant le fichier. Désormais **délégué** à `.cellchat_engine_extract()` (règle 3) : **une seule** lecture de `net$prob` dans l'application. `pathway` n'est plus NA sur cette route ⇒ `COMMUNICATION_RESULT_CONTRACT.md` §5 modifié **dans le même commit** (code + contrat + test de gel). Nouveau test de non-régression qui **construit un vrai objet CellChat**. Détail : `STATUS.md` §2ao.7 |
 
 ⚠️ **Deux mesures préalables qui corrigent la proposition** (détail `STATUS.md`
 §2ao) :
