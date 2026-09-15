@@ -2195,6 +2195,93 @@ manquant. Les corriger suppose de **réinstaller** ces 14 aux versions du lock
 (ou de mettre le lock à jour), donc **re-mesurer la suite complète** ensuite :
 jalon distinct, non ouvert.
 
+### 2as. 🟢 Porte de merge RÉPARÉE — les 218 erreurs C7 étaient un artefact de LOCALE (2026-09-15)
+
+**Chantier demandé** : deux chantiers — (a) faire décoder les `\uXXXX` par C7
+avec un cas négatif, (b) solder « ~46 clés i18n manquantes + le mojibake ».
+**Résultat mesuré : (a) était mal diagnostiqué et est corrigé ; (b) est VIDE —
+il n'y a ni clé manquante, ni mojibake.** Les deux symptômes avaient la même
+cause unique, et ce n'était pas celle qui avait été écrite.
+
+#### Cause racine (prouvée octet par octet, pas déduite)
+
+C7 ne comparait **pas** du texte brut : il décodait déjà les échappements. Le
+défaut est ailleurs — `parse()` convertit le texte en **encodage natif** avant
+de le lire. Sous une locale non-UTF-8, un caractère non-ASCII est remplacé par
+la chaîne **littérale** `<U+00E9>` (7 octets ASCII) :
+
+```
+eval(parse(text = '"3c. Réseau"'))  ->  "3c. R<U+00E9>seau"   # sous LC_CTYPE=C
+```
+
+`LC_CTYPE=C` n'est pas un cas tordu : c'est ce que **Git Bash exporte**
+(`LANG=C.UTF-8`, `LC_ALL=C.UTF-8` — un nom que R **ne reconnaît pas** sous
+Windows, d'où le repli silencieux sur `C`).
+
+Mesure avant correctif, sur le dépôt réel :
+
+| Locale | Erreurs C7 |
+|---|---|
+| `C` | **218** |
+| `French_France.1252` | **71** (les emoji restent hors CP1252) |
+| `fr_FR.UTF-8` | **0** |
+
+⇒ **La porte de merge était verte ou rouge selon la locale de l'appelant**, et
+le chiffre documenté (`0`) était celui d'une locale UTF-8.
+
+#### Chantier (b) — VIDE, et c'est le résultat de la mesure
+
+- **Clés manquantes : 0.** 2179 clés distinctes utilisées vs 2508 définies.
+  Les « 243 brutes / 46 après décodage » d'une analyse antérieure étaient
+  **toutes** des faux positifs : les 71 qui survivaient sous locale française
+  étaient les clés **emoji** (hors CP1252), pas des clés absentes.
+- **Mojibake : 0.** `i18n/translation.json` contient **0** occurrence de `Ã`
+  (octets `C3 83`), **0** caractère de remplacement `U+FFFD`, **0**
+  `SÃ©lectionnez` — et **21** `Sélectionnez` corrects. Le « mojibake
+  `SÃ©lectionnez` » observé la veille était le **rendu console** d'une chaîne
+  déjà corrompue en mémoire par `parse()`, pas le contenu du fichier.
+
+⇒ Aucune clé à ajouter, aucun octet à réparer. **Le chantier (b) n'existe pas.**
+
+#### Correctif (a)
+
+`tools/check_conventions.R` :
+- **`.asciify_non_ascii()`** (nouveau) : convertit tout caractère non-ASCII en
+  `\uXXXX` / `\UXXXXXXXX` **avant** `parse()`. La substitution est sans
+  ambiguïté — un caractère non-ASCII n'est jamais membre d'une séquence
+  d'échappement, celles-ci étant ASCII par construction.
+- **`enc2utf8()` des deux côtés** de la comparaison (clés du JSON et clés du
+  code), pour que le résultat ne dépende plus de la locale qui a produit les
+  chaînes.
+- **`.i18n_key_sets()`** extrait de `check_c7_i18n_keys()` : la décision devient
+  testable sur une fixture, ce qu'un contrôle en ligne sur le dépôt ne permet
+  pas (le dépôt doit rester à 0).
+
+#### Vérifications
+
+| Contrôle | Résultat |
+|---|---|
+| C7 sous `C`, `French_France.1252`, `fr_FR.UTF-8` | **0 / 0 / 0** (verdict identique) |
+| Diff de la sortie complète de la garde, hors bloc C7 | **aucune différence** — tous les compteurs inchangés (C6=16, C9=37, C10=270, C11=1, total 324 avert.) |
+| **Cas négatif — fixture** (`tests/testthat/test-conventions-c7-decoder.R`) | 15 assertions vertes ; l'ancien décodeur dérive (2 / 1 / 0 faux positifs selon la locale), le correctif reste à **1** (la clé volontairement absente) dans les trois locales |
+| **Cas négatif — bout en bout** | clé factice injectée dans `modules/bulk/mod_bulk.R` ⇒ **exactement 1 erreur C7** (sortie 1), puis restauration du fichier **octet pour octet** (`git status` propre, `diff` identique à la sauvegarde) |
+
+#### ⚠️ Découverte incidente — la suite de tests exige une locale UTF-8
+
+Sous `LC_CTYPE=C` **ou** `French_France.1252`, R ne peut pas **parser**
+certaines sources UTF-8 du dépôt :
+
+```
+R/sc/sc_communication_perturbation.R:436:73: unexpected invalid token
+    ... scale_colour_manual(values = c(Baseline = "grey55", Perturbé = "#D6604D")
+```
+
+Seule `fr_FR.UTF-8` passe (`Sys.setlocale("LC_CTYPE", "fr_FR.UTF-8")`). Le
+fichier est du UTF-8 **valide** (lu sans erreur par `readLines(encoding="UTF-8")`) ;
+c'est le couple `parse(file=)` + locale non-UTF-8 qui échoue. **Conséquence :
+toute exécution de la suite depuis Git Bash est impossible en l'état** — c'est
+un point d'environnement à traiter, indépendant de ce jalon.
+
 ### 5bis. Pourquoi Bulk V2 était « verrouillé » — et ce qui restait
 
 Question posée le 2026-09-11. Réponse : il y avait **trois** raisons, dont une

@@ -197,8 +197,21 @@ stop("Message en français.", call. = FALSE)
   gardé par `test-i18n-integrity.R`).
 - La traduction anglaise est **obligatoire** : jamais d'entrée `en` vide.
 - C7 vérifie que les ~2000 clés utilisées existent dans
-  `i18n/translation.json` : **0 manquante** au 2026-09-13 (101 clés ajoutées
-  lors de la passe de maintenance).
+  `i18n/translation.json` : **0 manquante** au 2026-09-15 (101 clés ajoutées
+  lors de la passe de maintenance du 2026-09-13 ; le « déficit » de 46 clés
+  annoncé le 2026-09-15 était **entièrement faux** — voir ci-dessous).
+- ⚠️ **C7 est indépendant de la locale depuis le 2026-09-15.** Avant, le
+  décodage des littéraux passait par `parse()` sans précaution : sous une
+  locale non-UTF-8, `parse()` convertit le texte en encodage natif et
+  **substitue la chaîne littérale `<U+00E9>`** (7 octets ASCII) à tout
+  caractère non-ASCII. Toute clé accentuée ou emoji était donc déclarée
+  **absente à tort** : 218 fausses erreurs sous `LC_CTYPE=C`, 71 sous
+  `French_France.1252`, 0 sous `fr_FR.UTF-8`. La porte de merge était donc
+  rouge **selon la locale de l'appelant**, sans qu'aucune clé ne manque.
+  Correctif : `.asciify_non_ascii()` + `enc2utf8()` des deux côtés de la
+  comparaison. Cas négatif : `tests/testthat/test-conventions-c7-decoder.R`
+  (prouve à la fois la disparition du faux positif **et** que la détection
+  d'une clé réellement absente fonctionne toujours).
 
 ---
 
@@ -243,7 +256,7 @@ sous la forme `TS_*` et se consomme par son nom.
 
 ---
 
-## 12. Ce que la garde mesure (relevé du 2026-09-13)
+## 12. Ce que la garde mesure (relevé du 2026-09-15)
 
 | Règle | Niveau | État |
 |---|---|---|
@@ -253,15 +266,21 @@ sous la forme `TS_*` et se consomme par son nom.
 | C4 aucun `setwd()` | ERREUR | 0 |
 | C5 aucun `browser()` | ERREUR | 0 |
 | C6 `library()`/`require()` au top-level de `R/` | AVERT. | **16** |
-| C7 clés i18n complètes | ERREUR | 0 (2367 clés) |
+| C7 clés i18n complètes | ERREUR | 0 (2179 clés utilisées / 2508 définies) |
 | C8 contrat référencé par un test | AVERT. | 0 (24/24) |
 | C9 fichier de `R/` avec test éponyme | AVERT. | **37** fichiers sans test éponyme |
 | C10 `stop()` classé ou `call. = FALSE` | AVERT. | **270** |
 | C11 primitive parallèle à vérifier | AVERT. | **1** (`MulticoreParam` sous garde Unix) |
 | C12 en-tête commenté | AVERT. | 0 (62/62) |
 
+Total : **0 erreur / 324 avertissements**.
+
 Les compteurs d'avertissements sont des **plafonds** : ils ne doivent pas
 augmenter. Les faire baisser est un chantier, pas une correction implicite.
+
+**Le relevé ci-dessus est valable sous `C`, `French_France.1252` ET
+`fr_FR.UTF-8`** — vérifié le 2026-09-15 après le correctif C7. Un garde dont le
+verdict dépend de la locale de l'appelant n'est pas un garde.
 
 ---
 
@@ -283,3 +302,20 @@ augmenter. Les faire baisser est un chantier, pas une correction implicite.
    script généré. La garde retire chaînes et commentaires avant d'analyser.
 4. **Le chemin du projet contient des parenthèses** (`… (git work) …`) : ne
    jamais l'injecter tel quel dans une expression régulière.
+5. **Ne jamais laisser `parse()` voir du non-ASCII.** C'est la cause racine du
+   faux positif C7 du 2026-09-15 (voir §8). `parse()` convertit le texte en
+   encodage natif ; hors locale UTF-8, un caractère non-ASCII devient la chaîne
+   littérale `<U+00E9>`. Règle générale : **convertir en `\uXXXX` ASCII avant
+   tout `parse()`/`eval()`** de texte issu d'un fichier, et comparer en
+   `enc2utf8()` des deux côtés. Corollaire mesuré : sous `LC_CTYPE=C` ou
+   `French_France.1252`, R **ne peut même pas parser** certaines sources UTF-8
+   du dépôt (`R/sc/sc_communication_perturbation.R:436`,
+   « unexpected invalid token ») — la locale `fr_FR.UTF-8` est nécessaire pour
+   lancer la suite de tests depuis Git Bash (qui exporte `LC_ALL=C.UTF-8`, nom
+   que R ne reconnaît pas sous Windows).
+6. **Un garde à « 0 erreur » ne prouve rien tant qu'on ne l'a pas vu rouge.**
+   Toute règle statique réécrite doit être éprouvée sur un cas négatif, et
+   l'injection doit être faite **dans un vrai fichier** puis annulée : c'est
+   ainsi qu'a été validé le correctif C7 (1 clé factice injectée dans
+   `modules/bulk/mod_bulk.R` ⇒ exactement 1 erreur C7, puis restauration).
+
