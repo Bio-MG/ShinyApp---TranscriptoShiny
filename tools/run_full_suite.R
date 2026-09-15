@@ -4,6 +4,15 @@
 # test_dir summary is lost. Running file-by-file inside ONE process keeps
 # the shared helper state AND flushes a result line per file, so a crash
 # is isolated to its file and everything before it survives.
+# Locale UTF-8 BEFORE any parse(): Git Bash exports LC_ALL=C.UTF-8, a name R
+# does NOT recognise on Windows, so R silently falls back to "C", where it
+# cannot parse some UTF-8 sources of the repo (STATUS.md, "Garde C13 +
+# semantique testServer() MESUREE"). Not fatal if the locale is missing, but
+# the warning must stay visible: a wrong locale yields FALSE failures.
+.localectl <- Sys.setlocale("LC_CTYPE", "fr_FR.UTF-8")
+if (!nzchar(.localectl)) {
+  warning("LC_CTYPE fr_FR.UTF-8 unavailable: parse() false failures are likely")
+}
 files <- sort(list.files("tests/testthat", pattern = "^test-.*\\.R$",
                          full.names = TRUE))
 cat(sprintf("files: %d\n", length(files)))

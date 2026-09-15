@@ -20,6 +20,40 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > « PLOT-S6 »). Citer les sections **par titre**, pas par numéro, tant que la
 > collision n'est pas arbitrée.
 
+## [V1.x — outils] — 2026-09-16 — les runners de tests sont enfin utilisables depuis Git Bash
+
+### Le problème mesuré
+Deux défauts distincts, tous deux **silencieux**, dans `tools/run_tests.R` et
+`tools/run_full_suite.R` :
+
+1. **Locale.** Git Bash exporte `LC_ALL=C.UTF-8` — un nom que R **ne reconnaît
+   pas** sous Windows. R retombait donc sur `C`, où `parse(file = )` échoue sur
+   certaines sources UTF-8 du dépôt (`unexpected invalid token` sur
+   `R/sc/sc_communication_perturbation.R`) : **lancer la suite depuis Git Bash
+   était impossible**. Aucun des deux runners ne posait la locale (point ouvert
+   documenté dans « Garde C13 + sémantique `testServer()` MESURÉE »).
+2. **Filtres multiples ignorés.** `tools/run_tests.R` annonçait
+   `<filter> [<filter2> ...]`, mais `testthat::test_dir(filter = )` prend **une
+   seule** regex : avec un vecteur de longueur > 1, seul le **premier** élément
+   est utilisé. Mesuré : demander `c("core-jobs", "da-milo-async")` n'exécutait
+   que `test-core-jobs.R` (19 tests) **tout en imprimant un `TOTAL` vert** — le
+   fichier demandé n'était pas lancé, et rien ne le signalait.
+
+Le second défaut est le plus dangereux : il transforme une commande de
+vérification en **faux témoin de succès**.
+
+### Corrigé
+- `tools/run_tests.R` + `tools/run_full_suite.R` : `Sys.setlocale("LC_CTYPE",
+  "fr_FR.UTF-8")` **avant tout `parse()`**, avec un `warning()` **visible** si la
+  locale est indisponible — ne jamais remplacer un échec par un silence.
+- `tools/run_tests.R` : `filter <- paste(filter, collapse = "|")` ⇒ tous les
+  filtres demandés sont honorés.
+
+### Vérifié
+Depuis Git Bash (locale `LC_ALL=C.UTF-8`), plus aucun `RUNNER-ERROR`.
+`Rscript tools/run_tests.R core-jobs da-milo-async` ⇒ **40 PASS / 0 FAIL /
+0 ERROR / 0 SKIP** (les **deux** fichiers sont bien exécutés : 19 + 21).
+
 ## [V1.x — 4E-4] — 2026-09-16 — la DA Milo passe par le pool applicatif (sync ≡ async)
 
 ### Le problème mesuré
