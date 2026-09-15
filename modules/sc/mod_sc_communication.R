@@ -12,7 +12,12 @@
 # (la table canonique n'est jamais modifiee) et sont capturés dans la
 # provenance a l'export. Le type de score et la methode source sont affiches
 # sur chaque vue — les scores de sources differentes ne sont jamais compares.
-# Aucun calcul CellChat/CellPhoneDB, aucune inference, aucun matching flou.
+# Aucun calcul CellPhoneDB, aucune inference sur les imports, aucun matching
+# flou. Depuis CC-5 le module peut aussi CALCULER (source « Calculer dans
+# l'application ») : c'est le moteur R/sc/sc_communication_engine.R qui fait le
+# calcul — le module ne fait qu'orchestrer, et le resultat est depose
+# EXACTEMENT comme un import (regle des deux voies : meme forme, donc memes
+# vues et memes exports, sans qu'aucun n'ait eu a changer).
 # =============================================================================
 
 mod_sc_communication_ui <- function(id) {
@@ -20,15 +25,17 @@ mod_sc_communication_ui <- function(id) {
   tagList(
     div(class = "alert alert-light",
         style = "font-size:0.9em;border-left:3px solid #2980B9;",
-        i18n$t("Communication cellule-cellule — import de resultats externes uniquement (CellChat / CellPhoneDB / LIANA). "),
-        i18n$t("Aucun recalcul, aucun score recompose. Les scores de sources differentes ne sont pas comparables.")),
+        i18n$t("Communication cellule-cellule — import de resultats externes (CellChat / CellPhoneDB / LIANA) ou calcul CellChat dans l'application. "),
+        i18n$t("Aucun score recompose. Les scores de sources differentes ne sont pas comparables.")),
 
     radioButtons(ns("comm_source"), i18n$t("Source des resultats"),
-                 choices = setNames(c("cellchat", "cellchat_object", "cellphonedb", "liana"),
-                                    c(.tr_plain("CellChat (table exportee)"),
-                                      .tr_plain("Objet CellChat (.rds, resultats deja calcules)"),
-                                      .tr_plain("CellPhoneDB (means.txt)"),
-                                      .tr_plain("LIANA (rangs agreges)"))),
+                 choices = setNames(
+                   c("cellchat", "cellchat_object", "cellphonedb", "liana", "cellchat_engine"),
+                   c(.tr_plain("CellChat (table exportee)"),
+                     .tr_plain("Objet CellChat (.rds, resultats deja calcules)"),
+                     .tr_plain("CellPhoneDB (means.txt)"),
+                     .tr_plain("LIANA (rangs agreges)"),
+                     .tr_plain("Calculer dans l'application (CellChat)"))),
                  selected = "cellchat"),
 
     conditionalPanel(
@@ -76,14 +83,47 @@ mod_sc_communication_ui <- function(id) {
           i18n$t("Colonnes de rang : mean_rank, aggregate_rank ou {methode}.rank. Dans LIANA, rang 1 = meilleur (inverse de prob) : aucun score n'est reconstitue, et les modes specificite/magnitude ne sont pas comparables entre eux."))
     ),
 
+    # ── CC-5 : Path B — calculer CellChat DANS l'application ──────────────────
+    # Le moteur (R/sc/sc_communication_engine.R) produit EXACTEMENT la meme forme
+    # qu'un import (les 12 champs canoniques du contrat Stage 11) et le resultat
+    # est depose au MEME endroit : toutes les vues et tous les exports sont donc
+    # conserves SANS modification. Regle des deux voies : la moindre divergence
+    # de forme entre import et calcul serait un BUG, pas une variante.
+    conditionalPanel(
+      condition = "input.comm_source == 'cellchat_engine'", ns = ns,
+      selectInput(ns("comm_engine_species"), i18n$t("Espece (base ligand-recepteur)"),
+                  choices = setNames(c("human", "mouse"),
+                                     c(.tr_plain("Humain (CellChatDB.human)"),
+                                       .tr_plain("Souris (CellChatDB.mouse)"))),
+                  selected = character(0), width = "100%"),
+      div(class = "small text-muted mb-2",
+          i18n$t("Choix OBLIGATOIRE : la base ligand-recepteur en decoule, elle ne se devine pas a partir des donnees.")),
+      numericInput(ns("comm_engine_seed"), i18n$t("Graine"),
+                   value = TS_CELLCHAT_SEED_DEFAULT, min = 1, step = 1, width = "100%"),
+      numericInput(ns("comm_engine_nboot"), i18n$t("Nombre de permutations"),
+                   value = TS_CELLCHAT_NBOOT_DEFAULT, min = 1, step = 1, width = "100%"),
+      div(class = "small text-muted mb-2",
+          i18n$t("Les p-values viennent d'une permutation : la graine est un parametre du calcul, elle est tracee dans la provenance. Plus de permutations = calcul plus long."))
+    ),
+
     hr(),
     selectInput(ns("comm_identity_column"),
                 i18n$t("Colonne d'identites cellulaires (Seurat)"),
                 choices = character(0), width = "100%"),
     div(class = "small text-muted mb-2",
         i18n$t("Harmonisation par exact match uniquement : aucun renommage de populations, labels sans correspondance listes integralement.")),
-    actionButton(ns("comm_import"), i18n$t("Importer et valider"),
-                 class = "btn-primary w-100", icon = icon("check")),
+    # Le bouton d'import n'a pas de sens pour la source « calcul dans
+    # l'application » : il lancerait la branche import sur une entree absente.
+    conditionalPanel(
+      condition = "input.comm_source != 'cellchat_engine'", ns = ns,
+      actionButton(ns("comm_import"), i18n$t("Importer et valider"),
+                   class = "btn-primary w-100", icon = icon("check"))
+    ),
+    conditionalPanel(
+      condition = "input.comm_source == 'cellchat_engine'", ns = ns,
+      actionButton(ns("comm_compute"), i18n$t("Lancer le calcul CellChat"),
+                   class = "btn-primary w-100", icon = icon("cogs"))
+    ),
     div(class = "small text-muted mt-1", textOutput(ns("comm_status"))),
     hr(),
     downloadButton(ns("dl_comm_table"), i18n$t("Exporter table canonique (CSV)"), class = "btn-sm btn-info w-100 mt-1"),
@@ -297,6 +337,39 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       )
     })
 
+    # Depot d'un resultat canonique : IDENTIQUE pour les deux voies (import =
+    # Path A, calcul = Path B). Factorise parce que la regle des deux voies
+    # exige que les deux chemins deposent le resultat au MEME endroit — sinon
+    # elles divergeraient, et une divergence est un bug.
+    .store_result <- function(canonical, obj) {
+      comm_state$result <- canonical
+      comm_state$object_fingerprint <- velocity_object_fingerprint(obj)
+
+      # Stage 17 (4F) : exposition ADDITIVE du resultat canonique au rapport
+      # consolide (lecture seule ; comm_state reste la reference du panel
+      # 8b — aucun changement de comportement du panneau).
+      shared_rv$communication_result <- canonical
+
+      provenance_append(shared_rv, canonical$provenance)
+
+      # Filtres : reset a chaque nouveau resultat (les anciens choix ne sont
+      # plus garantis valides sur une nouvelle source).
+      updateNumericInput(session, "comm_f_score_min", value = NA)
+      updateNumericInput(session, "comm_f_pmax", value = NA)
+      t0 <- canonical$canonical_table
+      sender_nodes <- ifelse(!is.na(t0$sender_mapped), t0$sender_mapped, t0$sender)
+      receiver_nodes <- ifelse(!is.na(t0$receiver_mapped), t0$receiver_mapped, t0$receiver)
+      updateSelectizeInput(session, "comm_f_pathways",
+                           choices = sort(unique(stats::na.omit(t0$pathway))),
+                           selected = character(0))
+      updateSelectizeInput(session, "comm_f_senders",
+                           choices = sort(unique(sender_nodes)),
+                           selected = character(0))
+      updateSelectizeInput(session, "comm_f_receivers",
+                           choices = sort(unique(receiver_nodes)),
+                           selected = character(0))
+    }
+
     # ── Import + validation (orchestration uniquement) ─────────────────────
     observeEvent(input$comm_import, {
       req(global_data$sc_obj)
@@ -312,6 +385,15 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
         assert_metadata_column(obj, identity_col, context = "communication import")
 
         src <- input$comm_source %||% "cellchat"
+        # Garde : la source « calcul dans l'application » n'a aucun fichier a
+        # importer. Sans ce filtre elle tomberait dans la branche finale
+        # (LIANA) et exigerait un fichier qui n'existe pas — message absurde.
+        if (identical(src, "cellchat_engine")) {
+          stop(paste0(
+            "La source « Calculer dans l'application » n'a aucun fichier a ",
+            "importer : utilisez le bouton « Lancer le calcul CellChat »."
+          ), call. = FALSE)
+        }
         warnings_all <- character(0)
 
         if (identical(src, "cellchat")) {
@@ -402,32 +484,7 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
           external_consensus = isTRUE(parsed$external_consensus),
           analysis_id     = "sc-communication-import"
         )
-        comm_state$result <- canonical
-        comm_state$object_fingerprint <- velocity_object_fingerprint(obj)
-
-        # Stage 17 (4F) : exposition ADDITIVE du resultat canonique au rapport
-        # consolide (lecture seule ; comm_state reste la reference du panel
-        # 8b — aucun changement de comportement du panneau).
-        shared_rv$communication_result <- canonical
-
-        provenance_append(shared_rv, canonical$provenance)
-
-        # Filtres : reset a chaque import (les anciens choix ne sont plus
-        # garantis valides sur une nouvelle source).
-        updateNumericInput(session, "comm_f_score_min", value = NA)
-        updateNumericInput(session, "comm_f_pmax", value = NA)
-        t0 <- canonical$canonical_table
-        sender_nodes <- ifelse(!is.na(t0$sender_mapped), t0$sender_mapped, t0$sender)
-        receiver_nodes <- ifelse(!is.na(t0$receiver_mapped), t0$receiver_mapped, t0$receiver)
-        updateSelectizeInput(session, "comm_f_pathways",
-                             choices = sort(unique(stats::na.omit(t0$pathway))),
-                             selected = character(0))
-        updateSelectizeInput(session, "comm_f_senders",
-                             choices = sort(unique(sender_nodes)),
-                             selected = character(0))
-        updateSelectizeInput(session, "comm_f_receivers",
-                             choices = sort(unique(receiver_nodes)),
-                             selected = character(0))
+        .store_result(canonical, obj)
 
         msg <- sprintf(
           paste0("Import OK : %d lignes canoniques (%d lignes source). ",
@@ -456,6 +513,81 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
           paste(.tr("Erreur import communication :"), conditionMessage(e)),
           type = "error", duration = 10
         )
+      })
+    })
+
+    # ── CC-5 : calcul CellChat DANS l'application (Path B) ──────────────────
+    # Meme depot, memes vues, memes exports que l'import : le resultat du
+    # moteur EST un resultat canonique (regle des deux voies). Aucune vue ni
+    # aucun export n'a eu a changer — c'est la preuve que la forme est bonne.
+    observeEvent(input$comm_compute, {
+      req(global_data$sc_obj)
+      tryCatch({
+        obj <- assert_seurat(global_data$sc_obj, context = "communication engine")
+
+        identity_col <- input$comm_identity_column
+        if (is.null(identity_col) || !nzchar(identity_col)) {
+          stop("Choisissez d'abord la colonne de metadonnees Seurat decrivant les identites des populations.", call. = FALSE)
+        }
+        assert_metadata_column(obj, identity_col, context = "communication engine")
+
+        species <- input$comm_engine_species
+        if (is.null(species) || !nzchar(species)) {
+          stop(paste0("Choisissez l'espece : la base ligand-recepteur en ",
+                      "decoule et ne se devine pas a partir des donnees."),
+               call. = FALSE)
+        }
+
+        # Dependance PARESSeUSE : l'absence de CellChat est un etat PREVU. On
+        # garde la main sur le texte (avec le remede) plutot que de laisser
+        # l'erreur du moteur arriver telle quelle dans la notification.
+        if (!cellchat_engine_available()) {
+          stop(paste0(
+            "Le package 'CellChat' n'est pas installe : le calcul dans ",
+            "l'application est impossible. Il est distribue uniquement sur ",
+            "GitHub — remotes::install_github(\"jinworks/CellChat\"). L'import ",
+            "de resultats externes reste disponible sans cette dependance."
+          ), call. = FALSE)
+        }
+
+        cc_input <- build_cellchat_input(obj, group_by = identity_col,
+                                         species = species)
+
+        result <- withProgress(message = .tr("Calcul CellChat en cours..."),
+                               value = 0, {
+          run_cellchat(cc_input,
+                       seed  = as.integer(input$comm_engine_seed),
+                       nboot = as.integer(input$comm_engine_nboot),
+                       seurat_obj = obj,
+                       on_progress = function(msg) incProgress(0, detail = msg))
+        })
+
+        .store_result(result, obj)
+
+        eng <- result$engine
+        msg <- sprintf(
+          paste0("Calcul OK : %s interactions, %s populations, %s voies ",
+                 "significatives. Moteur %s %s — base %s (%s) — graine %s, ",
+                 "%s permutations."),
+          format(eng$n_interactions), format(eng$n_populations),
+          format(eng$n_pathways_significant), eng$engine, eng$engine_version,
+          eng$database, eng$database_version, format(eng$seed), format(eng$nboot)
+        )
+        comm_status_rv(paste0("[", .status_label(result$status), "]\n", msg))
+        showNotification(.tr("Calcul CellChat termine."), type = "message", duration = 4)
+
+      }, error = function(e) {
+        comm_state$result <- NULL
+        comm_state$object_fingerprint <- NULL
+        # Les erreurs du moteur sont CLASSEES (6 etats) : on affiche l'etat EN
+        # PLUS du texte — « no_interactions » ou « invalid_parameters » ne se
+        # devinent pas dans un message generique.
+        st <- cellchat_engine_error_state(e)
+        detail <- if (is.na(st)) conditionMessage(e) else
+          paste0(conditionMessage(e), " [etat : ", st, "]")
+        comm_status_rv(paste(.tr("Erreur calcul communication :"), detail))
+        showNotification(paste(.tr("Erreur calcul communication :"), detail),
+                         type = "error", duration = 10)
       })
     })
 

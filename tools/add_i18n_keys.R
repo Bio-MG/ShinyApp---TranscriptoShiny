@@ -536,7 +536,27 @@ new_entries <- list(
   c("PCA descriptive colorée par jeu d'origine (pas de correction appliquée, ou diagnostic indisponible).",
     "Descriptive PCA colored by dataset of origin (no correction applied, or diagnostic unavailable)."),
   c("Transformation VST impossible sur la fusion (diagnostic indisponible).", "VST transformation impossible on the merge (diagnostic unavailable)."),
-  c("sans correction", "no correction")
+  c("sans correction", "no correction"),
+
+  # ── CC-5 : moteur CellChat natif (Path B) — UI « calculer dans l'app » ────
+  c("Communication cellule-cellule — import de resultats externes (CellChat / CellPhoneDB / LIANA) ou calcul CellChat dans l'application. ",
+    "Cell-cell communication — import external results (CellChat / CellPhoneDB / LIANA) or compute CellChat in the app. "),
+  c("Aucun score recompose. Les scores de sources differentes ne sont pas comparables.",
+    "No score is recomposed. Scores from different sources are not comparable."),
+  c("Calculer dans l'application (CellChat)", "Compute in the app (CellChat)"),
+  c("Espece (base ligand-recepteur)", "Species (ligand-receptor database)"),
+  c("Humain (CellChatDB.human)", "Human (CellChatDB.human)"),
+  c("Souris (CellChatDB.mouse)", "Mouse (CellChatDB.mouse)"),
+  c("Choix OBLIGATOIRE : la base ligand-recepteur en decoule, elle ne se devine pas a partir des donnees.",
+    "REQUIRED choice: the ligand-receptor database follows from it and cannot be guessed from the data."),
+  c("Graine", "Seed"),
+  c("Nombre de permutations", "Number of permutations"),
+  c("Les p-values viennent d'une permutation : la graine est un parametre du calcul, elle est tracee dans la provenance. Plus de permutations = calcul plus long.",
+    "p-values come from a permutation: the seed is a computation parameter and is traced in the provenance. More permutations means a longer computation."),
+  c("Lancer le calcul CellChat", "Run CellChat computation"),
+  c("Calcul CellChat en cours...", "Running CellChat..."),
+  c("Calcul CellChat termine.", "CellChat computation finished."),
+  c("Erreur calcul communication :", "Communication computation error:")
 )
 
 fr_existing <- vapply(j$translation, function(x) x$fr %||% "", character(1))

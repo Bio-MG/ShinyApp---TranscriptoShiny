@@ -10,6 +10,41 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > Leur état fait foi dans **`docs/STATUS.md`** §1 et §2. Ce fichier reprend à
 > partir de `STAT-S1`.
 
+## [V1.x — CC-5] — 2026-09-15 — Calcul CellChat dans l'application (UI Path B)
+
+Le moteur était **exécutable mais inexposable** : aucune action ne permettait
+de lancer un calcul. `modules/sc/mod_sc_communication.R` gagne une **5ᵉ
+source**, « Calculer dans l'application (CellChat) ».
+
+### Ajouté
+- **`comm_engine_species`** : espèce `human`/`mouse` **sans défaut** — la base
+  ligand-récepteur en découle et ne se devine pas à partir des données (même
+  motif que le mode d'agrégation LIANA : un choix implicite produirait un
+  artefact d'analyse).
+- **`comm_engine_seed`** / **`comm_engine_nboot`** : graine et nombre de
+  permutations, exposés et tracés dans la provenance.
+- **`comm_compute`** : bouton dédié. Le bouton « Importer et valider » est
+  **masqué** pour cette source, et la branche import s'en protège explicitement
+  (sans quoi elle exigerait un fichier inexistant).
+- Test de gel `tests/testthat/test-sc-communication-engine-ui.R` (53
+  assertions).
+
+### Modifié
+- **`.store_result()`** : le dépôt du résultat (état, empreinte objet, rapport
+  consolidé, provenance, remise à zéro des filtres) est **factorisé** et
+  désormais **commun aux deux voies** — c'est la garantie que vues et exports
+  ne peuvent pas diverger.
+- **Aucune vue ni aucun export n'a été modifié** : preuve mécanique de la règle
+  des deux voies.
+
+### Corrigé
+- `test-communication-contract-freeze.R` : l'invariant « aucun appel CellChat »
+  était exprimé par un grep sur `CellChatDB`, qui interdisait aussi le simple
+  **libellé** du choix d'espèce. Reformulé **sans perdre la garantie** : plus
+  de `library()`, plus de `computeCommunProb`, plus d'accès `CellChatDB$`, plus
+  d'appel `CellChat::`, et le nom de la base n'apparaît que dans des libellés
+  (occurrences comptées).
+
 ## [V1.x — CC-1] — 2026-09-15 — CellChat épinglé par SHA (moteur exécutable)
 
 Le moteur Path B livré au jalon précédent était **non exécutable** faute de
