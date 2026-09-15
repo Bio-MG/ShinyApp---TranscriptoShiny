@@ -2349,6 +2349,38 @@ Second symptôme remonté (Pathways → onglet Réseaux). **Non reproduit.**
 **À confirmer** : relancer l'app, et si l'erreur persiste, relever le texte
 **exact** affiché dans le plot.
 
+### 2av. 🔎 PROPOSITION (non implémentée) — canal de pilotage programmatique headless (2026-09-15)
+
+**Document** : `docs/PROPOSAL_PILOTAGE_PROGRAMMATIQUE.md` — **non versionné**
+(`docs/`, décision §7) : il est pour l'agent et le développement.
+**Statut : en attente d'arbitrage utilisateur/orchestrateur. Rien n'est codé.**
+
+**Pourquoi.** Deux défauts du moteur CellChat (§2at et §9 ci-dessous) sont
+passés à travers 5 103 tests unitaires, parce que le **câblage réactif n'était
+jamais exécuté** : les tests unitaires testent des fonctions, pas l'app.
+
+**Principe.** `Rscript` → `shiny::testServer(<module>)` → `session$setInputs()`
+→ assertions sur les **objets** `output$*` → **bilan sur disque** (jamais
+stdout, cause 139). Aucun navigateur, aucune capture.
+
+**Évaluation de la roadmap utilisateur** : principes retenus, **mais 4 points
+tels qu'écrits ne fonctionneront pas** — `source("app.R")` lance l'app
+(`shinyApp()` en top-level) ; un `fileInput` attend un data.frame et non un
+chemin ; un `actionButton` est un compteur (`TRUE` ne déclenche qu'une fois) ;
+un `downloadHandler` ne s'atteint pas par `output$id$content`. Et le harnais
+**doit** détecter les **plots sentinelles d'erreur** (§3.5 du document), sinon
+il répondra « OK » pendant que l'app affiche une erreur — exactement la classe
+de panne de §2au.
+
+**Périmètre conseillé** : par **module**, pas sur l'app entière (6 daemons
+mirai). MCP : **étendre `scripts/mcp_server.R` existant** (§2p) plutôt que
+d'ajouter `{mcptools}` (nouvelle dépendance ; les paquets MCP sont exclus du
+lock par convention).
+
+**3 décisions en attente** : (1) étiquette `"0"` CellChat = échec franc ou
+remappage déclaré ; (2) MCP = serveur existant ou `{mcptools}` ; (3)
+`test-shinytest2-*` = conserver / réduire au smoke / retirer.
+
 ### 5bis. Pourquoi Bulk V2 était « verrouillé » — et ce qui restait
 
 Question posée le 2026-09-11. Réponse : il y avait **trois** raisons, dont une
