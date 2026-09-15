@@ -2081,6 +2081,53 @@ casse** passe inaperçu, quel que soit le nombre de tests verts. Ici le
 déclencheur est l'affichage d'une branche d'UI ; là c'était un objet réel. Un
 test statique de la classe est le seul filet qui tienne dans les deux cas.
 
+### 2aq. 🔒 Herméticité renv — mesure, garde, et trou restant (2026-09-15)
+
+**Nouveau garde** : `tools/check_renv_hermeticity.R`. Pour chaque paquet du
+lock, il vérifie **où il se résout** (`find.package()`, sans charger). Sortie
+`0` si hermétique. Il ne charge aucun paquet ⇒ il échappe au segfault de
+teardown 139 qui rend `renv::status()` illisible en sortie standard.
+
+**Mesure initiale : 7 paquets hors bibliothèque projet**, pas un seul — tous
+résolus depuis `D:/Data_science/R-4.4.2/library` :
+
+`AsioHeaders`, `chromote`, `ggpubr`, `pingr`, `shiny.i18n`, `shinytest2`,
+`websocket`
+
+⚠️ `shiny.i18n` est une dépendance **d'exécution** (l'i18n de l'application),
+pas un détail de test. Ce n'était pas « juste ggpubr ».
+
+**Versions vérifiées IDENTIQUES au lock pour les 7** avant d'agir : déplacer
+ne change donc aucun comportement. 6 installés par
+`renv::install(..., lock = FALSE)` (lockfile **inchangé**, md5 identique).
+
+**`ggpubr` a résisté — et pourquoi** : aucun binaire Windows pour la version
+du lock **1.0.0** (seul **0.6.3** est distribué en binaire). renv doit donc
+construire depuis les sources ⇒ `ERROR: lazy loading failed` : le segfault de
+teardown déjà rencontré en CC-1. Même contournement :
+`Rcmd INSTALL --no-clean-on-error --no-test-load` puis
+`tools:::.install_package_namespace_info()` (127 exports,
+`loadNamespace("ggpubr")` OK).
+👉 Leçon : `renv::install()` échoue **en silence sur la cause** — il ne dit pas
+« pas de binaire », il dit « installation failed ».
+
+**Après correction : 426 / 426 hermétiques, 0 erreur.**
+
+**IL RESTE UN TROU PLUS GROS — mesuré, NON corrigé (jalon distinct).**
+**11 paquets utilisés par le code sont ABSENTS de `renv.lock`** :
+
+`decoupleR`, `GSVA`, `loomR`, `msigdbr`, `sceasy`, `survminer`, `sva`,
+`variancePartition`, `WGCNA` — et **`dorothea` / `progeny` non installés du
+tout**.
+
+`renv::restore()` sur une machine propre ne les poserait pas. Les enregistrer
+impose la procédure chirurgicale (§2ao.2 : jamais de `renv::snapshot()`
+global ; `renv::record()` n'est **pas** chirurgical).
+
+À noter : `renv::status()` liste aussi **22 paquets en dérive de version**
+(bibliothèque ≠ lock, ex. `igraph`, `bslib`, `future`, `sf`) et un
+`CellChat [ref: main != master]` — la référence et non le SHA.
+
 ### 5bis. Pourquoi Bulk V2 était « verrouillé » — et ce qui restait
 
 Question posée le 2026-09-11. Réponse : il y avait **trois** raisons, dont une

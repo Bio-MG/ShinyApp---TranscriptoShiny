@@ -10,6 +10,36 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > Leur état fait foi dans **`docs/STATUS.md`** §1 et §2. Ce fichier reprend à
 > partir de `STAT-S1`.
 
+## [V1.x — HERMÉTICITÉ renv] — 2026-09-15 — 7 paquets hors bibliothèque projet + garde
+
+### Ajouté
+- **`tools/check_renv_hermeticity.R`** (nouveau garde) : pour chaque paquet du
+  lock, vérifie **où il se résout**. Sortie `0` si hermétique. Ne charge aucun
+  paquet ⇒ échappe au segfault de teardown 139.
+  Usage : `Rscript tools/check_renv_hermeticity.R [--strict]`
+
+### Corrigé
+- **7 paquets** se résolvaient hors de la bibliothèque du projet, depuis
+  `R-4.4.2/library` : `AsioHeaders`, `chromote`, `ggpubr`, `pingr`,
+  **`shiny.i18n`**, `shinytest2`, `websocket`. `shiny.i18n` est une
+  dépendance **d'exécution** (i18n), pas un détail de test.
+  Après correction : **426 / 426 hermétiques, 0 erreur**.
+- Versions vérifiées **identiques au lock** avant déplacement ⇒ aucun
+  changement de comportement. `renv.lock` **inchangé** (md5 identique).
+
+### Note technique — pourquoi `renv::install("ggpubr")` échouait
+Aucun **binaire Windows** pour ggpubr **1.0.0** (seul 0.6.3 est binaire) ⇒
+construction depuis les sources ⇒ `ERROR: lazy loading failed`, le segfault de
+teardown déjà documenté en CC-1. Contournement identique :
+`Rcmd INSTALL --no-clean-on-error --no-test-load` puis
+`tools:::.install_package_namespace_info()` (127 exports, chargement OK).
+
+### ⚠️ Reste ouvert (jalon distinct)
+**11 paquets utilisés mais absents de `renv.lock`** : `decoupleR`, `GSVA`,
+`loomR`, `msigdbr`, `sceasy`, `survminer`, `sva`, `variancePartition`,
+`WGCNA`, et **`dorothea` / `progeny` non installés du tout**.
+`renv::restore()` sur une machine propre ne les poserait pas.
+
 ## [V1.x — HOTFIX `ns`] — 2026-09-15 — « impossible de trouver la fonction "ns" » dans deux serveurs
 
 ### Corrigé
