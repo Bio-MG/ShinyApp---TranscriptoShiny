@@ -404,11 +404,18 @@ run_cellchat <- function(cellchat_input, seed, nboot = TS_CELLCHAT_NBOOT_DEFAULT
   }
 
   .progress("creation de l'objet CellChat")
+  # `group.by` doit etre une COLONNE de `meta`. build_cellchat_input() NORMALISE
+  # les identites en `meta$labels` alors que `$group_by` garde le nom d'origine
+  # (ex. "celltype") pour la provenance : passer `$group_by` ici faisait
+  # echouer TOUT le run avec « The 'group.by' is not a column name in the
+  # `meta` » — le moteur ne marchait que si la colonne s'appelait "labels".
+  # Calcule AVANT le tryCatch pour qu'une entree non conforme garde son etat.
+  group_col <- cellchat_group_by_column(cellchat_input)
   object <- tryCatch(
     CellChat::createCellChat(
       object  = cellchat_input$data,
       meta    = cellchat_input$meta,
-      group.by = cellchat_input$group_by
+      group.by = group_col
     ),
     error = function(e) .cellchat_engine_stop(
       "engine_failure",

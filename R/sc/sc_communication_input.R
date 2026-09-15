@@ -611,6 +611,35 @@ assert_cellchat_input <- function(x, context = "consommateur CellChat") {
   invisible(x)
 }
 
+#' Colonne de `$meta` a passer a `CellChat::createCellChat(group.by = )`
+#'
+#' Piege deja paye en production : `build_cellchat_input()` **normalise** la
+#' colonne d'identites de l'objet Seurat en `meta$labels`. Le champ `group_by`
+#' conserve le nom D'ORIGINE (ex. `celltype`, `seurat_clusters`) pour la
+#' provenance et le rapport — ce nom n'est donc **pas** une colonne de `$meta`.
+#' Le passer tel quel a `createCellChat()` fait echouer tout le run :
+#' « The 'group.by' is not a column name in the `meta`, which will be used for
+#' cell grouping. » Le moteur ne fonctionnait que par accident, quand la
+#' colonne d'identites s'appelait litteralement `labels`.
+#'
+#' Cette fonction est la SEULE source de verite du regroupement : le moteur
+#' l'utilise, `assert_cellchat_input()` garantit que la colonne existe.
+#'
+#' @param x Objet `cellchat_input`.
+#' @return Nom de la colonne de `$meta` portant les populations (`"labels"`).
+#' @export
+cellchat_group_by_column <- function(x) {
+  if (is.null(x$meta) || !"labels" %in% colnames(x$meta)) {
+    .cellchat_input_stop(
+      "invalid_input",
+      sprintf(paste0("Colonne 'labels' absente de $meta (colonnes presentes : %s) ",
+                     ": entree CellChat non conforme au contrat 4D-3."),
+              paste(colnames(x$meta %||% data.frame()), collapse = ", "))
+    )
+  }
+  "labels"
+}
+
 #' Resume d'entree CellChat pour export CSV (une ligne)
 #'
 #' @param x Objet `cellchat_input` valide.
@@ -651,7 +680,7 @@ cellchat_input_summary <- function(x) {
 cellchat_input_public_api <- function() {
   c(
     "assert_cellchat_input", "build_cellchat_input", "cellchat_database_for_species",
-    "cellchat_input_error_state", "cellchat_input_from_matrix",
+    "cellchat_group_by_column", "cellchat_input_error_state", "cellchat_input_from_matrix",
     "cellchat_input_public_api", "cellchat_input_requirements",
     "cellchat_input_states", "cellchat_input_summary", "cellchat_log_normalize"
   )
