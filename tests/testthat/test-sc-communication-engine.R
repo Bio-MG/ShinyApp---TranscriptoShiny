@@ -244,16 +244,36 @@ test_that("the contract document exists and states the frozen rules", {
 test_that("a real run produces a canonical result with no CellChat object", {
   skip_if_not(cellchat_engine_available(), "CellChat absent (dependance GitHub)")
 
+  # Jeu VIABLE : de vrais genes de signalisation (issus de la base CellChat) et
+  # une surexpression par groupe. Un jeu jouet (quelques genes, expression
+  # uniforme) ne produit AUCUNE paire ligand-recepteur surexprimee et fait
+  # echouer CellChat sur « subscript out of bounds » — constate, pas suppose.
   set.seed(20260914)
-  cells <- 120L
-  genes <- c("TGFB1", "TGFBR1", "TGFBR2", "CD74", "APP", "MIF", "CD44",
-             paste0("GENE", 1:40))
-  data <- matrix(rpois(cells * length(genes), 3), nrow = length(genes),
-                 dimnames = list(genes, paste0("c", seq_len(cells))))
-  labels <- factor(rep(c("A", "B", "C"), length.out = cells))
+  cc_env <- new.env(parent = emptyenv())
+  utils::data(list = "CellChatDB.human", package = "CellChat", envir = cc_env)
+  cc_db <- get("CellChatDB.human", envir = cc_env)
+  cc_pw <- c("TGFb", "MIF", "MHC-I", "MHC-II", "GALECTIN", "CD99",
+             "ANNEXIN", "VISFATIN", "COMPLEMENT", "CXCL")
+  cc_sel <- cc_db$interaction[cc_db$interaction$pathway_name %in% cc_pw,
+                              c("ligand", "receptor")]
+  genes <- sort(unique(c(cc_sel$ligand, cc_sel$receptor)))
+  genes <- genes[nzchar(genes)]
+
+  cells <- 240L
+  feats <- c(genes, paste0("FILL", seq_len(60L)))
+  grp <- rep(c("A", "B", "C"), length.out = cells)
+  data <- matrix(rpois(length(feats) * cells, 2), nrow = length(feats),
+                 dimnames = list(feats, paste0("k", seq_len(cells))))
+  lig <- intersect(cc_sel$ligand, feats)
+  rec <- intersect(cc_sel$receptor, feats)
+  iA <- which(grp == "A")
+  iB <- which(grp == "B")
+  data[lig, iA] <- data[lig, iA] + rpois(length(lig) * length(iA), 25)
+  data[rec, iB] <- data[rec, iB] + rpois(length(rec) * length(iB), 25)
+  labels <- factor(grp)
 
   input <- cellchat_input_from_matrix(
-    data = data, features = genes, labels = labels, species = "human",
+    data = data, features = feats, labels = labels, species = "human",
     log_normalize = TRUE
   )
 
@@ -275,8 +295,40 @@ test_that("a real run produces a canonical result with no CellChat object", {
   expect_identical(res$engine$seed, 1L)
   expect_identical(res$engine$nboot, 5L)
   expect_true(nzchar(as.character(res$engine$database)))
+  # CellChatDB n'expose pas de champ `version` : la version est lue dans
+  # `interaction$version` (base livree MIXTE v1+v2). Elle doit etre tracée.
+  expect_true(nzchar(as.character(res$engine$database_version)))
   # p_adjusted reste NA (jamais fabrique)
   expect_true(all(is.na(res$canonical_table$p_adjusted)))
-  # le resultat passe la garde des consommateurs (voie commune)
-  expect_s3_class(assert_communication_result(res), "list")
+  # le resultat passe la garde des consommateurs (voie commune).
+  # NB : assert_communication_result() rend une liste BASE, pas un objet S3 —
+  # la garde VALIDE, elle ne requalifie pas le type.
+  expect_true(is.list(assert_communication_result(res)))
+})
+
+test_that("a run with no usable LR pair fails as no_interactions, not as a crash", {
+  skip_if_not(cellchat_engine_available(), "CellChat absent (dependance GitHub)")
+
+  # Jeu jouet MESURE : aucune paire ligand-recepteur surexprimee n'en ressort,
+  # donc CellChat ne peut rien inferer. Sans la garde, computeCommunProb()
+  # echoue sur « subscript out of bounds » — un indice de tableau, pas une
+  # cause. L'etat `no_interactions` doit porter le diagnostic.
+  set.seed(20260914)
+  cells <- 120L
+  genes <- c("TGFB1", "TGFBR1", "TGFBR2", "CD74", "APP", "MIF", "CD44",
+             paste0("GENE", 1:40))
+  data <- matrix(rpois(cells * length(genes), 3), nrow = length(genes),
+                 dimnames = list(genes, paste0("c", seq_len(cells))))
+  labels <- factor(rep(c("A", "B", "C"), length.out = cells))
+
+  input <- cellchat_input_from_matrix(
+    data = data, features = genes, labels = labels, species = "human",
+    log_normalize = TRUE
+  )
+
+  err <- tryCatch(run_cellchat(input, seed = 1L, nboot = 5L),
+                  error = function(e) e)
+  expect_s3_class(err, "cellchat_engine_error")
+  expect_identical(cellchat_engine_error_state(err), "no_interactions")
+  expect_true(grepl("ligand", conditionMessage(err), fixed = TRUE))
 })
