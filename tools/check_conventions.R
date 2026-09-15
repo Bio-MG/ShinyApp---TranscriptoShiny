@@ -389,6 +389,42 @@ check_c6_library_in_r <- function(r_files) {
   }
 }
 
+#' Rend une chaîne « ASCII-safe » : tout caractère hors ASCII devient son
+#' échappement `\uXXXX` (ou `\UXXXXXXXX` au-delà du BMP).
+#'
+#' POURQUOI — défaut mesuré le 2026-09-15, cause racine prouvée octet par octet.
+#' `parse()` convertit le texte en encodage NATIF avant de le lire. Sous une
+#' locale non-UTF-8 — constaté : `LC_CTYPE=C`, ce que Git Bash exporte via
+#' `LC_ALL=C.UTF-8`, nom que R ne reconnaît pas sous Windows — un caractère
+#' UTF-8 est remplacé par la chaîne LITTÉRALE « <U+00E9> » (7 octets ASCII) :
+#'
+#'     eval(parse(text = '"3c. Réseau"'))  ->  "3c. R<U+00E9>seau"
+#'
+#' Conséquence : toute clé i18n accentuée ou emoji était déclarée ABSENTE de
+#' translation.json à tort — 218 fausses erreurs C7 sous `C`, 71 sous
+#' `French_France.1252` (les emoji restent hors CP1252), 0 sous `fr_FR.UTF-8`.
+#' Le résultat du garde dépendait donc de la locale de l'appelant.
+#'
+#' En n'envoyant à `parse()` que de l'ASCII, le décodage devient indépendant de
+#' la locale. La substitution est sans ambiguïté : un caractère non-ASCII n'est
+#' jamais membre d'une séquence d'échappement, celles-ci étant ASCII par
+#' construction (`\`, `u`, `U`, chiffres hexadécimaux).
+.asciify_non_ascii <- function(s) {
+  vapply(s, function(x) {
+    if (length(x) == 0L || is.na(x)) return(NA_character_)
+    # Chemin rapide : en ASCII pur, octets == caractères. Comparaison
+    # indépendante de la locale (nchar(type = "chars") sait compter les
+    # caractères d'une chaîne marquée UTF-8 quelle que soit la locale).
+    if (nchar(x, type = "bytes") == nchar(x, type = "chars")) return(x)
+    cp <- utf8ToInt(enc2utf8(x))
+    paste0(vapply(cp, function(c) {
+      if (c < 128L) intToUtf8(c)
+      else if (c <= 0xFFFFL) sprintf("\\u%04X", c)
+      else sprintf("\\U%08X", c)
+    }, character(1)), collapse = "")
+  }, character(1), USE.NAMES = FALSE)
+}
+
 #' Décode les échappements \uXXXX d'une chaîne (base R, sans jsonlite).
 #' `s` est un vecteur : la fonction doit rester vectorielle (elle est appelée
 #' sur les 2000+ clés d'un coup), d'où le vapply() et le `repeat` par élément.
@@ -411,47 +447,60 @@ check_c6_library_in_r <- function(r_files) {
 #' `c("a", "b", ...)` et on ne parse qu'une fois. Si un seul littéral est
 #' invalide, le parse groupé échoue : on retombe alors sur le décodage élément
 #' par élément, ce qui garantit un résultat identique à l'ancienne version.
+#'
+#' Les littéraux passent d'abord par `.asciify_non_ascii()` : sans cela, la
+#' conversion en encodage natif faite par `parse()` corrompt tout caractère
+#' non-ASCII hors de la locale courante (voir la note de `.asciify_non_ascii`).
+#' Le résultat est ramené en UTF-8 : c'est ce qui rend la comparaison C7
+#' indépendante de la locale (`fr_FR.UTF-8` rend du UTF-8, `French_France.1252`
+#' du latin1, `C` de l'ASCII — les trois doivent comparer égal).
 .decode_json_literals <- function(lits) {
   if (!length(lits)) return(character(0))
+  safe <- .asciify_non_ascii(lits)
   vals <- tryCatch(
-    eval(parse(text = paste0("c(", paste0(lits, collapse = ", "), ")"))),
+    eval(parse(text = paste0("c(", paste0(safe, collapse = ", "), ")"))),
     error = function(e) NULL
   )
   if (is.null(vals) || length(vals) != length(lits)) {
-    vals <- vapply(lits, function(l) {
+    vals <- vapply(safe, function(l) {
       tryCatch(eval(parse(text = l)), error = function(e) NA_character_)
     }, character(1), USE.NAMES = FALSE)
   }
-  as.character(vals)
+  enc2utf8(as.character(vals))
 }
 
-check_c7_i18n_keys <- function(all_files) {
-  json_path <- file.path("i18n", "translation.json")
-  if (!file.exists(json_path)) {
-    .add("ERROR", "C7", json_path, NA_integer_, "fichier de traduction absent.")
-    return(invisible(NULL))
-  }
+#' Clés i18n : ensemble UTILISÉ par le code vs ensemble DÉFINI dans le JSON.
+#'
+#' Extrait de `check_c7_i18n_keys()` pour être testable sur une FIXTURE. Le cas
+#' négatif — « le garde détecte-t-il encore une clé réellement absente ? » — ne
+#' peut pas se vérifier sur le dépôt réel, qui doit rester à 0 signalement : un
+#' garde vert dont on n'a jamais vu le rouge ne prouve rien.
+#'
+#' @return `NULL` si le JSON est absent ou de format inattendu, sinon une liste
+#'   `used` (clé -> emplacements `fichier:ligne`), `defined` (clés du JSON) et
+#'   `missing` (clés utilisées et non définies).
+.i18n_key_sets <- function(json_path, code_files) {
+  if (!file.exists(json_path)) return(NULL)
   raw <- paste(readLines(json_path, warn = FALSE, encoding = "UTF-8"), collapse = "\n")
   fr_matches <- regmatches(raw, gregexpr('"fr"\\s*:\\s*"([^"\\\\]|\\\\.)*"', raw, perl = TRUE))[[1]]
-  if (!length(fr_matches)) {
-    .add("ERROR", "C7", json_path, NA_integer_, "aucune entrée {fr, en} trouvée — format inattendu.")
-    return(invisible(NULL))
-  }
-  # Les littéraux JSON sont décodés par R lui-même (eval/parse) : c'est le
-  # seul moyen fiable d'aligner `\"`, `\n`, `\u00e9` côté JSON avec ce que
-  # produit réellement tr("...") côté R — sinon toute clé contenant une
-  # apostrophe échappée ou un guillemet serait faussement signalée manquante.
+  if (!length(fr_matches)) return(NULL)
+
+  # Les littéraux JSON sont décodés par R lui-même (eval/parse, rendu sûr par
+  # .asciify_non_ascii) : c'est le seul moyen fiable d'aligner `\"`, `\n`,
+  # `\u00e9` côté JSON avec ce que produit réellement tr("...") côté R — sinon
+  # toute clé contenant une apostrophe échappée ou un guillemet serait
+  # faussement signalée manquante.
   fr_literals <- sub('^"fr"\\s*:\\s*', "", fr_matches, perl = TRUE)
   decoded_all <- .decode_json_literals(fr_literals)
   bad <- is.na(decoded_all)
-  if (any(bad)) {
-    decoded_all[bad] <- .unescape_r(gsub('^"|"$', "", fr_literals[bad]))
-  }
-  fr_keys <- unique(decoded_all)
+  if (any(bad)) decoded_all[bad] <- .unescape_r(gsub('^"|"$', "", fr_literals[bad]))
+  # enc2utf8 des DEUX côtés : c'est la condition pour que la comparaison ne
+  # dépende pas de la locale qui a produit les chaînes.
+  fr_keys <- enc2utf8(unique(decoded_all))
 
   lits <- character(0)
   locs <- character(0)
-  for (f in all_files) {
+  for (f in code_files) {
     ann <- .read_code_lines(f)
     if (nrow(ann) == 0) next
     rel_f <- .rel(f)
@@ -465,20 +514,33 @@ check_c7_i18n_keys <- function(all_files) {
       locs <- c(locs, rep(sprintf("%s:%d", rel_f, ann$line_no[i]), length(m)))
     }
   }
-  if (length(lits)) {
-    keys <- .unescape_r(.decode_json_literals(lits))
-    keep <- !is.na(keys)
-    used <- split(locs[keep], keys[keep])
-  } else {
-    used <- list()
+  if (!length(lits)) {
+    return(list(used = character(0), defined = fr_keys, missing = character(0)))
   }
-  missing_keys <- names(used)[!names(used) %in% fr_keys]
-  for (k in missing_keys) {
-    .add("ERROR", "C7", .rel(used[[k]][1]), NA_integer_,
+  keys <- enc2utf8(.unescape_r(.decode_json_literals(lits)))
+  keep <- !is.na(keys)
+  used <- split(locs[keep], keys[keep])
+  list(used = used, defined = fr_keys,
+       missing = names(used)[!names(used) %in% fr_keys])
+}
+
+check_c7_i18n_keys <- function(all_files) {
+  json_path <- file.path("i18n", "translation.json")
+  if (!file.exists(json_path)) {
+    .add("ERROR", "C7", json_path, NA_integer_, "fichier de traduction absent.")
+    return(invisible(NULL))
+  }
+  sets <- .i18n_key_sets(json_path, all_files)
+  if (is.null(sets)) {
+    .add("ERROR", "C7", json_path, NA_integer_, "aucune entrée {fr, en} trouvée — format inattendu.")
+    return(invisible(NULL))
+  }
+  for (k in sets$missing) {
+    .add("ERROR", "C7", .rel(sets$used[[k]][1]), NA_integer_,
          sprintf("clé i18n absente de translation.json : \"%s\" (ajouter via tools/add_i18n_keys.R).",
                  substr(k, 1L, 80L)))
   }
-  invisible(length(used))
+  invisible(length(sets$used))
 }
 
 check_c8_contract_tests <- function() {
