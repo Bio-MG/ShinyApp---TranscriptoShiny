@@ -10036,6 +10036,114 @@
     {
       "fr": "Erreur calcul communication :",
       "en": "Communication computation error:"
+    },
+    {
+      "fr": "Source de jeux de gènes",
+      "en": "Gene sets source"
+    },
+    {
+      "fr": "Exporter les jeux de gènes (.gmt)",
+      "en": "Export gene sets (.gmt)"
+    },
+    {
+      "fr": "Attribue à chaque échantillon un score par voie — PCA et heatmaps par voie même sans contraste. Exige la matrice VST (étape 1). Les jeux de gènes viennent d'une source NATIVE embarquée (MSigDB, PROGENy, DoRothEA — aucun fichier à fournir) ou d'un .gmt fourni. Les jeux dont moins de 20 % des gènes sont retrouvés sont rejetés (décalage d'identifiants).",
+      "en": "Assigns each sample a per-pathway score — PCA and per-pathway heatmaps even without any contrast. Requires the VST matrix (step 1). Gene sets come from a NATIVE bundled source (MSigDB, PROGENy, DoRothEA — no file to provide) or from a supplied .gmt. Gene sets with less than 20% of their genes found are rejected (identifier mismatch)."
+    },
+    {
+      "fr": "Format attendu : nom<TAB>description<TAB>gènes...",
+      "en": "Expected format: name<TAB>description<TAB>genes..."
+    },
+    {
+      "fr": "⚠️ Source indisponible — installez {pkg} (aucun téléchargement automatique).",
+      "en": "⚠️ Source unavailable — install {pkg} (no automatic download)."
+    },
+    {
+      "fr": "Erreur jeux de gènes :",
+      "en": "Gene sets error:"
+    },
+    {
+      "fr": "MSigDB Reactome (C2)",
+      "en": "MSigDB Reactome (C2)"
+    },
+    {
+      "fr": "MSigDB KEGG (C2, historique)",
+      "en": "MSigDB KEGG (C2, legacy)"
+    },
+    {
+      "fr": "MSigDB GO Biological Process (C5)",
+      "en": "MSigDB GO Biological Process (C5)"
+    },
+    {
+      "fr": "MSigDB Facteurs de transcription (C3)",
+      "en": "MSigDB Transcription factors (C3)"
+    },
+    {
+      "fr": "MSigDB signatures immunitaires (C7)",
+      "en": "MSigDB immune signatures (C7)"
+    },
+    {
+      "fr": "MSigDB signatures oncogéniques (C6)",
+      "en": "MSigDB oncogenic signatures (C6)"
+    },
+    {
+      "fr": "MSigDB types cellulaires (C8)",
+      "en": "MSigDB cell type signatures (C8)"
+    },
+    {
+      "fr": "PROGENy (activités de voies)",
+      "en": "PROGENy (pathway activities)"
+    },
+    {
+      "fr": "DoRothEA (réseau de facteurs de transcription)",
+      "en": "DoRothEA (transcription factor network)"
+    },
+    {
+      "fr": "Fichier .gmt fourni",
+      "en": "Provided .gmt file"
+    },
+    {
+      "fr": "50 ensembles « hallmark » : les processus biologiques de référence.",
+      "en": "50 hallmark sets: the reference biological processes."
+    },
+    {
+      "fr": "Voies Reactome (curées, orientées réactions).",
+      "en": "Reactome pathways (curated, reaction-oriented)."
+    },
+    {
+      "fr": "Voies KEGG historiques (MSigDB les a retirées ; sous-collection « legacy »).",
+      "en": "Legacy KEGG pathways (MSigDB removed them; 'legacy' subcollection)."
+    },
+    {
+      "fr": "Termes GO « biological process » — très granulaire, milliers de jeux.",
+      "en": "GO 'biological process' terms — very granular, thousands of sets."
+    },
+    {
+      "fr": "Cibles de facteurs de transcription (GTRD).",
+      "en": "Transcription factor targets (GTRD)."
+    },
+    {
+      "fr": "Signatures d'états immunitaires (module immuneSigDB).",
+      "en": "Immune state signatures (immuneSigDB module)."
+    },
+    {
+      "fr": "Signatures oncogéniques (perturbations).",
+      "en": "Oncogenic signatures (perturbations)."
+    },
+    {
+      "fr": "Signatures de types cellulaires.",
+      "en": "Cell type signatures."
+    },
+    {
+      "fr": "Activités de voies par échantillon (14 voies).",
+      "en": "Per-sample pathway activities (14 pathways)."
+    },
+    {
+      "fr": "Cibles de facteurs de transcription (confiance A/B/C).",
+      "en": "Transcription factor targets (confidence A/B/C)."
+    },
+    {
+      "fr": "Jeux de gènes maison : nom<TAB>description<TAB>gènes...",
+      "en": "Custom gene sets: name<TAB>description<TAB>genes..."
     }
   ]
 }

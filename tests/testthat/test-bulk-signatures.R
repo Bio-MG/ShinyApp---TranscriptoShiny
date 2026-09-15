@@ -11,6 +11,7 @@ source_project_file("R/core/provenance.R")
 source_project_file("R/plotting/theme.R")
 source_project_file("R/bulk/bulk_batch_qc.R")
 source_project_file("R/bulk/bulk_gsva.R")
+source_project_file("R/bulk/bulk_gene_sets.R")
 source_project_file("R/bulk/bulk_signatures.R")
 
 .vst_m3 <- function(genes = 80, samples = 8, seed = 1) {

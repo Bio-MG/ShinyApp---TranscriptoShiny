@@ -59,13 +59,27 @@ mod_bulk_pathways_ui <- function(id) {
     hr(),
     h6(i18n$t("Scores par \u00e9chantillon (GSVA / ssGSEA)"), style = "font-weight:bold;"),
     div(class = "small text-muted mb-2",
-        i18n$t("Attribue \u00e0 chaque \u00e9chantillon un score par voie \u2014 PCA et heatmaps par voie m\u00eame sans contraste. Exige la matrice VST (\u00e9tape 1) et un fichier .gmt (nom<TAB>description<TAB>g\u00e8nes...). Les jeux dont moins de 20 % des g\u00e8nes sont retrouv\u00e9s sont rejet\u00e9s (d\u00e9calage d'identifiants).")),
+        i18n$t("Attribue \u00e0 chaque \u00e9chantillon un score par voie \u2014 PCA et heatmaps par voie m\u00eame sans contraste. Exige la matrice VST (\u00e9tape 1). Les jeux de g\u00e8nes viennent d'une source NATIVE embarqu\u00e9e (MSigDB, PROGENy, DoRothEA \u2014 aucun fichier \u00e0 fournir) ou d'un .gmt fourni. Les jeux dont moins de 20 % des g\u00e8nes sont retrouv\u00e9s sont rejet\u00e9s (d\u00e9calage d'identifiants).")),
+    # PLOT-S6b — source NATIVE des jeux de gènes (bulk_gene_sets.R). Le .gmt
+    # reste disponible pour les jeux maison : le fileInput n'apparaît que pour
+    # cette source (conditionalPanel), il n'est plus un prérequis.
+    selectInput(ns("scores_source"), i18n$t("Source de jeux de g\u00e8nes"),
+                choices  = bulk_gene_set_choices(.tr_plain),
+                selected = "msigdb_hallmark"),
+    selectInput(ns("scores_org"), i18n$t("Organisme"),
+                choices = stats::setNames(c("human", "mouse"),
+                  c(.tr_plain("Humain"), .tr_plain("Souris"))),
+                selected = "human"),
+    conditionalPanel(
+      condition = "input.scores_source == 'file'", ns = ns,
+      fileInput(ns("scores_gmt"), i18n$t("Fichier de jeux de g\u00e8nes (.gmt)"),
+                accept = c(".gmt", ".txt"), buttonLabel = i18n$t("Parcourir..."))
+    ),
+    div(class = "small text-muted mb-2", textOutput(ns("scores_source_hint"))),
     selectInput(ns("scores_method"), i18n$t("M\u00e9thode de scoring"),
                 choices = stats::setNames(c("ssgsea", "gsva", "plage", "zscore"),
                   c("ssGSEA", "GSVA", "PLAGE", "zscore")),
                 selected = "ssgsea"),
-    fileInput(ns("scores_gmt"), i18n$t("Fichier de jeux de g\u00e8nes (.gmt)"),
-              accept = c(".gmt", ".txt"), buttonLabel = i18n$t("Parcourir...")),
     fluidRow(
       column(6, numericInput(ns("scores_min_size"), i18n$t("Taille min voie"),
                             value = TS_BULK_GSVA_MIN_SIZE, min = 1, step = 1)),
@@ -74,6 +88,10 @@ mod_bulk_pathways_ui <- function(id) {
     ),
     actionButton(ns("run_scores"), i18n$t("Lancer Scores par \u00e9chantillon"),
                  class = "btn-warning w-100", icon = icon("layer-group")),
+    # Les jeux natifs restent exportables en .gmt : reproductibilité hors
+    # application, et réutilisation dans un autre outil.
+    downloadButton(ns("dl_scores_gmt"), i18n$t("Exporter les jeux de g\u00e8nes (.gmt)"),
+                   class = "btn-sm btn-secondary w-100 mt-2"),
     div(class = "small text-muted mt-1", textOutput(ns("scores_status")))
   )
 }
@@ -121,6 +139,11 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+    # PLOT-S6b — jeux de gènes réellement chargés (source native ou .gmt).
+    # Déclaré ICI, avant tout observe() qui le lit : un observe() évalue son
+    # corps immédiatement, donc une définition plus bas serait introuvable.
+    scores_sets_rv <- reactiveVal(NULL)
+
     .tr <- function(key) {
       tr <- global_data$i18n
       if (is.null(tr)) return(key)
@@ -144,6 +167,13 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
       updateSelectInput(session, "pathway_padj_method", label = .tr("Méthode de correction (p-adj)"))
       updateActionButton(session, "run_pathway", label = .tr("Lancer Enrichissement"))
       # Bulk V2 M2 — libellés « scores par échantillon »
+      # PLOT-S6b — la source de jeux de gènes est un selectInput : ses libellés
+      # doivent être repoussés au changement de langue (les choix natifs sont
+      # traduits à la construction de l'UI, cf. bulk_gene_set_choices(.tr_plain)).
+      updateSelectInput(session, "scores_source", label = .tr("Source de jeux de gènes"),
+        choices = bulk_gene_set_choices(.tr))
+      updateSelectInput(session, "scores_org", label = .tr("Organisme"),
+        choices = stats::setNames(c("human", "mouse"), c(.tr("Humain"), .tr("Souris"))))
       updateSelectInput(session, "scores_method", label = .tr("Méthode de scoring"),
         choices = stats::setNames(c("ssgsea", "gsva", "plage", "zscore"),
                                   c("ssGSEA", "GSVA", "PLAGE", "zscore")))
@@ -154,6 +184,7 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
       updateNumericInput(session, "scores_heat_top_n", label = .tr("Voies affichées (heatmap)"))
       updateActionButton(session, "dl_scores_csv", label = .tr("Export CSV (scores)"))
       updateActionButton(session, "dl_scores_rds", label = .tr("Export RDS (résultat complet)"))
+      updateActionButton(session, "dl_scores_gmt", label = .tr("Exporter les jeux de gènes (.gmt)"))
     }, ignoreInit = TRUE)
 
     # (unchanged) manual gene picker refresh + mirroring
@@ -182,6 +213,8 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
       shinyjs::toggleState("run_scores", condition = !is.null(shared_rv$vst_mat))
       shinyjs::toggleState("dl_scores_csv", condition = !is.null(shared_rv$pathway_scores))
       shinyjs::toggleState("dl_scores_rds", condition = !is.null(shared_rv$pathway_scores))
+      # PLOT-S6b — l'export .gmt ne dépend que des jeux chargés (pas du scoring).
+      shinyjs::toggleState("dl_scores_gmt", condition = !is.null(scores_sets_rv()))
     })
 
     # ── Bulk V2 M2 — scores de voies par échantillon ────────────────────────
@@ -199,19 +232,55 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
                   n = nrow(sc$scores), m = ncol(sc$scores), meth = sc$method)
     })
 
+    # PLOT-S6b — jeux de gènes réellement chargés (natifs ou .gmt) : conservés
+    # pour l'export .gmt, qui doit rendre EXACTEMENT ce qui a été scoré.
+    # (le reactiveVal lui-même est déclaré en tête de serveur : lu par un
+    #  observe() qui s'exécute avant cette section.)
+
+    output$scores_source_hint <- renderText({
+      global_data$language
+      src <- input$scores_source %||% "msigdb_hallmark"
+      if (identical(src, "file")) {
+        return(.tr("Format attendu : nom<TAB>description<TAB>gènes..."))
+      }
+      cat_df <- bulk_gene_set_catalog()
+      row <- cat_df[cat_df$source == src, , drop = FALSE]
+      if (nrow(row) == 0L) return("")
+      if (!isTRUE(row$available)) {
+        return(.t_fmt(.tr("\u26a0\ufe0f Source indisponible — installez {pkg} (aucun téléchargement automatique)."),
+                      pkg = row$requires))
+      }
+      .tr(row$description)
+    })
+
     observeEvent(input$run_scores, {
       req(shared_rv$vst_mat)
-      if (is.null(input$scores_gmt) || is.null(input$scores_gmt$datapath)) {
-        showNotification(.tr("\u26a0\ufe0f Fournissez un fichier .gmt (jeux de gènes)."),
-                         type = "warning", duration = 5)
-        return()
+      # PLOT-S6b — la source décide : jeux NATIFS (aucun fichier à fournir) ou
+      # .gmt fourni. Les deux rendent la même forme (nom -> gènes), donc tout
+      # l'aval (compute_pathway_scores, exports, vues) est inchangé.
+      src <- input$scores_source %||% "msigdb_hallmark"
+      if (identical(src, "file")) {
+        if (is.null(input$scores_gmt) || is.null(input$scores_gmt$datapath)) {
+          showNotification(.tr("\u26a0\ufe0f Fournissez un fichier .gmt (jeux de gènes)."),
+                           type = "warning", duration = 5)
+          return()
+        }
+        sets <- tryCatch(bulk_parse_gmt(input$scores_gmt$datapath), error = function(e) e)
+        if (inherits(sets, "error")) {
+          showNotification(paste(.tr("Erreur GMT:"), conditionMessage(sets)),
+                           type = "error", duration = 8)
+          return()
+        }
+      } else {
+        sets <- tryCatch(bulk_load_gene_sets(src, input$scores_org %||% "human"),
+                         error = function(e) e)
+        if (inherits(sets, "error")) {
+          showNotification(paste(.tr("Erreur jeux de gènes :"), conditionMessage(sets)),
+                           type = "error", duration = 8)
+          return()
+        }
       }
-      sets <- tryCatch(bulk_parse_gmt(input$scores_gmt$datapath), error = function(e) e)
-      if (inherits(sets, "error")) {
-        showNotification(paste(.tr("Erreur GMT:"), conditionMessage(sets)),
-                         type = "error", duration = 8)
-        return()
-      }
+      scores_sets_rv(sets)
       p <- shiny::Progress$new(); on.exit(p$close())
       p$set(message = .tr("Scores de voies par échantillon..."), value = 0.2)
       tryCatch({
@@ -306,6 +375,20 @@ mod_bulk_pathways_server <- function(id, global_data, shared_rv) {
       content  = function(file) {
         req(shared_rv$pathway_scores)
         saveRDS(shared_rv$pathway_scores, file)
+      }
+    )
+    # PLOT-S6b — export .gmt des jeux RÉELLEMENT scorés : une source native
+    # (MSigDB/PROGENy/DoRothEA) reste ainsi réutilisable hors application, et
+    # le .gmt exporté se relit à l'identique (bulk_write_gmt -> bulk_parse_gmt).
+    output$dl_scores_gmt <- downloadHandler(
+      filename = function() {
+        src <- input$scores_source %||% "msigdb_hallmark"
+        paste0("gene_sets_", src, "_", Sys.Date(), ".gmt")
+      },
+      content  = function(file) {
+        sets <- scores_sets_rv()
+        req(sets)
+        bulk_write_gmt(sets, file)
       }
     )
 

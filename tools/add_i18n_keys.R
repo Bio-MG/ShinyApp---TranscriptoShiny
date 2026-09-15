@@ -556,7 +556,56 @@ new_entries <- list(
   c("Lancer le calcul CellChat", "Run CellChat computation"),
   c("Calcul CellChat en cours...", "Running CellChat..."),
   c("Calcul CellChat termine.", "CellChat computation finished."),
-  c("Erreur calcul communication :", "Communication computation error:")
+  c("Erreur calcul communication :", "Communication computation error:"),
+  # --- PLOT-S6b : source NATIVE de jeux de genes (scores par echantillon) ---
+  # Le .gmt n'est plus un prerequis : les jeux viennent de msigdbr / progeny /
+  # dorothea, embarques. Le fichier reste possible pour les jeux maison.
+  # ATTENTION : ce fichier est lu par R sous une locale qui peut etre "C" (Git
+  # Bash exporte LC_ALL=C.UTF-8, nom que R ne reconnait pas sous Windows) : tout
+  # caractere non-ASCII ecrit en clair ici est CORROMPU a la lecture. Les cles
+  # doivent donc etre ecrites en echappements \uXXXX (convention du fichier).
+  c("Source de jeux de g\u00e8nes", "Gene sets source"),
+  c("Exporter les jeux de g\u00e8nes (.gmt)", "Export gene sets (.gmt)"),
+  c("Attribue \u00e0 chaque \u00e9chantillon un score par voie \u2014 PCA et heatmaps par voie m\u00eame sans contraste. Exige la matrice VST (\u00e9tape 1). Les jeux de g\u00e8nes viennent d'une source NATIVE embarqu\u00e9e (MSigDB, PROGENy, DoRothEA \u2014 aucun fichier \u00e0 fournir) ou d'un .gmt fourni. Les jeux dont moins de 20 % des g\u00e8nes sont retrouv\u00e9s sont rejet\u00e9s (d\u00e9calage d'identifiants).",
+    "Assigns each sample a per-pathway score \u2014 PCA and per-pathway heatmaps even without any contrast. Requires the VST matrix (step 1). Gene sets come from a NATIVE bundled source (MSigDB, PROGENy, DoRothEA \u2014 no file to provide) or from a supplied .gmt. Gene sets with less than 20% of their genes found are rejected (identifier mismatch)."),
+  c("Format attendu : nom<TAB>description<TAB>g\u00e8nes...",
+    "Expected format: name<TAB>description<TAB>genes..."),
+  c("\u26a0\ufe0f Source indisponible \u2014 installez {pkg} (aucun t\u00e9l\u00e9chargement automatique).",
+    "\u26a0\ufe0f Source unavailable \u2014 install {pkg} (no automatic download)."),
+  c("Erreur jeux de g\u00e8nes :", "Gene sets error:"),
+  # Libelles du catalogue natif (bulk_gene_set_catalog)
+  c("MSigDB Reactome (C2)", "MSigDB Reactome (C2)"),
+  c("MSigDB KEGG (C2, historique)", "MSigDB KEGG (C2, legacy)"),
+  c("MSigDB GO Biological Process (C5)", "MSigDB GO Biological Process (C5)"),
+  c("MSigDB Facteurs de transcription (C3)", "MSigDB Transcription factors (C3)"),
+  c("MSigDB signatures immunitaires (C7)", "MSigDB immune signatures (C7)"),
+  c("MSigDB signatures oncog\u00e9niques (C6)", "MSigDB oncogenic signatures (C6)"),
+  c("MSigDB types cellulaires (C8)", "MSigDB cell type signatures (C8)"),
+  c("PROGENy (activit\u00e9s de voies)", "PROGENy (pathway activities)"),
+  c("DoRothEA (r\u00e9seau de facteurs de transcription)", "DoRothEA (transcription factor network)"),
+  c("Fichier .gmt fourni", "Provided .gmt file"),
+  # Descriptions du catalogue natif
+  c("50 ensembles \u00ab hallmark \u00bb : les processus biologiques de r\u00e9f\u00e9rence.",
+    "50 hallmark sets: the reference biological processes."),
+  c("Voies Reactome (cur\u00e9es, orient\u00e9es r\u00e9actions).",
+    "Reactome pathways (curated, reaction-oriented)."),
+  c("Voies KEGG historiques (MSigDB les a retir\u00e9es ; sous-collection \u00ab legacy \u00bb).",
+    "Legacy KEGG pathways (MSigDB removed them; 'legacy' subcollection)."),
+  c("Termes GO \u00ab biological process \u00bb \u2014 tr\u00e8s granulaire, milliers de jeux.",
+    "GO 'biological process' terms \u2014 very granular, thousands of sets."),
+  c("Cibles de facteurs de transcription (GTRD).",
+    "Transcription factor targets (GTRD)."),
+  c("Signatures d'\u00e9tats immunitaires (module immuneSigDB).",
+    "Immune state signatures (immuneSigDB module)."),
+  c("Signatures oncog\u00e9niques (perturbations).",
+    "Oncogenic signatures (perturbations)."),
+  c("Signatures de types cellulaires.", "Cell type signatures."),
+  c("Activit\u00e9s de voies par \u00e9chantillon (14 voies).",
+    "Per-sample pathway activities (14 pathways)."),
+  c("Cibles de facteurs de transcription (confiance A/B/C).",
+    "Transcription factor targets (confidence A/B/C)."),
+  c("Jeux de g\u00e8nes maison : nom<TAB>description<TAB>g\u00e8nes...",
+    "Custom gene sets: name<TAB>description<TAB>genes...")
 )
 
 fr_existing <- vapply(j$translation, function(x) x$fr %||% "", character(1))

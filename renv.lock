@@ -273,6 +273,32 @@
       "Repository": "CRAN"
     },
 
+    "bcellViper": {
+      "Package": "bcellViper",
+      "Version": "1.42.0",
+      "Source": "Bioconductor",
+      "Type": "Package",
+      "Title": "Human B-cell transcriptional interactome and normal human B-cell expression data",
+      "Date": "2013-04-15",
+      "Author": "Mariano Javier Alvarez",
+      "Maintainer": "Mariano Javier Alvarez <malvarez@c2b2.columbia.edu>",
+      "Description": "This package provides a human B-cell context-specific transcriptional regulatory network and a human normal B-cells dataset for the examples in package viper.",
+      "License": "GPL (>=2)",
+      "Depends": [
+        "R(>= 2.14.0)",
+        "Biobase",
+        "methods"
+      ],
+      "LazyLoad": "yes",
+      "biocViews": "ExperimentData, Genome, Homo_sapiens_Data, CancerData",
+      "Collate": "''",
+      "git_url": "https://git.bioconductor.org/packages/bcellViper",
+      "git_branch": "RELEASE_3_20",
+      "git_last_commit": "80d6f26",
+      "git_last_commit_date": "2024-10-29",
+      "Repository": "Bioconductor 3.20",
+      "NeedsCompilation": "no"
+    },
     "beeswarm": {
       "Package": "beeswarm",
       "Version": "0.4.0",
@@ -1209,6 +1235,58 @@
       "Author": "Guangchuang Yu [aut, cre], Li-Gen Wang [ctb], Vladislav Petyuk [ctb], Giovanni Dall'Olio [ctb]"
     },
 
+    "dorothea": {
+      "Package": "dorothea",
+      "Version": "1.18.0",
+      "Source": "Bioconductor",
+      "Type": "Package",
+      "Title": "Collection Of Human And Mouse TF Regulons",
+      "Authors@R": "c( person(given = \"Pau\", family = \"Badia-i-Mompel\", role = c(\"cre\"), email = \"pau.badia@uni-heidelberg.de\", comment = c(ORCID = \"0000-0002-1004-3923\")), person(given = \"Daniel\", family = \"Dimitrov\", role = c(\"aut\"), email = \"daniel.dimitrov@uni-heidelberg.de\", comment = c(ORCID = \"0000-0002-5197-2112\")), person(given = \"Christian H.\", family = \"Holland\", role = c(\"aut\"), email = \"cholland2408@gmail.com\", comment = c(ORCID = \"0000-0002-3060-5786\")), person(given = \"Luz\", family = \"Garcia-Alonso\", role = \"aut\"), person(given = \"Alberto\", family = \"Valdeolivas\", role = \"ctb\"), person(given = \"Minoo\", family = \"Ashtiani\", role = \"ctb\"), person(given = \"Attila\", family = \"Gabor\", role = \"ctb\") )",
+      "Description": "DoRothEA is a gene regulatory network containing signed transcription factor (TF) - target gene interactions. DoRothEA regulons, the collection of a TF and its transcriptional targets, were curated and collected from different types of evidence for both human and mouse. A confidence level was assigned to each TF-target interaction based on the number of supporting evidence.",
+      "URL": "https://saezlab.github.io/dorothea/, https://github.com/saezlab/dorothea",
+      "BugReports": "https://github.com/saezlab/dorothea/issues",
+      "Depends": [
+        "R (>= 4.0)"
+      ],
+      "License": "GPL-3 + file LICENSE",
+      "Encoding": "UTF-8",
+      "LazyData": "true",
+      "LazyDataCompression": "xz",
+      "RoxygenNote": "7.2.3",
+      "VignetteBuilder": "knitr",
+      "biocViews": "ExperimentData, Homo_sapiens_Data, Mus_musculus_Data",
+      "Imports": [
+        "dplyr",
+        "magrittr",
+        "bcellViper",
+        "decoupleR"
+      ],
+      "Suggests": [
+        "Biobase",
+        "BiocStyle",
+        "OmnipathR",
+        "viper",
+        "knitr",
+        "pheatmap",
+        "pkgdown",
+        "rmarkdown",
+        "Seurat",
+        "SingleCellExperiment",
+        "SummarizedExperiment",
+        "testthat (>= 2.1.0)",
+        "tibble",
+        "tidyr",
+        "utils"
+      ],
+      "git_url": "https://git.bioconductor.org/packages/dorothea",
+      "git_branch": "RELEASE_3_20",
+      "git_last_commit": "ce6afd2",
+      "git_last_commit_date": "2024-10-29",
+      "Repository": "Bioconductor 3.20",
+      "NeedsCompilation": "no",
+      "Author": "Pau Badia-i-Mompel [cre] (<https://orcid.org/0000-0002-1004-3923>), Daniel Dimitrov [aut] (<https://orcid.org/0000-0002-5197-2112>), Christian H. Holland [aut] (<https://orcid.org/0000-0002-3060-5786>), Luz Garcia-Alonso [aut], Alberto Valdeolivas [ctb], Minoo Ashtiani [ctb], Attila Gabor [ctb]",
+      "Maintainer": "Pau Badia-i-Mompel <pau.badia@uni-heidelberg.de>"
+    },
     "dynamicTreeCut": {
       "Package": "dynamicTreeCut",
       "Version": "1.63-1",
@@ -2158,6 +2236,99 @@
       "Repository": "CRAN"
     },
 
+    "progeny": {
+      "Package": "progeny",
+      "Version": "1.28.0",
+      "Source": "Bioconductor",
+      "Title": "Pathway RespOnsive GENes for activity inference from gene expression",
+      "Authors@R": "c( person(given = \"Michael\", family = \"Schubert\", role = \"aut\"), person(given = \"Alberto\", family = \"Valdeolivas\", role = \"ctb\", email = \"alvaldeolivas@gmail.com\", comment = c(ORCID = \"0000-0001-5482-9023\")), person(given = \"Christian H.\", family = \"Holland\", role = \"ctb\", email = \"cholland2408@gmail.com\", comment = c(ORCID = \"0000-0002-3060-5786\")), person(given = \"Igor\", family = \"Bulanov\", role = \"ctb\"), person(given = \"Aurélien\", family = \"Dugourd\", role = c(\"cre\",\"ctb\"),  email = \"aurelien.dugourd@bioquant.uni-heidelberg.de\") )",
+      "Description": "PROGENy is resource that leverages a large compendium of publicly available signaling perturbation experiments to yield a common core of pathway responsive genes for human and mouse. These, coupled with any statistical method, can be used to infer pathway activities from bulk or single-cell transcriptomics.",
+      "URL": "https://github.com/saezlab/progeny",
+      "BugReports": "https://github.com/saezlab/progeny/issues",
+      "Depends": [
+        "R (>= 3.6.0)"
+      ],
+      "Imports": [
+        "Biobase",
+        "stats",
+        "dplyr",
+        "tidyr",
+        "ggplot2",
+        "ggrepel",
+        "gridExtra",
+        "decoupleR",
+        "reshape2"
+      ],
+      "biocViews": "SystemsBiology, GeneExpression, FunctionalPrediction, GeneRegulation",
+      "License": "Apache License (== 2.0) | file LICENSE",
+      "LazyData": "true",
+      "LazyDataCompression": "bzip2",
+      "Encoding": "UTF-8",
+      "Suggests": [
+        "airway",
+        "biomaRt",
+        "BiocFileCache",
+        "broom",
+        "Seurat",
+        "SingleCellExperiment",
+        "DESeq2",
+        "BiocStyle",
+        "knitr",
+        "readr",
+        "readxl",
+        "pheatmap",
+        "tibble",
+        "rmarkdown",
+        "testthat (>= 2.1.0)"
+      ],
+      "VignetteBuilder": "knitr",
+      "RoxygenNote": "7.1.2",
+      "git_url": "https://git.bioconductor.org/packages/progeny",
+      "git_branch": "RELEASE_3_20",
+      "git_last_commit": "cbdfaf7",
+      "git_last_commit_date": "2024-10-29",
+      "Repository": "Bioconductor 3.20",
+      "NeedsCompilation": "no",
+      "Author": "Michael Schubert [aut], Alberto Valdeolivas [ctb] (<https://orcid.org/0000-0001-5482-9023>), Christian H. Holland [ctb] (<https://orcid.org/0000-0002-3060-5786>), Igor Bulanov [ctb], Aurélien Dugourd [cre, ctb]",
+      "Maintainer": "Aurélien Dugourd <aurelien.dugourd@bioquant.uni-heidelberg.de>"
+    },
+    "ragg": {
+      "Package": "ragg",
+      "Version": "1.5.2",
+      "Source": "Repository",
+      "Type": "Package",
+      "Title": "Graphic Devices Based on AGG",
+      "Authors@R": "c( person(\"Thomas Lin\", \"Pedersen\", , \"thomas.pedersen@posit.co\", role = c(\"cre\", \"aut\"), comment = c(ORCID = \"0000-0002-5147-4711\")), person(\"Maxim\", \"Shemanarev\", role = c(\"aut\", \"cph\"), comment = \"Author of AGG\"), person(\"Tony\", \"Juricic\", , \"tonygeek@yahoo.com\", role = c(\"ctb\", \"cph\"), comment = \"Contributor to AGG\"), person(\"Milan\", \"Marusinec\", , \"milan@marusinec.sk\", role = c(\"ctb\", \"cph\"), comment = \"Contributor to AGG\"), person(\"Spencer\", \"Garrett\", role = \"ctb\", comment = \"Contributor to AGG\"), person(\"Posit Software, PBC\", role = c(\"cph\", \"fnd\"), comment = c(ROR = \"03wc8by49\")) )",
+      "Maintainer": "Thomas Lin Pedersen <thomas.pedersen@posit.co>",
+      "Description": "Anti-Grain Geometry (AGG) is a high-quality and high-performance 2D drawing library. The 'ragg' package provides a set of graphic devices based on AGG to use as alternative to the raster devices provided through the 'grDevices' package.",
+      "License": "MIT + file LICENSE",
+      "URL": "https://ragg.r-lib.org, https://github.com/r-lib/ragg",
+      "BugReports": "https://github.com/r-lib/ragg/issues",
+      "Imports": [
+        "systemfonts (>= 1.0.3)",
+        "textshaping (>= 0.3.0)"
+      ],
+      "Suggests": [
+        "covr",
+        "graphics",
+        "grid",
+        "testthat (>= 3.0.0)"
+      ],
+      "LinkingTo": [
+        "systemfonts",
+        "textshaping"
+      ],
+      "Config/build/compilation-database": "true",
+      "Config/Needs/website": "ggplot2, devoid, magick, bench, tidyr, ggridges, hexbin, sessioninfo, pkgdown, tidyverse/tidytemplate",
+      "Config/testthat/edition": "3",
+      "Config/usethis/last-upkeep": "2025-04-25",
+      "Encoding": "UTF-8",
+      "RoxygenNote": "7.3.3",
+      "SystemRequirements": "freetype2, libpng, libtiff, libjpeg, libwebp, libwebpmux",
+      "NeedsCompilation": "yes",
+      "Author": "Thomas Lin Pedersen [cre, aut] (ORCID: <https://orcid.org/0000-0002-5147-4711>), Maxim Shemanarev [aut, cph] (Author of AGG), Tony Juricic [ctb, cph] (Contributor to AGG), Milan Marusinec [ctb, cph] (Contributor to AGG), Spencer Garrett [ctb] (Contributor to AGG), Posit Software, PBC [cph, fnd] (ROR: <https://ror.org/03wc8by49>)",
+      "Repository": "CRAN"
+    },
     "remaCor": {
       "Package": "remaCor",
       "Version": "0.0.20",

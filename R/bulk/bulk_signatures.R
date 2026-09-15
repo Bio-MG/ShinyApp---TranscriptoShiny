@@ -87,31 +87,36 @@ bulk_load_signatures <- function(resource = "hallmark", organism = "human",
 
   sets <- switch(resource,
     hallmark = {
-      sp <- if (identical(organism, "mouse")) "Mus musculus" else "Homo sapiens"
-      df <- tryCatch(
-        msigdbr::msigdbr(species = sp, collection = "H"),
-        error = function(e1) tryCatch(
-          msigdbr::msigdbr(species = sp, category = "H"),
-          error = function(e2) stop(errorCondition(paste0(
-            "bulk_load_signatures() : msigdbr a \u00e9chou\u00e9 — ", conditionMessage(e2)),
-            class = "bulk_signatures_error", state = "compute_failed")))
-      )
-      # colonnes stables entre versions : gs_name + gene_symbol (ou gene_entrez)
-      gene_col <- if ("gene_symbol" %in% colnames(df)) "gene_symbol" else
-        if ("gene_entrez" %in% colnames(df)) "gene_entrez" else
-          stop(errorCondition(
-            "bulk_load_signatures() : colonnes de gènes inattendues dans msigdbr.",
-            class = "bulk_signatures_error", state = "compute_failed"))
-      split(df[[gene_col]], df$gs_name)
+      # Chargement MSigDB DELEGUE a bulk_gene_sets.R : `msigdbr::msigdbr()` n'est
+      # appele qu'a UN SEUL endroit du depot (regle 3 — etendre, ne pas
+      # dupliquer). Le catalogue y gere aussi les collections autres que
+      # Hallmark, la traduction d'organisme et la normalisation NA -> NULL des
+      # sous-collections. L'echec est retraduit dans la classe de CE domaine :
+      # les appelants de bulk_load_signatures() n'ont rien a changer.
+      tryCatch(
+        bulk_load_gene_sets("msigdb_hallmark", organism),
+        error = function(e) stop(errorCondition(paste0(
+          "bulk_load_signatures() : msigdbr a \u00e9chou\u00e9 — ", conditionMessage(e)),
+          class = "bulk_signatures_error", state = "compute_failed")))
     },
     progeny = {
-      df <- decoupleR::get_progeny(organism = organism, top = 500)
-      split(as.character(df$target), df$source)
+      # PLOT-S6b — lecture LOCALE via bulk_gene_sets.R. `decoupleR::get_progeny()`
+      # passe par OmnipathR (réseau) depuis decoupleR 2.12.0 et échoue sans lui :
+      # mesuré le 2026-09-15 (« there is no package called 'OmnipathR' »). Le
+      # modèle embarqué du paquet `progeny` est lu directement.
+      tryCatch(
+        bulk_load_gene_sets("progeny", organism),
+        error = function(e) stop(errorCondition(paste0(
+          "bulk_load_signatures() : PROGENy a \u00e9chou\u00e9 — ", conditionMessage(e)),
+          class = "bulk_signatures_error", state = "compute_failed")))
     },
     dorothea = {
-      df <- decoupleR::get_dorothea(organism = organism,
-                                    levels = c("A", "B", "C"))
-      split(as.character(df$target), df$source)
+      # Idem : `dorothea::dorothea_hs` (local) plutôt que decoupleR/OmnipathR.
+      tryCatch(
+        bulk_load_gene_sets("dorothea", organism),
+        error = function(e) stop(errorCondition(paste0(
+          "bulk_load_signatures() : DoRothEA a \u00e9chou\u00e9 — ", conditionMessage(e)),
+          class = "bulk_signatures_error", state = "compute_failed")))
     },
     rds_local = {
       if (is.null(rds_path) || !file.exists(rds_path)) {
