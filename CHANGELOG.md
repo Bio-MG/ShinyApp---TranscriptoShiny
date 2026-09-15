@@ -5,10 +5,101 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ;
 versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur `main`.
 
 > ℹ️ **Trou de maintenance assumé** : entre `V1.x-D` (2026-09-06) et l'entrée
-> ci-dessous, plusieurs jalons ont été livrés **sans entrée de changelog**
-> (PLOT-Q1..Q5, PLOT-S1..S5, Bulk V2 / batch-QC, correctif Milo, STAT-Q1..Q4).
-> Leur état fait foi dans **`docs/STATUS.md`** §1 et §2. Ce fichier reprend à
-> partir de `STAT-S1`.
+> `[V1.x — FERMETURE renv]` (2026-09-15), plusieurs jalons ont été livrés **sans
+> entrée de changelog** (PLOT-Q1..Q5, PLOT-S1..S5, Bulk V2 / batch-QC, correctif
+> Milo, STAT-Q1..Q4). Quatre jalons supplémentaires sont également concernés
+> (2026-09-15/16) : garde **C13** (`choices` nommé, `dff0041`), **marges de
+> figures** sur device de surface nulle (`abcebcd`), **jeux de gènes natifs**
+> (`440878b`) et **P0 `round()` du chemin DE** (`3a0827d`). Leur état fait foi
+> dans **`docs/STATUS.md`** — respectivement « Garde C13 + sémantique
+> `testServer()` MESURÉE » et « PLOT-S6 : rendu des plots, jeux de gènes natifs,
+> garde P0 counts ».
+>
+> ⚠️ **Défaut de numérotation relevé le 2026-09-16** : `STATUS.md` contient
+> **deux** sections étiquetées `2aw` (`### 2aw.` « Garde C13 » et `## §2aw`
+> « PLOT-S6 »). Citer les sections **par titre**, pas par numéro, tant que la
+> collision n'est pas arbitrée.
+
+## [V1.x — 4E-4] — 2026-09-16 — la DA Milo passe par le pool applicatif (sync ≡ async)
+
+### Le problème mesuré
+La proposition 4E-4 (Stage 18) était bloquée par un prérequis **jamais
+arbitré** : « accepter la sérialisation mirai des objets Seurat (coût IPC) ».
+Mesuré plutôt que supposé :
+
+| Objet | Seurat complet | Charge utile Milo | Ratio | IPC complet | IPC charge utile |
+|---|---|---|---|---|---|
+| 6 000 × 2 000 | 13,0 Mo | 1,74 Mo | 7,5 × | 0,00 s | ~0,00 s |
+| 20 000 × 5 000 | 98,2 Mo | 5,81 Mo | 16,9 × | 0,59 s | 0,01 s |
+| 40 000 × 10 000 | 379,5 Mo | 11,63 Mo | **32,6 ×** | 1,67 s | 0,01 s |
+
+L'affirmation du Stage 18 est **confirmée pour l'objet entier** et **infirmée
+pour la charge utile** : Milo ne consomme que les embeddings + `meta.data`. Le
+prérequis est donc **fermé par la mesure**, pas par une décision d'opinion.
+
+### Corrigé — un défaut de reproductibilité découvert en EXÉCUTANT
+Le premier câblage « réussissait » : `status = valid`, même graine enregistrée,
+aucune erreur. Il produisait pourtant **un autre résultat** que le chemin
+synchrone :
+
+| Chemin | Quartiers | Σ logFC | `md5` |
+|---|---|---|---|
+| synchrone (×3 identiques) | 20 | +5,45101795671 | `d61d2fd6fd05` |
+| daemon **sans** correctif | **19** | **−0,538258164913** | `1cc65c57d664` |
+| daemon **avec** correctif | 20 | +5,45101795671 | `d61d2fd6fd05` |
+
+Cause mesurée : `rngkind` **principal** = `Mersenne-Twister/Inversion/Rejection`
+vs **daemon** = `L'Ecuyer-CMRG/Inversion/Rejection` ⇒ `set.seed()` n'a pas le
+même sens dans un daemon. Écartés **par la mesure** : la sérialisation
+(aller-retour `serialize`/`unserialize` en processus = octets identiques, même
+résultat), le backend parallèle (`SnowParam` des deux côtés) et `mc.cores`
+(`NA` des deux côtés).
+
+### Ajouté
+- **`run_job(..., rng_kind = RNGkind())`** (`R/core/jobs.R`) : le `RNGkind()` de
+  l'appelant est figé dans le **processus principal** et transmis au job, qui le
+  restaure avant `fn` puis rétablit le précédent. Corrigé **dans le wrapper**,
+  pas dans le domaine (règle 3 : étendre, ne pas dupliquer — évite de toucher un
+  contrat gelé).
+- **`APP_DAEMON_SOURCE_FILES`** (`R/spatial/spatial_async.R`) : 17 fichiers
+  préchargés dans les daemons (7 spatial + `config/*` + `R/core/*` +
+  `R/sc/*` design/Milo/velocity) ⇒ le pool sert désormais **aussi** le domaine
+  SC **sans** créer un second framework async (règle 8).
+- **`ensure_app_daemons()`** : point d'entrée applicatif neutre et idempotent.
+- **`.resolve_app_base_dir()`** : résout la racine par le marqueur `app.R` au
+  lieu de faire confiance à `getwd()`.
+- **`TS_DA_MILO_TIMEOUT_MS`** (`config/defaults.R`) = 30 min — paramètre déclaré.
+- **2 clés i18n** (+ `tools/add_i18n_keys.R` mis à jour, forme canonique
+  `\uXXXX`).
+- **`tests/testthat/test-da-milo-async.R`** (nouveau, 21 assertions) et une
+  garde de non-régression du flux RNG dans `test-core-jobs.R`.
+
+### Corrigé — deux échecs silencieux
+- Le pool résolvait les chemins de préchargement depuis `getwd()` : sous
+  `testthat::test_file()` (cwd = dossier de test) **tous** les `file.exists()`
+  étaient faux, le préchargement était **sauté en silence** et le daemon levait
+  `could not find function "assert_seurat"`. Corrigé par
+  `.resolve_app_base_dir()`, **plus** un avertissement côté processus principal
+  quand un fichier de préchargement manque — l'échec n'est plus muet.
+- Repli synchrone **déclaré et averti** (notification UI) si le pool est
+  indisponible, au lieu d'un échec non expliqué.
+
+### ⚠️ Ce que ce jalon NE fait PAS
+- **L'UI reste bloquante.** `run_job(async = TRUE)` fait un collect **bloquant**
+  par contrat. Le passage en non-bloquant (`ExtendedTask` +
+  `bslib::bind_task_button()`) est un **jalon séparé, non ouvert**. Ne pas
+  annoncer « UI débloquée ».
+- **scCODA reste synchrone** (reticulate/TensorFlow = un interpréteur Python par
+  daemon) — exclusion **permanente**, pas un report.
+- Sérialiser la **charge utile seule** exigerait de modifier le contrat gelé
+  `MILO_RESULT_CONTRACT.md` — non fait, non ouvert.
+
+### Vérifié
+Tests ciblés : **255 PASS / 0 FAIL / 0 ERROR / 0 SKIP** (7 fichiers).
+`check_conventions.R` = 0 err / 324 avert. (baseline exacte) ;
+`check_duplication.R` = 0 err / 3 avert. ; arbre applicatif sourcé de bout en
+bout (124 fichiers, 0 échec). Détail : `docs/STATUS.md` §2ax, rapport
+`docs/ROADMAP_HANDOFF_STAGE_4E_4.md`.
 
 ## [V1.x — FERMETURE renv] — 2026-09-15 — fermeture de dépendances complète (447 → 482) + garde §4
 

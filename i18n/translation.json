@@ -10144,6 +10144,14 @@
     {
       "fr": "Jeux de gènes maison : nom<TAB>description<TAB>gènes...",
       "en": "Custom gene sets: name<TAB>description<TAB>genes..."
+    },
+    {
+      "fr": "Calcul Milo en cours...",
+      "en": "Milo computation running..."
+    },
+    {
+      "fr": "Pool de calcul indisponible : l'analyse Milo tourne en synchrone — l'interface restera bloquée pendant le calcul.",
+      "en": "Compute pool unavailable: Milo runs synchronously — the interface will stay blocked during the computation."
     }
   ]
 }

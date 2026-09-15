@@ -16,6 +16,19 @@
 # fn doit etre AUTONOME sur le chemin async (serialise vers le daemon) :
 # une fonction pure ou une closure qui n'appelle que des fonctions preloadees
 # dans le pool (cf. source_files de init_spatial_daemons()).
+#
+# ── DETERMINISME : le daemon n'a PAS le RNGkind de l'appelant (2026-09-16) ──
+# Mesure : un daemon mirai tourne en RNGkind "L'Ecuyer-CMRG" alors que le
+# processus principal tourne en "Mersenne-Twister" (defaut R) — mirai impose
+# son propre flux pour des raisons de parallelisme. Consequence SILENCIEUSE :
+# `set.seed(s)` DANS le job ne produit pas la meme suite que `set.seed(s)` en
+# synchrone. Mesure sur Milo (miloR::makeNhoods est stochastique) : 20 -> 19
+# voisinages et somme des logFC de signe INVERSE, avec le MEME `seed`
+# enregistre en provenance et le meme statut `valid` — donc invisible.
+# run_job() restaure donc le RNGkind de l'APPELANT dans le daemon avant fn(),
+# puis rend au daemon son propre RNGkind (le pool est partage : le job suivant
+# ne doit pas heriter de notre etat). `rng_kind = NULL` desactive la
+# restauration (comportement mirai brut, a reserver aux jobs non stochastiques).
 # =============================================================================
 
 #' Extraire un message lisible d'une erreur R ou d'une errorValue mirai
@@ -45,10 +58,14 @@
 #' @param timeout_ms Plafond du job mirai en ms (argument .timeout natif de
 #'   mirai ; NULL = pas de plafond propre au wrapper, les plafonds spatiaux
 #'   MIRAI_TASK_TIMEOUT_MS etc. restent geres par les modules).
+#' @param rng_kind Vecteur RNGkind() a restaurer DANS le daemon avant fn()
+#'   (defaut : le RNGkind de l'appelant, evalue paresseusement dans le
+#'   processus appelant). Sans cela un calcul stochastique ne rend PAS le meme
+#'   resultat qu'en synchrone (voir l'en-tete). NULL = ne rien restaurer.
 #' @return Le resultat de fn(...), ou NULL (invisible) si on_error a absorbe
 #'   une erreur.
 run_job <- function(fn, ..., async = FALSE, on_progress = NULL, on_error = NULL,
-                    timeout_ms = NULL) {
+                    timeout_ms = NULL, rng_kind = RNGkind()) {
   if (!is.function(fn)) {
     stop("run_job() : 'fn' doit etre une fonction.", call. = FALSE)
   }
@@ -93,9 +110,32 @@ run_job <- function(fn, ..., async = FALSE, on_progress = NULL, on_error = NULL,
 
   .progress("soumission mirai")
   job_args <- list(...)
+  # Le RNGkind de l'appelant est fige ICI (processus principal) et voyage avec
+  # le job : le daemon ne peut pas le deviner.
+  rng_kind_job <- if (is.null(rng_kind)) NULL else as.character(rng_kind)
   res <- tryCatch(
-    mirai::mirai(do.call(fn, job_args), fn = fn, job_args = job_args,
-                 .timeout = timeout_ms)[],
+    mirai::mirai(
+      {
+        # Restauration du RNGkind de l'appelant, puis remise en etat du daemon.
+        # tryCatch imbrique plutot que on.exit : on ne depend pas de la
+        # semantique de frame du daemon mirai, et l'erreur du job reste
+        # remontee a l'appelant comme une valeur (traitee plus bas).
+        .prev_kind <- RNGkind()
+        .out <- tryCatch(
+          {
+            if (!is.null(rng_kind_job)) {
+              do.call(RNGkind, as.list(rng_kind_job))
+            }
+            do.call(fn, job_args)
+          },
+          error = function(e) e
+        )
+        tryCatch(do.call(RNGkind, as.list(.prev_kind)), error = function(e2) NULL)
+        .out
+      },
+      fn = fn, job_args = job_args, rng_kind_job = rng_kind_job,
+      .timeout = timeout_ms
+    )[],
     error = function(e) e
   )
 

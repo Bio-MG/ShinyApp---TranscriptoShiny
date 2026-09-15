@@ -75,3 +75,36 @@ test_that("run_job async routes daemon errors through on_error", {
   expect_null(res)
   expect_match(conditionMessage(got), "echec daemon")
 })
+
+# ── 4E-4 : determinisme du chemin async ─────────────────────────────────────
+# Cause racine MESUREE (2026-09-16) : un daemon mirai tourne en
+# "L'Ecuyer-CMRG" alors que le processus principal tourne en
+# "Mersenne-Twister". Sans restauration, `set.seed(s)` dans le job ne produit
+# PAS la meme suite qu'en synchrone — un calcul stochastique (Milo /
+# makeNhoods) rendait alors 19 voisinages au lieu de 20, avec la somme des
+# logFC de signe INVERSE, tout en declarant le meme `seed` en provenance et le
+# meme statut `valid` : invisible.
+test_that("run_job async reproduces the caller's RNG stream (RNGkind trap)", {
+  skip_if_not_installed("mirai")
+  skip_on_cran()
+  on.exit(tryCatch(mirai::daemons(0), error = function(e) NULL), add = TRUE)
+  if (!mirai::daemons_set()) mirai::daemons(2)
+
+  draw <- function() { set.seed(1234L); stats::runif(3) }
+  sync_val <- run_job(draw)
+  expect_identical(run_job(draw, async = TRUE, timeout_ms = 60000), sync_val)
+
+  # Le daemon n'a effectivement pas le RNGkind de l'appelant : c'est la cause.
+  # La sonde doit desactiver la restauration (rng_kind = NULL), sinon elle
+  # mesure le correctif et non le defaut.
+  kind_daemon <- run_job(function() RNGkind(), async = TRUE, timeout_ms = 60000,
+                         rng_kind = NULL)
+  skip_if(identical(as.character(kind_daemon), as.character(RNGkind())),
+          "le daemon partage deja le RNGkind de l'appelant")
+
+  # ... et c'est bien ce qui rendrait le job non reproductible sans correctif.
+  expect_false(identical(
+    run_job(draw, async = TRUE, timeout_ms = 60000, rng_kind = NULL),
+    sync_val
+  ))
+})

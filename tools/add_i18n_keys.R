@@ -605,7 +605,11 @@ new_entries <- list(
   c("Cibles de facteurs de transcription (confiance A/B/C).",
     "Transcription factor targets (confidence A/B/C)."),
   c("Jeux de g\u00e8nes maison : nom<TAB>description<TAB>g\u00e8nes...",
-    "Custom gene sets: name<TAB>description<TAB>genes...")
+    "Custom gene sets: name<TAB>description<TAB>genes..."),
+  # --- 4E-4 : DA Milo dans le pool applicatif partage ---
+  c("Calcul Milo en cours...", "Milo computation running..."),
+  c("Pool de calcul indisponible : l'analyse Milo tourne en synchrone \u2014 l'interface restera bloqu\u00e9e pendant le calcul.",
+    "Compute pool unavailable: Milo runs synchronously \u2014 the interface will stay blocked during the computation.")
 )
 
 fr_existing <- vapply(j$translation, function(x) x$fr %||% "", character(1))

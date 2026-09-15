@@ -58,6 +58,15 @@ TS_DA_MILO_ROBUST                <- TRUE       # glmQLFit robust (defaut miloR)
 TS_DA_MILO_IDENTITY_FRACTION_MIN <- 0.7        # fraction min d'identite pour annoter un voisinage (convention miloR)
 TS_DA_MILO_DISPLAY_ALPHA         <- 0.1        # seuil SpatialFDR d'affichage des voisinages significatifs (vues)
 TS_DA_MILO_SEED                  <- 14L        # graine enregistree dans la provenance
+# Plafond propre au job DA Milo (4E-4). Le calcul tourne desormais dans un
+# daemon mirai (run_job(async = TRUE)) : sans plafond, un run pathologique
+# bloquerait la session indefiniment. On NE releve PAS le plafond partage
+# TS_MIRAI_TIMEOUT_MS (20 min, dimensionne pour les taches spatiales) : on en
+# declare un dedie, meme raisonnement que RCTD / Label Transfer
+# (R/spatial/spatial_async.R). Valeur : Milo enchaine kNN + makeNhoods +
+# calcNhoodDistance + countCells + glmQLFit par voisinage, et le nombre de
+# voisinages croit avec le nombre de cellules.
+TS_DA_MILO_TIMEOUT_MS            <- 30 * 60 * 1000L  # 30 min
 
 # --- scCODA (4E-2) ------------------------------------------------------------
 # DA compositionnelle au niveau ECHANTILLON via l'environnement Python sccoda

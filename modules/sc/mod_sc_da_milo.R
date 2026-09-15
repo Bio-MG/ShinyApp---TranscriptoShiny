@@ -182,7 +182,30 @@ mod_sc_da_milo_server <- function(id, global_data, shared_rv = NULL) {
         ident_col <- if (is.null(ident_choice) || ident_choice == "") NULL
                      else if (ident_choice == "__none__") "" else ident_choice
 
-        res <- run_milo_da(
+        # ── 4E-4 : le calcul part dans le POOL APPLICATIF partage ──────────
+        # run_job() est le wrapper async UNIQUE du depot (regle 8 : aucun
+        # second mecanisme de workers ; jamais MulticoreParam, jamais
+        # enableWGCNAThreads). Le pool est celui de spatial_async.R, rendu
+        # applicatif (APP_DAEMON_SOURCE_FILES) : il preloade la fermeture Milo,
+        # sans quoi le daemon ne resout pas run_milo_da() (mesure : « could not
+        # find function »).
+        # Le repli synchrone de run_job() est DECLARE ici (statut + notification)
+        # et non seulement journalise : l'utilisateur doit savoir que l'interface
+        # va rester bloquee. scCODA reste hors du perimetre async (reticulate /
+        # TensorFlow = un interpreteur Python par daemon).
+        pool_ok <- isTRUE(ensure_app_daemons()) &&
+                   requireNamespace("mirai", quietly = TRUE) &&
+                   isTRUE(mirai::daemons_set())
+        if (!pool_ok) {
+          showNotification(
+            .tr("Pool de calcul indisponible : l'analyse Milo tourne en synchrone — l'interface restera bloquée pendant le calcul."),
+            type = "warning", duration = 10
+          )
+        }
+        milo_status_rv(.tr("Calcul Milo en cours..."))
+
+        res <- run_job(
+          run_milo_da,
           seurat_obj          = obj,
           da_design_result    = des,
           reduction           = input$milo_reduction,
@@ -193,7 +216,9 @@ mod_sc_da_milo_server <- function(id, global_data, shared_rv = NULL) {
           k    = max(3L, as.integer(input$milo_k %||% TS_DA_MILO_K)),
           prop = min(max(as.numeric(input$milo_prop %||% TS_DA_MILO_PROP), 0.01), 1),
           d    = max(2L, as.integer(input$milo_d %||% TS_DA_MILO_D)),
-          seed = as.integer(input$milo_seed %||% TS_DA_MILO_SEED)
+          seed = as.integer(input$milo_seed %||% TS_DA_MILO_SEED),
+          async      = TRUE,
+          timeout_ms = TS_DA_MILO_TIMEOUT_MS
         )
         # Le resultat canonique est deja valide par construction ; la garde
         # explicite documente la consommation (contrat Stage 14).

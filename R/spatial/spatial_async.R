@@ -96,6 +96,77 @@ RCTD_TIMEOUT_MS <- if (exists("TS_RCTD_TIMEOUT_MS")) TS_RCTD_TIMEOUT_MS else 40 
 # a longer, dedicated ceiling rather than raising the shared one.
 LABEL_TRANSFER_TIMEOUT_MS <- if (exists("TS_LABEL_TRANSFER_TIMEOUT")) TS_LABEL_TRANSFER_TIMEOUT else 45 * 60 * 1000L  # 45 minutes
 
+# ── v6 (4E-4) — le pool devient un POOL APPLICATIF partage ─────────────────
+# Decision utilisateur 2026-09-14 (`STATUS.md` §2am.1, option (b)) : un seul
+# pool mirai partage par l'application, et non un pool « spatial » auquel on
+# grefferait un second pool SC (interdit : un seul mecanisme de workers).
+#
+# Consequence MESUREE : le pool demarre UNE fois et sa liste de preload est
+# FIGEE a cet instant (`init_spatial_daemons()` est idempotent). Un daemon qui
+# n'a pas preloade un fichier ne peut pas resoudre les fonctions qu'il definit —
+# mesure : `could not find function "main_only_helper"`. La liste par defaut
+# doit donc couvrir TOUS les domaines async de l'application des le premier
+# demarrage, sinon la branche echoue au premier appel reel.
+#
+# Le domaine SC contribue ici la fermeture de Milo (4E-1), mesuree le
+# 2026-09-16 : config + R/core/{io_helpers,state,provenance,validation} +
+# R/sc/{sc_velocity,sc_abundance_design,sc_abundance_milo,sc_abundance_milo_views}.
+# Cout mesure : +0,6 s sur l'init du pool (7,4 s -> 8,0 s pour 2 daemons).
+# scCODA (4E-2) reste EXCLU : reticulate/TensorFlow initialise Python par
+# processus, donc un daemon de plus = un interpreteur Python de plus.
+#
+# ⚠️ Un pool demarre AVANT ce changement garde l'ancien preload : le badge
+# passera en « degrade » et il faut « Reinitialiser les daemons »
+# (reset_spatial_daemons()), exactement comme pour le preload v5.
+APP_DAEMON_SOURCE_FILES <- c(
+  # --- Spatial (v5) ---
+  "R/spatial/spatial_async.R",
+  "R/spatial/spatial_io.R",
+  "R/spatial/spatial_multi.R",
+  "R/spatial/spatial_niche.R",
+  "R/spatial/spatial_deconv_prep.R",
+  "R/spatial/spatial_deconv_tasks.R",
+  "R/spatial/spatial_stats.R",
+  # --- SC : abondance differentielle Milo (4E-4) — ORDRE : config, core, domaine ---
+  "config/defaults.R",
+  "config/thresholds.R",
+  "R/core/io_helpers.R",
+  "R/core/state.R",
+  "R/core/provenance.R",
+  "R/core/validation.R",
+  "R/sc/sc_velocity.R",
+  "R/sc/sc_abundance_design.R",
+  "R/sc/sc_abundance_milo.R",
+  "R/sc/sc_abundance_milo_views.R"
+)
+
+#' Resolve the application root WITHOUT trusting getwd() (4E-4)
+#'
+#' v4 resolved source_files to absolute paths in the main process — but still
+#' derived them from `getwd()`. Measured 2026-09-16 : under `testthat::test_file()`
+#' the working directory is the TEST directory, so every preload path pointed
+#' nowhere, `file.exists()` was FALSE inside every daemon, the preload was
+#' skipped with only a `message()` nobody reads, and the pool reported
+#' "degraded" while the first real job failed with « could not find function ».
+#' The same silent degradation would happen in production if the app were ever
+#' launched from another directory.
+#'
+#' Walking up to the `app.R` marker is the same rule the test helpers use
+#' (`helper-source.R`), so main process and harness agree by construction.
+#'
+#' @return Absolute path to the directory containing `app.R`, or `getwd()`
+#'   if no marker is found (never fatal: the caller warns on missing files).
+.resolve_app_base_dir <- function(marker = "app.R", max_up = 8L) {
+  d <- normalizePath(getwd(), winslash = "/", mustWork = FALSE)
+  for (i in seq_len(max_up)) {
+    if (file.exists(file.path(d, marker))) return(d)
+    parent <- dirname(d)
+    if (identical(parent, d)) break
+    d <- parent
+  }
+  normalizePath(getwd(), winslash = "/", mustWork = FALSE)
+}
+
 #' Initialize the mirai daemon pool used by all spatial async tasks
 #'
 #' Idempotent: safe to call multiple times — daemons are only spawned once
@@ -105,18 +176,13 @@ LABEL_TRANSFER_TIMEOUT_MS <- if (exists("TS_LABEL_TRANSFER_TIMEOUT")) TS_LABEL_T
 #'
 #' @param n_daemons Integer, number of persistent background R processes.
 #' @param source_files Character vector of project file paths (relative to
-#'   the app's working directory) to source() inside every daemon. Kept
-#'   deliberately spatial-only — see v4 changelog above for why
-#'   helpers_io.R/helpers_sc.R were removed.
+#'   the app's working directory) to source() inside every daemon. Defaults to
+#'   APP_DAEMON_SOURCE_FILES — the APPLICATION-wide preload (spatial + SC DA),
+#'   because the pool is started once and its preload is frozen at that moment
+#'   (see the v6 changelog above).
 #' @return invisible(TRUE) on success, invisible(FALSE) if mirai is missing.
 init_spatial_daemons <- function(n_daemons = 6,
-                                 source_files = c("R/spatial/spatial_async.R",
-                                                  "R/spatial/spatial_io.R",
-                                                  "R/spatial/spatial_multi.R",
-                                                  "R/spatial/spatial_niche.R",
-                                                  "R/spatial/spatial_deconv_prep.R",
-                                                  "R/spatial/spatial_deconv_tasks.R",
-                                                  "R/spatial/spatial_stats.R")) {
+                                 source_files = APP_DAEMON_SOURCE_FILES) {
   if (!requireNamespace("mirai", quietly = TRUE)) {
     warning("Package 'mirai' manquant : les calculs spatiaux asynchrones (clustering, ",
             "deconvolution, indice de Moran) seront indisponibles. Installez-le via ",
@@ -126,13 +192,27 @@ init_spatial_daemons <- function(n_daemons = 6,
 
   if (isTRUE(.spatial_async_env$daemons_ready)) return(invisible(TRUE))
 
-  # Resolve ABSOLUTE paths ONCE, here (main process, reliable getwd()) --
-  # never re-derived relative to whatever a given daemon's own getwd() is.
-  base_dir <- normalizePath(getwd(), winslash = "/", mustWork = FALSE)
+  # Resolve ABSOLUTE paths ONCE, here (main process) -- never re-derived
+  # relative to whatever a given daemon's own getwd() is. Le repertoire de base
+  # est resolu par le marqueur app.R, PAS par getwd() (cf. .resolve_app_base_dir).
+  base_dir <- .resolve_app_base_dir()
   abs_files <- normalizePath(file.path(base_dir, source_files), winslash = "/", mustWork = FALSE)
   .spatial_async_env$base_dir         <- base_dir
   .spatial_async_env$source_files_abs <- abs_files
   .spatial_async_env$n_daemons        <- n_daemons
+
+  # Un fichier de preload absent n'est PAS fatal cote daemon (le `for` se
+  # contente d'un message() invisible depuis Shiny) : on le signale ICI, sur le
+  # processus principal, sinon la panne n'apparait qu'au premier job reel.
+  .missing_files <- abs_files[!file.exists(abs_files)]
+  if (length(.missing_files) > 0L) {
+    warning(sprintf(
+      paste0("init_spatial_daemons() : %d fichier(s) de preload INTROUVABLE(S) ",
+             "— le pool demarrera DEGRADE (repertoire de base : %s). Manquant(s) : %s"),
+      length(.missing_files), base_dir,
+      paste(basename(.missing_files), collapse = ", ")),
+      call. = FALSE)
+  }
 
   mirai::daemons(n_daemons)
 
@@ -173,6 +253,27 @@ init_spatial_daemons <- function(n_daemons = 6,
   }
 
   invisible(TRUE)
+}
+
+#' Point d'entree NEUTRE du pool applicatif partage (4E-4)
+#'
+#' Alias documente de init_spatial_daemons() pour les domaines qui ne sont pas
+#' spatiaux (aujourd'hui : la DA Milo du module SC). Il n'existe QU'UN pool de
+#' workers dans l'application (regle 8) : cette fonction ne cree rien de plus,
+#' elle garantit que le pool applicatif est demarre — c'est-a-dire que le
+#' preload APP_DAEMON_SOURCE_FILES a bien ete applique aux daemons.
+#'
+#' Idempotent : sans effet si le pool est deja pret.
+#'
+#' @param ... Arguments transmis a init_spatial_daemons() (n_daemons,
+#'   source_files). A ne renseigner que pour un besoin explicite.
+#' @return invisible(TRUE) si le pool est disponible et verifie,
+#'   invisible(FALSE) si mirai est absent (l'appelant doit alors le DIRE a
+#'   l'utilisateur : le repli synchrone de run_job() est trace, jamais muet).
+ensure_app_daemons <- function(...) {
+  if (!requireNamespace("mirai", quietly = TRUE)) return(invisible(FALSE))
+  init_spatial_daemons(...)
+  invisible(isTRUE(.spatial_async_env$daemons_ready))
 }
 
 #' Are the spatial mirai daemons started? (pool up, NOT necessarily verified)
