@@ -191,10 +191,24 @@ cellchat_engine_available <- function() {
 #' Les colonnes `ligand` / `receptor` / `pathway` ne sont PAS devinees par
 #' decoupage de chaine : elles sont lues dans object@LR$LRsig, qui porte
 #' exactement ces colonnes indexees par interaction_name.
+#' Accepte l'objet S4 CellChat OU une liste nommee repliquant les slots `net`
+#' et `LR` (route de test, et objet relu sans le paquet).
 #' NB : cette fonction est la SEULE a connaitre la structure interne de
-#' CellChat. Un upgrade du paquet ne casse donc qu'ici.
+#' CellChat. Un upgrade du paquet ne casse donc qu'ici — et l'import d'un
+#' objet .rds (parse_cellchat_object()) lui DELEGUE l'extraction, plutot que
+#' de relire net$prob une deuxieme fois (regle 3 : etendre, ne pas dupliquer).
+# Acces tolerant aux "slots" : objet S4 CellChat OU liste nommee qui les
+# replique (route de test, et objet relu sans le paquet). Un SEUL accesseur,
+# pour que l'extraction de net$prob reste ecrite UNE fois et soit partagee
+# par le moteur ET par l'import d'objet (regle 3 : etendre, ne pas dupliquer).
+.cellchat_engine_slot <- function(object, name) {
+  if (isS4(object)) tryCatch(methods::slot(object, name), error = function(e) NULL)
+  else if (is.list(object)) object[[name]]
+  else NULL
+}
+
 .cellchat_engine_extract <- function(object, source_file = NA_character_) {
-  net <- tryCatch(methods::slot(object, "net"), error = function(e) NULL)
+  net <- .cellchat_engine_slot(object, "net")
   if (is.null(net) || is.null(net$prob)) {
     .cellchat_engine_stop(
       "engine_failure",
@@ -220,7 +234,8 @@ cellchat_engine_available <- function() {
            "p_value laissee a NA (jamais fabriquee).")
   } else character(0)
 
-  lrsig <- tryCatch(object@LR$LRsig, error = function(e) NULL)
+  lrsig <- tryCatch(.cellchat_engine_slot(object, "LR")[["LRsig"]],
+                    error = function(e) NULL)
   if (is.null(lrsig) || !is.data.frame(lrsig) || !nrow(lrsig)) {
     .cellchat_engine_stop(
       "engine_failure",

@@ -3,7 +3,8 @@
 # =============================================================================
 # - read_velocity_rds() : workspace .rda à objet unique (liste spliced/
 #   unspliced) importé ; multi-objets -> erreur orientante.
-# - parse_cellchat_object() : stub liste net=... dans un .rda à objet unique ;
+# - parse_cellchat_object() : liste net=... (forme REELLE de CellChat :
+#   [source, target, interaction_name] + LR$LRsig) dans un .rda à objet unique ;
 #   multi-objets -> erreur classée communication_import_error.
 # Contrat : docs/contracts/RDATA_IMPORT_CONTRACT.md.
 # =============================================================================
@@ -12,6 +13,8 @@ source_project_file("R/core/io_helpers.R")
 source_project_file("R/core/rdata_io.R")
 source_project_file("R/sc/sc_velocity.R")
 source_project_file("R/sc/sc_communication.R")
+# parse_cellchat_object() delegue l'extraction au moteur (regle 3).
+source_project_file("R/sc/sc_communication_engine.R")
 
 .tmpdir <- tempfile(pattern = "rda_comm_vel_")
 dir.create(.tmpdir, showWarnings = FALSE)
@@ -34,12 +37,22 @@ vel_extra <- "not_a_list"
 vel_multi_path <- file.path(.tmpdir, "velocity_multi.rda")
 save(vel_ok, vel_extra, file = vel_multi_path)
 
-# ── CellChat : stub liste net=... dans un .rda ───────────────────────────────
-lig <- c("IL7", "CCL5"); rec <- c("IL7R", "CCR5")
-prs <- c("CD4 T|B", "B|CD4 T")
-prob <- array(c(0.5, 0.0, 0.0, 0.3, 0.2, 0.4, 0.0, 0.1),
-              dim = c(2, 2, 2), dimnames = list(lig, rec, prs))
-cc_stub <- list(net = list(prob = prob))
+# ── CellChat : forme REELLE [source, target, interaction_name] dans un .rda ──
+grp <- c("CD4 T", "B"); inter <- c("IL7_IL7R", "CCL5_CCR5")
+prob <- array(0, dim = c(2, 2, 2), dimnames = list(grp, grp, inter))
+prob["CD4 T", "B", "IL7_IL7R"] <- 0.5
+prob["B", "B", "CCL5_CCR5"] <- 0.4
+cc_stub <- list(
+  net = list(prob = prob),
+  LR = list(LRsig = data.frame(
+    interaction_name = inter,
+    pathway_name     = c("IL7 signaling", "CCL signaling"),
+    ligand           = c("IL7", "CCL5"),
+    receptor         = c("IL7R", "CCR5"),
+    row.names        = inter,
+    stringsAsFactors = FALSE
+  ))
+)
 cc_path <- file.path(.tmpdir, "cellchat.rda")
 save(cc_stub, file = cc_path)
 

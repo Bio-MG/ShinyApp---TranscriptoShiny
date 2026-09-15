@@ -242,6 +242,22 @@ test_that("module consumes the frozen views accessors (Stage 12)", {
   expect_match(src, "parse_cellchat_object(", fixed = TRUE)
 })
 
+test_that("CellChat object import DELEGATES extraction (no second net$prob parser)", {
+  src <- paste(readLines(file.path(ts_project_root(),
+                                   "R/sc/sc_communication.R")),
+               collapse = "\n")
+  # UNE SEULE lecture de net$prob dans toute l'application : l'import d'un
+  # objet .rds DELEGUE au moteur (regle 3 : etendre, ne pas dupliquer).
+  expect_match(src, ".cellchat_engine_extract(", fixed = TRUE)
+  # La forme [ligand, recepteur, "sender|receiver"] documentee avant le
+  # 2026-09-15 etait FICTIVE (0/109 noms d'interaction reels ne contiennent
+  # '|') : son decoupage ne doit pas revenir. NB : le decoupage sur '|' reste
+  # LEGITIME pour CellPhoneDB (interacting_pair = "ligand|receptor") — ce qui
+  # est interdit ici, c'est de lire net$prob hors du moteur.
+  expect_false(grepl("pairs_split", src, fixed = TRUE))
+  expect_false(grepl("dimnames\\(prob\\)\\[\\[", src))
+})
+
 # ── CCC 7-8 route (b) : contrat des rangs (source LIANA) ───────────────────
 test_that("rank measure fields are frozen and separate from the 12 contract fields", {
   expect_setequal(communication_rank_fields(),
