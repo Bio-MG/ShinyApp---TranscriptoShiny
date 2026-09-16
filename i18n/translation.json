@@ -10152,6 +10152,134 @@
     {
       "fr": "Pool de calcul indisponible : l'analyse Milo tourne en synchrone — l'interface restera bloquée pendant le calcul.",
       "en": "Compute pool unavailable: Milo runs synchronously — the interface will stay blocked during the computation."
+    },
+    {
+      "fr": "3g. Réseau PCSF (interactome)",
+      "en": "3g. PCSF network (interactome)"
+    },
+    {
+      "fr": "Réseau PCSF",
+      "en": "PCSF network"
+    },
+    {
+      "fr": "Sous-réseau PCSF (heuristique)",
+      "en": "PCSF subnetwork (heuristic)"
+    },
+    {
+      "fr": "Interactome dérivé des voies Reactome — ce n'est PAS un PPI.",
+      "en": "Interactome derived from Reactome pathways — this is NOT a PPI."
+    },
+    {
+      "fr": "Une arête signifie « ces deux protéines participent à la même voie », pas « interaction physique démontrée ». Les nœuds gris (relais) sont des CO-MEMBRES DE VOIE prédits, pas des partenaires de liaison.",
+      "en": "An edge means \"these two proteins participate in the same pathway\", not \"demonstrated physical interaction\". Grey nodes (relays) are PREDICTED PATHWAY CO-MEMBERS, not binding partners."
+    },
+    {
+      "fr": "Espèce (déclarée)",
+      "en": "Species (declared)"
+    },
+    {
+      "fr": "Humain (hsapiens)",
+      "en": "Human (hsapiens)"
+    },
+    {
+      "fr": "Source des gènes d'intérêt",
+      "en": "Source of genes of interest"
+    },
+    {
+      "fr": "Prime (score du nœud)",
+      "en": "Prize (node score)"
+    },
+    {
+      "fr": "-log10(padj) — recommandé",
+      "en": "-log10(padj) — recommended"
+    },
+    {
+      "fr": "|log2FC| — direction ignorée",
+      "en": "|log2FC| — direction ignored"
+    },
+    {
+      "fr": "Seuil de prime (déclaré)",
+      "en": "Prize threshold (declared)"
+    },
+    {
+      "fr": "Seuls les gènes dont la prime DÉPASSE strictement ce seuil deviennent des primes. 1,3 = p = 0,05 sur l'échelle -log10(padj).",
+      "en": "Only genes whose prize STRICTLY EXCEEDS this threshold become prizes. 1.3 = p = 0.05 on the -log10(padj) scale."
+    },
+    {
+      "fr": "Paramètres du moteur (heuristique)",
+      "en": "Engine parameters (heuristic)"
+    },
+    {
+      "fr": "ω (ouverture d'arbre)",
+      "en": "ω (tree opening)"
+    },
+    {
+      "fr": "β (par arête)",
+      "en": "β (per edge)"
+    },
+    {
+      "fr": "μ (par relais)",
+      "en": "μ (per relay)"
+    },
+    {
+      "fr": "Deux groupes ne sont reliés que s'ils sont séparés par au plus {d} arête(s).",
+      "en": "Two groups are joined only if separated by at most {d} edge(s)."
+    },
+    {
+      "fr": "Paramètres invalides : ω, β et μ doivent être des nombres >= 0.",
+      "en": "Invalid parameters: ω, β and μ must be numbers >= 0."
+    },
+    {
+      "fr": "Calculer le sous-réseau",
+      "en": "Compute the subnetwork"
+    },
+    {
+      "fr": "Nœuds",
+      "en": "Nodes"
+    },
+    {
+      "fr": "Paramètres & QC",
+      "en": "Parameters & QC"
+    },
+    {
+      "fr": "✓ {n} nœuds ({t} primes, {r} relais) et {e} arêtes en {c} composante(s).",
+      "en": "✓ {n} nodes ({t} prizes, {r} relays) and {e} edges in {c} component(s)."
+    },
+    {
+      "fr": "✓ {n} nœuds retenus ({t} primes, {r} relais). Heuristique — ce n'est pas un optimum.",
+      "en": "✓ {n} nodes retained ({t} prizes, {r} relays). Heuristic — this is not an optimum."
+    },
+    {
+      "fr": "Erreur réseau PCSF:",
+      "en": "PCSF network error:"
+    },
+    {
+      "fr": "⚠️ Aucun gène significatif pour cette source — élargissez les seuils de l'étape 2.",
+      "en": "⚠️ No significant gene for this source — widen the step 2 thresholds."
+    },
+    {
+      "fr": "Chargement du réseau de voies (Reactome, hors ligne)...",
+      "en": "Loading the pathway network (Reactome, offline)..."
+    },
+    {
+      "fr": "Calcul du sous-réseau PCSF (heuristique)...",
+      "en": "Computing the PCSF subnetwork (heuristic)..."
+    },
+    {
+      "fr": "En attente — lancez d'abord l'étape 1 (Filtrage & VST) et l'étape 2 (Analyse Différentielle).",
+      "en": "Waiting — first run step 1 (Filtering & VST) and step 2 (Differential Analysis)."
+    },
+    {
+      "fr": "Réseau vide : aucune prime exploitable.",
+      "en": "Empty network: no usable prize."
+    },
+    {
+      "fr": "Rouge = prime (mesurée) · Gris = relais (PRÉDIT, co-membre de voie — pas une interaction physique)",
+      "en": "Red = prize (measured) · Grey = relay (PREDICTED pathway co-member — not a physical interaction)"
+    },
+    {
+      "fr": "{n} avertissement(s).",
+      "en": "{n} warning(s)."
     }
   ]
 }

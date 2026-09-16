@@ -22,6 +22,94 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
 > renumérotation. Détail : `STATUS.md` §6, item 6.
 
+## [V1.x — NEW-3] — 2026-09-16 — interactome local + moteur PCSF heuristique (+ 3 prémisses corrigées, 3 défauts trouvés en exécutant)
+
+### Pourquoi
+
+NEW-3 (`ROADMAP.md` §2.0 rang 6) était le **dernier jalon débloqué non ouvert**.
+Objectif : relier des gènes d'intérêt (résultat DE) en un **sous-réseau** dans un
+interactome **local**, sans aucune dépendance nouvelle ni accès réseau
+(*local-first*).
+
+### Changement
+
+- **`R/bulk/bulk_network.R`** (nouveau, pur) :
+  - **N-1** `bulk_network_map_ids()` — UniProt → SYMBOL, taux **tracé**, plancher
+    **déclaré** ;
+  - **N-2** `load_bulk_network()` — réseau Reactome **dédupliqué** (paire non
+    orientée), mémoïsation **de session** ;
+  - **N-3** `run_bulk_network_pcsf()` — moteur PCSF **heuristique déterministe**
+    (plus courts chemins + arbre couvrant + élagage), paramètres ω/β/μ déclarés,
+    `max_join_hops` rendant le critère **lisible** ;
+  - **N-4** `plot_bulk_network()` + `build_bulk_network_table_export()`.
+- **`modules/bulk/mod_bulk_network.R`** (nouveau) — panneau `3g. Réseau PCSF
+  (interactome)`, onglet `Réseau PCSF`. La mise en garde sémantique est
+  **affichée** (bandeau + légende du tracé), pas seulement documentée.
+- **`docs/contracts/BULK_NETWORK_CONTRACT.md`** (nouveau, gelé) +
+  **`tests/testthat/test-bulk-network-contract-freeze.R`**.
+- **`config/thresholds.R`** — `TS_BULK_NETWORK_MIN_MAP_RATE` (0.50),
+  `TS_BULK_NETWORK_MAX_NODES` (200), justifiés par mesure.
+- **32 clés i18n** (2537 → 2569). `app.R` + `mod_bulk.R` câblés.
+
+### Corrigé — trois prémisses de la proposition étaient fausses (mesuré)
+
+1. **« 19 107 arêtes, degré ~1,7 »** → **292 895 arêtes**, **11 030 nœuds**,
+   **degré moyen 53,1** : le degré était sous-estimé d'un **facteur ~30**, et
+   c'est lui qui calibre ω.
+2. **« `org.Mm.eg.db` absent »** → il **est** installé. La souris est
+   indisponible à cause de **`mmuReactome.db`** (base de **voies** absente ⇒
+   `graphite` tente un **téléchargement**, interdit par *local-first*).
+   Conclusion « humain seul » inchangée, **raison différente et mesurée**.
+3. **« préfixe `UNIPROT:` à retirer »** → les accessions sont **NUES**.
+
+### Corrigé — trois défauts trouvés **en exécutant**
+
+1. **Critère incohérent avec l'objectif** : la rentabilité était testée
+   `ω > β·d`, alors que l'objectif annoncé compte **aussi** `μ` par relais.
+   Corrigé en `ω > β·d + μ·(d−1)` ; ω=1 était de fait **dégénéré** (rien ne se
+   reliait jamais sur un réseau de degré 53).
+2. **Boucle infinie** : l'appartenance à un groupe était lue dans une liste de
+   membres indexée par le nœud d'**absorption**, si bien qu'un nœud du même
+   groupe gardait une liste singleton ⇒ des paires intra-groupe restaient
+   finies et le nombre de groupes ne décroissait plus. **> 10 min, processus
+   tué** ; **0,69 s** après correction (borne de terminaison **prouvable**).
+3. **`AnnotationDbi::mapIds()` échoue** (« None of the keys entered are valid
+   keys ») quand **aucune** clé n'est dans l'espace, au lieu de rendre `NA` —
+   précisément le cas qu'un plancher doit rendre **lisible**. Corrigé par
+   pré-filtrage sur l'espace de clés (mémoïsé), **sans `tryCatch`** (qui
+   masquerait aussi les vraies erreurs).
+
+### Garde
+
+- `test-bulk-network.R` : fixture synthétique à sous-réseau **optimal connu par
+  construction**, élagage, critère de rentabilité (dont le cas **dégénéré**
+  ω=1), déterminisme, invariant de **forêt** (`arêtes = nœuds − composantes`),
+  états d'erreur, plancher sur **cas négatif réellement injecté**, coût borné.
+- Freeze test : surface publique **triée** + signatures, états, **pureté Shiny**,
+  réutilisation d'`igraph` (interdit désormais toute réimplémentation de
+  graphe : `BFS|Dijkstra|Floyd`), ancres `app.R`/`mod_bulk.R`, seuils déclarés,
+  **`bulk_multi_pipeline_fields()` inchangé** (contrat MD-1 non modifié),
+  clés i18n, sync code ↔ contrat.
+
+### Vérifié
+
+`390 PASS / 0 FAIL / 0 ERROR / 0 SKIP` (2 fichiers) · `check_conventions.R`
+**0/324** (inchangé) · `check_duplication.R` **0/3** (inchangé) ·
+`check_renv_hermeticity.R` **0** · `audit_doc_refs.py` **0 err / 18 warn**
+(inchangé) · lancement headless `Listening on http://127.0.0.1:4917` sans
+erreur · **aucune dépendance nouvelle**.
+
+### Non fait
+
+- **`network_result` reste HORS du snapshot multi-jeux** — précédent respecté
+  (`pattern_result`/`dose_result`/`survival_result` en sont aussi absents) ;
+  l'y ajouter toucherait un contrat **gelé** ⇒ décision séparée
+  (`ROADMAP.md` §6).
+- Réseau **PPI physique** et algorithme **exact** (PLNE) : hors périmètre,
+  consignés en §6.
+
+---
+
 ## [V1.x — CC-5] — 2026-09-16 — le moteur CellChat devient la source PAR DÉFAUT (+ audit documentaire re-mesuré)
 
 ### Pourquoi

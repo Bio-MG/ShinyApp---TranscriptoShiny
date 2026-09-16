@@ -64,6 +64,22 @@ TS_BULK_MULTI_MAX_DATASETS <- 20L      # plafond du conteneur (budget RAM 32 Go 
 # --- MD-4 — conteneur sc_datasets (double jeu SC) -----------------------------
 TS_SC_MULTI_MAX_DATASETS   <- 5L       # plafond du conteneur (budget RAM 32 Go — chaque entrée est un objet Seurat complet, bien plus lourd qu'une matrice bulk)
 
+# --- NEW-3 — interactome local (réseau dérivé des voies Reactome) -------------
+# La conversion UniProt -> SYMBOL perd des nœuds : le réseau est amputé en
+# silence si personne ne regarde. Mesuré le 2026-09-16 sur le réseau entier :
+# 10 523 / 11 030 = 95,4 %. Les 507 non convertis sont TOUS hors de l'espace de
+# clés UNIPROT d'org.Hs.eg.db (507 hors espace, 0 dans l'espace mais sans
+# symbole) — c'est un trou de la base d'annotation, pas du code. Le plancher
+# sert de garde-fou par ANALYSE : un jeu de gènes d'intérêt peut être bien moins
+# couvert que le réseau global.
+TS_BULK_NETWORK_MIN_MAP_RATE <- 0.50   # fraction min d'identifiants convertis
+# Plafond du nombre de primes (nœuds d'intérêt) par analyse. PCSF heuristique :
+# le coût est dominé par une matrice de distances k x k (k = nb de primes), donc
+# O(k^2) en mémoire et k appels de plus court chemin. 200 primes = 40 000
+# distances, mesuré < 1 s sur le réseau réel (11 030 nœuds / 292 895 arêtes).
+# Au-delà, on REFUSE plutôt que de laisser la session geler en silence.
+TS_BULK_NETWORK_MAX_NODES   <- 200L    # plafond de primes par analyse PCSF
+
 # --- Spatial deconvolution ---------------------------------------------------
 TS_DECONV_MAX_CELLS_PER_TYPE <- 500L   # per-type subsample cap in artifact
 

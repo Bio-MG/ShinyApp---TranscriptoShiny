@@ -115,6 +115,7 @@ source("R/bulk/dose_response.R")      # NEW-1 : dose-réponse / time-course (drc
 source("R/bulk/bulk_multi.R")         # MD-1 : conteneur bulk_datasets & jeux nommés (pur, contrat gelé)
 source("R/bulk/bulk_multi_compare.R") # MD-2 : comparaison multi-jeux (pur, contrat gelé §10)
 source("R/bulk/bulk_merge.R")         # NEW-2 : fusion de jeux bulk (pur, contrat gelé)
+source("R/bulk/bulk_network.R")       # NEW-3 : interactome local Reactome + PCSF (pur, contrat gelé)
 source("R/sc/sc_multi.R")             # MD-4 : conteneur sc_datasets & double jeu SC (pur, contrat gelé)
 source("R/bulk/bulk_report_engine.R")
 source("R/bulk/bulk_import_engine.R")
@@ -184,6 +185,7 @@ source("modules/bulk/mod_bulk_dose_response.R")  # NEW-1 : dose-réponse / time-
 source("modules/bulk/mod_bulk_datasets.R")    # MD-1 : gestion du conteneur bulk_datasets
 source("modules/bulk/mod_bulk_multi.R")       # MD-2 : comparaison multi-jeux
 source("modules/bulk/mod_bulk_merge.R")       # NEW-2 : fusion de jeux bulk
+source("modules/bulk/mod_bulk_network.R")     # NEW-3 : réseau PCSF / interactome
 source("modules/bulk/mod_bulk_report.R")
 source("modules/bulk/mod_bulk.R")
 

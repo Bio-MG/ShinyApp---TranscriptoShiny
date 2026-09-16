@@ -62,7 +62,11 @@ mod_bulk_ui <- function(id) {
           # NEW-2 : fusion de jeux enregistrés (gènes communs + ComBat-seq
           # optionnel, produit chargé comme jeu actif).
           accordion_panel(i18n$t("Multi-jeux — Fusion de jeux"), value = "panel_merge",
-                          icon = icon("object-group"), mod_bulk_merge_ui(ns("merge")))
+                          icon = icon("object-group"), mod_bulk_merge_ui(ns("merge"))),
+          # NEW-3 : réseau PCSF / interactome dérivé des voies Reactome
+          # (heuristique, hors ligne ; N'EST PAS un PPI).
+          accordion_panel(i18n$t("3g. Réseau PCSF (interactome)"), value = "panel_network",
+                          icon = icon("share-nodes"), mod_bulk_network_ui(ns("network")))
         )
       ),
       navset_card_underline(
@@ -104,7 +108,11 @@ mod_bulk_ui <- function(id) {
         # NEW-2 : fusion de jeux (consomme global_data$bulk_datasets,
         # n'écrit que global_data$bulk_obj — comportement d'un import).
         nav_panel(i18n$t("Fusion de jeux"), value = "tab_bulk_merge",
-                  mod_bulk_merge_output_ui(ns("merge")))
+                  mod_bulk_merge_output_ui(ns("merge"))),
+        # NEW-3 : sous-réseau PCSF (heuristique ; réseau DÉRIVÉ DES VOIES, pas
+        # un PPI — la mise en garde est portée par l'UI du module).
+        nav_panel(i18n$t("Réseau PCSF"), value = "tab_bulk_network",
+                  mod_bulk_network_output_ui(ns("network")))
       )
     )
   )
@@ -461,6 +469,7 @@ mod_bulk_server <- function(id, global_data) {
     mod_bulk_datasets_server("datasets", global_data, shared_rv)  # MD-1
     mod_bulk_multi_server("multi", global_data)                   # MD-2
     mod_bulk_merge_server("merge", global_data)                   # NEW-2
+    mod_bulk_network_server("network", global_data, shared_rv)    # NEW-3
     mod_bulk_report_server(  "report",   global_data, shared_rv)
 
   }) # /moduleServer
