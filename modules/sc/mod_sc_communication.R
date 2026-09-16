@@ -28,15 +28,21 @@ mod_sc_communication_ui <- function(id) {
         i18n$t("Communication cellule-cellule — import de resultats externes (CellChat / CellPhoneDB / LIANA) ou calcul CellChat dans l'application. "),
         i18n$t("Aucun score recompose. Les scores de sources differentes ne sont pas comparables.")),
 
+    # Le moteur natif (CC-5) n'est pas un repli mais la voie NORMALE : il est
+    # donc propose EN TETE et SELECTIONNE par defaut (decision utilisateur du
+    # 2026-09-16). Les quatre sources d'import restent disponibles, dans leur
+    # ordre d'origine. ⚠️ Le defaut est DECLARE ici ET repris par le repli
+    # serveur (`input$comm_source %||% ...`) : les deux doivent rester
+    # d'accord — garde test-sc-communication-engine-ui.R.
     radioButtons(ns("comm_source"), i18n$t("Source des resultats"),
                  choices = setNames(
-                   c("cellchat", "cellchat_object", "cellphonedb", "liana", "cellchat_engine"),
-                   c(.tr_plain("CellChat (table exportee)"),
+                   c("cellchat_engine", "cellchat", "cellchat_object", "cellphonedb", "liana"),
+                   c(.tr_plain("Calculer dans l'application (CellChat)"),
+                     .tr_plain("CellChat (table exportee)"),
                      .tr_plain("Objet CellChat (.rds, resultats deja calcules)"),
                      .tr_plain("CellPhoneDB (means.txt)"),
-                     .tr_plain("LIANA (rangs agreges)"),
-                     .tr_plain("Calculer dans l'application (CellChat)"))),
-                 selected = "cellchat"),
+                     .tr_plain("LIANA (rangs agreges)"))),
+                 selected = "cellchat_engine"),
 
     conditionalPanel(
       condition = "input.comm_source == 'cellchat'", ns = ns,
@@ -384,7 +390,11 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
         }
         assert_metadata_column(obj, identity_col, context = "communication import")
 
-        src <- input$comm_source %||% "cellchat"
+        # Le repli doit valoir le defaut DECLARE de l'UI (cellchat_engine) :
+        # sinon un input absent ferait silencieusement retomber la branche
+        # import sur CellChat table (req() muet) au lieu d'aiguiller vers le
+        # bouton de calcul. Garde : test-sc-communication-engine-ui.R.
+        src <- input$comm_source %||% "cellchat_engine"
         # Garde : la source « calcul dans l'application » n'a aucun fichier a
         # importer. Sans ce filtre elle tomberait dans la branche finale
         # (LIANA) et exigerait un fichier qui n'existe pas — message absurde.

@@ -22,6 +22,66 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
 > renumérotation. Détail : `STATUS.md` §6, item 6.
 
+## [V1.x — CC-5] — 2026-09-16 — le moteur CellChat devient la source PAR DÉFAUT (+ audit documentaire re-mesuré)
+
+### Pourquoi
+Le moteur CellChat natif (CC-5) était présenté comme une **cinquième** option,
+placée **en fin de liste** et **non sélectionnée** : l'UI faisait donc passer
+l'import d'une table exportée pour la voie normale, alors que le **calcul dans
+l'application** est la voie voulue par l'utilisateur (demande consignée
+`STATUS.md` §2bd.5 #2).
+
+### Changement
+- `modules/sc/mod_sc_communication.R` : `cellchat_engine` passe **en tête** de
+  `comm_source` et devient le **défaut** (`selected = "cellchat_engine"`). Les
+  quatre sources d'import restent, dans leur ordre d'origine.
+- **Repli serveur aligné** : `input$comm_source %||% "cellchat_engine"`. Avant,
+  un input absent retombait sur la branche « CellChat table » et y échouait **en
+  silence** (`req()` muet) au lieu d'aiguiller vers le bouton de calcul.
+- `docs/contracts/CELLCHAT_ENGINE_CONTRACT.md` §10 : le défaut est documenté
+  comme **invariant d'UI gelé** (contract-first : code + test + doc ensemble).
+- Aucun champ canonique, aucune vue, aucun export ne change — la **règle des
+  deux voies** reste intacte.
+
+### Garde
+- `tests/testthat/test-sc-communication-engine-ui.R` — nouveau test
+  « the native engine is the DEFAULT source and comes FIRST in the list » :
+  4 assertions (défaut déclaré, ordre des **valeurs**, ordre des **libellés** —
+  un réordonnancement peut désynchroniser les deux vecteurs de `setNames()` sans
+  que rien ne casse à l'exécution — et accord UI ↔ serveur).
+- **Éprouvé sur un cas négatif réel** : les 4 assertions rejouées sur le texte de
+  `HEAD` (`git show HEAD:modules/sc/mod_sc_communication.R`) rendent **FALSE
+  toutes les quatre**. ⚠️ Un premier essai sur une « avant » reconstruit à la
+  main était **incomplet** et faisait passer la 3ᵉ assertion à tort ⇒ le « avant »
+  doit venir de **git**, jamais d'une reconstitution.
+
+### Vérifié
+- Tests **ciblés** (4 fichiers, chacun vérifié présent au bilan) : **266 pass /
+  0 fail / 0 error / 0 skip**. Suite complète **non re-lancée** (politique :
+  en fin de version).
+- Gardes : conventions **0 err / 324 avert.**, duplication **0 err / 3 avert.**,
+  herméticité renv **0 err / 0 avert.** — ⚠️ les **2 avertissements** du relevé
+  précédent n'apparaissent plus et la cause **n'a pas été instruite** (ce jalon
+  n'a touché aucune dépendance) : ne pas s'appuyer dessus sans re-mesure.
+
+### Documentation
+- `STATUS.md` **§2be** (nouveau) + §0 rafraîchi + §2bd.5 #2 **clos**.
+- `ROADMAP.md` §2 (bandeau) et §6 (**autopipeline étendu débloqué**).
+- **Audit documentaire re-mesuré** : **0 erreur · 59 → 18 avertissements**. Les
+  « 59 avertissements sur 8 fichiers » annoncés étaient **faux** : **41 des 59**
+  sont **un seul token**, `archive/STATUS_JOURNAL.md` — et c'est la forme que la
+  convention **PRESCRIT**. La section 1 de l'auditeur **résout** ce lien contre le
+  dossier de l'émetteur et le déclare valide ; sa section 2 cherche des *tokens
+  nus* et les résout contre la **racine**, où `archive/` n'existe pas ⇒ **faux
+  positif par construction**. Accepté (`docs/audit-accepted.txt`, classe 6),
+  documenté (`docs/archive/README.md`), et le détecteur a été **vérifié sur une
+  sonde injectée** (lien mort signalé en erreur, lien correct muet).
+
+### Non fait — **listé, non exécuté** (règle 9)
+NEW-3 (5 décisions ; **D5 débloquée**) · LIANA natif (route (a), décision
+séparée) · autopipeline étendu (**débloqué**, à cadrer) · réseau d'enrichissement
+**interactif** (à cadrer) · dette `STATUS.md` §2bd.4.
+
 ## [V1.x — doc] — 2026-09-16 — passe de nettoyage : `STATUS.md` 187 Ko → ~64 Ko, suite RE-MESURÉE à 5408 PASS
 
 ### Pourquoi

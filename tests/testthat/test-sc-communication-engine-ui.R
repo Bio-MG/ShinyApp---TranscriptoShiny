@@ -49,6 +49,48 @@ test_that("the engine is a declared source and is not importable", {
   expect_true(grepl('identical(src, "cellchat_engine")', .cc_ui_src, fixed = TRUE))
 })
 
+test_that("the native engine is the DEFAULT source and comes FIRST in the list", {
+  # Decision utilisateur du 2026-09-16 (STATUS.md §2bd.5 #2) : le moteur natif
+  # n'est pas un repli mais la voie NORMALE de la communication ⇒ propose EN
+  # TETE et SELECTIONNE par defaut. Ce gel protege trois proprietes distinctes
+  # qu'une edition distraite casserait en silence.
+  i <- regexpr('radioButtons(ns("comm_source")', .cc_ui_src, fixed = TRUE)
+  expect_true(i > 0L)
+  # Le bloc des choix s'arrete au premier `selected =` : au-dela ce sont
+  # d'autres widgets (espece, mode LIANA), dont les choix ne doivent pas etre
+  # lus ici — sans cette borne, le test pourrait passer par accident.
+  block <- substr(.cc_ui_src, i, i + 1200L)
+  j <- regexpr("selected =", block, fixed = TRUE)
+  expect_true(j > 0L)
+  block <- substr(block, 1L, j + 40L)
+
+  # 1. le defaut DECLARE est le moteur natif
+  expect_true(grepl('selected = "cellchat_engine"', block, fixed = TRUE))
+
+  # 2. il est en TETE de liste. NB : les guillemets ferment la comparaison,
+  #    donc `"cellchat"` ne matche PAS l'interieur de `"cellchat_engine"` —
+  #    le piege de sous-chaine est evite par construction.
+  p_engine <- regexpr('"cellchat_engine"', block, fixed = TRUE)
+  p_table  <- regexpr('"cellchat"', block, fixed = TRUE)
+  expect_true(p_engine > 0L && p_table > 0L)
+  expect_lt(p_engine, p_table)
+
+  # 3. le reordonnancement n'a pas DESYNCHRONISE valeurs et libelles : les deux
+  #    vecteurs de setNames() doivent rester dans le meme ordre, sinon le
+  #    premier libelle annoncerait une source qui n'est pas la premiere valeur.
+  p_lab_engine <- regexpr("Calculer dans l'application (CellChat)",
+                          block, fixed = TRUE)
+  p_lab_table  <- regexpr("CellChat (table exportee)", block, fixed = TRUE)
+  expect_true(p_lab_engine > 0L && p_lab_table > 0L)
+  expect_lt(p_lab_engine, p_lab_table)
+
+  # 4. le repli SERVEUR doit valoir le defaut DECLARE : s'ils divergent, un
+  #    input absent retombe silencieusement sur la branche import (req() muet)
+  #    au lieu d'aiguiller vers le bouton de calcul.
+  expect_true(grepl('input$comm_source %||% "cellchat_engine"',
+                    .cc_ui_src, fixed = TRUE))
+})
+
 test_that("species is a DECLARED choice, never an implicit default", {
   expect_true(grepl('selectInput(ns("comm_engine_species")',
                     .cc_ui_src, fixed = TRUE))
