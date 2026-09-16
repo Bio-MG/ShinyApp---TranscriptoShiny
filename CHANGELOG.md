@@ -472,7 +472,7 @@ dépendance installée. `CellChat` 2.2.0.9001 est désormais **épinglé par SHA
 (`75253cd0…358f`) et inséré au lockfile avec les **12 dépendances manquantes**
 mesurées : 425 → **438** entrées, **+535 / −0 lignes**, **0 changement de
 version**. Le bloc « run réel » des tests n'est plus skippé.
-Détail : `docs/STATUS_JOURNAL.md` **§2ao.5**.
+Détail : `docs/archive/STATUS_JOURNAL.md` **§2ao.5**.
 
 ### Ajouté
 - `renv.lock` : `CellChat` (`Source: GitHub` + SHA) et `coda`, `collapse`,
@@ -504,14 +504,14 @@ Détail : `docs/STATUS_JOURNAL.md` **§2ao.5**.
 
 ## [V1.x — CC-2/3/4] — 2026-09-15 — Moteur CellChat natif (Path B)
 
-Décision utilisateur du 2026-09-14 (`docs/STATUS_JOURNAL.md` §2al) : **choix B retenu**,
+Décision utilisateur du 2026-09-14 (`docs/archive/STATUS_JOURNAL.md` §2al) : **choix B retenu**,
 **Path A (import CSV/TSV externe) impérativement conservé** et export conservé.
 Jalons **CC-2** (contrat), **CC-3** (moteur) et **CC-4** (tests + gardes) livrés
 ensemble — la règle contract-first exige code + test + doc dans le même commit.
 ⚠️ **CC-1 (épinglage de la dépendance) n'est pas abouti** : le moteur est livré
 mais **non exécutable** tant que `CellChat` n'est pas installé
 (`run_cellchat()` lève `missing_dependency` avec guidage). L'application démarre
-et Path A continue de fonctionner — détail : `docs/STATUS_JOURNAL.md` **§2ao**.
+et Path A continue de fonctionner — détail : `docs/archive/STATUS_JOURNAL.md` **§2ao**.
 
 ### Ajouté
 - **`R/sc/sc_communication_engine.R`** — `run_cellchat(cellchat_input, seed,

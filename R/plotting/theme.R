@@ -16,7 +16,7 @@
 #     theme_*() call migrated to ts_theme() renders exactly as before;
 #   * each migrated site KEEPS its historical base_size (12/13/15) explicitly —
 #     the repo was already inconsistent, so a silent normalisation would change
-#     the rendering of 16+ sites (see docs/ROADMAP_HANDOFF_NEXT.md section 3).
+#     the rendering of 16+ sites (see docs/archive/ROADMAP_HANDOFF_NEXT.md section 3).
 #
 # Sourced in app.R right after R/plotting/palettes.R.
 # =============================================================================
