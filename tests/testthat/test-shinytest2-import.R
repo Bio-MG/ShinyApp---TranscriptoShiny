@@ -5,7 +5,6 @@
 
 test_that("Import domain: GEO tab navigates without Shiny error", {
   app <- new_app_driver("import_geo_smoke")
-  skip_if(is.null(app), "Chromote/headless Chrome unavailable.")
   on.exit(app$stop(), add = TRUE)
 
   click_nav_by_text(app, "Import Données")
@@ -24,7 +23,6 @@ test_that("Import domain: GEO tab navigates without Shiny error", {
 
 test_that("Import domain: GEO module exposes its namespaced inputs", {
   app <- new_app_driver("import_geo_ids")
-  skip_if(is.null(app), "Chromote/headless Chrome unavailable.")
   on.exit(app$stop(), add = TRUE)
 
   click_nav_by_text(app, "Import Données")

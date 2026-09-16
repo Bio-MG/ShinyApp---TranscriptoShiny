@@ -19,6 +19,58 @@ app_root_dir <- function() {
   normalizePath(testthat::test_path("..", ".."), mustWork = FALSE)
 }
 
+# --- Locale des processus ENFANTS (correctif 2026-09-16) --------------------
+# shinytest2 demarre l'app dans un PROCESSUS ENFANT. Sys.setlocale() ne suffit
+# donc PAS (il ne change que le processus courant), alors que les enfants
+# heritent des VARIABLES d'environnement. Or Git Bash exporte LC_ALL=C.UTF-8,
+# un nom que R sous Windows ne reconnait pas => repli silencieux sur "C" =>
+# la lecture de i18n/translation.json (UTF-8) echoue par
+# « invalid multibyte string, element 1 » — que ce helper rapportait a tort
+# comme « Chromote/headless Chrome unavailable ».
+# Mesure 2026-09-16 (A/B) : heritage LC_ALL=C.UTF-8 => ECHEC ; LC_ALL leve +
+# LC_CTYPE=fr_FR.UTF-8 => driver OK, inputs visibles.
+# On ne touche QUE LC_ALL / LANG / LC_CTYPE, et seulement le temps du
+# demarrage : forcer LC_ALL changerait aussi LC_COLLATE / LC_TIME, donc le tri
+# des chaines, donc potentiellement des resultats de tests.
+
+#' Candidate UTF-8 locale names accepted by R on Windows
+ts_e2e_locale_candidates <- function() {
+  c("fr_FR.UTF-8", "French_France.utf8", "English_United States.utf8", "en_US.UTF-8")
+}
+
+#' Set LC_CTYPE to the first candidate R actually accepts; return its name
+ts_e2e_first_valid_utf8_locale <- function() {
+  for (cand in ts_e2e_locale_candidates()) {
+    ok <- suppressWarnings(tryCatch({
+      Sys.setlocale("LC_CTYPE", cand)
+      grepl("UTF-8|utf8", Sys.getlocale("LC_CTYPE"), ignore.case = TRUE)
+    }, error = function(e) FALSE))
+    if (isTRUE(ok)) return(cand)
+  }
+  NA_character_
+}
+
+#' Restore an environment snapshot taken with unset = NA_character_
+ts_e2e_restore_env <- function(old) {
+  present <- old[!is.na(old)]
+  if (length(present)) do.call(Sys.setenv, as.list(present))
+  absent <- names(old)[is.na(old)]
+  if (length(absent)) Sys.unsetenv(absent)
+}
+
+#' Evaluate expr with a locale that child processes can actually use
+ts_e2e_with_child_locale <- function(expr) {
+  old <- Sys.getenv(c("LC_ALL", "LANG", "LC_CTYPE"), unset = NA_character_)
+  on.exit(ts_e2e_restore_env(old), add = TRUE)
+  # Ne toucher a l'environnement QUE si l'on sait poser une locale utilisable :
+  # sinon on laisse l'etat initial (l'echec reste visible et honnetement
+  # rapporte) plutot que d'echanger un probleme d'encodage contre un autre.
+  if (!is.na(ts_e2e_first_valid_utf8_locale())) {
+    Sys.unsetenv(c("LC_ALL", "LANG"))
+  }
+  force(expr)
+}
+
 #' Best-effort AppDriver constructor — skips (never fails) if shinytest2 or
 #' a headless Chrome (chromote) is unavailable. Generous timeouts : global.R
 #' charge toute la pile de packages, et l'init des 6 daemons mirai est
@@ -26,19 +78,31 @@ app_root_dir <- function() {
 #' l'en-tête de app.R).
 new_app_driver <- function(name) {
   testthat::skip_if_not_installed("shinytest2")
+  err <- NULL
   driver <- tryCatch(
-    shinytest2::AppDriver$new(
-      app_dir = app_root_dir(), name = name, height = 900, width = 1400,
-      load_timeout = 120000, timeout = 120000,
-      # Smoke tests : check_names=FALSE pour qu'un warning de doublon d'id
-      # ne transforme PAS chaque test en skip silencieux — le drift de
-      # namespace est déjà asserté explicitement via get_values().
-      check_names = FALSE,
-      options = list(shiny.testmode = TRUE)
+    ts_e2e_with_child_locale(
+      shinytest2::AppDriver$new(
+        app_dir = app_root_dir(), name = name, height = 900, width = 1400,
+        load_timeout = 120000, timeout = 120000,
+        # Smoke tests : check_names=FALSE pour qu'un warning de doublon d'id
+        # ne transforme PAS chaque test en skip silencieux — le drift de
+        # namespace est déjà asserté explicitement via get_values().
+        check_names = FALSE,
+        options = list(shiny.testmode = TRUE)
+      )
     ),
-    error = function(e) { message("AppDriver init failed: ", conditionMessage(e)); NULL }
+    error = function(e) { err <<- conditionMessage(e); NULL }
   )
-  testthat::skip_if(is.null(driver), "Chromote/headless Chrome unavailable.")
+  # Le motif de skip porte desormais la VRAIE cause : un echec de locale ne
+  # doit plus se déguiser en « Chrome absent » (8 tests restes invisibles
+  # ainsi jusqu'au 2026-09-16).
+  if (is.null(driver)) {
+    msg <- if (is.null(err)) "raison inconnue" else err
+    if (grepl("multibyte|encoding|locale|LC_", msg, ignore.case = TRUE)) {
+      testthat::skip(paste("Locale inutilisable par le processus enfant :", msg))
+    }
+    testthat::skip(paste("AppDriver indisponible (Chromote/headless Chrome ?) :", msg))
+  }
   driver
 }
 

@@ -22,6 +22,83 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
 > renumérotation. Détail : `STATUS.md` §6, item 6.
 
+## [V1.x — doc] — 2026-09-16 — passe de nettoyage : `STATUS.md` 187 Ko → ~64 Ko, suite RE-MESURÉE à 5408 PASS
+
+### Pourquoi
+`docs/STATUS.md` est le *NEXT SESSION ENTRY POINT* (`AGENTS.md`), mais il
+cumulait l'état courant **et** un journal : **187 Ko**, inexploitable.
+
+### Changement
+- **Journal extrait** : `§2i`…`§2aw` (2026-09-10 → 2026-09-15) déplacés **à
+  l'identique** (sous-sections `2am.1`…`2am.4`, `2ao.1`…`2ao.7` incluses) vers
+  **`docs/archive/STATUS_JOURNAL.md`** (142 Ko). **Rien de supprimé.**
+- **Index inséré** : une section `§2i … 2aw` récapitule chaque entrée archivée
+  **en une ligne** (objet + verdict) → les décisions restent découvrables.
+- **Nouveau `§0 « État courant »`** : 7 lignes (suite / prochain jalon / gelé /
+  bloqué / reste ouvert / arbre / historique).
+- **~80 références** `STATUS.md §2xx` réécrites vers `STATUS_JOURNAL.md §2xx`
+  dans `STATUS.md` et `ROADMAP.md`.
+- **Archivés** (périmés / orphelins) : `ROADMAP_HANDOFF_NEXT.md` (périmé sur son
+  objet), `ROADMAP_HANDOFF_STAGE_PLOT_S6.md` (prémisse périmée),
+  `helper-mock-data.R` (orphelin — ⚠️ ne pas le remettre dans `tests/testthat/`,
+  testthat source tout `helper-*.R`). Index : `docs/archive/README.md`.
+- `AGENTS.md` : baselines et durées remises à jour (voir ci-dessous).
+
+### Suite complète RE-MESURÉE — `5408 PASS / 0 FAIL / 0 ERROR / 1 SKIP`
+L'ancienne référence « 5103 PASS / 87 fichiers / ~37 min » était **périmée** :
+obtenue avant le correctif de locale des runners, avant les jalons 4E-4 et
+P0-sourcing, et avec deux fichiers e2e sautés. Nouvelle mesure : **95 fichiers,
+~11 min**. Le seul SKIP restant est `test-mod-geo.R` = smoke GEO **live**
+(réseau), voulu.
+
+⚠️ **La lenteur était un symptôme** : le « flake chromote »
+`test-shinytest2-import.R` **stallait ~15 min** (`handle_read_frame error`).
+Le correctif de locale supprime aussi ce stall. Détail : `STATUS.md` §2ba.
+
+## [V1.x — e2e] — 2026-09-16 — les 4 fichiers `test-shinytest2-*` étaient sautés : la couverture e2e était nulle
+
+### Symptôme
+Suite complète : **9 SKIP** au lieu du 1 attendu. Les quatre fichiers
+`test-shinytest2-{bulk,import,sc,spatial}.R` étaient intégralement sautés
+(`pass=0 skip=2`), donc **zéro couverture e2e** — or ces tests pinnent les ids
+d'inputs **namespacés** des 4 domaines, c'est-à-dire exactement le drift de
+namespace qu'aucun test unitaire ne peut voir.
+
+### Cause — un faux motif de skip qui masquait la vraie erreur
+Le helper annonçait `"Chromote/headless Chrome unavailable."`, mais Chrome **est**
+présent. La vraie erreur était **`invalid multibyte string, element 1`** : un
+problème de **locale**, pas de navigateur. Le `message()` qui portait la cause
+réelle partait sur stderr, noyé dans la sortie — seul le motif de skip (faux)
+restait visible.
+
+`shinytest2` démarre l'app dans un **processus enfant** : il hérite des
+**variables d'environnement**, pas des appels `Sys.setlocale()` du parent. Or Git
+Bash exporte `LC_ALL=C.UTF-8`, nom que R sous Windows **ne reconnaît pas**
+(`Warning: Setting LC_CTYPE=C.UTF-8 failed`) ⇒ repli sur `C` ⇒
+`i18n/translation.json` (UTF-8) illisible. `LC_ALL` **prime sur `LC_CTYPE`** :
+poser `LC_CTYPE` seul ne suffit pas.
+
+| Environnement hérité | `AppDriver$new()` |
+|---|---|
+| `LC_ALL=C.UTF-8` (tel quel) | ❌ `invalid multibyte string, element 1` |
+| `LC_ALL` levé + `LC_CTYPE=fr_FR.UTF-8` | ✅ driver OK, inputs lus |
+
+### Changement
+`tests/testthat/helper-app-driver.R` : `ts_e2e_with_child_locale()` lève
+`LC_ALL`/`LANG`, pose un `LC_CTYPE` UTF-8 **réellement accepté** (candidats testés
+via `Sys.setlocale`), et **restaure l'environnement** dès le driver créé. On ne
+force donc pas `LC_ALL` : cela toucherait aussi `LC_COLLATE`/`LC_TIME`, donc le
+tri des chaînes, donc potentiellement des résultats de tests. Le motif de skip
+cite désormais l'**erreur réelle**. Deux `skip_if(is.null(app), …)` devenus
+**inatteignables** ont été retirés de `test-shinytest2-import.R`.
+
+### Effet mesuré
+| | avant | après |
+|---|---|---|
+| fichiers e2e seuls | 0 pass / 8 skip | **18 pass / 0 fail / 0 skip** |
+
+Les assertions de drift de namespace des 4 domaines passent : **aucun drift**.
+
 ## [V1.x — P0 LANCEMENT] — 2026-09-16 — l'app ne démarrait plus : deux fichiers de `R/` n'étaient pas sourcés
 
 ### Symptôme
