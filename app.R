@@ -62,6 +62,13 @@ source("R/plotting/theme.R")   # PLOT-S1 : resolveur de theme partage (ts_theme)
 source("R/plotting/export.R")  # PLOT-S2 : helper d'export unifie (ts_export_plot)
 source("R/plotting/datatable.R")  # PLOT-S3 : wrapper DT harmonise (ts_datatable)
 source("R/plotting/complex_heatmap.R")  # PLOT-S4 : coeur ComplexHeatmap unifie (ts_complex_heatmap)
+# PLOT-S6 : dimension MINIMALE de device (ts_render_plot_args). OBLIGATOIRE :
+# global.R enveloppe renderPlot() et appelle ts_render_plot_args() a CHAQUE
+# renderPlot(). Le fichier existait et etait teste (test-plot-dims.R le source
+# directement) mais n'etait PAS source ici => « impossible de trouver la
+# fonction "ts_render_plot_args" » des le premier plot. Garde :
+# tests/testthat/test-app-sourcing.R.
+source("R/plotting/plot_dims.R")
 source("R/sc/sc_plotting.R")
 source("R/spatial/spatial_plotting.R")
 
@@ -94,6 +101,13 @@ source("R/bulk/bulk_batch_qc.R")    # Bulk V2 M1 : diagnostics batch (pur, contr
 source("R/bulk/batch_correction.R")  # STAT-S1 : correction de batch ComBat-seq (pur, contrat gelé)
 source("R/bulk/bulk_gsva.R")          # Bulk V2 M2 : scores de voies par échantillon (pur, contrat gelé)
 source("R/bulk/bulk_signatures.R")    # Bulk V2 M3 : signatures cellulaires (pur, contrat gelé)
+# PLOT-S6b : jeux de genes NATIFS (bulk_gene_set_choices, bulk_load_gene_sets).
+# OBLIGATOIRE : mod_bulk_pathways.R appelle bulk_gene_set_choices() a la
+# CONSTRUCTION de l'UI => sans cette ligne l'app ne demarre pas du tout
+# (« impossible de trouver la fonction "bulk_gene_set_choices" », appele depuis
+# hasGroups(choices)). Le fichier etait teste (test-bulk-gene-sets.R le source
+# directement) mais absent d'ici. Garde : tests/testthat/test-app-sourcing.R.
+source("R/bulk/bulk_gene_sets.R")     # PLOT-S6b : jeux de gènes NATIFS (pur, contrat gelé)
 source("R/bulk/bulk_wgcna.R")         # Bulk V2 M4 : WGCNA safe-mode (pur, contrat gelé)
 source("R/bulk/bulk_survival.R")      # Bulk V2 M5 : survie & clinique (pur, contrat gelé)
 source("R/bulk/bulk_pattern.R")       # STAT-S3 : clustering de profils (kmeans MVP, pur, contrat gelé)

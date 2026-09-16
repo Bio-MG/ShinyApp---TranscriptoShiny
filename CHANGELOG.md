@@ -15,10 +15,72 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > `testServer()` MESURÉE » et « PLOT-S6 : rendu des plots, jeux de gènes natifs,
 > garde P0 counts ».
 >
-> ⚠️ **Défaut de numérotation relevé le 2026-09-16** : `STATUS.md` contient
+> ✅ **Défaut de numérotation CORRIGÉ le 2026-09-16** : `STATUS.md` contenait
 > **deux** sections étiquetées `2aw` (`### 2aw.` « Garde C13 » et `## §2aw`
-> « PLOT-S6 »). Citer les sections **par titre**, pas par numéro, tant que la
-> collision n'est pas arbitrée.
+> « PLOT-S6 »), `PLOT-S6` ayant repris un numéro déjà pris. Renumérotation
+> **chronologique** : `PLOT-S6` → **`§2ax`**, `4E-4` → **`§2ay`**. ⚠️ Le message
+> du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
+> renumérotation. Détail : `STATUS.md` §6, item 6.
+
+## [V1.x — P0 LANCEMENT] — 2026-09-16 — l'app ne démarrait plus : deux fichiers de `R/` n'étaient pas sourcés
+
+### Symptôme
+```
+Erreur dans bulk_gene_set_choices(.tr_plain) :
+  impossible de trouver la fonction "bulk_gene_set_choices"
+Called from: hasGroups(choices)
+```
+L'application **ne démarrait plus du tout** : l'erreur tombe à la construction de
+l'UI, avant même l'ouverture de la session.
+
+### Cause
+`R/bulk/bulk_gene_sets.R` (ajouté par `440878b`, jalon « jeux de gènes NATIFS »)
+n'était **pas** dans la liste `source()` de `app.R`. `bulk_gene_set_choices()`
+n'était donc jamais définie, alors que `mod_bulk_pathways.R` l'appelle dans un
+`choices =` de l'UI.
+
+**Pourquoi les tests ne l'ont pas vu** : `test-bulk-gene-sets.R` fait
+`source_project_file("R/bulk/bulk_gene_sets.R")` — il **contourne** la liste de
+sources de `app.R` et reste vert pendant que l'app est cassée. Un harnais de
+test n'est pas un test de démarrage.
+
+### Vérification systématique : il y en avait DEUX
+`find R -name '*.R'` comparé aux `source("R/...")` de `app.R` ⇒ **69 fichiers sur
+disque, 66 sourcés** :
+
+| Fichier | Sort |
+|---|---|
+| `R/bulk/bulk_gene_sets.R` | **non sourcé** → P0 (l'UI ne se construit pas) |
+| `R/plotting/plot_dims.R` (PLOT-S6) | **non sourcé** → P0 (crash au **premier** plot : `global.R` enveloppe `renderPlot()` et appelle `ts_render_plot_args()` à chaque invocation) |
+| `R/sc/sc_state.R` | non sourcé **volontairement** (re-export LEGACY) |
+| `modules/spatial/mod_spatial_lr.R` | module **parqué** (vague 8/backlog), aucun appelant |
+
+Le second P0 était **masqué** par le premier : corriger seulement
+`bulk_gene_sets.R` aurait déplacé le crash au premier rendu de plot.
+
+### Corrigé
+Deux lignes dans `app.R` : `source("R/plotting/plot_dims.R")` et
+`source("R/bulk/bulk_gene_sets.R")`.
+
+### Ajouté — garde d'EXHAUSTIVITÉ
+`tests/testthat/test-app-sourcing.R` : **tout** fichier de `R/` et `modules/`
+doit être sourcé par `app.R` — directement, ou via `list.files(<dir>)` (cas
+`modules/bulk_de`). Il **généralise** le précédent « patch CellChat »
+(`test-sc-communication-engine-ui.R` assertait `app.R sources the engine` pour
+**un** fichier). Deux exceptions en allowlist justifiée.
+
+- **Cas négatif éprouvé** : un fichier réel injecté dans `R/` fait rougir le
+  garde en le nommant, puis la suppression rend le vert.
+- **Auto-contrôle** : le garde vérifie que ses deux extracteurs voient bien
+  quelque chose — assertion qui a **attrapé un bug du garde lui-même** au premier
+  essai (`regmatches()` renvoie la correspondance entière, guillemet fermant
+  inclus ⇒ `dir.exists()` faux).
+
+### Vérifié
+- Lancement : `source("app.R")` OK, `ui` construit — **1 093 434 caractères de
+  HTML**, panneau Bulk présent, `renderPlot()` opérationnel.
+- Tests ciblés : **202 PASS / 0 FAIL / 0 ERROR / 0 SKIP** (4 fichiers).
+- `check_conventions.R` 0 err / 324 avert. ; `check_duplication.R` 0 err / 3 avert.
 
 ## [V1.x — outils] — 2026-09-16 — les runners de tests sont enfin utilisables depuis Git Bash
 
@@ -132,7 +194,7 @@ résultat), le backend parallèle (`SnowParam` des deux côtés) et `mc.cores`
 Tests ciblés : **255 PASS / 0 FAIL / 0 ERROR / 0 SKIP** (7 fichiers).
 `check_conventions.R` = 0 err / 324 avert. (baseline exacte) ;
 `check_duplication.R` = 0 err / 3 avert. ; arbre applicatif sourcé de bout en
-bout (124 fichiers, 0 échec). Détail : `docs/STATUS.md` §2ax, rapport
+bout (124 fichiers, 0 échec). Détail : `docs/STATUS.md` §2ay, rapport
 `docs/ROADMAP_HANDOFF_STAGE_4E_4.md`.
 
 ## [V1.x — FERMETURE renv] — 2026-09-15 — fermeture de dépendances complète (447 → 482) + garde §4
