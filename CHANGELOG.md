@@ -22,6 +22,67 @@ versionnement [SemVer](https://semver.org/lang/fr/). Une étape = un commit sur 
 > du commit `03951cb` cite encore `§2ax` pour 4E-4 : c'est l'état **avant** la
 > renumérotation. Détail : `STATUS.md` §6, item 6.
 
+## [V1.x — dette de conventions] — 2026-09-16 — la garde mesurait FAUX (324 → 319) + `--list-all`
+
+### Pourquoi
+
+`ROADMAP.md` §5 **décision 10** laissait le choix : *« chantier de réduction, ou
+statu quo avec plafond ? »*. **Choix utilisateur : la dette.** Premier incrément —
+et il ne touche **aucun code applicatif** : il corrige la **garde**, qui gonflait
+la dette mesurée.
+
+### Corrigé
+
+- **Chaînes multi-lignes ignorées** (`tools/check_conventions.R`) :
+  `.strip_strings_and_comments()` appliquait ses regex **ligne par ligne**, donc
+  ne voyait pas les chaînes R s'étendant sur plusieurs lignes — les scripts
+  reproductibles **embarqués** dans `R/bulk/bulk_report_engine.R` et
+  `R/sc/sc_export.R`. Les `library()` contenus dans ce **texte** étaient signalés
+  alors qu'ils ne sont **jamais exécutés au `source()`** : **5 des 16 signalements
+  C6 étaient FAUX**, dont `R/sc/sc_export.R:47` — exactement le cas que le
+  commentaire de la fonction annonçait couvrir. Les `{`/`}` du texte embarqué
+  faussaient en plus le compteur de profondeur de `check_c6_library_in_r()`.
+  Remplacé par un **automate d'états** transportant l'état « dans une chaîne »
+  d'une ligne à l'autre.
+- **Dette non énumérable** : le message de troncature invitait à passer
+  `--strict` « pour tout lister », mais `--strict` ne change **rien** à
+  l'affichage — il rend seulement les avertissements **bloquants**. Ajout de
+  **`--list-all`**, désormais distinct de `--strict`.
+
+### Piège trouvé EN EXÉCUTANT (gelé par test)
+
+Une **première** version de l'automate retirait **aussi les guillemets**. Or le
+garde lit la **FORME** du code : C10 exempte `stop()` mais signale `stop("")`.
+`stop("Package requis")` devenait `stop()` → forme exemptée → **63 avertissements
+C10 réels disparaissaient** (`pathway_helpers.R`, `sc_trajectory.R`,
+`spatial_reference.R`…) **sans qu'aucune ERREUR n'apparaisse**. Révélé par
+l'écart **avant/après** (l'« avant » venant de **git**) : les 63 disparus étaient
+« hors chaîne », donc **injustifiés**. Le garde était **aveugle en silence**.
+Corrigé : on vide le **contenu**, on garde la **ponctuation**.
+
+### Mesuré
+
+| Garde | Avant | Après |
+|---|---|---|
+| `check_conventions.R` | 0 err / **324** avert. | 0 err / **319** avert. |
+| dont C6 | 16 | **11** |
+| C9 · C10 · C11 | 37 · 270 · 1 | 37 · 270 · 1 (inchangés) |
+| Durée | 30 s | **20 s** |
+| Tests de conventions | — | **33 PASS / 0 FAIL / 0 ERROR** |
+
+**0 apparu, 5 disparus, 5 justifiés, 0 injustifié.** Aucune ERREUR, aucun
+compteur aggravé.
+
+### Ajouté
+
+- `tests/testthat/test-conventions-c6-strings.R` — 11 assertions, **éprouvé par
+  mutation** (réinjecter le défaut fait passer 2 assertions au rouge).
+
+### Documentation
+
+`docs/CONVENTIONS.md` **§12.1** et **§12.2** (plafonds 324 → 319) ; `STATUS.md`
+**§2bg** + §0 ; `ROADMAP.md` **§5 #10** (décision close : réduction engagée).
+
 ## [V1.x — NEW-3] — 2026-09-16 — interactome local + moteur PCSF heuristique (+ 3 prémisses corrigées, 3 défauts trouvés en exécutant)
 
 ### Pourquoi

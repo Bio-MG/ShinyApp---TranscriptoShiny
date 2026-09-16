@@ -13,10 +13,14 @@
 # documentée porte donc un ID C1..C13 repris ci-dessous et dans le doc.
 #
 # USAGE
-#   Rscript tools/check_conventions.R [--strict] [--no-git]
+#   Rscript tools/check_conventions.R [--strict] [--no-git] [--list-all]
 #
 #   --strict   : les AVERTISSEMENTS font échouer la garde (exit 1).
 #   --no-git   : n'interroge pas git (règle C3 partielle : existence seule).
+#   --list-all : affiche TOUS les avertissements (défaut : les 25 premiers).
+#                Distinct de --strict : l'un change le VERDICT, l'autre
+#                l'AFFICHAGE. Un message de troncature les confondait, si bien
+#                que la dette mesurée n'était pas énumérable.
 #
 # SÉVÉRITÉ
 #   ERREUR  -> enfreint une règle dure : la garde sort en 1. Le dépôt doit
@@ -35,15 +39,81 @@
 # Utilitaires de lecture : on travaille sur le code, pas sur le texte brut.
 # ---------------------------------------------------------------------------
 
-#' Retire (approximativement) le contenu des chaînes et les commentaires de
-#' fin de ligne. Volontairement simple — ce n'est pas un vrai tokenizer R —
-#' mais suffisant pour ne pas signaler un `library(Seurat)` qui n'existe que
-#' DANS le texte d'un script reproductible généré (cas réel :
-#' R/sc/sc_export.R), ni un `tr("...")` cité dans un commentaire.
-.strip_strings_and_comments <- function(line) {
-  line <- gsub('"([^"\\\\]|\\\\.)*"', '""', line, perl = TRUE)
-  line <- gsub("'([^'\\\\]|\\\\.)*'", "''", line, perl = TRUE)
-  sub("#.*$", "", line)
+#' Retire le contenu des chaînes et les commentaires de fin de ligne, et rend le
+#' CODE de chaque ligne du fichier.
+#'
+#' `text` : le fichier ENTIER (vecteur de lignes). Rend un vecteur de même
+#' longueur — d'où le pluriel : l'état « dans une chaîne » se TRANSPORTE d'une
+#' ligne à l'autre, une ligne ne peut donc pas être traitée seule.
+#'
+#' DÉFAUT CORRIGÉ le 2026-09-16 (cause racine mesurée). La version précédente
+#' appliquait deux regex LIGNE PAR LIGNE :
+#'
+#'     line <- gsub('"([^"\\\\]|\\\\.)*"', '""', line, perl = TRUE)
+#'     line <- gsub("'([^'\\\\]|\\\\.)*'", "''", line, perl = TRUE)
+#'
+#' Une chaîne R peut s'étendre sur PLUSIEURS lignes — c'est le cas des scripts
+#' reproductibles embarqués dans `R/bulk/bulk_report_engine.R` et
+#' `R/sc/sc_export.R` — et une regex appliquée ligne par ligne ne peut pas la
+#' voir. Conséquences mesurées sur les 16 signalements C6 : **5 étaient FAUX**,
+#' dont `R/sc/sc_export.R:47`, exactement le cas que le commentaire précédent
+#' annonçait couvrir (« suffisant pour ne pas signaler un library(Seurat) qui
+#' n'existe que DANS le texte d'un script reproductible généré »). En prime, les
+#' `{`/`}` de ce texte embarqué faussaient le compteur de profondeur de
+#' `check_c6_library_in_r()`, qui se croyait au top-level.
+#'
+#' ORDRE DES DÉCISIONS — c'est le point délicat, et la raison d'un automate
+#' plutôt que de regex :
+#'   - un `#` rencontré HORS chaîne ouvre un commentaire et GÈLE l'état ; c'est
+#'     ce qui rend inoffensive une apostrophe française de commentaire
+#'     (« # l'analyse ») qui, sinon, ouvrirait une chaîne fantôme et masquerait
+#'     du code réel — un garde qui masque du code ne mesure plus rien ;
+#'   - un `#` rencontré DANS une chaîne est du contenu, pas un commentaire ;
+#'   - `\` échappe le caractère suivant, y compris un guillemet.
+.strip_code_lines <- function(text) {
+  in_str <- NA_character_        # NA hors chaîne, sinon le guillemet ouvrant
+  out    <- character(length(text))
+  for (i in seq_along(text)) {
+    ln <- text[i]
+    # Chemin rapide : sans guillemet ni dièse, la ligne ne peut rien changer.
+    if (!grepl("['\"#]", ln, useBytes = TRUE)) {
+      out[i] <- if (is.na(in_str)) ln else ""  # chaîne ouverte => tout est texte
+      next
+    }
+    ch   <- strsplit(ln, "", fixed = TRUE)[[1]]
+    n    <- length(ch)
+    drop <- logical(n)                         # TRUE = caractère retiré
+    # Position où commence le CONTENU de la chaîne (NA hors chaîne).
+    #
+    # Les GUILLEMETS, eux, sont CONSERVÉS — et c'est essentiel : le garde lit la
+    # FORME du code, pas seulement sa présence. C10 distingue `stop()` (exempté,
+    # ligne 661) de `stop("")` (signalé). Supprimer les délimiteurs transforme
+    # `stop("Package requis")` en `stop()`, qui devient EXEMPT : mesuré le
+    # 2026-09-16, cette seule erreur a fait disparaître **63 avertissements C10
+    # réels** (pathway_helpers.R, sc_trajectory.R, spatial_reference.R…). On vide
+    # donc le contenu, jamais la ponctuation.
+    cstart <- if (is.na(in_str)) NA_integer_ else 1L
+    j <- 1L
+    while (j <= n) {
+      c <- ch[j]
+      if (is.na(in_str)) {
+        if (c == "#") { drop[j:n] <- TRUE; break }
+        if (c == "'" || c == "\"") { in_str <- c; cstart <- j + 1L }
+        j <- j + 1L
+      } else {
+        if (c == "\\") { j <- j + 2L; next }   # échappement : saute 2
+        if (c == in_str) {
+          if (j - 1L >= cstart) drop[cstart:(j - 1L)] <- TRUE
+          in_str <- NA_character_; cstart <- NA_integer_
+        }
+        j <- j + 1L
+      }
+    }
+    # Chaîne jamais refermée sur cette ligne : elle continue sur la suivante.
+    if (!is.na(in_str) && !is.na(cstart) && n >= cstart) drop[cstart:n] <- TRUE
+    out[i] <- paste(ch[!drop], collapse = "")
+  }
+  out
 }
 
 #' Une ligne est-elle un commentaire pur ?
@@ -64,8 +134,7 @@
   out <- data.frame(
     line_no = seq_along(raw),
     raw     = raw,
-    code    = vapply(raw, .strip_strings_and_comments, character(1),
-                     USE.NAMES = FALSE),
+    code    = .strip_code_lines(raw),
     stringsAsFactors = FALSE
   )
   .code_cache[[path]] <- out
@@ -702,7 +771,7 @@ check_c13_choices_named_values <- function(files) {
 # ---------------------------------------------------------------------------
 # Rapport final
 # ---------------------------------------------------------------------------
-run_check <- function(strict = FALSE, use_git = TRUE) {
+run_check <- function(strict = FALSE, use_git = TRUE, list_all = FALSE) {
   r_files  <- .collect_files("R")
   m_files  <- .collect_files("modules")
   all_code <- c(r_files, m_files, "app.R", "global.R")
@@ -763,15 +832,24 @@ run_check <- function(strict = FALSE, use_git = TRUE) {
     }
   }
   if (length(.REPORT$warns)) {
-    cat(sprintf("\n-- AVERTISSEMENTS (dette mesurée, %d) — premiers signalements --\n",
-                length(.REPORT$warns)))
-    for (e in head(.REPORT$warns, 25L)) {
+    n_warn_total <- length(.REPORT$warns)
+    # Défaut corrigé le 2026-09-16 : le message invitait à passer `--strict`
+    # « pour tout lister ». Or `--strict` ne change RIEN à l'affichage — il rend
+    # seulement les avertissements BLOQUANTS (voir `blocking` plus bas). La garde
+    # demandait donc une action qui ne produisait pas l'effet annoncé, et la
+    # dette mesurée n'était PAS énumérable : on ne peut pas réduire ce qu'on ne
+    # peut pas lister. D'où `--list-all`.
+    n_show <- if (isTRUE(list_all)) n_warn_total else min(25L, n_warn_total)
+    cat(sprintf("\n-- AVERTISSEMENTS (dette mesurée, %d)%s --\n",
+                n_warn_total,
+                if (n_show < n_warn_total) " — premiers signalements" else ""))
+    for (e in .REPORT$warns[seq_len(n_show)]) {
       loc <- if (is.na(e$line)) .rel(e$file) else sprintf("%s:%d", .rel(e$file), e$line)
       cat(sprintf("  %-4s %s\n       %s\n", e$rule, loc, e$detail))
     }
-    if (length(.REPORT$warns) > 25L) {
-      cat(sprintf("  ... et %d autre(s) — relancer avec --strict pour tout lister.\n",
-                  length(.REPORT$warns) - 25L))
+    if (n_show < n_warn_total) {
+      cat(sprintf("  ... et %d autre(s) — relancer avec --list-all pour tout lister.\n",
+                  n_warn_total - n_show))
     }
   }
 
@@ -789,6 +867,7 @@ if (identical(environment(), globalenv()) && sys.nframe() == 0L &&
     !interactive() && length(grep("--file=", commandArgs(trailingOnly = FALSE))) > 0) {
   argv <- commandArgs(trailingOnly = TRUE)
   status <- run_check(strict = "--strict" %in% argv,
-                      use_git = !("--no-git" %in% argv))
+                      use_git = !("--no-git" %in% argv),
+                      list_all = "--list-all" %in% argv)
   quit(status = status, save = "no")
 }
