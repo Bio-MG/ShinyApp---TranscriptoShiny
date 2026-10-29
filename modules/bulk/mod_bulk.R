@@ -303,6 +303,7 @@ mod_bulk_server <- function(id, global_data) {
             selectInput(ns_m("ap_engine"), .tr("Moteur"),
                         c("DESeq2"="deseq2","edgeR"="edger","limma-voom"="limma")),
             uiOutput(ns_m("ap_no_rep_ui")),
+            uiOutput(ns_m("ap_mono_cond_ui")),
             numericInput(ns_m("ap_lfc"),  .tr("|Log2FC| seuil"), 1,    min=0, step=0.1),
             numericInput(ns_m("ap_padj"), .tr("P-adj seuil"),    0.05, min=0, max=1, step=0.01)
           )
@@ -378,10 +379,23 @@ mod_bulk_server <- function(id, global_data) {
           numericInput(ns_m("ap_no_rep_bcv"), .tr("BCV impos\u00e9 (dispersion = BCV\u00b2)"),
                        value = 0.4, min = 0.01, max = 2, step = 0.05),
           checkboxInput(ns_m("ap_no_rep_attest"),
-                        .tr("J'atteste comprendre que ces p-values reposent sur une dispersion impos\u00e9e et ne sont PAS inf\u00e9rentielles."),
+                        .tr("J'atteste comprendre que ces p-values reposent sur une dispersion imposée et ne sont PAS inférentielles."),
                         value = isTRUE(input$ap_no_rep_attest))
         )
       )
+    })
+
+    # IMP-B3-C (O26, 2026-10-29) — consomme le slot orphelin de_allowed (mod_import_bulk.R:1474) ;
+    # legacy sans le slot = NULL ⇒ comportement inchangé.
+    output$ap_mono_cond_ui <- renderUI({
+      obj <- global_data$bulk_obj
+      req(!is.null(obj))
+      if (!isFALSE(obj$de_allowed)) return(NULL)
+      tagList(
+        div(class = "alert alert-warning",
+            style = "font-size:0.76em;padding:6px 10px;",
+            tags$strong(.tr("Mono-condition détectée à l'import")),
+            tags$div(.tr("Le jeu n'expose qu'un seul groupe : QC/PCA actifs, DE/pathway désactivés. Configurez une variable d'intérêt à au moins 2 groupes ci-dessus pour débloquer l'analyse différentielle."))))
     })
 
     # Auto-pipeline execution — logic unchanged; all user-facing strings via .tr()/.t_fmt().

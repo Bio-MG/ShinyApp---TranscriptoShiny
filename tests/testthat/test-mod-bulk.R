@@ -537,3 +537,52 @@ test_that("B1-F : une étape optionnelle en échec n'annule JAMAIS le pipeline",
   expect_true(any(grepl("report_ko", steps, fixed = TRUE)),
               info = "échec rapport non journalisé")
 })
+
+# =============================================================================
+# IMP-B3-C (O26, 2026-10-29) — le slot orphelin `de_allowed` a un lecteur
+# =============================================================================
+# ÉTAT MESURÉ AVANT : `de_allowed` est ÉCRIT à l'import (mod_import_bulk.R:1474,
+# `de_allowed    = result$de_ok,` dans global_data$bulk_obj) mais lu NULLE PART
+# en production (grep modules/ app.R R/ : 1 seul hit = l'écrivain). La
+# divulgation mono-condition s'aligne sur le motif EXISTANT `ap_no_rep_ui`
+# (mod_bulk.R:361-385 : renderUI -> req -> alert tagList .tr/.t_fmt).
+#
+# Verrou SOURCE (doctrine §2bs, pas de testServer pour mod_bulk) : invariant
+# falsifiable « écrit ET lu » —
+#   (a) le consommateur existe : accroche UI ET bloc serveur
+#       output$ap_mono_cond_ui <- renderUI( ;
+#   (b) ce BLOC lit obj$de_allowed via isFALSE( (dans le bloc, pas ailleurs) ;
+#   (c) l'écrivain d'origine écrit toujours de_allowed = result$de_ok.
+# Si le consommateur disparaît ou si l'écrivain est renommé, ce test échoue.
+# NB : legacy sans le slot = NULL ⇒ isFALSE(NULL) = FALSE ⇒ pas d'alerte,
+# comportement inchangé.
+# =============================================================================
+
+.MBK_IMPORT_FILE <- "modules/import/mod_import_bulk.R"
+
+test_that("IMP-B3-C : le slot de_allowed a un lecteur (fin de l'état écrit-jamais-lu)", {
+  bulk <- readLines(file.path(ts_project_root(), .MBK_FILE), warn = FALSE,
+                    encoding = "UTF-8")
+  imp  <- readLines(file.path(ts_project_root(), .MBK_IMPORT_FILE), warn = FALSE,
+                    encoding = "UTF-8")
+
+  # (a) le consommateur existe : accroche UI ET bloc serveur.
+  expect_true(any(grepl("output$ap_mono_cond_ui <- renderUI(", bulk, fixed = TRUE)),
+              info = "mod_bulk.R : output$ap_mono_cond_ui <- renderUI( absent")
+  expect_true(any(grepl('uiOutput(ns_m("ap_mono_cond_ui"))', bulk, fixed = TRUE)),
+              info = "mod_bulk.R : uiOutput(ns_m(\"ap_mono_cond_ui\")) absent")
+
+  # (b) le BLOC consommateur lit obj$de_allowed via isFALSE( — la lecture doit
+  #     être DANS le bloc output$ap_mono_cond_ui, pas ailleurs dans le fichier.
+  i0 <- grep("output$ap_mono_cond_ui <- renderUI(", bulk, fixed = TRUE)
+  if (length(i0) == 1L) {
+    i1 <- i0 + grep("^[[:space:]]*\\}\\)[[:space:]]*$", bulk[(i0 + 1L):length(bulk)])[1L]
+    bloc <- paste(bulk[i0:i1], collapse = "\n")
+    expect_true(grepl("isFALSE(obj$de_allowed)", bloc, fixed = TRUE),
+                info = "le bloc ap_mono_cond_ui doit lire obj$de_allowed via isFALSE(")
+  }
+
+  # (c) l'écrivain d'origine est toujours là — invariant « écrit ET lu ».
+  expect_true(any(grepl("de_allowed[[:space:]]*=[[:space:]]*result\\$de_ok", imp)),
+              info = "mod_import_bulk.R : l'écriture de_allowed = result$de_ok a disparu")
+})
