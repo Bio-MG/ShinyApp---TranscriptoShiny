@@ -7,6 +7,13 @@ j <- jsonlite::fromJSON(json_path, simplifyVector = FALSE)
 
 # key (fr) -> en
 new_entries <- list(
+  # --- IMP-B3-C (O26, 2026-10-29): mono-condition disclosure, used at
+  # modules/bulk/mod_bulk.R:397-398 (ap_mono_cond_ui) — caught by the
+  # independent verifier of dwfrun-f806bc99 (2 C7 errors on a0f43a5).
+  c("Mono-condition d\u00e9tect\u00e9e \u00e0 l'import",
+    "Mono-condition detected at import"),
+  c("Le jeu n'expose qu'un seul groupe : QC/PCA actifs, DE/pathway d\u00e9sactiv\u00e9s. Configurez une variable d'int\u00e9r\u00eat \u00e0 au moins 2 groupes ci-dessus pour d\u00e9bloquer l'analyse diff\u00e9rentielle.",
+    "The dataset exposes a single group: QC/PCA active, DE/pathway disabled. Configure a variable of interest with at least 2 groups above to unlock the differential analysis."),
   # --- C3-17 (2026-10-26): M3 async pipeline progress message, used at
   # tools/pkg_skeleton/R/sc_pipeline.R:565 — the C7 guard is blind to
   # tools/pkg_skeleton/R/ (all_code, check_conventions.R:1442) so this key

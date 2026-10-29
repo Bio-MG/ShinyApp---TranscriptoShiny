@@ -11024,6 +11024,14 @@
     {
       "fr": "✓ {n} signatures scorées (Hallmark)",
       "en": "✓ {n} signatures scored (Hallmark)"
+    },
+    {
+      "fr": "Mono-condition détectée à l'import",
+      "en": "Mono-condition detected at import"
+    },
+    {
+      "fr": "Le jeu n'expose qu'un seul groupe : QC/PCA actifs, DE/pathway désactivés. Configurez une variable d'intérêt à au moins 2 groupes ci-dessus pour débloquer l'analyse différentielle.",
+      "en": "The dataset exposes a single group: QC/PCA active, DE/pathway disabled. Configure a variable of interest with at least 2 groups above to unlock the differential analysis."
     }
   ]
 }
