@@ -245,3 +245,41 @@ test_that("mod_import_bulk (per_sample) : métadonnées uploadées ⇒ condition
 })
 
 
+# ── IMP-B1-B (O26, 2026-10-29) : pastille d'orientation + bouton ↻ ──────────
+# Spéc §2.2 de V1X_BULK_IMPORT_QA_AUDIT_FIXES_PROPOSAL (arbitrage O26 = RETENU) :
+# l'orientation CHOISIE (radio counts_format) doit être VISIBLE avant l'import —
+# piège mesuré des panels ciblés (200 échantillons × 50 gènes) — et le bouton
+# ↻ inverse l'aperçu manuellement (override au-dessus du radio).
+.mib_counts_csv <- local({
+  f <- file.path(.mib_tmp, "counts_ok.csv")
+  writeLines(c("gene,S1,S2", "G1,10,20", "G2,11,21", "G3,12,22"), f)
+  f
+})
+.mib_badge_collect <- function() {
+  gd <- new.env(parent = emptyenv())
+  gd$i18n <- NULL
+  out <- new.env(parent = emptyenv())
+  shiny::testServer(mod_import_bulk_server, args = list(global_data = gd), expr = {
+    session$setInputs(bulk_import_mode = "merged_matrix", counts_format = "rows",
+                      counts_has_header = TRUE, counts_has_rownames = TRUE,
+                      min_counts = 10, project_name = "P")
+    session$setInputs(counts_file = list(name = basename(.mib_counts_csv),
+                                         size = 100L, datapath = .mib_counts_csv))
+    session$flushReact()
+    out$before <<- paste(as.character(shiny::isolate(output$orientation_badge)), collapse = "")
+    session$setInputs(toggle_transpose = 1L)
+    session$flushReact()
+    out$after <<- paste(as.character(shiny::isolate(output$orientation_badge)), collapse = "")
+    out$log <<- paste(logs(), collapse = "\n")
+  })
+  out
+}
+
+test_that("IMP-B1-B : la pastille expose l'orientation et le toggle l'inverse", {
+  o <- .mib_badge_collect()
+  expect_match(o$before, "Matrice active : 3 g\u00e8nes (lignes) \u00d7 2 \u00e9chantillons (colonnes)",
+               fixed = TRUE)
+  expect_match(o$after, "Matrice active : 2 g\u00e8nes (lignes) \u00d7 3 \u00e9chantillons (colonnes)",
+               fixed = TRUE)
+  expect_match(o$log, "Inversion manuelle lignes / colonnes", fixed = TRUE)
+})

@@ -121,6 +121,11 @@ mod_import_bulk_ui <- function(id) {
               checkboxInput(ns("counts_has_rownames"), "La 1ère colonne est le nom des gènes", value = TRUE),
               
               h6("Aperçu de la matrice:", style = "font-weight: bold; margin-top: 10px;"),
+              # IMP-B1-B (O26, 2026-10-29) : pastille d'orientation ACTIVE + override manuel
+              div(class = "d-flex align-items-center gap-2 mb-2",
+                  uiOutput(ns("orientation_badge")),
+                  actionButton(ns("toggle_transpose"), "↻ Inverser lignes / colonnes",
+                               class = "btn-xs btn-outline-secondary")),
               div(style = "max-height: 200px; overflow: auto; border: 1px solid #ddd; padding: 5px;",
                   tableOutput(ns("counts_preview"))),
               
@@ -678,7 +683,27 @@ mod_import_bulk_server <- function(id, global_data) {
         NULL
       })
     })
-    
+
+    # IMP-B1-B (O26, 2026-10-29) : override manuel de l'APERÇU au-dessus du choix
+    # counts_format — pastille, aperçu et logs reflètent l'orientation ACTIVE.
+    transposed <- reactiveVal(FALSE)
+    active_counts <- reactive({
+      df <- counts_reactive()
+      if (is.null(df)) return(NULL)
+      if (transposed()) as.data.frame(t(df)) else df
+    })
+    observeEvent(input$toggle_transpose, {
+      transposed(!transposed())
+      add_log("↻ Inversion manuelle lignes / colonnes (pastille mise à jour)")
+    })
+    output$orientation_badge <- renderUI({
+      df <- active_counts()
+      req(!is.null(df))
+      span(class = "badge bg-info",
+           sprintf("Matrice active : %d gènes (lignes) × %d échantillons (colonnes)",
+                   nrow(df), ncol(df)))
+    })
+
     metadata_file_reactive <- reactive({
       if (is.null(input$metadata_file)) return(NULL)
       tryCatch({
@@ -901,7 +926,7 @@ mod_import_bulk_server <- function(id, global_data) {
     })
     
     output$counts_preview <- renderTable({
-      df <- counts_reactive(); if (is.null(df)) return(NULL)
+      df <- active_counts(); if (is.null(df)) return(NULL)
       head(df[, 1:min(5, ncol(df)), drop = FALSE], 10)
     }, rownames = TRUE)
     
