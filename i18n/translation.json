@@ -11032,6 +11032,30 @@
     {
       "fr": "Le jeu n'expose qu'un seul groupe : QC/PCA actifs, DE/pathway désactivés. Configurez une variable d'intérêt à au moins 2 groupes ci-dessus pour débloquer l'analyse différentielle.",
       "en": "The dataset exposes a single group: QC/PCA active, DE/pathway disabled. Configure a variable of interest with at least 2 groups above to unlock the differential analysis."
+    },
+    {
+      "fr": "Réduction active synchronisée : %s",
+      "en": "Active reduction synchronised: %s"
+    },
+    {
+      "fr": "Réduction active : %s — sélecteur : %s (non recalculé)",
+      "en": "Active reduction: %s — selector: %s (not recomputed)"
+    },
+    {
+      "fr": "Gène cible calculé : %s",
+      "en": "Computed target gene: %s"
+    },
+    {
+      "fr": "Modification non recalculée — cliquez sur Rechercher",
+      "en": "Change not recomputed — click Search"
+    },
+    {
+      "fr": "Sélectionnez au moins une ligne dans la table des corrélations",
+      "en": "Select at least one row in the correlation table"
+    },
+    {
+      "fr": "✓ {n} gène(s) ajouté(s) au module Visualisation",
+      "en": "✓ {n} gene(s) added to the Visualisation module"
     }
   ]
 }

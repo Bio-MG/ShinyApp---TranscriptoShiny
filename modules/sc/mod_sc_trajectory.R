@@ -122,6 +122,10 @@ mod_sc_trajectory_ui <- function(id) {
                 choices  = c("PCA" = "pca", "UMAP" = "umap"),
                 selected = "pca"),
 
+    # 1C (O28) : badge d'état — réduction ACTIVE (pipeline auto / dernier
+    # calcul) vs sélecteur ; tout écart est affiché, jamais tu (spéc §2.3).
+    uiOutput(ns("traj_reduction_badge")),
+
     # Slingshot-only controls (cluster column + optional start/terminal
     # clusters); rendered only when method == "slingshot".
     uiOutput(ns("slingshot_controls")),
@@ -273,6 +277,38 @@ mod_sc_trajectory_server <- function(id, global_data, shared_rv) {
       updateCheckboxInput(session, "traj_auto_root", label = .tr("Detection auto racine"))
       updateCheckboxInput(session, "traj_show_edges", label = .tr("Afficher le graphe (aretes echantillonnees)"))
     }, ignoreInit = TRUE)
+
+    # ── 1C (O28) : synchronisation du sélecteur sur la réduction ACTIVE ────
+    # Le pipeline auto (sc_pipeline.R:674, mod_sc.R:1294) écrit
+    # shared_rv$traj_reduction ("umap"/"pca") après le pseudotemps ; le
+    # sélecteur ne doit pas rester sur son défaut "pca" — sinon « Actualiser
+    # Plot » recalcule le graphe kNN sur une réduction différente de celle du
+    # pipeline (constat 1C, packet round-7 ; spéc §2.3 de la proposition).
+    # Le propre run du module réécrit la même valeur (:564) — l'observer est
+    # alors un no-op ; un reset/chargement de session resynchronise aussi.
+    observeEvent(shared_rv$traj_reduction, {
+      red <- shared_rv$traj_reduction
+      req(red)
+      updateSelectInput(session, "traj_reduction", selected = tolower(red))
+    }, ignoreInit = FALSE)
+
+    # Badge d'état : réduction ACTIVE (pipeline / dernier calcul) vs sélecteur
+    # courant — synchronisé (vert) ou écart signalé quand le sélecteur a été
+    # déplacé sans recalcul (spéc §2.3 : « Réduction active synchronisée »).
+    output$traj_reduction_badge <- renderUI({
+      red <- shared_rv$traj_reduction
+      if (is.null(red) || length(red) != 1L || is.na(red) || !nzchar(red)) return(NULL)
+      sel <- tolower(input$traj_reduction %||% "")
+      if (identical(sel, tolower(red))) {
+        tags$span(class = "badge bg-success",
+                  sprintf(.tr("Réduction active synchronisée : %s"), toupper(red)))
+      } else {
+        tags$span(class = "badge bg-warning text-dark",
+                  sprintf(.tr("Réduction active : %s — sélecteur : %s (non recalculé)"),
+                          toupper(red), toupper(sel)))
+      }
+    })
+
     # ── Live cell-count badge ──────────────────────────────────────────────
     output$cell_count_badge <- renderUI({
       obj <- global_data$sc_obj

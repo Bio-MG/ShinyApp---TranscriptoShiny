@@ -7,6 +7,22 @@ j <- jsonlite::fromJSON(json_path, simplifyVector = FALSE)
 
 # key (fr) -> en
 new_entries <- list(
+  # --- O28 batch B1 (2026-10-29) : items 1C/1D/3C du packet round-7 —
+  # badges de synchronisation (mod_sc_trajectory.R, spéc §2.3 ;
+  # mod_sc_corr.R, spéc §2.4) et feedback visible du bouton « Ajouter
+  # sélection à Viz » (mod_sc_corr.R, spéc §2.13).
+  c("R\u00e9duction active synchronis\u00e9e : %s",
+    "Active reduction synchronised: %s"),
+  c("R\u00e9duction active : %s \u2014 s\u00e9lecteur : %s (non recalcul\u00e9)",
+    "Active reduction: %s \u2014 selector: %s (not recomputed)"),
+  c("G\u00e8ne cible calcul\u00e9 : %s",
+    "Computed target gene: %s"),
+  c("Modification non recalcul\u00e9e \u2014 cliquez sur Rechercher",
+    "Change not recomputed \u2014 click Search"),
+  c("S\u00e9lectionnez au moins une ligne dans la table des corr\u00e9lations",
+    "Select at least one row in the correlation table"),
+  c("\u2713 {n} g\u00e8ne(s) ajout\u00e9(s) au module Visualisation",
+    "\u2713 {n} gene(s) added to the Visualisation module"),
   # --- IMP-B3-C (O26, 2026-10-29): mono-condition disclosure, used at
   # modules/bulk/mod_bulk.R:397-398 (ap_mono_cond_ui) — caught by the
   # independent verifier of dwfrun-f806bc99 (2 C7 errors on a0f43a5).

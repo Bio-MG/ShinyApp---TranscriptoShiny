@@ -54,10 +54,27 @@ mod_sc_corr_output_ui <- function(id) {
     layout_columns(
       col_widths=c(12),
       card(card_header(i18n$t("Network Plot")),max_height="400px",
+           # 1D (O28) : badge d'écart au-dessus du graphe — seed réellement
+           # utilisé + alerte si le sélecteur a bougé sans recalcul (spéc §2.4).
+           uiOutput(ns("corr_seed_badge")),
            plotOutput(ns("correlation_network"),height="350px")),
       card(card_header(i18n$t("Table des Correlations")),max_height="400px",
            DTOutput(ns("correlation_table"))))
   )
+}
+
+# ── 1D (O28) : gène seed du résultat de corrélation courant ──────────────────
+# Le graphe ET les deux exports doivent être enracinés sur le gène pour lequel
+# les corrélations ont RÉELLEMENT été calculées — le seed porté par le résultat
+# (attr "seed_gene") ou reflété par l'auto-pipeline (shared_rv$corr_target_gene)
+# — jamais la valeur vivante du sélecteur, que l'utilisateur peut modifier sans
+# relancer « Rechercher Genes Correles » (constat 1D, packet round-7 ; spéc §2.4
+# de la proposition). Fonction pure, testable headless (test-mod-sc-corr.R).
+.corr_seed_gene <- function(result, shared_target, picker) {
+  seed <- attr(result, "seed_gene")
+  # NA/"" (seed inconnu) => NULL, pour que la chaîne %||% retombe plus bas.
+  if (is.null(seed) || length(seed) != 1L || is.na(seed) || !nzchar(seed)) seed <- NULL
+  seed %||% shared_target %||% picker
 }
 
 mod_sc_corr_server <- function(id, global_data, shared_rv) {
@@ -87,7 +104,14 @@ mod_sc_corr_server <- function(id, global_data, shared_rv) {
     # ── Step-3.7 BUG1 fix: sync local table from shared_rv (auto-pipeline / restored
     #    session visibility) — mirrors mod_sc_markers.R / mod_sc_pathways.R. ────────
     observeEvent(shared_rv$correlated_genes, {
-      corr_rv(shared_rv$correlated_genes)
+      df <- shared_rv$correlated_genes
+      # 1D (O28) : propager le seed (gène corrélé par l'auto-pipeline,
+      # shared_rv$corr_target_gene) sur la copie locale, pour que graphe et
+      # exports restent enracinés dessus même si le sélecteur bouge ensuite.
+      if (!is.null(df)) {
+        attr(df, "seed_gene") <- as.character(shared_rv$corr_target_gene %||% NA_character_)[1]
+      }
+      corr_rv(df)
     }, ignoreNULL = FALSE)
 
     # ── Sync the target-gene picker too, so it reflects who the auto-pipeline
@@ -144,6 +168,9 @@ mod_sc_corr_server <- function(id, global_data, shared_rv) {
           return()
         }
 
+        # 1D (O28) : le seed de CE run = gène cible réellement corrélé,
+        # attaché au résultat (lisible via attr(corr_rv(), "seed_gene")).
+        attr(cor_df, "seed_gene") <- as.character(input$target_gene)[1]
         corr_rv(cor_df)
         shared_rv$correlated_genes <- cor_df
         shared_rv$corr_target_gene <- as.character(input$target_gene)[1]  # ← FIX: was missing
@@ -165,22 +192,44 @@ mod_sc_corr_server <- function(id, global_data, shared_rv) {
       req(corr_rv(), input$target_gene)
       df  <- corr_rv()
       top <- head(df, 20)
+      # 1D (O28) : enraciner le graphe sur le SEED calculé, jamais sur le
+      # sélecteur vivant (spéc §2.4).
+      seed <- .corr_seed_gene(df, shared_rv$corr_target_gene, input$target_gene)
       library(igraph)
-      edges <- data.frame(from=input$target_gene, to=top$gene,
+      edges <- data.frame(from=seed, to=top$gene,
                           weight=top$abs_correlation, correlation=top$correlation)
       g <- graph_from_data_frame(edges, directed=FALSE)
       edge_colors <- ifelse(edges$correlation > 0, "#27AE60", "#E74C3C")
       edge_widths <- scales::rescale(edges$weight, to=c(1,5))
       layout      <- layout_with_fr(g)
-      node_sizes  <- ifelse(V(g)$name == input$target_gene, 15, 8)
-      node_colors <- ifelse(V(g)$name == input$target_gene, "#3498DB", "#95A5A6")
+      node_sizes  <- ifelse(V(g)$name == seed, 15, 8)
+      node_colors <- ifelse(V(g)$name == seed, "#3498DB", "#95A5A6")
       par(mar=c(0,0,2,0))
       plot(g, layout=layout, vertex.size=node_sizes, vertex.color=node_colors,
            vertex.label.cex=0.7, vertex.label.color="black", vertex.label.family="sans",
            edge.color=edge_colors, edge.width=edge_widths,
-           main=paste(.tr("Réseau de Corrélation -"), input$target_gene), edge.curved=0.2)
+           main=paste(.tr("Réseau de Corrélation -"), seed), edge.curved=0.2)
       legend("bottomleft", legend=c(.tr("Corrélation positive"),.tr("Corrélation négative"),.tr("Gène cible")),
              col=c("#27AE60","#E74C3C","#3498DB"), pch=c(15,15,19), pt.cex=c(2,2,2.5), bty="n", cex=0.9)
+    })
+
+    # ── 1D (O28) : badge d'écart sélecteur ↔ seed (au-dessus du graphe) ────
+    # Badge primaire = seed réellement utilisé par le graphe/exports ; si le
+    # sélecteur a été déplacé sans relancer « Rechercher », une alerte l'
+    # accompagne (spéc §2.4 : « Modification non recalculée »).
+    output$corr_seed_badge <- renderUI({
+      req(corr_rv())
+      seed <- .corr_seed_gene(corr_rv(), shared_rv$corr_target_gene, input$target_gene)
+      req(seed, nzchar(seed))
+      desync <- !identical(seed, input$target_gene)
+      tagList(
+        span(class = "badge bg-primary",
+             sprintf(.tr("Gène cible calculé : %s"), seed)),
+        if (desync) {
+          span(class = "badge bg-warning text-dark",
+               .tr("Modification non recalculée — cliquez sur Rechercher"))
+        }
+      )
     })
 
     output$correlation_table <- renderDT({
@@ -218,19 +267,29 @@ mod_sc_corr_server <- function(id, global_data, shared_rv) {
     })
 
      observeEvent(input$quick_add_corr, {
-      req(corr_rv(), input$correlation_table_rows_selected)
-      df    <- corr_rv()
-      idx   <- input$correlation_table_rows_selected
-      valid <- idx[idx > 0 & idx <= nrow(df)]
-      if (length(valid) > 0) {
-        genes   <- unique(df$gene[valid])
-        current <- shared_rv$selected_genes %||% character(0)
-        shared_rv$selected_genes <- unique(c(current, genes))
-        shared_rv$active_tab     <- "tab_viz"
-        showNotification(.t_fmt(.tr("Ajouté {n} gène(s) à Viz"), n = length(genes)), type="message", duration=3)
-      } else {
-        showNotification(.tr("Sélectionnez des lignes dans la table d'abord"), type="warning")
+      # 3C (O28) : plus de `req` muet — chaque garde déclenchée produit un
+      # retour VISIBLE (constat 3C, packet round-7 ; spéc §2.13 : l'ancien
+      # `req(corr_rv(), input$correlation_table_rows_selected)` avortait en
+      # silence quand aucune ligne n'était sélectionnée).
+      req(corr_rv())
+      idx <- input$correlation_table_rows_selected
+      if (is.null(idx) || length(idx) == 0) {
+        showNotification(.tr("Sélectionnez au moins une ligne dans la table des corrélations"),
+                         type = "warning", duration = 3)
+        return()
       }
+      df    <- corr_rv()
+      valid <- idx[idx > 0 & idx <= nrow(df)]
+      if (length(valid) == 0) {
+        showNotification(.tr("Sélectionnez au moins une ligne dans la table des corrélations"),
+                         type = "warning", duration = 3)
+        return()
+      }
+      genes   <- unique(df$gene[valid])
+      current <- shared_rv$selected_genes %||% character(0)
+      shared_rv$selected_genes <- unique(c(current, genes))
+      shared_rv$active_tab     <- "tab_viz"
+      showNotification(.t_fmt(.tr("✓ {n} gène(s) ajouté(s) au module Visualisation"), n = length(genes)), type="message", duration=3)
     })
 
     observeEvent(input$add_correlated_to_viz, {
@@ -259,18 +318,20 @@ mod_sc_corr_server <- function(id, global_data, shared_rv) {
       content  = function(file) {
         req(corr_rv(), input$target_gene)
         df    <- corr_rv(); top <- head(df, 20)
-        edges <- data.frame(from=input$target_gene, to=top$gene,
+        # 1D (O28) : export enraciné sur le SEED calculé (spéc §2.4).
+        seed  <- .corr_seed_gene(df, shared_rv$corr_target_gene, input$target_gene)
+        edges <- data.frame(from=seed, to=top$gene,
                             weight=top$abs_correlation, correlation=top$correlation)
         g <- igraph::graph_from_data_frame(edges, directed=FALSE)
         png(file, width=1200, height=900, res=150)
         par(mar=c(0,0,2,0))
         plot(g, layout=igraph::layout_with_fr(g),
-             vertex.size=ifelse(igraph::V(g)$name==input$target_gene,15,8),
-             vertex.color=ifelse(igraph::V(g)$name==input$target_gene,"#3498DB","#95A5A6"),
+             vertex.size=ifelse(igraph::V(g)$name==seed,15,8),
+             vertex.color=ifelse(igraph::V(g)$name==seed,"#3498DB","#95A5A6"),
              vertex.label.cex=0.7,
              edge.color=ifelse(edges$correlation>0,"#27AE60","#E74C3C"),
              edge.width=scales::rescale(edges$weight,to=c(1,5)),
-             main=paste(.tr("Réseau de Corrélation -"),input$target_gene), edge.curved=0.2)
+             main=paste(.tr("Réseau de Corrélation -"),seed), edge.curved=0.2)
         dev.off()
       }
     )
@@ -280,7 +341,9 @@ mod_sc_corr_server <- function(id, global_data, shared_rv) {
       content  = function(file) {
         req(corr_rv(), input$target_gene)
         df    <- corr_rv(); top <- head(df, 50)
-        edges <- data.frame(source=input$target_gene, target=top$gene,
+        # 1D (O28) : export enraciné sur le SEED calculé (spéc §2.4).
+        seed  <- .corr_seed_gene(df, shared_rv$corr_target_gene, input$target_gene)
+        edges <- data.frame(source=seed, target=top$gene,
                             correlation=round(top$correlation,4),
                             abs_corr=round(top$abs_correlation,4), p_adj=top$p_adj)
         write.csv(edges, file, row.names=FALSE)
