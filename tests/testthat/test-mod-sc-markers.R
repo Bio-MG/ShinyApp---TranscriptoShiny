@@ -362,3 +362,57 @@ test_that("marqueurs : une p-valeur inconnue descend, elle ne prend pas la tête
                    stringsAsFactors = FALSE)
   expect_identical(.markers_sort(df, "pval")$gene, c("G_sig", "G_weak", "G_na"))
 })
+
+# =============================================================================
+# F01 (revue externe 2026-10-28) — le TROISIEME consommateur
+# =============================================================================
+# Le test ci-dessus (« les DEUX consommateurs ») était VRAI et néanmoins
+# insuffisant : il existe un TROISIEME site qui résout `rows_selected` — le
+# bouton d'en-tête « Ajouter sélection » (`quick_add_markers`). Il indexait
+# `markers_rv()` BRUT, donc l'ordre de stockage (p_adj), alors que la table
+# affiche l'ordre de `.markers_sort()` (défaut « logfc »).
+#
+# ⚠️ `>= 2L` ne pouvait pas attraper ça : deux consommateurs corrects suffisent
+# à le satisfaire. L'invariant doit donc porter sur le NOMBRE DE SITES DE
+# RESOLUTION, pas sur la présence du helper.
+#
+# 🔴 Le tri par défaut est « logfc » : `selectInput(sort_by)` n'a pas de
+# `selected=`, donc la 1re choice gagne. Un `sort_by` NULL (module non monté)
+# retombe sur p_adj — les deux cas sont couverts ci-dessous.
+
+test_that("marqueurs : l'indice de ligne désigne le gène AFFICHÉ, pas celui stocké", {
+  # Ordre de stockage : G_low, G_high, G_mid. Ordre affiché en « logfc » :
+  # G_high, G_mid, G_low. Les deux diffèrent — c'est tout l'enjeu.
+  df <- data.frame(gene       = c("G_low", "G_high", "G_mid"),
+                   avg_log2FC = c(0.3, 4.1, 1.7),
+                   p_val_adj  = c(1, 1, 1),
+                   cluster    = "0",
+                   stringsAsFactors = FALSE)
+
+  # Ligne 1 affichée = G_high (le gène à |log2FC| maximal), PAS G_low.
+  expect_identical(.markers_selected_genes(df, "logfc", 1L), "G_high")
+
+  # Indices hors bornes ignorés, sans décaler les autres.
+  expect_identical(.markers_selected_genes(df, "logfc", c(0L, 2L, 99L)), "G_mid")
+
+  # Aucune sélection : vecteur vide, jamais NULL (contrat de `req()`).
+  expect_identical(.markers_selected_genes(df, "logfc", integer(0)), character(0))
+
+  # Doublons d'affichage dédupliqués (un gène deux fois dans la sélection).
+  expect_identical(.markers_selected_genes(df, "logfc", c(1L, 1L)), "G_high")
+})
+
+test_that("marqueurs : la résolution de sélection est un helper UNIQUE (3 sites)", {
+  p     <- ts_ast_parse(.SM_FILE)
+  calls <- ts_ast_find_all(p, function(x) TRUE)
+  d     <- vapply(calls, ts_ast_deparse, character(1))
+
+  # (1) La forme fautive a disparu : indexer la colonne du tableau NON trié.
+  #     C'est la signature exacte du bug (le gène poussé n'est pas celui vu).
+  expect_identical(sum(grepl("df$gene[valid]", d, fixed = TRUE)), 0L)
+
+  # (2) Les DEUX observateurs de sélection (lignes du tableau ET bouton
+  #     d'en-tête) passent par le helper unique. `>= 2L` est le plancher :
+  #     c'est le défaut mesuré avant correctif (1 seul site sur 2).
+  expect_true(sum(grepl(".markers_selected_genes(", d, fixed = TRUE)) >= 2L)
+})

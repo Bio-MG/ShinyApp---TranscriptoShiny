@@ -103,6 +103,25 @@
   df[order(key, tie, na.last = TRUE, method = "radix"), , drop = FALSE]
 }
 
+# Resolution d'une selection de lignes du tableau.
+#
+# 🔴 L'indice vient de l'UI : il designe la ligne AFFICHEE, donc la table
+# TRIEE. L'appliquer a `markers_rv()` brut designe un AUTRE gene des que
+# l'ordre de stockage (p_adj) differe de l'ordre affiche (defaut : logfc).
+# C'est pourquoi la resolution passe par CE helper unique et jamais par une
+# indexation directe : trois sites la consomment (rendu, selection, bouton
+# d'en-tete), et deux copies d'une meme expression finissent par diverger.
+.markers_selected_genes <- function(df, sort_by = NULL, idx) {
+  if (is.null(df) || nrow(df) == 0L || is.null(idx) || length(idx) == 0L) {
+    return(character(0))
+  }
+  sorted <- .markers_sort(df, sort_by)
+  idx <- suppressWarnings(as.integer(idx))
+  idx <- idx[!is.na(idx) & idx > 0L & idx <= nrow(sorted)]
+  if (length(idx) == 0L) return(character(0))
+  unique(as.character(sorted$gene[idx]))
+}
+
 
 # ── UI: sidebar controls ──────────────────────────────────────────────────────
 
@@ -375,12 +394,9 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
     # ── 3. Row selection -> update local selected_genes_rv ────────────────────
     observeEvent(input$table_markers_rows_selected, {
       req(markers_rv())
-      df <- markers_rv()
-      df_sorted <- .markers_sort(df, input$sort_by)
-      idx   <- input$table_markers_rows_selected
-      valid <- idx[idx > 0 & idx <= nrow(df_sorted)]
-      if (length(valid) > 0) {
-        genes <- unique(df_sorted$gene[valid])
+      genes <- .markers_selected_genes(markers_rv(), input$sort_by,
+                                       input$table_markers_rows_selected)
+      if (length(genes) > 0) {
         selected_genes_rv(genes)
         # Mirror into bulk textarea for convenience
         updateTextAreaInput(session, "bulk_gene_input", value = paste(genes, collapse = ", "))
@@ -390,11 +406,10 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
     # ── 4. Quick-add from table header button ─────────────────────────────────
      observeEvent(input$quick_add_markers, {
       req(markers_rv(), input$table_markers_rows_selected)
-      df  <- markers_rv()
-      idx <- input$table_markers_rows_selected
-      valid <- idx[idx > 0 & idx <= nrow(df)]
-      if (length(valid) > 0) {
-        .push_to_viz(unique(df$gene[valid]))
+      genes <- .markers_selected_genes(markers_rv(), input$sort_by,
+                                       input$table_markers_rows_selected)
+      if (length(genes) > 0) {
+        .push_to_viz(genes)
       } else {
         showNotification(.tr("Sélectionnez des lignes dans le tableau d'abord"), type = "warning")
       }
