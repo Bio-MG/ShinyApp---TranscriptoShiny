@@ -416,3 +416,57 @@ test_that("marqueurs : la résolution de sélection est un helper UNIQUE (3 site
   #     c'est le défaut mesuré avant correctif (1 seul site sur 2).
   expect_true(sum(grepl(".markers_selected_genes(", d, fixed = TRUE)) >= 2L)
 })
+
+
+# =============================================================================
+# B2 (O28, 2026-10-31) — item 3B : formatage des p-valeurs extrêmes
+# =============================================================================
+# Constat 3B (packet round-7 ; SC-5 du live audit 2026-10-28) : `format(p,
+# scientific = TRUE, digits = 3)` rend « 0.00e+00 » pour un p sous-flotté
+# (GP9, preuve re-mesurée à HEAD). Le formateur `.markers_format_pval()`
+# affiche « < 2.2e-16 » (spéc §2.12) — plancher qui couvre aussi le sous-
+# flottement à 0 exact — et laisse NA explicite. La couleur DT passe côté R
+# (`.markers_pval_color`) car la cellule « < 2.2e-16 » n'est plus parseable
+# en JS : le repli styleInterval la colorerait « red » (non-significatif),
+# l'inverse du sens scientifique.
+test_that("3B : un p sous-flotté ne rend JAMAIS 0e+00 — plancher < 2.2e-16 (spéc §2.12)", {
+  out <- .markers_format_pval(c(NA, 0, 1e-300, 1e-10, 0.5, 2.2e-16))
+  expect_identical(out[[1]], "NA")
+  # 0 exact (sous-flottement) ET 1e-300 : plancher, pas zéro — LE fix 3B :
+  expect_identical(out[[2]], "< 2.2e-16")
+  expect_identical(out[[3]], "< 2.2e-16")
+  # p « normales » : rendu SCIENTIFIQUE inchangé (pas de plancher, jamais
+  # « 0e+00 ») ; l'alignement vectoriel de format() est conservé tel quel
+  # (comportement historique — format() aligne le vecteur affiché) :
+  expect_match(trimws(out[[4]]), "^1(\\.0+)?e-10$")
+  expect_match(trimws(out[[5]]), "^5(\\.0+)?e-01$")
+  # Borne : 2.2e-16 n'est PAS < 2.2e-16 — rendu formaté, pas plancher :
+  expect_match(trimws(out[[6]]), "^2\\.2e-16$")
+  # Appel scalaire : même contrat, sans surprise d'alignement :
+  expect_identical(.markers_format_pval(0.5),
+                   format(0.5, scientific = TRUE, digits = 3))
+})
+
+test_that("3B : le rendu de la table passe par le formateur UNIQUE (jamais un format() nu)", {
+  p     <- ts_ast_parse(.SM_FILE)
+  calls <- ts_ast_find_all(p, function(x) TRUE)
+  d     <- vapply(calls, ts_ast_deparse, character(1))
+
+  # (1) La forme fautive ne doit plus exister nulle part :
+  expect_identical(sum(grepl("format(df_sorted$p_val_adj", d, fixed = TRUE)), 0L)
+  # (2) Le formateur 3B est bien consommé :
+  expect_true(sum(grepl(".markers_format_pval(", d, fixed = TRUE)) >= 1L)
+})
+
+test_that("3B : couleur P_adj côté R — intervalles < stricts, repli noir pour NA", {
+  # Sémantique styleInterval préservée (0.001 -> borne SUPÉRIEURE exclue) :
+  expect_identical(.markers_pval_color(c(NA, 5e-4, 0.001, 0.02, 0.5)),
+                   c("black", "darkgreen", "green", "orange", "red"))
+  # L'ancien styleInterval côté client ne doit plus exister (cellule non
+  # parseable en JS une fois le plancher 3B posé) — verrou AST : aucun APPEL
+  # styleInterval dans le module (les commentaires documentant l'histoire ne
+  # comptent pas) :
+  calls <- ts_ast_find_all(ts_ast_parse(.SM_FILE), function(x) TRUE)
+  d     <- vapply(calls, ts_ast_deparse, character(1))
+  expect_identical(sum(grepl("styleInterval(", d, fixed = TRUE)), 0L)
+})

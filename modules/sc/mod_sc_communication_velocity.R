@@ -17,6 +17,10 @@ mod_sc_communication_velocity_ui <- function(id) {
     div(class = "alert alert-warning", style = "font-size:0.85em;padding:6px;",
         i18n$t("« Associé à l'état de vitesse » n'établit aucune causalité : la magnitude des vecteurs précalculés est une quantité descriptive par population.")),
     div(class = "small text-muted mb-2", textOutput(ns("vel_info"))),
+    # 3F (O28, spéc §2.18 point 1) : garde PRÉVENTIVE — bandeau info + bouton
+    # désactivé avant tout clic quand les vecteurs sont absents/inutilisables
+    # (le constat 3F : la seule garde existante — stop :84 — était post-clic).
+    uiOutput(ns("vel_guard")),
     fluidRow(
       column(6, numericInput(ns("vel_min_overlap"), i18n$t("Recouvrement minimal (fraction)"),
                              value = TS_VELOCITY_OVERLAP_MIN, min = 0, max = 1, step = 0.05,
@@ -65,6 +69,38 @@ mod_sc_communication_velocity_server <- function(id, comm_state, global_data, sh
       }
     })
 
+    # ── 3F (O28, spéc §2.18 point 1) : garde préventive ──────────────────────
+    # États utilisables du contrat velocity (sc_velocity.R:141-151) :
+    # valid / valid_partial_embedding portent des vecteurs consommables ;
+    # valid_no_vectors (objet valide, AUCUN vecteur) et les invalid_* n'en
+    # portent pas. Préventif = bandeau + bouton désactivé AVANT le clic ; le
+    # stop post-clic (:84) reste en seconde ligne de défense.
+    .vel_vr <- reactive({
+      if (!is.null(shared_rv)) state_get(shared_rv, "velocity_result") else NULL
+    })
+    .vel_ready <- function(vr) {
+      st <- if (!is.null(vr)) vr$status %||% NA_character_ else NA_character_
+      !is.null(vr) && st %in% c("valid", "valid_partial_embedding")
+    }
+    observeEvent(.vel_vr(), {
+      vr <- .vel_vr()
+      shiny::updateActionButton(session, "vel_compute", disabled = !.vel_ready(vr))
+    })
+    output$vel_guard <- renderUI({
+      vr <- .vel_vr()
+      if (.vel_ready(vr)) return(NULL)
+      msg <- if (is.null(vr)) {
+        .tr("Le calcul de contexte nécessite des vecteurs de vélocité précalculés complets — aucun résultat velocity importé.")
+      } else if (identical(vr$status, "valid_no_vectors")) {
+        .tr("Le calcul de contexte nécessite des vecteurs de vélocité précalculés complets (absents dans l'import actuel).")
+      } else {
+        sprintf(.tr("Statut velocity « %s » : vecteurs inutilisables — réimportez depuis le panneau Vélocité (8.6)."),
+                as.character(vr$status %||% "inconnu"))
+      }
+      div(class = "alert alert-info", style = "font-size:0.85em;padding:6px;",
+          icon("circle-info"), " ", msg)
+    })
+
     .identities <- function() {
       obj <- global_data$sc_obj
       col <- comm_state$result$identity_column %||% NA_character_
@@ -88,13 +124,18 @@ mod_sc_communication_velocity_server <- function(id, comm_state, global_data, sh
           stop(sprintf("Colonne d'identités '%s' introuvable — réimportez la communication.",
                        comm_state$result$identity_column %||% NA), call. = FALSE)
         }
-        ctx <- build_communication_velocity_context(
-          comm_state$result,
-          velocity_result  = vr,
-          cell_identities  = idents,
-          identity_column  = comm_state$result$identity_column,
-          min_overlap      = input$vel_min_overlap %||% NA_real_
-        )
+        # 3F (O28, spéc §2.18) : jauge de progression — le constat 3F mesurait
+        # 0 withProgress dans ce module (calcul potentiellement long, gel
+        # perçu de la session).
+        ctx <- withProgress(message = .tr("Calcul du contexte vélocité..."), value = 0.4, {
+          build_communication_velocity_context(
+            comm_state$result,
+            velocity_result  = vr,
+            cell_identities  = idents,
+            identity_column  = comm_state$result$identity_column,
+            min_overlap      = input$vel_min_overlap %||% NA_real_
+          )
+        })
         vel_ctx(ctx)
         if (!is.null(shared_rv)) provenance_append(shared_rv, ctx$provenance)
         if (identical(ctx$status, "valid")) {

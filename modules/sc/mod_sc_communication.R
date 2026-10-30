@@ -360,9 +360,16 @@ mod_sc_communication_output_ui <- function(id) {
                 # 2G (O28) : les 5 bannières `alert-*` empilées (constat 2G,
                 # packet round-7 : 1 warning, 2 info, 2 light) sont regroupées en
                 # UNE carte synthétique à puces thématiques (spéc §2.15).
-                # ⚠️ Coordination 3D : le TEXTE de la 5ᵉ puce (objet RDS
-                # CellChat) est la bannière partagée avec le constat 3D (batch
-                # B2) — il est reproduit VERBATIM ici, jamais reformulé.
+                # ⚠️ Coordination 3D (batch B2, 2026-10-31) : le TEXTE de la 5ᵉ
+                # puce (objet RDS CellChat) ÉTAIT la bannière partagée avec le
+                # constat 3D — B3 l'avait reproduite verbatim ; B2 corrige
+                # désormais le drift UI/code : le moteur résout le mapping
+                # ligand-receptor → pathway par appariement EXACT sur
+                # @LR$LRsig (sc_communication_engine.R:260-268) et remonte un
+                # engine_failure explicite quand @LR$LRsig est absent
+                # (sc_communication_engine.R:238-243). L'ancien texte (« …n'est
+                # pas reconstitue ») contredisait le moteur — verrou test
+                # test-mod-sc-communication-ui.R mis à jour en conséquence.
                 # La hiérarchie de sévérité d'origine est conservée via la
                 # couleur des puces (warning > info > light).
                 card(
@@ -388,7 +395,9 @@ mod_sc_communication_output_ui <- function(id) {
                             tags$li(class = "mb-0",
                                     tags$span(class = "badge bg-secondary text-white me-2",
                                               "🧬 ", i18n$t("Objets RDS CellChat")),
-                                    i18n$t("Objet CellChat (.rds) : extraction de resultats deja calcules uniquement — le mapping ligand-receptor vers pathway n'est pas reconstitue."))))))
+                                    # 3D (O28, spéc §2.16) : texte aligné sur le moteur —
+                                    # appariement EXACT (jamais « non reconstitué ») :
+                                    i18n$t("Objet CellChat (.rds) : extraction de resultats deja calcules uniquement ; les paires ligand-receptor sont appariées EXACTEMENT sur @LR$LRsig (ligand, receptor, pathway_name) — aucune reconstruction heuristique ; un @LR$LRsig absent est remonté comme « engine_failure » explicite."))))))
       ),
     ),
     # ── 2L (O28, spéc §2.23 point 2) : tiroir offcanvas secondaire (droite) ──
@@ -649,6 +658,56 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
 
     output$comm_filter_summary <- renderText({ .filter_summary_txt() })
     output$comm_filter_summary_drawer <- renderText({ .filter_summary_txt() })
+
+    # ── 3F (O28, spéc §2.18 point 4) : normalisation contextuelle des filtres
+    # score / rang selon la source détectée. Un rang n'est pas un score
+    # (communication_apply_filters REFUSE score_min + rank_max simultanés) :
+    # l'intitulé et les bornes du filtre suivent donc la colonne qui EXISTE
+    # dans la table canonique de la source — jamais un label générique qui
+    # invite à saisir un rang dans le filtre score (refus moteur à la clé).
+    # Bornes calculées SUR la table importée (aucune borne fabriquée) ; les
+    # valeurs saisies ne sont jamais écrasées (seuls label/min/max bougent).
+    observeEvent(comm_state$result, {
+      r <- comm_state$result
+      if (is.null(r)) {
+        updateNumericInput(session, "comm_f_score_min",
+                           label = .tr("Score minimum (importé)"), min = 0)
+        updateNumericInput(session, "comm_f_rank_max",
+                           label = .tr("Rang maximum (importé)"), min = 0)
+        return()
+      }
+      src <- as.character(r$source_method %||% NA_character_)
+      t <- tryCatch(r$canonical_table, error = function(e) NULL)
+      score_max <- if (!is.null(t) && "score" %in% colnames(t) && any(!is.na(t$score)))
+        suppressWarnings(max(t$score, na.rm = TRUE)) else NA_real_
+      rank_max <- if (!is.null(t) && "rank" %in% colnames(t) && any(!is.na(t$rank)))
+        suppressWarnings(max(t$rank, na.rm = TRUE)) else NA_real_
+      if (identical(src, "liana")) {
+        updateNumericInput(session, "comm_f_score_min",
+                           label = .tr("Score minimum — sans objet pour LIANA (un rang n'est pas un score : utiliser Rang maximum)"),
+                           min = 0)
+        if (!is.na(rank_max)) {
+          updateNumericInput(session, "comm_f_rank_max",
+                             label = .tr("Rang agrégé [1 - N] (1 = plus significatif)"),
+                             min = 1, max = rank_max)
+        }
+      } else if (identical(src, "cellphonedb")) {
+        updateNumericInput(session, "comm_f_score_min",
+                           label = .tr("Moyenne d'expression [0.0 - Max]"),
+                           min = 0, max = if (!is.na(score_max)) score_max else NA)
+        updateNumericInput(session, "comm_f_rank_max",
+                           label = .tr("Rang maximum — sans objet pour CellPhoneDB (utiliser le score)"),
+                           min = 0)
+      } else {
+        # cellchat (import, objet ou moteur) et défaut : probabilité [0.0 - 1.0].
+        updateNumericInput(session, "comm_f_score_min",
+                           label = .tr("Probabilité de communication [0.0 - 1.0]"),
+                           min = 0, max = 1)
+        updateNumericInput(session, "comm_f_rank_max",
+                           label = .tr("Rang maximum — sans objet pour CellChat (utiliser le score)"),
+                           min = 0)
+      }
+    })
 
     # ── 2L (O28, spéc §2.23 point 2) : saut direct vers un sous-panneau CCC
     # depuis le tiroir offcanvas. nav_select vise les `value` ASCII posés par

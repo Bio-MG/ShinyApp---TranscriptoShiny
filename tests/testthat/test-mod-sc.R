@@ -346,3 +346,115 @@ test_that("2A : les 17 onglets Résultats sont regroupés en 5 nav_menu thémati
   expect_match(src, 'value = "tab_communication", mod_sc_communication_output_ui', fixed = TRUE)
   expect_match(src, 'value = "tab_report_consolide", mod_sc_report_consolidated_output_ui', fixed = TRUE)
 })
+
+
+# =============================================================================
+# B2 (O28, 2026-10-31) — items 1E et 3A
+# =============================================================================
+# 1E (spéc §2.5) : garde contextuelle single-sample — onglets VISIBLES, libellé
+# 🔒 dynamique + carte d'état vide actionnable (pourquoi + voie réelle + CTA
+# deep-link import), contenu arbitré par l'opérateur (DECISIONS.md row O28 (b),
+# non édulcorable). 3A (spéc §2.11 + live audit §5.1) : lignes de seuil sur les
+# violons + rappel des seuils appliqués + compte « retirées » complet.
+
+test_that("1E : les 3 onglets DA gardent leurs value et passent par les uiOutput gardés", {
+  src <- paste(readLines(file.path(ts_project_root(), .MSCR_FILE),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  # Les `value` sont verrouillés par les contrats freeze + le test 2A — la
+  # garde ne touche QUE la présentation :
+  for (v in c("tab_da_milo", "tab_da_sccoda", "tab_da_cross")) {
+    expect_match(src, sprintf('value = "%s"', v), fixed = TRUE, info = v)
+  }
+  # Canvas gardé (carte 🔒 vs UI réelle) + libellé dynamique :
+  for (pfx in c("da_milo", "da_sccoda", "da_cross")) {
+    expect_match(src, sprintf('uiOutput(ns("%s_guarded"))', pfx), fixed = TRUE, info = pfx)
+    expect_match(src, sprintf('uiOutput(ns("%s_tab_title"))', pfx), fixed = TRUE, info = pfx)
+  }
+})
+
+test_that("1E : la carte porte le contenu arbitré O28(b) — pourquoi + voie réelle + CTA", {
+  src <- paste(readLines(file.path(ts_project_root(), .MSCR_FILE),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  # POURQUOI (non négociable — O28(b) : ≥ 2 échantillons réels par condition ;
+  # les cellules ne sont pas des réplicats) :
+  expect_match(src, "au moins 2 \u00e9chantillons R\u00c9ELS par condition", fixed = TRUE)
+  expect_match(src, "Les cellules ne sont pas des r\u00e9plicats", fixed = TRUE)
+  expect_match(src, "aucune pseudoreplication tol\u00e9r\u00e9e", fixed = TRUE)
+  # LA VOIE RÉELLE EXISTANTE (import multi-échantillons, parse A_1/B2, table
+  # design éditable) :
+  expect_match(src, "A_1 / B2", fixed = TRUE)
+  expect_match(src, "Ouvrir l'\u00e9tape 0.5", fixed = TRUE)
+  # CTA deep-link import : saut racine par le sélecteur BS5 STABLE data-value
+  # (nav_select("main_nav") est un no-op depuis un module — makeScope préfixe
+  # sendInputMessage ; shinyjs n'est pas activé dans app.R).
+  expect_match(src, '.sc_root_tab_js("Single-Cell")', fixed = TRUE)
+  expect_match(src, 'data-value', fixed = TRUE)
+  # CTA design in-module (accordéon de CETTE sidebar) :
+  expect_match(src, 'values = "0_metadata"', fixed = TRUE)
+})
+
+test_that("1E : l'éligibilité consomme le verdict moteur (aucun seuil re-enseigné)", {
+  src <- paste(readLines(file.path(ts_project_root(), .MSCR_FILE),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  # verdict canonique (sc_abundance_design.R:131-134) — pas de re-validation locale :
+  expect_match(src, "da_design_status_is_valid(des$status)", fixed = TRUE)
+  # Les serveurs DA restent montés une fois pour toutes (contrats freeze
+  # milo/sccoda/cross) — la garde ne les remonte pas :
+  for (srv in c("mod_sc_da_milo_server", "mod_sc_da_sccoda_server",
+                "mod_sc_da_cross_server")) {
+    expect_match(src, srv, fixed = TRUE, info = srv)
+  }
+})
+
+test_that("3A : lignes de seuil — nFeature min/max + percent.mt, JAMAIS nCount (non filtré)", {
+  applied <- list(source = "auto", min_genes = 100, max_genes = 8000, max_mt = 20,
+                  n_removed = 800L, n_remaining = 1900L)
+  ln <- .sc_qc_threshold_lines(applied)
+  expect_false(is.null(ln))
+  expect_setequal(unique(ln$feature), c("nFeature_RNA", "percent.mt"))
+  expect_identical(sort(ln$y), c(20, 100, 8000))
+  expect_identical(sum(ln$feature == "nFeature_RNA"), 2L)  # min ET max
+
+  # Un run manuel (source != "auto") ne produit AUCUNE ligne — ses seuils ne
+  # sont pas devinables ici (mod_sc_pipeline.R hors périmètre) : honnêteté.
+  expect_null(.sc_qc_threshold_lines(list(source = "manual")))
+  expect_null(.sc_qc_threshold_lines(NULL))
+  # Seuils non numériques (QC sauté) : lignes droppées, jamais NaN tracé :
+  expect_null(.sc_qc_threshold_lines(list(source = "auto", min_genes = NA_real_)))
+})
+
+test_that("3A : formes canoniques du rappel (applied / manual / skipped / none)", {
+  expect_identical(.sc_qc_recall_lines(NULL)$kind, "none")
+  expect_identical(.sc_qc_recall_lines(list(source = "manual"))$kind, "manual")
+  expect_identical(.sc_qc_recall_lines(list(source = "auto", min_genes = NA_real_))$kind,
+                   "skipped")
+  r <- .sc_qc_recall_lines(list(source = "auto", min_genes = 100, max_genes = 8000,
+                                max_mt = 20, n_removed = 800, n_remaining = 1900))
+  expect_identical(r$kind, "applied")
+  expect_identical(r$min_genes, 100)
+  expect_identical(r$max_genes, 8000)
+  expect_identical(r$max_mt, 20)
+  expect_identical(r$n_removed, 800)
+  expect_identical(r$n_remaining, 1900)
+})
+
+test_that("3A verrou source : rappel QC dans l'onglet + log non tronqué + capture aux lancements", {
+  src <- paste(readLines(file.path(ts_project_root(), .MSCR_FILE),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  # Rappel dans le canvas QC (UX-1 : « les seuils appliqués ne sont rappelés
+  # nulle part ») :
+  expect_match(src, 'uiOutput(ns("qc_threshold_recall"))', fixed = TRUE)
+  # Compte complet (UX-1) : le conteneur force le repli des lignes longues :
+  expect_match(src, 'class = "sc-auto-log-wrap"', fixed = TRUE)
+  expect_match(src, "white-space: pre-wrap", fixed = TRUE)
+  # Capture aux lancements du pipeline auto (UI confirm, voie directe, drive)
+  # + confirmation par le snapshot moteur (sc_pipeline.R:237-245) :
+  expect_match(src, ".sc_qc_capture_applied(params)", fixed = TRUE)
+  expect_match(src, ".sc_qc_capture_applied(sc_ap_normalize_params(as.list(input)))",
+               fixed = TRUE)
+  expect_match(src, ".sc_qc_capture_applied(sc_ap_normalize_params(drive_inputs))",
+               fixed = TRUE)
+  expect_match(src, "res$qc_snapshot", fixed = TRUE)
+  # Purge honnête au changement de dataset :
+  expect_match(src, "qc_applied_rv(NULL)", fixed = TRUE)
+})

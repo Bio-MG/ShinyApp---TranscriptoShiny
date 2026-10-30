@@ -103,6 +103,37 @@
   df[order(key, tie, na.last = TRUE, method = "radix"), , drop = FALSE]
 }
 
+# ── 3B (O28, spéc §2.12) : formatage des p-valeurs extrêmes ───────────────────
+#
+# Constat 3B (packet round-7 ; SC-5 du live audit 2026-10-28) : `format(p,
+# scientific = TRUE, digits = 3)` rend « 0.00e+00 » pour un p sous-flotté
+# (ex. GP9) — un zéro EXACT ment sur la significativité. Formateur robuste :
+# un p < 2.2e-16 (epsilon machine R) s'affiche « < 2.2e-16 » — ce qui couvre
+# aussi les valeurs sous-flottées à 0 exact ; NA reste « NA » ; les autres
+# gardent le rendu scientifique historique (digits = 3, inchangé).
+#
+# ⚠️ Le floor « < 2.2e-16 » est celui de la spéc §2.12 du packet (row 3B) —
+# il ne FABRIQUE rien : toute valeur affichée « < 2.2e-16 » l'est réellement.
+.markers_format_pval <- function(p) {
+  p <- suppressWarnings(as.numeric(p))
+  ifelse(is.na(p), "NA",
+    ifelse(p < 2.2e-16, "< 2.2e-16",
+           format(p, scientific = TRUE, digits = 3)))
+}
+
+# Couleur DT de la colonne P_adj : mêmes intervalles que l'ancien
+# `styleInterval(c(0.001, 0.01, 0.05), c("darkgreen", "green", "orange", "red"))`
+# (sémantique `<` stricte de styleInterval préservée) — mais évaluée côté R,
+# car la cellule affichée « < 2.2e-16 » n'est plus parseable en JS : le repli
+# styleInterval la colorerait « red » (non-significatif), l'inverse du sens.
+.markers_pval_color <- function(p) {
+  p <- suppressWarnings(as.numeric(p))
+  ifelse(is.na(p), "black",
+    ifelse(p < 0.001, "darkgreen",
+      ifelse(p < 0.01, "green",
+        ifelse(p < 0.05, "orange", "red"))))
+}
+
 # Resolution d'une selection de lignes du tableau.
 #
 # 🔴 L'indice vient de l'UI : il designe la ligne AFFICHEE, donc la table
@@ -357,7 +388,8 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
         Gene    = df_sorted$gene,
         Cluster = df_sorted$cluster,
         Log2FC  = round(df_sorted$avg_log2FC, 3),
-        P_adj   = format(df_sorted$p_val_adj, scientific = TRUE, digits = 3),
+        # 3B (O28) : « < 2.2e-16 » pour les p extrêmes — plus jamais « 0.00e+00 ».
+        P_adj   = .markers_format_pval(df_sorted$p_val_adj),
         Pct.1   = round(df_sorted$pct.1 * 100, 1),
         Pct.2   = round(df_sorted$pct.2 * 100, 1),
         stringsAsFactors = FALSE
@@ -386,8 +418,21 @@ mod_sc_markers_server <- function(id, global_data, shared_rv) {
         ) %>%
         formatStyle(
           "P_adj",
-          color = styleInterval(c(0.001, 0.01, 0.05),
-                                c("darkgreen", "green", "orange", "red"))
+          # 3B (O28) : couleur évaluée côté R (.markers_pval_color) — la cellule
+          # « < 2.2e-16 » n'est plus parseable en JS, un styleInterval côté
+          # client la colorerait « red » (sens inversé). Le JS ci-dessous
+          # reproduit les intervalles < 0.001 / < 0.01 / < 0.05 pour les
+          # cellules numériques et traite les chaînes du formateur 3B.
+          color = JS(
+            "(function() {",
+            "  var p = parseFloat(value);",
+            "  if (isNaN(p)) { return String(value).indexOf('<') === 0 ? 'darkgreen' : 'black'; }",
+            "  if (p < 0.001) { return 'darkgreen'; }",
+            "  if (p < 0.01)  { return 'green'; }",
+            "  if (p < 0.05)  { return 'orange'; }",
+            "  return 'red';",
+            "})()"
+          )
         )
     })
 

@@ -602,8 +602,92 @@ run_markers <- function(input, global_data, shared_rv, session) {
   close
 }
 
+# ── 3A (O28, spéc §2.11) : retour visuel des seuils QC ───────────────────────
+# Constat 3A (packet round-7 ; SC-1 + UX-1 du live audit 2026-10-28) : les
+# seuils réellement appliqués par le QC ne sont ni dessinés sur les violons
+# (aucun hline/abline à HEAD) ni rappelés nulle part dans les résultats, et le
+# compte « retirées: » du log est coupé par la largeur de colonne. Trois
+# livrables (recommandation §5.1 du live audit) : lignes de seuil sur les
+# violons + rappel des seuils + compte complet.
+#
+# ⚠️ Honnêteté (thème O28) : seules les valeurs RÉELLEMENT APPLIQUÉES par le
+# dernier pipeline auto sont tracées. Les sliders du pipeline manuel vivent
+# dans mod_sc_pipeline.R (hors périmètre B2) — leurs valeurs ne sont pas
+# lisibles d'ici ; un run manuel est donc signalé comme tel, avec un pointeur
+# vers le panneau où les seuils sont configurés, JAMAIS avec des chiffres
+# supposés. Le moteur (`sc_pipeline_qc`, sc_pipeline.R:237-245) porte le
+# snapshot exact (min_genes/max_genes/max_mt + n_removed/n_remaining) — la
+# capture est faite aux 4 sites de lancement de mod_sc.R (voir serveur).
+.sc_qc_threshold_lines <- function(applied) {
+  if (!is.list(applied) || !identical(applied$source, "auto")) return(NULL)
+  num <- function(x) suppressWarnings(as.numeric(if (is.null(x)) NA_real_ else x))
+  rows <- list()
+  add_line <- function(feature, y, label) {
+    if (length(y) != 1L || is.na(y) || !is.finite(y)) return(invisible(NULL))
+    rows[[length(rows) + 1L]] <<- data.frame(
+      feature = feature, y = as.numeric(y), label = label,
+      stringsAsFactors = FALSE)
+  }
+  add_line("nFeature_RNA", num(applied$min_genes), "min")
+  add_line("nFeature_RNA", num(applied$max_genes), "max")
+  add_line("percent.mt",   num(applied$max_mt),    "max")
+  if (!length(rows)) NULL else do.call(rbind, rows)
+}
+
+# Violons QC avec seuils tracés : SEULE la présentation change — le rendu
+# Seurat (VlnPlot, groupement par identité, pt.size = 0, palette cohérente
+# avec l'UMAP — point positif à préserver du live audit §3) est conservé
+# feature par feature ; patchwork (déjà requis par Seurat, global.R:73)
+# réassemble en une ligne de 3. Une feature absente du meta.data est ignorée
+# au lieu de faire échouer le rendu.
+.sc_qc_violin_plot <- function(obj, applied) {
+  feats <- intersect(c("nFeature_RNA", "nCount_RNA", "percent.mt"),
+                     colnames(obj@meta.data))
+  if (!length(feats)) {
+    return(ggplot2::ggplot() +
+      ggplot2::annotate("text", x = 0.5, y = 0.5,
+                        label = "Aucune métrique QC (nFeature_RNA / nCount_RNA / percent.mt) dans meta.data",
+                        size = 4) +
+      ggplot2::theme_void())
+  }
+  lines <- .sc_qc_threshold_lines(applied)
+  plots <- lapply(feats, function(f) {
+    p <- Seurat::VlnPlot(obj, features = f, pt.size = 0)
+    if (!is.null(lines)) {
+      lf <- lines[lines$feature == f, , drop = FALSE]
+      if (nrow(lf)) {
+        p <- p + ggplot2::geom_hline(data = lf,
+                                     ggplot2::aes(yintercept = .data$y),
+                                     colour = "#C0392B", linetype = "dashed",
+                                     linewidth = 0.5)
+      }
+    }
+    p
+  })
+  if (length(plots) == 1L) return(plots[[1L]])
+  patchwork::wrap_plots(plots, ncol = 3L)
+}
+
+# Lignes de rappel : forme canonique consommée par le serveur (traduction
+# .tr) — pure et testable headless. kind = applied | manual | skipped | none.
+.sc_qc_recall_lines <- function(applied) {
+  if (is.null(applied)) return(list(kind = "none"))
+  if (isTRUE(applied$source == "manual")) return(list(kind = "manual"))
+  num <- function(x) suppressWarnings(as.numeric(if (is.null(x)) NA_real_ else x))
+  if (is.na(num(applied$min_genes))) return(list(kind = "skipped"))
+  list(kind = "applied",
+       min_genes = num(applied$min_genes), max_genes = num(applied$max_genes),
+       max_mt = num(applied$max_mt),
+       n_removed = applied$n_removed, n_remaining = applied$n_remaining)
+}
+
 mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
   ns <- NS(id)
+  # 3A (O28, UX-1) : compte QC « complet » — le log du pipeline auto est rendu
+  # dans un `pre` dont la largeur de colonne coupait la fin de ligne
+  # (« … (retirées: »). Portée au conteneur .sc-auto-log-wrap uniquement.
+  tags$style(HTML(
+    ".sc-auto-log-wrap pre { white-space: pre-wrap; overflow-wrap: anywhere; }"))
   layout_sidebar(
     sidebar = sidebar(
       # 2J (O28) : width paramétrable (voir .sc_sidebar_width ci-dessus) —
@@ -630,7 +714,14 @@ mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
                             value = "0_autopipeline",
                             actionButton(ns("btn_auto_pipeline_sc"), i18n$t("▶ Lancer Pipeline Complet (SC)"),
                                          icon = icon("play-circle"), class = "btn-outline-success w-100 mb-1"),
-                            verbatimTextOutput(ns("sc_auto_log")),
+                            # 3A (O28, UX-1) : le compte « retirées: » du log est
+                            # la valeur la plus importante du QC — `pre` ne doit
+                            # JAMAIS la couper par la largeur de colonne. Le
+                            # conteneur force le repli des lignes longues
+                            # (white-space: pre-wrap) au lieu de la troncature
+                            # mesurée (« ✓ QC : 2698 cellules (retirées: »).
+                            div(class = "sc-auto-log-wrap",
+                                verbatimTextOutput(ns("sc_auto_log"))),
                             uiOutput(ns("sc_pipeline_status_bar"))),
             accordion_panel(i18n$t("0. Mapping IDs (Optionnel)"), icon = icon("arrows-rotate"),
                             value = "0_mapping",
@@ -798,9 +889,21 @@ mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
       nav_menu(i18n$t("Différentiel & DA"),
         nav_panel(i18n$t("Pseudobulk DE"), value = "tab_pseudobulk", mod_sc_pseudobulk_output_ui(ns("pseudobulk"))),
         nav_panel(i18n$t("DA design"), value = "tab_da_design", mod_sc_da_design_output_ui(ns("da_design"))),
-        nav_panel(i18n$t("Milo DA"), value = "tab_da_milo", mod_sc_da_milo_output_ui(ns("da_milo"))),
-        nav_panel(i18n$t("scCODA DA"), value = "tab_da_sccoda", mod_sc_da_sccoda_output_ui(ns("da_sccoda"))),
-        nav_panel(i18n$t("DA croisées"), value = "tab_da_cross", mod_sc_da_cross_output_ui(ns("da_cross")))
+        # 1E (O28, spéc §2.5) : garde contextuelle single-sample — onglet
+        # VISIBLE (jamais masqué ni grisé muet), libellé 🔒 dynamique + carte
+        # d'état vide actionnable dans le canvas tant que le design validé
+        # n'atteste pas ≥ 2 conditions avec ≥ 2 échantillons réels chacune
+        # (principe sc_abundance_design.R:6-8 — « aucune pseudoreplication
+        # n'est toleree » ; O28(b) : les cellules ne sont pas des réplicats).
+        # Les `value` restent INCHANGÉS (verrous drive-watcher + contrats
+        # Milo/scCODA/cross) et les serveurs restent montés une fois pour
+        # toutes (mod_sc_da_*_server) — seule la PRÉSENTATION est gardée.
+        nav_panel(uiOutput(ns("da_milo_tab_title")), value = "tab_da_milo",
+                  uiOutput(ns("da_milo_guarded"))),
+        nav_panel(uiOutput(ns("da_sccoda_tab_title")), value = "tab_da_sccoda",
+                  uiOutput(ns("da_sccoda_guarded"))),
+        nav_panel(uiOutput(ns("da_cross_tab_title")), value = "tab_da_cross",
+                  uiOutput(ns("da_cross_guarded")))
       ),
       nav_menu(i18n$t("Réseaux & Signalisation"),
         nav_panel(i18n$t("Gènes Corrélés"), value = "tab_correlation", mod_sc_corr_output_ui(ns("corr"))),
@@ -815,6 +918,10 @@ mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
         nav_panel(i18n$t("QC"), value = "tab_qc",
           card(max_height = 750,
             div(class = "card-header bg-light", h5(i18n$t("Contrôle Qualité"), class = "card-title mb-0")),
+            # 3A (O28) : rappel des seuils RÉELLEMENT appliqués par le dernier
+            # QC (UX-1 : « les seuils appliqués ne sont rappelés nulle part »)
+            # + violons avec lignes de seuil tracées (SC-1).
+            uiOutput(ns("qc_threshold_recall")),
             plotOutput(ns("plot_qc"), height = "650px"),
             # V1.x UX multi-échantillons : sous-panneau léger, visible seulement
             # quand >= 2 échantillons (orig.ident) — barplots méta.data +
@@ -851,7 +958,132 @@ mod_sc_server <- function(id, global_data) {
     # effacerait ses propres résultats au commit final (sc_pipeline.R:402).
     observeEvent(global_data$sc_obj_epoch, {
       sc_purge_shared_results(shared_rv)
+      # 3A (O28) : les seuils « appliqués » appartiennent au run purgé —
+      # le rappel QC repart de l'état honnête « aucun QC appliqué ».
+      qc_applied_rv(NULL)
     }, ignoreInit = TRUE)
+
+    # ── 1E (O28, spéc §2.5) : garde contextuelle DA single-sample ───────────
+    # Éligibilité = design VALIDÉ (statut valid / valid_with_warnings,
+    # sc_abundance_design.R:131-134) : la validation moteur encadre déjà
+    # ≥ 2 conditions et ≥ TS_DA_MIN_REPLICATES_PER_CONDITION réplicats RÉELS
+    # par condition (sc_abundance_design.R:375-390) — on ne re-enseigne pas
+    # les seuils ici, on consomme le verdict canonique (O28(b) : les cellules
+    # ne sont pas des réplicats ; O13 : aucun réplicat fabriqué).
+    .da_design_result <- reactive({
+      if (is.null(shared_rv)) return(NULL)
+      shared_rv$da_design_result
+    })
+    .da_eligible <- reactive({
+      des <- .da_design_result()
+      !is.null(des) && isTRUE(tryCatch(da_design_status_is_valid(des$status),
+                                       error = function(e) FALSE))
+    })
+    # Compteurs HONNÊTES affichés sur la carte (mesurés, jamais simulés) :
+    # échantillons réels = orig.ident distincts de l'objet courant ;
+    # conditions déclarées = lignes du condition_summary du design.
+    .sc_da_state_counts <- function() {
+      obj <- global_data$sc_obj
+      des <- .da_design_result()
+      list(
+        n_samples = if (is.null(obj) || is.null(obj$orig.ident)) 0L
+          else length(unique(stats::na.omit(as.character(obj$orig.ident)))),
+        n_conditions = if (is.null(des) || is.null(des$condition_summary) ||
+                           !nrow(des$condition_summary)) 0L
+          else nrow(des$condition_summary),
+        design_status = if (is.null(des)) NA_character_
+          else as.character(des$status %||% NA_character_)
+      )
+    }
+    # Libellé d'onglet dynamique : 🔒 + infobulle tant que non éligible,
+    # libellé nu sinon (le badge mensonger une fois débloqué est exclu).
+    .sc_da_tab_title <- function(label) {
+      if (isTRUE(.da_eligible())) return(label)
+      tags$span(style = "opacity:0.6; cursor: not-allowed;", "\U0001F512 ",
+                bslib::tooltip(
+                  label,
+                  .tr("Nécessite au moins 2 conditions expérimentales et des réplicats biologiques — voir la carte dans l'onglet.")))
+    }
+    # Carte d'état vide actionnable (spéc §2.5 niveau 2) : POURQUOI c'est
+    # bloqué (O28(b), non négociable) + LA VOIE RÉELLE EXISTANTE + CTA.
+    # Contenu arbitré par l'opérateur (DECISIONS.md row O28 point b) — ne pas
+    # édulcorer : ≥ 2 échantillons réels par condition ; les cellules ne sont
+    # PAS des réplicats ; la voie = import multi-échantillons
+    # (mod_import_sc.R:196-234), parse des conventions A_1/B2
+    # (sc_metadata.R:86-124), table design éditable
+    # (mod_sc_metadata.R:34,:144-155) — CTA deep-link vers l'import.
+    .sc_da_lock_card <- function(module_purpose, pfx) {
+      st <- .sc_da_state_counts()
+      design_lab <- if (is.na(st$design_status)) .tr("aucun design validé")
+        else sprintf(.tr("statut « %s »"), st$design_status)
+      card(class = "border-warning my-3",
+        card_header(class = "bg-warning-subtle text-warning-emphasis",
+          icon("lock"), " ",
+          .tr("Analyse non éligible : comparaison multi-échantillons requise")),
+        card_body(
+          p(module_purpose),
+          p(strong(.tr("Pourquoi ce blocage ?")),
+            .tr("L'abondance différentielle compare des conditions ENTRE échantillons biologiques : il faut au moins 2 échantillons RÉELS par condition. Les cellules ne sont pas des réplicats — un jeu mono-échantillon, aussi volumineux soit-il, ne peut pas alimenter un test (aucune pseudoreplication tolérée).")),
+          tags$ul(class = "small",
+            tags$li(sprintf(.tr("Échantillons détectés (orig.ident) : %d"), st$n_samples)),
+            tags$li(sprintf(.tr("Conditions déclarées dans le design : %d"), st$n_conditions)),
+            tags$li(sprintf(.tr("Design expérimental : %s"), design_lab))),
+          p(strong(.tr("La voie réelle (existante) :"))),
+          tags$ol(class = "small",
+            tags$li(.tr("Import multi-échantillons — importez chaque échantillon séparément (➕ Ajouter à la liste, puis 🚀 Charger Tous les Échantillons) ; l'identité d'échantillon est préservée.")),
+            tags$li(.tr("Nommez les échantillons selon les conventions A_1 / B2 : condition et réplicat sont déduits automatiquement (« Déduire depuis les noms »), puis corrigez à la main si besoin.")),
+            tags$li(.tr("Validez le plan dans « 0.5 Métadonnées — condition / réplicat » (table design éditable) : le design validé débloque les analyses DA de cet onglet."))),
+          fluidRow(
+            column(6, tags$a(href = "#", class = "btn btn-primary w-100",
+                             onclick = .sc_root_tab_js("Single-Cell"),
+                             .tr("📥 Importer des échantillons (multi-échantillons)")),
+                   div(class = "small text-muted mt-1",
+                       .tr("Ouvre l'onglet « Import Données » → Single-Cell."))),
+            column(6, actionButton(ns(paste0(pfx, "_goto_design")),
+                                   .tr("⚙️ Ouvrir l'étape 0.5 — Métadonnées (condition / réplicat)"),
+                                   class = "btn-outline-primary w-100")))))
+    }
+    # Saut racine vers l'onglet Import Single-Cell. ⚠️ nav_select("main_nav")
+    # est un NO-OP depuis un module : makeScope préfixe sendInputMessage
+    # (shiny:::ShinySession$public_methods$makeScope — mesuré), shinyjs n'est
+    # PAS activé (aucun useShinyjs dans app.R) et l'ancre bslib est aléatoire
+    # par boot — l'activation passe donc par un onclick minimal visant le
+    # sélecteur BS5 STABLE `data-value` (mesuré : data-value="Single-Cell"
+    # sur le lien d'import, app.R:490). Le CTA design est, lui, IN-MODULE
+    # (accordéon de CETTE sidebar) — accordion_panel_open préfixé correctement.
+    .sc_root_tab_js <- function(value) {
+      sprintf(paste0("var l=document.querySelector('#main_nav [data-value=\"%s\"]');",
+                     "if(l){l.click();} return false;"), value)
+    }
+    lapply(c("da_milo", "da_sccoda", "da_cross"), function(pfx) {
+      observeEvent(input[[paste0(pfx, "_goto_design")]], {
+        try(accordion_panel_open(ns("acc_workflow"), values = "grp_prep"), silent = TRUE)
+        try(accordion_panel_open(ns("acc_prep"), values = "0_metadata"), silent = TRUE)
+      }, ignoreInit = TRUE)
+    })
+    for (da_pfx in c("da_milo", "da_sccoda", "da_cross")) {
+      output[[paste0(da_pfx, "_tab_title")]] <- renderUI({
+        .sc_da_tab_title(switch(da_pfx,
+          da_milo = .tr("Milo DA"), da_sccoda = .tr("scCODA DA"),
+          da_cross = .tr("DA croisées")))
+      })
+      output[[paste0(da_pfx, "_guarded")]] <- renderUI({
+        if (isTRUE(.da_eligible())) {
+          switch(da_pfx,
+            da_milo = mod_sc_da_milo_output_ui(ns("da_milo")),
+            da_sccoda = mod_sc_da_sccoda_output_ui(ns("da_sccoda")),
+            da_cross = mod_sc_da_cross_output_ui(ns("da_cross")))
+        } else {
+          purpose <- switch(da_pfx,
+            da_milo = .tr("Milo DA évalue l'abondance différentielle PAR VOISINAGE entre au moins deux conditions expérimentales."),
+            da_sccoda = .tr("scCODA DA modélise la composition cellulaire entre au moins deux conditions expérimentales."),
+            da_cross = .tr("Les DA croisées comparent les mêmes voies entre paires de conditions distinctes."))
+          # Ids PAR PRÉFIXE : les trois panneaux coexistent dans le DOM
+          # (navset) — un id partagé ferait un doublon de binding Shiny.
+          .sc_da_lock_card(purpose, da_pfx)
+        }
+      })
+    }
 
     # ── i18n: update report section choices on language switch ──────────────
     observeEvent(global_data$language, {
@@ -884,12 +1116,57 @@ mod_sc_server <- function(id, global_data) {
       nav_select(id="main_tabs", selected=state_get(shared_rv, "active_tab"), session=session)
     })
 
-    # ── QC plot ──────────────────────────────────────────────────────────────
+    # ── 3A (O28) : seuils QC appliqués — capture, violons tracés, rappel ────
+    # État MODULE-LOCAL (aucun champ ad hoc dans shared_rv — règle state.R:19-22,
+    # fabrique hors périmètre B2). Forme : list(source = "auto"|"manual",
+    # min_genes, max_genes, max_mt, n_removed, n_remaining) ou NULL.
+    qc_applied_rv <- reactiveVal(NULL)
+    # Capture aux lancements du PIPELINE AUTO : les valeurs passées au moteur
+    # (normalisées par sc_ap_normalize_params) SONT celles que sc_pipeline_qc
+    # appliquera — le snapshot moteur (res$qc_snapshot) les confirme au
+    # retour avec les comptes (n_removed/n_remaining).
+    .sc_qc_capture_applied <- function(params) {
+      qc_applied_rv(list(
+        source     = "auto",
+        min_genes  = params$sc_ap_min_gene %||% NA_real_,
+        max_genes  = params$sc_ap_max_gene %||% NA_real_,
+        max_mt     = params$sc_ap_mt %||% NA_real_,
+        n_removed  = NA_integer_, n_remaining = NA_integer_))
+    }
+    # Run MANUEL détecté par l'écriture du qc_snapshot (data.frame par
+    # échantillon — mod_sc_pipeline.R:363) : ses sliders vivent dans ce
+    # module-hors-périmètre, leurs valeurs ne sont PAS devinables ici — le
+    # rappel pointe vers le panneau, sans chiffres fabriqués.
+    observeEvent(state_get(shared_rv, "qc_snapshot"), {
+      if (is.data.frame(state_get(shared_rv, "qc_snapshot"))) {
+        qc_applied_rv(list(source = "manual"))
+      }
+    }, ignoreInit = TRUE)
+
     output$plot_qc <- renderPlot({
       req(global_data$sc_obj)
-      VlnPlot(global_data$sc_obj,
-              features=c("nFeature_RNA","nCount_RNA","percent.mt"), ncol=3, pt.size=0)
+      .sc_qc_violin_plot(global_data$sc_obj, qc_applied_rv())
     })
+
+    output$qc_threshold_recall <- renderUI({
+      if (is.null(global_data$sc_obj)) return(NULL)
+      rec <- .sc_qc_recall_lines(qc_applied_rv())
+      txt <- switch(rec$kind,
+        applied = {
+          base <- sprintf(.tr("Seuils QC appliqués (dernier pipeline auto) : nFeature_RNA > %s · nFeature_RNA < %s · %% Mito < %s%%"),
+                          format(rec$min_genes), format(rec$max_genes), format(rec$max_mt))
+          counts <- if (is.na(as.numeric(rec$n_removed %||% NA_integer_))) ""
+            else sprintf(.tr(" — cellules retirées : %s, conservées : %s."),
+                         format(rec$n_removed), format(rec$n_remaining))
+          paste0(base, counts, " ", .tr("Les lignes rouges pointillées sur les violons matérialisent ces seuils."))
+        },
+        manual = .tr("Le dernier QC a été lancé depuis le panneau « 1. Pipeline » : ses seuils (Min Gènes / Max Gènes / % Mito Max) y sont configurés et appliqués à cet endroit — ils ne sont pas rappelés chiffrés ici pour ne pas afficher des valeurs supposées."),
+        skipped = .tr("QC ignoré par le dernier pipeline (matrice pré-filtrée fournie) : aucun seuil appliqué, aucune ligne tracée."),
+        none = .tr("Aucun QC appliqué pour l'instant — lancez le Pipeline (auto ou « 1. Pipeline ») : les seuils appliqués s'afficheront ici et seront tracés sur les violons."))
+      div(class = "alert alert-light", style = "font-size:0.82em;padding:6px;",
+          icon("ruler-horizontal"), " ", txt)
+    })
+
 
     # ── V1.x UX multi-échantillons : vue d'ensemble (≥ 2 orig.ident) ─────────
     # Lectures pures de l'état existant : barplots depuis méta.data, projets
@@ -1396,6 +1673,24 @@ mod_sc_server <- function(id, global_data) {
               .close_sc_ap_drive_job("error", error = clean_msg)
             }
           } else {
+            # 3A (O28) : confirmation par le snapshot MOTEUR — les valeurs
+            # appliquées (sc_pipeline.R:237-245) remplacent la capture du
+            # lancement, avec les comptes réels (retirées/conservées). Un QC
+            # sauté (matrice pré-filtrée) capture des NA : le rappel affiche
+            # alors « aucun seuil appliqué » au lieu d'un chiffre supposé.
+            qcs <- res$qc_snapshot
+            if (is.list(qcs) && !is.null(qcs$min_genes)) {
+              qc_applied_rv(list(
+                source = "auto",
+                min_genes = qcs$min_genes, max_genes = qcs$max_genes,
+                max_mt = qcs$max_mt,
+                n_removed = qcs$n_removed %||% NA_integer_,
+                n_remaining = qcs$n_remaining %||% NA_integer_))
+            } else {
+              qc_applied_rv(list(source = "auto", min_genes = NA_real_,
+                                 max_genes = NA_real_, max_mt = NA_real_,
+                                 n_removed = NA_integer_, n_remaining = NA_integer_))
+            }
             if (!is.null(res$obj)) {
               global_data$sc_obj <- res$obj
               if ("pseudotime" %in% colnames(res$obj@meta.data)) {
@@ -1457,12 +1752,17 @@ mod_sc_server <- function(id, global_data) {
 
       if (pool_ok) {
         params <- sc_ap_normalize_params(as.list(input))
+        # 3A (O28) : capture des seuils réellement passés au moteur.
+        .sc_qc_capture_applied(params)
         obj <- shiny::isolate(global_data$sc_obj)
         cat("", file = sc_ap_log_file)
         sc_task_context(list(mode = "ui", job_id = NULL, params = params, obj_before = obj))
         drive_run_state("running")
         sc_pipeline_task$invoke(obj, params, sc_ap_log_file)
       } else {
+        # 3A (O28) : capture AVANT le run direct (les mêmes normalisations que
+        # le moteur — valeurs identiques à celles que sc_pipeline_qc applique).
+        .sc_qc_capture_applied(sc_ap_normalize_params(as.list(input)))
         tryCatch(
           run_sc_auto_pipeline(input, global_data, shared_rv, session, sc_log_rv),
           error = function(e) NULL
@@ -1486,13 +1786,21 @@ mod_sc_server <- function(id, global_data) {
 
       if (pool_ok) {
         params <- .sc_ap_drive_inputs()
+        # 3A (O28) : capture des seuils du scenario drive (normalisés comme
+        # le moteur les consomme).
+        .sc_qc_capture_applied(sc_ap_normalize_params(params))
         obj <- shiny::isolate(global_data$sc_obj)
         cat("", file = sc_ap_log_file)
         sc_task_context(list(mode = "drive", job_id = drive_job$id, params = params, obj_before = obj))
         sc_pipeline_task$invoke(obj, params, sc_ap_log_file)
       } else {
+        # 3A (O28) : repli synchrone — mêmes garanties que la voie pool. Les
+        # entrées drive sont lues UNE fois (capture == exécution, jamais deux
+        # lectures d'un scénario qui pourrait différer).
+        drive_inputs <- .sc_ap_drive_inputs()
+        .sc_qc_capture_applied(sc_ap_normalize_params(drive_inputs))
         res <- .sc_ap_run_drive(global_data, shared_rv, session, sc_log_rv,
-                                .close_sc_ap_drive_job)
+                                .close_sc_ap_drive_job, inputs = drive_inputs)
         drive_last_steps$value <- res$steps
         drive_run_state(res$status)
       }

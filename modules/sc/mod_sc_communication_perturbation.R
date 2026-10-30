@@ -114,6 +114,17 @@ mod_sc_communication_perturbation_server <- function(id, comm_state, global_data
       .update_value_choices()
     }, ignoreInit = TRUE)
 
+    # ── 3F (O28, spéc §2.18) : garde préventive + jauge ─────────────────────
+    # Sans résultat de communication importé, la simulation n'a AUCUNE table à
+    # perturber : le bouton est désactivé AVANT le clic (l'erreur du moteur
+    # reste en seconde ligne de défense). Le clic déclenche la jauge — le
+    # constat 3F mesurait 0 withProgress ici alors que l'évaluation porte sur
+    # toutes les interactions importées (gel perçu de la session).
+    observeEvent(comm_state$result, {
+      shiny::updateActionButton(session, "pert_compute",
+                                disabled = is.null(comm_state$result))
+    })
+
     output$pert_target_info <- renderText({
       req(comm_state$result)
       t <- .node_table()
@@ -125,14 +136,19 @@ mod_sc_communication_perturbation_server <- function(id, comm_state, global_data
     observeEvent(input$pert_compute, {
       .guard_stale()
       tryCatch({
-        ctx <- build_communication_perturbation(
-          comm_state$result,
-          target = input$pert_target,
-          value  = input$pert_value,
-          mode   = input$pert_mode,
-          factor = if (identical(input$pert_mode, "attenuate"))
-            input$pert_factor %||% 0.5 else 0.5
-        )
+        # 3F (O28, spéc §2.18 point 3) : la simulation est encapsulée dans
+        # withProgress (« Simulation de perturbation in silico... ») pour
+        # éviter tout gel perçu de la session R.
+        ctx <- withProgress(message = .tr("Simulation de perturbation in silico..."), value = 0.4, {
+          build_communication_perturbation(
+            comm_state$result,
+            target = input$pert_target,
+            value  = input$pert_value,
+            mode   = input$pert_mode,
+            factor = if (identical(input$pert_mode, "attenuate"))
+              input$pert_factor %||% 0.5 else 0.5
+          )
+        })
         pert_ctx(ctx)
         if (!is.null(shared_rv)) provenance_append(shared_rv, ctx$provenance)
         showNotification(

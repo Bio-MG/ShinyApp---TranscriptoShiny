@@ -11200,6 +11200,170 @@
     {
       "fr": "Navigation CCC",
       "en": "CCC navigation"
+    },
+    {
+      "fr": "Nécessite au moins 2 conditions expérimentales et des réplicats biologiques — voir la carte dans l'onglet.",
+      "en": "Requires at least 2 experimental conditions and biological replicates — see the card inside the tab."
+    },
+    {
+      "fr": "Analyse non éligible : comparaison multi-échantillons requise",
+      "en": "Analysis not eligible: multi-sample comparison required"
+    },
+    {
+      "fr": "Pourquoi ce blocage ?",
+      "en": "Why is this blocked?"
+    },
+    {
+      "fr": "L'abondance différentielle compare des conditions ENTRE échantillons biologiques : il faut au moins 2 échantillons RÉELS par condition. Les cellules ne sont pas des réplicats — un jeu mono-échantillon, aussi volumineux soit-il, ne peut pas alimenter un test (aucune pseudoreplication tolérée).",
+      "en": "Differential abundance compares conditions ACROSS biological samples: at least 2 REAL samples per condition are required. Cells are not replicates — a single-sample dataset, however large, cannot feed a test (no pseudoreplication allowed)."
+    },
+    {
+      "fr": "Échantillons détectés (orig.ident) : %d",
+      "en": "Samples detected (orig.ident): %d"
+    },
+    {
+      "fr": "Conditions déclarées dans le design : %d",
+      "en": "Conditions declared in the design: %d"
+    },
+    {
+      "fr": "Design expérimental : %s",
+      "en": "Experimental design: %s"
+    },
+    {
+      "fr": "aucun design validé",
+      "en": "no validated design"
+    },
+    {
+      "fr": "statut « %s »",
+      "en": "status '%s'"
+    },
+    {
+      "fr": "La voie réelle (existante) :",
+      "en": "The real (existing) path:"
+    },
+    {
+      "fr": "Import multi-échantillons — importez chaque échantillon séparément (➕ Ajouter à la liste, puis 🚀 Charger Tous les Échantillons) ; l'identité d'échantillon est préservée.",
+      "en": "Multi-sample import — import each sample separately (Add to list, then Load All Samples); the sample identity is preserved."
+    },
+    {
+      "fr": "Nommez les échantillons selon les conventions A_1 / B2 : condition et réplicat sont déduits automatiquement (« Déduire depuis les noms »), puis corrigez à la main si besoin.",
+      "en": "Name samples using the A_1 / B2 conventions: condition and replicate are inferred automatically ('Infer from names'), then adjust by hand if needed."
+    },
+    {
+      "fr": "Validez le plan dans « 0.5 Métadonnées — condition / réplicat » (table design éditable) : le design validé débloque les analyses DA de cet onglet.",
+      "en": "Validate the plan in '0.5 Metadata — condition / replicate' (editable design table): the validated design unlocks the DA analyses of this tab."
+    },
+    {
+      "fr": "📥 Importer des échantillons (multi-échantillons)",
+      "en": "Import samples (multi-sample)"
+    },
+    {
+      "fr": "Ouvre l'onglet « Import Données » → Single-Cell.",
+      "en": "Opens the 'Data Import' tab → Single-Cell."
+    },
+    {
+      "fr": "⚙️ Ouvrir l'étape 0.5 — Métadonnées (condition / réplicat)",
+      "en": "Open step 0.5 — Metadata (condition / replicate)"
+    },
+    {
+      "fr": "Milo DA évalue l'abondance différentielle PAR VOISINAGE entre au moins deux conditions expérimentales.",
+      "en": "Milo DA evaluates differential abundance BY NEIGHBOURHOOD between at least two experimental conditions."
+    },
+    {
+      "fr": "scCODA DA modélise la composition cellulaire entre au moins deux conditions expérimentales.",
+      "en": "scCODA DA models the cellular composition between at least two experimental conditions."
+    },
+    {
+      "fr": "Les DA croisées comparent les mêmes voies entre paires de conditions distinctes.",
+      "en": "Cross DA compares the same pathways across distinct condition pairs."
+    },
+    {
+      "fr": "Seuils QC appliqués (dernier pipeline auto) : nFeature_RNA > %s · nFeature_RNA < %s · %% Mito < %s%%",
+      "en": "QC thresholds applied (last auto pipeline): nFeature_RNA > %s · nFeature_RNA < %s · %% Mito < %s%%"
+    },
+    {
+      "fr": " — cellules retirées : %s, conservées : %s.",
+      "en": " — cells removed: %s, kept: %s."
+    },
+    {
+      "fr": "Les lignes rouges pointillées sur les violons matérialisent ces seuils.",
+      "en": "The red dashed lines on the violins materialise these thresholds."
+    },
+    {
+      "fr": "Le dernier QC a été lancé depuis le panneau « 1. Pipeline » : ses seuils (Min Gènes / Max Gènes / % Mito Max) y sont configurés et appliqués à cet endroit — ils ne sont pas rappelés chiffrés ici pour ne pas afficher des valeurs supposées.",
+      "en": "The last QC was run from the '1. Pipeline' panel: its thresholds (Min Genes / Max Genes / % Mito Max) are configured and applied there — they are not recalled numerically here so as not to display assumed values."
+    },
+    {
+      "fr": "QC ignoré par le dernier pipeline (matrice pré-filtrée fournie) : aucun seuil appliqué, aucune ligne tracée.",
+      "en": "QC skipped by the last pipeline (pre-filtered matrix provided): no threshold applied, no line drawn."
+    },
+    {
+      "fr": "Aucun QC appliqué pour l'instant — lancez le Pipeline (auto ou « 1. Pipeline ») : les seuils appliqués s'afficheront ici et seront tracés sur les violons.",
+      "en": "No QC applied yet — run the Pipeline (auto or '1. Pipeline'): the applied thresholds will be listed here and drawn on the violins."
+    },
+    {
+      "fr": "Score minimum — sans objet pour LIANA (un rang n'est pas un score : utiliser Rang maximum)",
+      "en": "Minimum score — not applicable to LIANA (a rank is not a score: use Maximum rank)"
+    },
+    {
+      "fr": "Rang agrégé [1 - N] (1 = plus significatif)",
+      "en": "Aggregate rank [1 - N] (1 = most significant)"
+    },
+    {
+      "fr": "Rang maximum — sans objet pour CellPhoneDB (utiliser le score)",
+      "en": "Maximum rank — not applicable to CellPhoneDB (use the score)"
+    },
+    {
+      "fr": "Moyenne d'expression [0.0 - Max]",
+      "en": "Mean expression [0.0 - Max]"
+    },
+    {
+      "fr": "Probabilité de communication [0.0 - 1.0]",
+      "en": "Communication probability [0.0 - 1.0]"
+    },
+    {
+      "fr": "Rang maximum — sans objet pour CellChat (utiliser le score)",
+      "en": "Maximum rank — not applicable to CellChat (use the score)"
+    },
+    {
+      "fr": "Le calcul de contexte nécessite des vecteurs de vélocité précalculés complets — aucun résultat velocity importé.",
+      "en": "The context computation requires complete pre-computed velocity vectors — no velocity result imported."
+    },
+    {
+      "fr": "Le calcul de contexte nécessite des vecteurs de vélocité précalculés complets (absents dans l'import actuel).",
+      "en": "The context computation requires complete pre-computed velocity vectors (absent from the current import)."
+    },
+    {
+      "fr": "Statut velocity « %s » : vecteurs inutilisables — réimportez depuis le panneau Vélocité (8.6).",
+      "en": "Velocity status '%s': unusable vectors — re-import from the Velocity panel (8.6)."
+    },
+    {
+      "fr": "Calcul du contexte vélocité...",
+      "en": "Computing the velocity context..."
+    },
+    {
+      "fr": "Aucune colonne pseudotime_slingshot_* : le mode lignée est indisponible — retour au mode global.",
+      "en": "No pseudotime_slingshot_* column: lineage mode is unavailable — back to global mode."
+    },
+    {
+      "fr": "Aucune colonne pseudotime_slingshot_* : le mode lignée est indisponible — seul le mode global (toutes cellules) est calculable.",
+      "en": "No pseudotime_slingshot_* column: lineage mode is unavailable — only global mode (all cells) can be computed."
+    },
+    {
+      "fr": "Aucune colonne de pseudo-temps dans l'objet courant : lancez d'abord Trajectoire (8.4) pour calculer le pseudo-temps, puis revenez ici.",
+      "en": "No pseudotime column in the current object: run Trajectory (8.4) first to compute pseudotime, then come back here."
+    },
+    {
+      "fr": "Calcul du contexte trajectoire...",
+      "en": "Computing the trajectory context..."
+    },
+    {
+      "fr": "Simulation de perturbation in silico...",
+      "en": "In silico perturbation simulation..."
+    },
+    {
+      "fr": "Objet CellChat (.rds) : extraction de resultats deja calcules uniquement ; les paires ligand-receptor sont appariées EXACTEMENT sur @LR$LRsig (ligand, receptor, pathway_name) — aucune reconstruction heuristique ; un @LR$LRsig absent est remonté comme « engine_failure » explicite.",
+      "en": "CellChat (.rds) object: extraction of pre-computed results only; ligand-receptor pairs are matched EXACTLY against @LR$LRsig (ligand, receptor, pathway_name) — no heuristic reconstruction; a missing @LR$LRsig is reported as an explicit engine_failure."
     }
   ]
 }

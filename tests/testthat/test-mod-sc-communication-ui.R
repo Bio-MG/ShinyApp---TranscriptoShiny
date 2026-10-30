@@ -54,7 +54,7 @@ test_that("2G : plus aucune bannière alert-* empilée — la seule restante est
   expect_identical(.n_hits(src, "badge bg-secondary"), 2L)
 })
 
-test_that("2G : les 5 textes d'origine sont préservés VERBATIM (coordination 3D)", {
+test_that("2G : les textes d'origine sont préservés VERBATIM (coordination 3D — B2 a corrigé la 5ᵉ)", {
   src <- paste(readLines(file.path(ts_project_root(), .MSCC_UI_FILE),
                          warn = FALSE, encoding = "UTF-8"), collapse = "\n")
   expect_match(src, "Validite technique uniquement : un import valide n'implique aucune validite biologique.",
@@ -65,9 +65,13 @@ test_that("2G : les 5 textes d'origine sont préservés VERBATIM (coordination 3
                fixed = TRUE)
   expect_match(src, "Les labels sans correspondance exacte dans la colonne choisie sont conserves tels quels et listes — jamais renommes.",
                fixed = TRUE)
-  # 5ᵉ texte = objet du constat 3D (batch B2) — VERBATIM ici, jamais reformulé :
-  expect_match(src, "Objet CellChat (.rds) : extraction de resultats deja calcules uniquement — le mapping ligand-receptor vers pathway n'est pas reconstitue.",
-               fixed = TRUE)
+  # 5ᵉ texte = objet du constat 3D — corrigé par B2 (O28, 2026-10-31) : le
+  # verrou B3 « verbatim jamais reformulé » s'appliquait TANT QUE B2 n'était
+  # pas passé ; le texte est désormais celui aligné sur le moteur (test 3D
+  # ci-dessous), l'ancien texte faux ne doit plus exister nulle part.
+  expect_match(src, "appari\u00e9es EXACTEMENT sur @LR$LRsig", fixed = TRUE)
+  expect_identical(.n_hits(src, "le mapping ligand-receptor vers pathway n'est pas reconstitue"), 0L,
+                   info = "l'ancien texte (drift UI/code) subsiste")
 })
 
 # =============================================================================
@@ -198,7 +202,38 @@ test_that("2L : tiroir offcanvas secondaire — pastille, .offcanvas, sauts, zé
   # ZÉRO duplication des filtres (arbitrage 2I : instance unique dans
   # l'accordéon ; le tiroir ne porte que le résumé + la navigation). Compte
   # mesuré : 1 UI (accordéon) + 2 updateNumericInput (reset état / échantillon)
-  # + 1 input$ (comm_filtered) — toute 5ᵉ occurrence serait un doublon.
-  expect_identical(.n_hits(src, 'comm_f_score_min'), 4L,
-                   info = "occurrences comm_f_score_min (1 UI + 2 updates + 1 input$)")
+  # + 1 input$ (comm_filtered) + 4 updateNumericInput 3F (O28, 2026-10-31 :
+  # normalisation contextuelle score/rang par source — spéc §2.18 point 4 ;
+  # branches NULL, LIANA, CellPhoneDB, défaut CellChat) — coordonné B4↔B2 :
+  # chaque occurrence sert UN des deux rôles (rendu / reset / consommation /
+  # adaptation par source), aucune n'en duplique un autre.
+  expect_identical(.n_hits(src, 'comm_f_score_min'), 8L,
+                   info = "occurrences comm_f_score_min (1 UI + 2 resets + 1 input$ + 4 updates 3F)")
+})
+
+
+# =============================================================================
+# B2 (O28, 2026-10-31) — item 3D : la bannière « Limites » est alignée sur le
+# moteur. Constat 3D (packet round-7 ; correctif 3D RÉFUTÉ round 2 jamais
+# posé) : le texte affirmait « le mapping ligand-receptor vers pathway n'est
+# pas reconstitue » alors que le moteur le résout par appariement EXACT sur
+# @LR$LRsig (sc_communication_engine.R:260-268) et remonte un engine_failure
+# explicite quand @LR$LRsig est absent (sc_communication_engine.R:238-243).
+# Formulation de la spéc §2.16 (tranchée à l'implémentation, comme autorisé).
+# ⚠️ B4 (pastille offcanvas de l'en-tête) et B5 (surface « Harmonisation
+# identites ») restent intacts — la correction ne touche que le TEXTE de la
+# 5ᵉ puce de l'onglet « Limites » (ccc_tab_limites).
+# =============================================================================
+test_that("3D : la bannière RDS CellChat est alignée sur le moteur (exact match + engine_failure)", {
+  src <- paste(readLines(file.path(ts_project_root(), .MSCC_UI_FILE),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  # Le moteur résout ligand/receptor/pathway par appariement EXACT :
+  expect_match(src, "appari\u00e9es EXACTEMENT sur @LR$LRsig (ligand, receptor, pathway_name)",
+               fixed = TRUE)
+  expect_match(src, "aucune reconstruction heuristique", fixed = TRUE)
+  # Le comportement d'échec documenté du moteur est ÉNONCÉ (pas nié) :
+  expect_match(src, "engine_failure", fixed = TRUE)
+  # Le texte faux (prémisse réfutée round 2) a disparu de TOUT le fichier :
+  expect_identical(.n_hits(src, "n'est pas reconstitue"), 0L,
+                   info = "l'ancien texte contredisant le moteur subsiste")
 })

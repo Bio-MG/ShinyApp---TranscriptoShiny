@@ -31,6 +31,12 @@ mod_sc_communication_trajectory_ui <- function(id) {
                              value = 10, min = 2, max = 100, step = 1, width = "100%"))),
     div(class = "small text-muted mb-2",
         i18n$t("Mode par lignée : chaque cellule est rattachée à la première colonne pseudotime_slingshot_* finie (point de branchement = première lignée). Les lignées ne sont jamais collapsées.")),
+    # 3F (O28, spéc §2.18 point 2) : garde PRÉVENTIVE — bandeau + bouton
+    # désactivé avant tout clic quand aucune colonne de pseudo-temps n'est
+    # disponible ; le mode lignée bascule automatiquement sur global quand
+    # aucune colonne pseudotime_slingshot_* n'existe (l'ancienne garde —
+    # stop :152 — était post-clic uniquement).
+    uiOutput(ns("trj_guard")),
     actionButton(ns("trj_compute"), i18n$t("Calculer le contexte trajectoire"),
                  class = "btn-primary w-100", icon = icon("chart-line")),
     div(class = "small text-muted mt-1", textOutput(ns("trj_status"))),
@@ -96,6 +102,55 @@ mod_sc_communication_trajectory_server <- function(id, comm_state, global_data, 
                         selected = if ("RNA" %in% assays) "RNA" else assays[1])
     }, ignoreInit = FALSE)
 
+    # ── 3F (O28, spéc §2.18 point 2) : garde préventive trajectoire ──────────
+    # (1) Sans colonne de pseudo-temps : bandeau + bouton désactivé (le clic
+    #     ne peut plus provoquer le stop brut « Choisissez d'abord une colonne
+    #     de pseudo-temps » — il reste en seconde ligne de défense).
+    # (2) Sans colonne pseudotime_slingshot_* : le mode lignée est
+    #     IMPOSSIBLE — bascule automatique vers le mode global (option
+    #     documentée de la spéc) + bandeau explicite, jamais d'erreur brute.
+    .trj_meta_cols <- reactive({
+      obj <- global_data$sc_obj
+      if (is.null(obj)) character(0) else colnames(obj@meta.data)
+    })
+    .trj_has_pseudotime <- function(meta_cols) {
+      any(grepl("^pseudotime", meta_cols))
+    }
+    .trj_has_lineages <- function(meta_cols) {
+      any(grepl("^pseudotime_slingshot_", meta_cols))
+    }
+    observeEvent(.trj_meta_cols(), {
+      mc <- .trj_meta_cols()
+      shiny::updateActionButton(session, "trj_compute", disabled = !.trj_has_pseudotime(mc))
+      if (!.trj_has_lineages(mc) && isTRUE(input$trj_lineage_mode == "per_lineage")) {
+        updateRadioButtons(session, "trj_lineage_mode", selected = "global")
+      }
+    })
+    # Bascule de sécurité au CHANGEMENT du sélecteur aussi : un mode lignée
+    # sélectionné à la main reste possible, mais s'il est manifestement
+    # indisponible (aucune colonne slingshot), on l'empêche avant le clic.
+    observeEvent(input$trj_lineage_mode, {
+      if (identical(input$trj_lineage_mode, "per_lineage") &&
+          !.trj_has_lineages(.trj_meta_cols())) {
+        updateRadioButtons(session, "trj_lineage_mode", selected = "global")
+        showNotification(
+          .tr("Aucune colonne pseudotime_slingshot_* : le mode lignée est indisponible — retour au mode global."),
+          type = "warning", duration = 6)
+      }
+    }, ignoreInit = TRUE)
+    output$trj_guard <- renderUI({
+      mc <- .trj_meta_cols()
+      if (.trj_has_pseudotime(mc)) {
+        if (.trj_has_lineages(mc)) return(NULL)
+        return(div(class = "alert alert-info", style = "font-size:0.85em;padding:6px;",
+                   icon("circle-info"), " ",
+                   .tr("Aucune colonne pseudotime_slingshot_* : le mode lignée est indisponible — seul le mode global (toutes cellules) est calculable.")))
+      }
+      div(class = "alert alert-info", style = "font-size:0.85em;padding:6px;",
+          icon("circle-info"), " ",
+          .tr("Aucune colonne de pseudo-temps dans l'objet courant : lancez d'abord Trajectoire (8.4) pour calculer le pseudo-temps, puis revenez ici."))
+    })
+
     # Rattachement des lignées : première colonne pseudotime_slingshot_*
     # finie par cellule (convention documentée dans l'UI).
     .lineage_vector <- function() {
@@ -154,21 +209,26 @@ mod_sc_communication_trajectory_server <- function(id, comm_state, global_data, 
         table_use <- comm_state$result$canonical_table
         genes_needed <- unique(c(stats::na.omit(table_use$ligand),
                                  stats::na.omit(table_use$receptor)))
-        expr <- communication_fetch_expression_matrix(
-          global_data$sc_obj, genes = genes_needed, assay = input$trj_assay %||% "RNA"
-        )
-        if (!is.null(comm_state$context_cells)) {
-          expr <- expr[, colnames(expr) %in% as.character(comm_state$context_cells), drop = FALSE]
-        }
-        ctx <- build_communication_trajectory_context(
-          comm_state$result,
-          expression_matrix = expr,
-          cell_identities   = idents,
-          pseudotime        = pt,
-          lineage           = lineage,
-          identity_column   = comm_state$result$identity_column,
-          n_bins            = as.integer(input$trj_nbins %||% 10L)
-        )
+        # 3F (O28, spéc §2.18) : jauge de progression — le constat 3F mesurait
+        # 0 withProgress dans ce module (extraction d'expression + binning,
+        # gel perçu de la session).
+        ctx <- withProgress(message = .tr("Calcul du contexte trajectoire..."), value = 0.4, {
+          expr <- communication_fetch_expression_matrix(
+            global_data$sc_obj, genes = genes_needed, assay = input$trj_assay %||% "RNA"
+          )
+          if (!is.null(comm_state$context_cells)) {
+            expr <- expr[, colnames(expr) %in% as.character(comm_state$context_cells), drop = FALSE]
+          }
+          build_communication_trajectory_context(
+            comm_state$result,
+            expression_matrix = expr,
+            cell_identities   = idents,
+            pseudotime        = pt,
+            lineage           = lineage,
+            identity_column   = comm_state$result$identity_column,
+            n_bins            = as.integer(input$trj_nbins %||% 10L)
+          )
+        })
         trj_ctx(ctx)
         if (!is.null(shared_rv)) provenance_append(shared_rv, ctx$provenance)
         pairs <- paste(ctx$pair_bin_table$sender_node, ctx$pair_bin_table$receiver_node, sep = "\r")
