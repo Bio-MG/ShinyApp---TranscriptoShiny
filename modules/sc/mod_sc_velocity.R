@@ -115,15 +115,31 @@ mod_sc_velocity_ui <- function(id) {
     hr(),
     selectInput(ns("velocity_gene"), i18n$t("Gene pour phase portrait"), choices = character(0)),
     selectInput(ns("velocity_reduction"), i18n$t("Reduction pour vecteurs"), choices = c("umap", "pca")),
-    downloadButton(ns("dl_velocity_provenance"), i18n$t("Exporter provenance (CSV)"), class = "btn-sm btn-info w-100 mt-1"),
-    downloadButton(ns("dl_velocity_summary"), i18n$t("Exporter resume validation (CSV)"), class = "btn-sm btn-info w-100 mt-1"),
-    downloadButton(ns("dl_velocity_mapping"), i18n$t("Exporter alignement cellules/genes (CSV)"), class = "btn-sm btn-info w-100 mt-1"),
-    downloadButton(ns("dl_velocity_result_rds"), i18n$t("Exporter resultat valide (RDS)"), class = "btn-sm btn-info w-100 mt-1"),
-    downloadButton(ns("dl_velocity_phase_png"), i18n$t("Exporter phase portrait (PNG)"), class = "btn-sm btn-info w-100 mt-1"),
-    downloadButton(ns("dl_velocity_phase_pdf"), i18n$t("Exporter phase portrait (PDF)"), class = "btn-sm btn-info w-100 mt-1"),
-    downloadButton(ns("dl_velocity_embedding_png"), i18n$t("Exporter embedding (PNG)"), class = "btn-sm btn-info w-100 mt-1"),
-    downloadButton(ns("dl_velocity_embedding_pdf"), i18n$t("Exporter embedding (PDF)"), class = "btn-sm btn-info w-100 mt-1"),
-    downloadButton(ns("dl_velocity_cell_vectors"), i18n$t("Exporter vecteurs par cellule (CSV)"), class = "btn-sm btn-info w-100 mt-1")
+    # 2C (O28) : les 9 downloadButton empilés (constat 2C, packet round-7 :
+    # `grep -c downloadButton` -> 9) sont regroupés en 2 dropdownButton compacts
+    # (spéc §2.8) — « 📊 Graphiques » (phase portrait + embedding, PNG/PDF) et
+    # « 💾 Données & Provenance » (provenance, résumé validation, alignement,
+    # vecteurs par cellule, RDS complet). Les ID des handlers dl_velocity_* sont
+    # INCHANGÉS : aucun contrat serveur ne bouge, seul l'habillage UI change.
+    shinyWidgets::dropdownButton(
+      inputId = ns("velocity_export_plots_menu"),
+      label = i18n$t("📊 Exporter les Graphiques"),
+      circle = FALSE, status = "info", width = "100%",
+      div(class = "d-grid gap-2",
+          downloadButton(ns("dl_velocity_phase_png"), i18n$t("Exporter phase portrait (PNG)"), class = "btn-sm btn-info w-100"),
+          downloadButton(ns("dl_velocity_phase_pdf"), i18n$t("Exporter phase portrait (PDF)"), class = "btn-sm btn-info w-100"),
+          downloadButton(ns("dl_velocity_embedding_png"), i18n$t("Exporter embedding (PNG)"), class = "btn-sm btn-info w-100"),
+          downloadButton(ns("dl_velocity_embedding_pdf"), i18n$t("Exporter embedding (PDF)"), class = "btn-sm btn-info w-100"))),
+    shinyWidgets::dropdownButton(
+      inputId = ns("velocity_export_data_menu"),
+      label = i18n$t("💾 Exporter les Données & Provenance"),
+      circle = FALSE, status = "info", width = "100%",
+      div(class = "d-grid gap-2",
+          downloadButton(ns("dl_velocity_provenance"), i18n$t("Exporter provenance (CSV)"), class = "btn-sm btn-info w-100"),
+          downloadButton(ns("dl_velocity_summary"), i18n$t("Exporter resume validation (CSV)"), class = "btn-sm btn-info w-100"),
+          downloadButton(ns("dl_velocity_mapping"), i18n$t("Exporter alignement cellules/genes (CSV)"), class = "btn-sm btn-info w-100"),
+          downloadButton(ns("dl_velocity_cell_vectors"), i18n$t("Exporter vecteurs par cellule (CSV)"), class = "btn-sm btn-info w-100"),
+          downloadButton(ns("dl_velocity_result_rds"), i18n$t("Exporter resultat valide (RDS)"), class = "btn-sm btn-info w-100")))
   )
 }
 
@@ -144,6 +160,65 @@ mod_sc_velocity_output_ui <- function(id) {
                 plotOutput(ns("velocity_qc_plot"), height = "450px"))
     )
   )
+}
+
+# ── 2D (O28) : gène par défaut du phase portrait — heuristique ordonnée ──────
+# À HEAD le sélecteur était rempli avec `selected = gene_choices[1]` (ordre
+# alphabétique des gènes alignés) — constat 2D, packet round-7 ; spéc §2.9.
+# Heuristique :
+#   1. premier gène du top 10 des marqueurs différentiels significatifs
+#      (p-adj < 0.05, tri croissant) présent dans les gènes alignés ;
+#   2. sinon premier HVG (VariableFeatures) présent dans les gènes alignés ;
+#   3. sinon gène de plus forte variance dans `unspliced` (matrice dense
+#      uniquement — une matrice sparse ne doit JAMAIS être densifiée ici ;
+#      variance calculée par blocs de lignes pour borner la mémoire) ;
+#   4. fallback : gene_choices[1] (comportement d'antan).
+# Fonction pure, testable headless (test-mod-sc-velocity.R).
+.velocity_phase_default_gene <- function(gene_choices,
+                                         markers_df = NULL,
+                                         var_features = NULL,
+                                         unspliced = NULL) {
+  if (!length(gene_choices)) return(character(0))
+  # Priorité 1 — marqueurs différentiels significatifs (top 10 par p-adj).
+  if (is.data.frame(markers_df) && nrow(markers_df) > 0L &&
+      all(c("gene", "p_val_adj") %in% names(markers_df))) {
+    sig <- markers_df[!is.na(markers_df$p_val_adj) & markers_df$p_val_adj < 0.05, ,
+                      drop = FALSE]
+    sig <- sig[order(sig$p_val_adj), , drop = FALSE]
+    hit <- intersect(as.character(head(sig$gene, 10L)), gene_choices)
+    if (length(hit)) return(hit[1])
+  }
+  # Priorité 2 — HVG.
+  hit <- intersect(as.character(var_features), gene_choices)
+  if (length(hit)) return(hit[1])
+  # Priorité 3 — variance maximale dans unspliced (matrice de base uniquement).
+  if (is.matrix(unspliced) && nrow(unspliced) > 0L && ncol(unspliced) > 1L) {
+    v <- tryCatch({
+      m <- unspliced[intersect(rownames(unspliced), gene_choices), , drop = FALSE]
+      # NB : jamais de `return(...)` dans ce bloc tryCatch — un return
+      # s'échapperait de la FONCTION entière (essayé, mesuré) ; on rend la
+      # valeur et le `any(ok)` en aval route vers le fallback.
+      if (nrow(m)) {
+        chunk <- 2000L
+        n     <- nrow(m)
+        out   <- numeric(n)
+        for (start in seq.int(1L, n, by = chunk)) {
+          idx <- seq.int(start, min(start + chunk - 1L, n))
+          blk <- m[idx, , drop = FALSE]
+          mu  <- rowMeans(blk)
+          out[idx] <- rowSums((blk - mu)^2) / max(1L, ncol(blk) - 1L)
+        }
+        names(out) <- rownames(m)
+        out
+      } else numeric(0)
+    }, error = function(e) numeric(0))
+    ok <- !is.na(v)
+    if (any(ok)) {
+      return(names(v)[ok][which.max(v[ok])])
+    }
+  }
+  # Fallback — comportement d'antan (premier gène des choix).
+  gene_choices[1]
 }
 
 mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
@@ -657,9 +732,19 @@ mod_sc_velocity_server <- function(id, global_data, shared_rv = NULL) {
 
         provenance_append(shared_rv, canonical$provenance)
 
-        # 10. Populate gene selector
+        # 10. Populate gene selector — 2D (O28) : heuristique marqueurs → HVG →
+        # variance unspliced → fallback (spéc §2.9 ; plus jamais le premier
+        # gène alphabétique brut).
         gene_choices <- rownames(validated$spliced)
-        updateSelectInput(session, "velocity_gene", choices = gene_choices, selected = gene_choices[1])
+        default_gene <- .velocity_phase_default_gene(
+          gene_choices,
+          markers_df   = shared_rv$markers_data,
+          var_features = tryCatch(VariableFeatures(global_data$sc_obj),
+                                  error = function(e) character(0)),
+          unspliced    = validated$unspliced
+        )
+        updateSelectInput(session, "velocity_gene", choices = gene_choices,
+                          selected = default_gene %||% gene_choices[1])
 
         # 11. French status summary : statut canonique explicite (+ BUG 3
         # message when only coordinates exist). Validite technique uniquement —

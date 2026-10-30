@@ -223,14 +223,26 @@ mod_sc_viz_ui <- function(id) {
     uiOutput(ns("sc_manual_volcano_ui")),
     
     hr(),
-    div(class = "alert alert-light", style = "font-size:0.72em;opacity:0.55;",
-        bsicons::bs_icon("hourglass-split"), tags$strong(" Bloc 2 — Régulation & Fonction"),
-        i18n$t(" (à venir — régulons, cartes d'enrichissement).")),
-    # Bloc 3 : fonctionnalites livrees (panels 8 a 8f + 9b) — carte "disponible"
-    # (plus un placeholder "a venir") ; decision UX 2026-09-03, mission 4F.
-    div(class = "alert alert-light", style = "font-size:0.72em;margin-bottom:0;",
-        bsicons::bs_icon("check-circle-fill"), tags$strong(" Bloc 3 — Dynamique & Écosystème"),
-        i18n$t(" Disponible : vélocité ARN (8), communication (8b), Milo (8d), scCODA (8e), vues croisées (8f) — rapport consolidé (9b)."))
+    # 2E (O28) : les deux bannières informatives (Bloc 2 « à venir » + Bloc 3
+    # « livré ») surchargeaient la sidebar en permanence (constat 2E, packet
+    # round-7 : mod_sc_viz.R:227-232 ; spéc §2.10). Elles sont encapsulées dans
+    # un accordion FERMÉ par défaut — textes inchangés, espace vertical libéré.
+    accordion(
+      open = FALSE,
+      accordion_panel(
+        title = tagList(bsicons::bs_icon("hourglass-split"), " ",
+                        i18n$t("Fonctionnalités avancées / Roadmap")),
+        value = "roadmap_advanced",
+        div(class = "alert alert-light", style = "font-size:0.72em;opacity:0.55;",
+            bsicons::bs_icon("hourglass-split"), tags$strong(" Bloc 2 — Régulation & Fonction"),
+            i18n$t(" (à venir — régulons, cartes d'enrichissement).")),
+        # Bloc 3 : fonctionnalites livrees (panels 8 a 8f + 9b) — carte "disponible"
+        # (plus un placeholder "a venir") ; decision UX 2026-09-03, mission 4F.
+        div(class = "alert alert-light", style = "font-size:0.72em;margin-bottom:0;",
+            bsicons::bs_icon("check-circle-fill"), tags$strong(" Bloc 3 — Dynamique & Écosystème"),
+            i18n$t(" Disponible : vélocité ARN (8), communication (8b), Milo (8d), scCODA (8e), vues croisées (8f) — rapport consolidé (9b)."))
+      )
+    )
     
     
   )

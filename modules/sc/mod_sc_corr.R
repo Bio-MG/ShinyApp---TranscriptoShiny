@@ -51,14 +51,16 @@ mod_sc_corr_output_ui <- function(id) {
             h5(i18n$t("Analyse de Correlation"),class="card-title mb-0"),
             actionButton(ns("quick_add_corr"),i18n$t("Ajouter selection a Viz"),
                          class="btn-sm btn-primary",icon=icon("chart-line")))),
+    # 2B (O28) : graphe + table CÔTE À CÔTE (spéc §2.7 — l'empilement
+    # col_widths=c(12) créait deux ascenseurs étriqués à max_height=400px).
     layout_columns(
-      col_widths=c(12),
-      card(card_header(i18n$t("Network Plot")),max_height="400px",
+      col_widths=c(7, 5),
+      card(card_header(i18n$t("Network Plot")),min_height="520px",
            # 1D (O28) : badge d'écart au-dessus du graphe — seed réellement
            # utilisé + alerte si le sélecteur a bougé sans recalcul (spéc §2.4).
            uiOutput(ns("corr_seed_badge")),
-           plotOutput(ns("correlation_network"),height="350px")),
-      card(card_header(i18n$t("Table des Correlations")),max_height="400px",
+           plotOutput(ns("correlation_network"),height="480px")),
+      card(card_header(i18n$t("Table des Correlations")),min_height="520px",
            DTOutput(ns("correlation_table"))))
   )
 }

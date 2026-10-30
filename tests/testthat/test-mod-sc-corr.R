@@ -226,3 +226,42 @@ test_that("3C : sans analyse en cours (corr_rv NULL) => garde conservée", {
   expect_length(notifs, 0L)
   expect_length(selected_after, 0L)
 })
+
+# ---------------------------------------------------------------------------
+# 2B (O28, batch B3) — graphe + table CÔTE À CÔTE (spéc §2.7)
+# ---------------------------------------------------------------------------
+# Constat 2B : `col_widths = c(12)` empilait verticalement le graphe et la
+# table (deux ascenseurs étriqués à max_height = 400px ; preuve
+# mod_sc_corr.R:54-62 à HEAD 88f9a43). Correctif : layout_columns
+# col_widths = c(7, 5), min_height 520px, plot 480px.
+
+test_that("2B verrou source : col_widths c(7, 5), plus aucun empilement c(12)", {
+  code <- readLines(file.path(ts_project_root(), "modules/sc/mod_sc_corr.R"),
+                    warn = FALSE, encoding = "UTF-8")
+  # Code seul (commentaires exclus) : le constat 2B est DOCUMENTÉ au-dessus du
+  # layout — le verrou ne doit pas se mordre la queue.
+  code <- grep("^\\s*#", code, value = TRUE, invert = TRUE)
+  src <- paste(code, collapse = "\n")
+  expect_match(src, "col_widths=c(7, 5)", fixed = TRUE,
+               info = "la disposition côte à côte c(7,5) est absente (spéc §2.7)")
+  expect_false(grepl("col_widths[[:space:]]*=[[:space:]]*c[(]12[)]", src),
+               label = "l'empilement col_widths=c(12) subsiste (constat 2B)")
+})
+
+test_that("2B rendu réel : la carte de sortie expose graphe ET table, sans erreur", {
+  suppressPackageStartupMessages(library(bslib))
+  # Shim i18n (l'UI appelle i18n$t à la construction — résolu depuis globalenv)
+  old_i18n <- get0("i18n", envir = globalenv())
+  assign("i18n", list(t = function(x) x), envir = globalenv())
+  on.exit({
+    if (is.null(old_i18n)) rm(list = "i18n", envir = globalenv())
+    else assign("i18n", old_i18n, envir = globalenv())
+  }, add = TRUE)
+
+  ui <- mod_sc_corr_output_ui("corr")
+  expect_s3_class(ui, "shiny.tag")
+  html <- paste(as.character(ui), collapse = " ")
+  # Les deux consommateurs sont toujours présents (aucune perte de contenu) :
+  expect_match(html, "correlation_network", fixed = TRUE)
+  expect_match(html, "correlation_table", fixed = TRUE)
+})

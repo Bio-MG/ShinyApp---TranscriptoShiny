@@ -86,7 +86,9 @@ test_that("appel nu = table de resultats boutonnee (defaut TS_DT_BUTTONS_DEFAULT
   got <- ts_datatable(df, page_length = 15)
   expect_identical(got$x$options$dom, "Bfrtip")
   expect_identical(got$x$options$pageLength, 15)
-  expect_identical(got$x$options$scrollX, TRUE)
+  # 2H (O28, 2026-10-30) : scrollX n'est PLUS le defaut (arbitrage constat 2H —
+  # voir bloc 4 ci-dessous) ; le filtre par colonne, lui, reste "top".
+  expect_identical(got$x$options$scrollX, FALSE)
   expect_true("Buttons" %in% unlist(got$x$extensions))
   # aucun jeu de boutons nomme : DT applique ses boutons par defaut
   expect_null(got$x$options$buttons)
@@ -128,7 +130,11 @@ test_that("buttons = TRUE reproduit exactement le site pathways (dom + Buttons)"
                        options = list(pageLength = 10, scrollX = TRUE,
                                       dom = "Bfrtip"),
                        extensions = "Buttons")
-  got <- ts_datatable(df, page_length = 10, buttons = TRUE)
+  # Le site pathways historique déclarait scrollX = TRUE EXPLICITEMENT (voir
+  # les options du réf ci-dessus) : la reproduction passe donc scroll_x = TRUE.
+  # Depuis le 2H (O28), le defaut du wrapper est FALSE — la règle « chaque site
+  # garde ses valeurs écrites explicitement » n'est pas touchée.
+  got <- ts_datatable(df, page_length = 10, buttons = TRUE, scroll_x = TRUE)
   expect_identical(got$x$options$dom, "Bfrtip")
   expect_identical(got$x$options$pageLength, 10)
   expect_identical(got$x$options$scrollX, TRUE)
@@ -269,4 +275,35 @@ test_that("DT-EXPORT : plus AUCUN appel datatable() direct hors du wrapper", {
   expect_length(offenders, 0L)
   info <- if (length(offenders)) paste(offenders, collapse = ", ") else ""
   expect_identical(info, "")
+})
+
+# --- 4. 2H (O28) : arbitrage scrollX vs filter="top" --------------------------
+# Constat 2H (packet round-7) : `scrollX = TRUE` + `filter = "top"` produisait
+# le bug DataTables du double header / double filtre (le clonage du conteneur
+# `thead` par le defilement horizontal duplique les boîtes de sélection du
+# header flottant ; preuve datatable.R:105 à HEAD 88f9a43, aucun headerCallback ;
+# spéc §2.19). Arbitrage retenu : le filtre par colonne — fonctionnalité
+# porteuse d'ergonomie sur les tables de résultats — reste le defaut, le
+# scrollX devient un opt-in explicite pour les tables réellement larges. Les
+# deux correctifs JS/CSS de la spéc étant invérifiables hors navigateur,
+# l'arbitrage retire la CAUSE du glitch (déterministe, vérifiable en R).
+
+test_that("2H : appel nu = filter 'top' actif, scrollX OFF (arbitrage O28)", {
+  df <- .tsd_df()
+  got <- ts_datatable(df, page_length = 15)
+  # L'ergonomie porteuse reste le defaut :
+  expect_identical(got$x$filter, "top")
+  # Le declencheur du double header quitte le defaut :
+  expect_identical(got$x$options$scrollX, FALSE)
+  # Le defaut vit dans la SIGNATURE (jamais un effet de bord d'une constante) :
+  expect_identical(formals(ts_datatable)$scroll_x, FALSE)
+})
+
+test_that("2H : les tables larges optent explicitement pour le scrollX", {
+  df <- .tsd_df()
+  got <- ts_datatable(df, page_length = 10, scroll_x = TRUE)
+  expect_identical(got$x$options$scrollX, TRUE)
+  # Le reste du contrat est intact dans la même construction :
+  expect_identical(got$x$filter, "top")
+  expect_identical(got$x$options$pageLength, 10)
 })

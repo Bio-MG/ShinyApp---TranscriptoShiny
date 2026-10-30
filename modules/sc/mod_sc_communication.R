@@ -244,16 +244,38 @@ mod_sc_communication_output_ui <- function(id) {
       nav_panel(i18n$t("QC import"),
                 uiOutput(ns("comm_qc"))),
       nav_panel(i18n$t("Limites"),
-                div(class = "alert alert-warning m-3", style = "font-size:0.9em;",
-                    i18n$t("Validite technique uniquement : un import valide n'implique aucune validite biologique.")),
-                div(class = "alert alert-info m-3", style = "font-size:0.9em;",
-                    i18n$t("Les scores ne sont pas compares entre sources differentes (CellChat vs CellPhoneDB).")),
-                div(class = "alert alert-info m-3", style = "font-size:0.9em;",
-                    i18n$t("Une association ligand-receptor n'etablit aucune causalite.")),
-                div(class = "alert alert-light m-3", style = "font-size:0.9em;",
-                    i18n$t("Les labels sans correspondance exacte dans la colonne choisie sont conserves tels quels et listes — jamais renommes.")),
-                div(class = "alert alert-light m-3", style = "font-size:0.9em;",
-                    i18n$t("Objet CellChat (.rds) : extraction de resultats deja calcules uniquement — le mapping ligand-receptor vers pathway n'est pas reconstitue.")))
+                # 2G (O28) : les 5 bannières `alert-*` empilées (constat 2G,
+                # packet round-7 : 1 warning, 2 info, 2 light) sont regroupées en
+                # UNE carte synthétique à puces thématiques (spéc §2.15).
+                # ⚠️ Coordination 3D : le TEXTE de la 5ᵉ puce (objet RDS
+                # CellChat) est la bannière partagée avec le constat 3D (batch
+                # B2) — il est reproduit VERBATIM ici, jamais reformulé.
+                # La hiérarchie de sévérité d'origine est conservée via la
+                # couleur des puces (warning > info > light).
+                card(
+                  card_header(i18n$t("Points d'attention — lecture des résultats")),
+                  card_body(
+                    tags$ul(class = "list-unstyled m-0",
+                            tags$li(class = "mb-2",
+                                    tags$span(class = "badge bg-warning text-dark me-2",
+                                              "⚠️ ", i18n$t("Validité technique vs biologique")),
+                                    i18n$t("Validite technique uniquement : un import valide n'implique aucune validite biologique.")),
+                            tags$li(class = "mb-2",
+                                    tags$span(class = "badge bg-info text-dark me-2",
+                                              "⚖️ ", i18n$t("Comparabilité des scores")),
+                                    i18n$t("Les scores ne sont pas compares entre sources differentes (CellChat vs CellPhoneDB).")),
+                            tags$li(class = "mb-2",
+                                    tags$span(class = "badge bg-info text-dark me-2",
+                                              "🔗 ", i18n$t("Causalité")),
+                                    i18n$t("Une association ligand-receptor n'etablit aucune causalite.")),
+                            tags$li(class = "mb-2",
+                                    tags$span(class = "badge bg-secondary text-white me-2",
+                                              "🏷️ ", i18n$t("Labels cellulaires")),
+                                    i18n$t("Les labels sans correspondance exacte dans la colonne choisie sont conserves tels quels et listes — jamais renommes.")),
+                            tags$li(class = "mb-0",
+                                    tags$span(class = "badge bg-secondary text-white me-2",
+                                              "🧬 ", i18n$t("Objets RDS CellChat")),
+                                    i18n$t("Objet CellChat (.rds) : extraction de resultats deja calcules uniquement — le mapping ligand-receptor vers pathway n'est pas reconstitue."))))))
     )
   )
 }

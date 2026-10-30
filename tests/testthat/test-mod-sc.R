@@ -227,3 +227,87 @@ test_that("mod_sc.R ne contribue aucun signalement C10", {
   }
   expect_equal(n, 0L)
 })
+
+# ---------------------------------------------------------------------------
+# 2J (O28, batch B3) : largeur de la sidebar paramétrable
+# ---------------------------------------------------------------------------
+# Constat 2J : à HEAD, `width = 420` figé (preuve mod_sc.R:571 — 30,7 % d'un
+# écran 1366 px). Correctif : option globale `ts.sc_sidebar_width` ou argument
+# `sidebar_width` de mod_sc_ui(), bornée [240, 720] px. Le mécanisme réactif
+# complet (toggle ◀/▶ + offcanvas) est le constat 2L — batch B4, PAS ici.
+
+test_that("2J : .sc_sidebar_width — defaut 420, option globale, bornes [240, 720]", {
+  expect_identical(.sc_sidebar_width(), 420L)
+  expect_identical(.sc_sidebar_width(360), 360L)
+  expect_identical(.sc_sidebar_width("500"), 500L)
+  # Bornes : trop petit / trop grand -> clamp, jamais un layout cassé.
+  expect_identical(.sc_sidebar_width(100), 240L)
+  expect_identical(.sc_sidebar_width(9999), 720L)
+  # Invalide -> repli 420 (jamais NA transmis à sidebar(width=)).
+  expect_identical(.sc_sidebar_width(NA), 420L)
+  expect_identical(.sc_sidebar_width("abc"), 420L)
+  expect_identical(.sc_sidebar_width(c(300, 500)), 420L)
+  # L'option globale est le canal de paramétrisation (app.R n'est pas modifié) :
+  old <- options(ts.sc_sidebar_width = 360)
+  on.exit(options(old), add = TRUE)
+  expect_identical(.sc_sidebar_width(), 360L)
+})
+
+test_that("2J verrou source : mod_sc_ui accepte sidebar_width et la transmet à width", {
+  src <- paste(readLines(file.path(ts_project_root(), .MSCR_FILE),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  expect_match(src,
+               "mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width())",
+               fixed = TRUE)
+  expect_false(grepl("width[[:space:]]*=[[:space:]]*420[,)]", src),
+               label = "width = 420 figé subsiste (constat 2J)")
+})
+
+# ---------------------------------------------------------------------------
+# 2K (O28, batch B3) : repliage des panneaux d'accordéon après validation
+# ---------------------------------------------------------------------------
+# Constat 2K : à HEAD, `git grep accordion_panel_close` sur modules/ + tools/
+# renvoyait 0 hit — les panneaux restaient ouverts après validation (spéc
+# §2.22). Fonction pure `.sc_acc_panels_to_close()` + observateur à signature
+# (le repli ne tire qu'au CHANGEMENT d'état : jamais de combat réactif avec un
+# panneau que l'utilisateur a rouvert).
+#
+# ⚠️ Limite documentée (même piège que le reste du fichier) : le message
+# `accordion_panel_close` est consommé par le widget JS — sous testServer()
+# l'input ne bouge pas (leçon B1) ; la preuve comportementale du message ne
+# peut pas être levée ici. Ce lot prouve : (a) la correspondance état →
+# panneaux (fonction pure), (b) le verrou source de l'observateur.
+
+test_that("2K : .sc_acc_panels_to_close — tronc pipeline + marqueurs, jamais partiel", {
+  # Rien de validé -> rien à replier :
+  expect_length(.sc_acc_panels_to_close(FALSE, FALSE, FALSE, FALSE), 0L)
+  # Tronc partiel (ex. QC seul, ou QC+Norm sans clusters) -> Pipeline ouvert :
+  expect_length(.sc_acc_panels_to_close(TRUE, FALSE, FALSE, FALSE), 0L)
+  expect_length(.sc_acc_panels_to_close(TRUE, TRUE, FALSE, FALSE), 0L)
+  # Tronc QC + Normalisation + Clustering validé -> « 1. Pipeline » replié :
+  got <- .sc_acc_panels_to_close(TRUE, TRUE, TRUE, FALSE)
+  expect_identical(got$acc_prep, "1_pipeline")
+  expect_false("acc_analyse" %in% names(got))
+  # Marqueurs posés (module manuel OU auto-pipeline) -> « 4. Marqueurs » replié :
+  got2 <- .sc_acc_panels_to_close(FALSE, FALSE, FALSE, TRUE)
+  expect_identical(got2$acc_analyse, "4_markers")
+  expect_false("acc_prep" %in% names(got2))
+  # Les deux à la fois :
+  got3 <- .sc_acc_panels_to_close(TRUE, TRUE, TRUE, TRUE)
+  expect_setequal(names(got3), c("acc_prep", "acc_analyse"))
+})
+
+test_that("2K verrou source : repli via accordion_panel_close au changement de signature + pastille", {
+  src <- paste(readLines(file.path(ts_project_root(), .MSCR_FILE),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  # Le repli passe par l'API bslib documentée (jamais un hack CSS) :
+  expect_match(src,
+               "bslib::accordion_panel_close(ns(acc_id), values = to_close[[acc_id]])",
+               fixed = TRUE)
+  # Garde anti-combat réactif : un seul repli par signature d'état.
+  expect_match(src, "identical(sig, acc_close_signature())", fixed = TRUE)
+  # Pastille de résumé dans l'en-tête du panneau « 1. Pipeline » (spéc §2.22) :
+  expect_match(src, "acc_pipeline_resume_badge", fixed = TRUE)
+  expect_match(src, "\u2705 Pipeline valid\u00e9 \u2014 %s cellules conserv\u00e9es",
+               fixed = TRUE)
+})

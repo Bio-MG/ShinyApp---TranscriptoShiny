@@ -206,3 +206,122 @@ test_that("O13 : le module n'embarque AUCUN appel d'autopipeline", {
 test_that("mod_sc_velocity.R ne contribue aucun signalement C10", {
   expect_identical(ts_c10_sites(.MSV_FILE), integer(0))
 })
+
+# ---------------------------------------------------------------------------
+# 2D (O28, batch B3) : heuristique du gène par défaut du phase portrait
+# ---------------------------------------------------------------------------
+# Constat 2D : à HEAD, `selected = gene_choices[1]` (ordre alphabétique des
+# gènes alignés ; preuve mod_sc_velocity.R:661-662). Correctif (spéc §2.9) :
+# heuristique marqueurs différentiels significatifs (top 10, tri p-adj) →
+# HVG → variance unspliced (matrice dense, par blocs) → fallback.
+# Fonction pure `.velocity_phase_default_gene()` — testable headless.
+source_project_file("modules/sc/mod_sc_velocity.R")
+
+.VELOC_2D_GENES <- c("AAA1", "CXCL10", "SKAP1", "ZZZ9")
+
+test_that("2D : priorité 1 — premier marqueur significatif du top 10 présent dans les gènes alignés", {
+  markers <- data.frame(
+    gene      = paste0("MK", 1:12),
+    p_val_adj = c(1e-22, 1e-21, 1e-20, 1e-19, 1e-18, 1e-17, 1e-16, 1e-15,
+                  1e-14, 1e-13, 1e-12, 1e-11)
+  )
+  # SKAP1 (3e marqueur) est le premier du top 10 présent dans les choix :
+  markers$gene[3] <- "SKAP1"
+  # CXCL10 est significatif mais HORS top 10 (12e) : il ne doit PAS gagner.
+  markers$gene[12] <- "CXCL10"
+  expect_identical(
+    .velocity_phase_default_gene(.VELOC_2D_GENES, markers_df = markers),
+    "SKAP1")
+})
+
+test_that("2D : priorité 2 — pas de marqueur => premier HVG présent dans les choix", {
+  markers <- data.frame(gene = c("AAA1"), p_val_adj = c(0.4))  # non significatif
+  expect_identical(
+    .velocity_phase_default_gene(.VELOC_2D_GENES, markers_df = markers,
+                                 var_features = c("ABSENT", "CXCL10")),
+    "CXCL10")
+  # un p-adj NA n'est jamais « significatif » :
+  markers_na <- data.frame(gene = c("AAA1"), p_val_adj = NA_real_)
+  expect_identical(
+    .velocity_phase_default_gene(.VELOC_2D_GENES, markers_df = markers_na,
+                                 var_features = "SKAP1"),
+    "SKAP1")
+})
+
+test_that("2D : priorité 3 — gène de plus forte variance dans unspliced (dense, par blocs)", {
+  # 2501 lignes (> 1 bloc de 2000) : la ligne à variance maximale est en
+  # QUEUE (bloc 2) — prouve le parcours par blocs de lignes.
+  set.seed(42)
+  n <- 2501L
+  m <- matrix(rnorm(n * 5L, sd = 0.01), nrow = n)
+  rownames(m) <- paste0("G", seq_len(n))
+  hi <- paste0("G", n)          # variance écrasante, dernier bloc
+  m[hi, ] <- rnorm(5L, sd = 50)
+  # cohérence locale : a = constante (var 0), b = étalée (var 16) -> "b"
+  small <- matrix(c(10, 10, 10, 1, 5, 9), nrow = 2, byrow = TRUE,
+                  dimnames = list(c("a", "b"), NULL))
+  expect_identical(
+    .velocity_phase_default_gene(c("a", "b"), unspliced = small), "b")
+  expect_identical(
+    .velocity_phase_default_gene(rownames(m), unspliced = m), hi)
+})
+
+test_that("2D : une matrice unspliced sparse n'est JAMAIS densifiée — repli fallback", {
+  sm <- Matrix::Matrix(1:6, nrow = 2, sparse = TRUE,
+                       dimnames = list(c("AAA1", "CXCL10"), NULL))
+  expect_identical(
+    .velocity_phase_default_gene(c("AAA1", "CXCL10"), unspliced = sm),
+    "AAA1")
+})
+
+test_that("2D : fallback — rien de connu => gene_choices[1] ; choix vides => character(0)", {
+  expect_identical(.velocity_phase_default_gene(.VELOC_2D_GENES), "AAA1")
+  expect_identical(.velocity_phase_default_gene(.VELOC_2D_GENES,
+                                                markers_df = data.frame(gene = "X", p_val_adj = 1e-30),
+                                                var_features = "X",
+                                                unspliced = matrix(1:4, nrow = 2)),
+                   "AAA1")
+  expect_identical(.velocity_phase_default_gene(character(0)), character(0))
+})
+
+test_that("2D verrou source : le sélecteur velocity_gene n'est plus rempli au premier gène alphabétique", {
+  code <- readLines(file.path(ts_project_root(), .MSV_FILE),
+                    warn = FALSE, encoding = "UTF-8")
+  # Code seul (commentaires exclus) : le constat 2D est DOCUMENTÉ dans
+  # l'en-tête du helper — le verrou ne doit pas se mordre la queue.
+  code <- grep("^\\s*#", code, value = TRUE, invert = TRUE)
+  src <- paste(code, collapse = "\n")
+  expect_false(grepl("selected[[:space:]]*=[[:space:]]*gene_choices[[]1[]]", src),
+               label = "selected = gene_choices[1] subsiste (constat 2D)")
+  expect_match(src, ".velocity_phase_default_gene(", fixed = TRUE)
+})
+
+# ---------------------------------------------------------------------------
+# 2C (O28, batch B3) : 9 exports regroupés en 2 dropdownButton
+# ---------------------------------------------------------------------------
+# Constat 2C : 9 downloadButton empilés pleine largeur (preuve à HEAD :
+# `grep -c downloadButton` -> 9 ; spéc §2.8). Correctif : 2 menus « 📊
+# Graphiques » / « 💾 Données & Provenance ». Les ID des handlers dl_velocity_*
+# sont CONSERVÉS : aucun contrat serveur ne bouge (verrou ci-dessous).
+
+test_that("2C verrou source : 2 dropdownButton, 9 downloadButton, 9 handlers intacts", {
+  src <- paste(readLines(file.path(ts_project_root(), .MSV_FILE),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  n_dl <- lengths(regmatches(src, gregexpr("downloadButton[(]", src)))[1]
+  expect_identical(n_dl, 9L,
+                   info = "les 9 exports doivent rester exposés (dans les menus)")
+  n_dd <- lengths(regmatches(src, gregexpr("dropdownButton[(]", src)))[1]
+  expect_identical(n_dd, 2L, info = "exactement 2 dropdownButton (spéc §2.8)")
+  # Libellés des 2 menus (clés i18n ajoutées au lot B3) :
+  expect_match(src, "\U0001F4CA Exporter les Graphiques", fixed = TRUE)
+  expect_match(src, "\U0001F4BE Exporter les Donn\u00e9es & Provenance", fixed = TRUE)
+  # AUCUN export supprimé : les 9 handlers serveur existent toujours.
+  ids <- c("dl_velocity_provenance", "dl_velocity_summary", "dl_velocity_mapping",
+           "dl_velocity_result_rds", "dl_velocity_phase_png", "dl_velocity_phase_pdf",
+           "dl_velocity_embedding_png", "dl_velocity_embedding_pdf",
+           "dl_velocity_cell_vectors")
+  for (id in ids) {
+    expect_match(src, sprintf("output$%s <- downloadHandler", id), fixed = TRUE,
+                 info = paste("handler", id, "absent — le lot 2C a supprimé un export"))
+  }
+})

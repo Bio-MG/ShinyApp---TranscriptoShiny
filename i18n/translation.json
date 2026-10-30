@@ -11056,6 +11056,46 @@
     {
       "fr": "✓ {n} gène(s) ajouté(s) au module Visualisation",
       "en": "✓ {n} gene(s) added to the Visualisation module"
+    },
+    {
+      "fr": "📊 Exporter les Graphiques",
+      "en": "📊 Export plots"
+    },
+    {
+      "fr": "💾 Exporter les Données & Provenance",
+      "en": "💾 Export Data & Provenance"
+    },
+    {
+      "fr": "Fonctionnalités avancées / Roadmap",
+      "en": "Advanced features / Roadmap"
+    },
+    {
+      "fr": "Points d'attention — lecture des résultats",
+      "en": "Points of attention — reading the results"
+    },
+    {
+      "fr": "Validité technique vs biologique",
+      "en": "Technical vs biological validity"
+    },
+    {
+      "fr": "Comparabilité des scores",
+      "en": "Score comparability"
+    },
+    {
+      "fr": "Causalité",
+      "en": "Causality"
+    },
+    {
+      "fr": "Labels cellulaires",
+      "en": "Cell labels"
+    },
+    {
+      "fr": "Objets RDS CellChat",
+      "en": "CellChat RDS objects"
+    },
+    {
+      "fr": "✅ Pipeline validé — %s cellules conservées",
+      "en": "✅ Pipeline validated — %s cells retained"
     }
   ]
 }

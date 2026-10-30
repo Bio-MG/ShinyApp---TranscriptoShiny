@@ -82,7 +82,17 @@ ts_datatable_public_api <- function() {
 #'   les boutons copy / print / csv / excel avec ce nom de fichier.
 #' @param filter Emplacement du filtre ("top" / "none" / "bottom").
 #' @param rownames Afficher les noms de lignes.
-#' @param scroll_x Defilement horizontal.
+#' @param scroll_x Defilement horizontal. **Defaut = FALSE depuis le 2H (O28,
+#'   2026-10-30)** : arbitrage du constat 2H (packet round-7) — la COMBINAISON
+#'   `scrollX = TRUE` + `filter = "top"` produisait le bug DataTables du
+#'   double header / double filtre (le clonage du conteneur `thead` par le
+#'   defilement horizontal duplique les boîtes de sélection du header flottant,
+#'   `tools/pkg_skeleton/R/datatable.R:105` à HEAD `88f9a43` ; spéc §2.19).
+#'   Les deux correctifs JS/CSS de la spéc étant invérifiables hors navigateur,
+#'   l'arbitrage retire la cause du glitch : le filtre par colonne — la
+#'   fonctionnalité porteuse d'ergonomie sur les tables de résultats — reste
+#'   ACTIF par defaut (`filter = "top"`), le scrollX devient un OPT-IN explicite
+#'   (`scroll_x = TRUE`) pour les tables réellement larges.
 #' @param buttons Ajouter l'extension Buttons + `dom = "Bfrtip"`.
 #'   **Defaut = `TS_DT_BUTTONS_DEFAULT` (TRUE depuis le jalon DT-EXPORT,
 #'   2026-09-14 — contrat §6 option B)** : les tables de resultats sont
@@ -102,7 +112,8 @@ ts_datatable_public_api <- function() {
 #' ts_datatable(df, page_length = 10, buttons = TRUE, filename_base = "pathways")
 #' }
 ts_datatable <- function(df, page_length, filename_base = NULL,
-                         filter = "top", rownames = FALSE, scroll_x = TRUE,
+                         filter = "top", rownames = FALSE,
+                         scroll_x = FALSE,   # 2H (O28) : était TRUE — voir @param scroll_x
                          buttons = .ts_dt_const("TS_DT_BUTTONS_DEFAULT", TRUE),
                          dom = NULL, extensions = NULL, extra_options = NULL,
                          ...) {

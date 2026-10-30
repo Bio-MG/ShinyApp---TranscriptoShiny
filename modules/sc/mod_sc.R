@@ -564,11 +564,51 @@ run_markers <- function(input, global_data, shared_rv, session) {
        step = if (ok) "ran" else "error")
 }
 
-mod_sc_ui <- function(id) {
+# ── 2J (O28) : largeur de la sidebar paramétrable ────────────────────────────
+# Constat 2J (packet round-7) : à HEAD la sidebar était figée `width = 420`
+# (mod_sc.R:571) — 30,7 % d'un écran 1366 px. La largeur devient PARAMÉTRABLE :
+# option globale `ts.sc_sidebar_width` (posée dans global.R/app.R, sans y
+# toucher) ou argument `sidebar_width` de mod_sc_ui(), bornée [240, 720] px
+# pour écarter toute valeur cassant le layout. ⚠️ Le mécanisme réactif
+# complet (toggle ◀/▶ + tiroirs offcanvas) est le constat 2L — batch B4,
+# PAS ici ; cette passe rend la valeur paramétrable et validée.
+.sc_sidebar_width <- function(x = getOption("ts.sc_sidebar_width", 420)) {
+  w <- suppressWarnings(as.integer(x))
+  if (length(w) != 1L || is.na(w)) return(420L)
+  max(240L, min(720L, w))
+}
+
+# ── 2K (O28) : panneaux d'accordéon à replier une fois leurs étapes validées ─
+# Constat 2K : à HEAD `git grep accordion_panel_close` sur modules/ + tools/
+# renvoyait 0 hit — les panneaux de la sidebar restaient ouverts après
+# validation, obligeant à scroller en continu (spéc §2.22). Fonction pure,
+# testable headless : état des étapes -> liste (id accordéon -> valeurs de
+# panneaux à replier). Les signaux d'état sont ceux de la barre de statut
+# pipeline (output$sc_pipeline_status_bar) : percent.mt (QC), VariableFeatures
+# (normalisation), seurat_clusters (clustering), markers_data (marqueurs).
+.sc_acc_panels_to_close <- function(qc_done, norm_done, cluster_done,
+                                    markers_done) {
+  close <- list()
+  # Panneau « 1. Pipeline » (acc_prep) : tronc QC + Normalisation + Clustering.
+  if (isTRUE(qc_done) && isTRUE(norm_done) && isTRUE(cluster_done)) {
+    close$acc_prep <- "1_pipeline"
+  }
+  # Panneau « 4. Marqueurs » (acc_analyse) : résultats FindAllMarkers posés
+  # (écrits par le module manuel mod_sc_markers.R:329 OU l'auto-pipeline
+  # sc_pipeline.R:661).
+  if (isTRUE(markers_done)) {
+    close$acc_analyse <- "4_markers"
+  }
+  close
+}
+
+mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
   ns <- NS(id)
   layout_sidebar(
     sidebar = sidebar(
-      width = 420, title = i18n$t("Single-Cell Workflow"),
+      # 2J (O28) : width paramétrable (voir .sc_sidebar_width ci-dessus) —
+      # était figé à 420.
+      width = sidebar_width, title = i18n$t("Single-Cell Workflow"),
       # LOT 1 (V1.x UX): paradigm badge — auto-pipeline exists, manual steps stay optional.
       div(class = "alert alert-success", style = "font-size:0.78rem;padding:5px;margin-bottom:5px;",
           icon("bolt"), " ", i18n$t("Auto-pipeline disponible — les étapes manuelles restent optionnelles")),
@@ -595,7 +635,11 @@ mod_sc_ui <- function(id) {
             accordion_panel(i18n$t("0. Mapping IDs (Optionnel)"), icon = icon("arrows-rotate"),
                             value = "0_mapping",
                             mod_sc_mapping_ui(ns("mapping"))),
-            accordion_panel(i18n$t("1. Pipeline"), icon = icon("cogs"),
+            accordion_panel(tagList(i18n$t("1. Pipeline"),
+                                    # 2K (O28) : pastille de résumé dans l'en-tête
+                                    # — visible panneau replié (spéc §2.22).
+                                    uiOutput(ns("acc_pipeline_resume_badge"))),
+                            icon = icon("cogs"),
                             value = "1_pipeline",
                             mod_sc_pipeline_ui(ns("pipeline"))),
             # Audit 2026-09-27 (feature 6×10X) : déclaration du design
@@ -926,6 +970,54 @@ mod_sc_server <- function(id, global_data) {
           tags$span(style="padding:2px 4px;", s_umap,    .tr(" UMAP")),
           tags$span(style="padding:2px 4px;", s_annot,   .tr(" Annot")),
           tags$span(style="padding:2px 4px;", s_markers, .tr(" Marqueurs")))
+    })
+
+    # ── 2K (O28) : repliage automatique des panneaux validés ─────────────────
+    # Les signaux d'état sont ceux de la barre de statut ci-dessus (mêmes
+    # colonnes du même objet) ; la correspondance état -> panneaux vit dans la
+    # fonction pure .sc_acc_panels_to_close(). Le repli ne tire qu'au
+    # CHANGEMENT de signature d'état : un panneau que l'utilisateur a rouvert
+    # n'est jamais refermé derrière son dos tant que l'état du pipeline ne
+    # change pas (pas de combat reactif).
+    acc_close_signature <- shiny::reactiveVal(NULL)
+    observe({
+      obj  <- global_data$sc_obj
+      meta <- if (!is.null(obj)) tryCatch(obj@meta.data, error = function(e) NULL) else NULL
+      qc_done      <- !is.null(meta) && "percent.mt" %in% colnames(meta)
+      norm_done    <- !is.null(obj) &&
+        length(tryCatch(VariableFeatures(obj), error = function(e) character(0))) > 0L
+      cluster_done <- !is.null(meta) && "seurat_clusters" %in% colnames(meta)
+      markers_done <- !is.null(state_get(shared_rv, "markers_data"))
+      sig <- paste(qc_done, norm_done, cluster_done, markers_done, sep = "|")
+      if (identical(sig, acc_close_signature())) return(invisible(NULL))
+      acc_close_signature(sig)
+      to_close <- .sc_acc_panels_to_close(qc_done, norm_done, cluster_done,
+                                          markers_done)
+      for (acc_id in names(to_close)) {
+        # bslib::accordion_panel_close envoie un message custom au widget —
+        # sans effet si le panneau est déjà replié.
+        tryCatch(
+          bslib::accordion_panel_close(ns(acc_id), values = to_close[[acc_id]]),
+          error = function(e) NULL)
+      }
+    })
+
+    # Pastille de résumé « 1. Pipeline » (2K, spéc §2.22) : dans l'en-tête du
+    # panneau, visible même replié ; réactive à la langue et à l'objet.
+    output$acc_pipeline_resume_badge <- renderUI({
+      global_data$language
+      obj <- global_data$sc_obj
+      if (is.null(obj)) return(NULL)
+      meta <- tryCatch(obj@meta.data, error = function(e) NULL)
+      if (is.null(meta) || !"percent.mt" %in% colnames(meta) ||
+          !"seurat_clusters" %in% colnames(meta) ||
+          length(tryCatch(VariableFeatures(obj),
+                          error = function(e) character(0))) == 0L) {
+        return(NULL)
+      }
+      tags$span(class = "badge bg-success ms-1",
+                sprintf(.tr("✅ Pipeline validé — %s cellules conservées"),
+                        format(ncol(obj), big.mark = ",")))
     })
 
     # ── Pipeline summary panel ────────────────────────────────────────────────
