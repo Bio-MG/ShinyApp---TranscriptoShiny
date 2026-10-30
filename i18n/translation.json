@@ -11096,6 +11096,66 @@
     {
       "fr": "✅ Pipeline validé — %s cellules conservées",
       "en": "✅ Pipeline validated — %s cells retained"
+    },
+    {
+      "fr": "Correspondances proposees : sous-onglet « Harmonisation identites » (validation explicite avant application).",
+      "en": "Proposed correspondences: 'Identity harmonisation' sub-tab (explicit validation before applying)."
+    },
+    {
+      "fr": "Proposer des correspondances",
+      "en": "Propose correspondences"
+    },
+    {
+      "fr": "Appliquer le mapping valide",
+      "en": "Apply the validated mapping"
+    },
+    {
+      "fr": "Propositions pre-remplies (exact + suggerees, preuve par ligne). Editez ou videz la colonne « identite validee », puis appliquez avec confirmation : rien n'est applique sans validation et l'exact match reste en vigueur.",
+      "en": "Pre-filled proposals (exact + suggested, per-line evidence). Edit or clear the 'validated identity' column, then apply with confirmation: nothing is applied without validation and the exact match remains in force."
+    },
+    {
+      "fr": "Harmonisation : %d label(s) sans correspondance exacte — propositions de correspondance dans le sous-onglet « Harmonisation identites ».",
+      "en": "Harmonisation: %d label(s) without exact match — correspondence proposals in the 'Identity harmonisation' sub-tab."
+    },
+    {
+      "fr": "Mapping interactif disponible pour les resultats importes uniquement.",
+      "en": "Interactive mapping available for imported results only."
+    },
+    {
+      "fr": "Erreur propositions d'identites :",
+      "en": "Identity proposal error:"
+    },
+    {
+      "fr": "Aucune proposition en attente — cliquez d'abord sur « Proposer des correspondances ».",
+      "en": "No pending proposal — click 'Propose correspondences' first."
+    },
+    {
+      "fr": "Aucune correspondance validee — rien a appliquer (l'exact match reste en vigueur).",
+      "en": "No validated correspondence — nothing to apply (the exact match remains in force)."
+    },
+    {
+      "fr": "Confirmer le mapping d'identites valide",
+      "en": "Confirm the validated identity mapping"
+    },
+    {
+      "fr": "Ces paires seront appliquees a la table canonique (aucune autre modification) :",
+      "en": "These pairs will be applied to the canonical table (no other change):"
+    },
+    {
+      "fr": "Les identites inconnues de la colonne choisie seront refusees ; une identite vide vaut « laisser non-apparie ».",
+      "en": "Identities unknown to the chosen column will be rejected; an empty identity means 'leave unmapped'."
+    },
+    {
+      "fr": "Mapping d'identites applique : %d paire(s) validee(s).",
+      "en": "Identity mapping applied: %d validated pair(s)."
+    },
+    {
+      "fr": "Erreur application du mapping :",
+      "en": "Mapping application error:"
+    },
+    {
+      "fr": "Aucun resultat importe — importez d'abord une table de communication.",
+      "en": "No imported result — import a communication table first."
     }
   ]
 }

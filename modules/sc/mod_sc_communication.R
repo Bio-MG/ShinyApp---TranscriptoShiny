@@ -148,6 +148,11 @@ mod_sc_communication_ui <- function(id) {
                 choices = character(0), width = "100%"),
     div(class = "small text-muted mb-2",
         i18n$t("Harmonisation par exact match uniquement : aucun renommage de populations, labels sans correspondance listes integralement.")),
+    # 3E (O28, spéc §2.17) : pointeur VISIBLE vers la surface propose/valide —
+    # le constat 3E est précisément que l'échec de l'exact match restait
+    # discret. Changement minimal : une ligne de plus, même style.
+    div(class = "small text-muted mb-2",
+        i18n$t("Correspondances proposees : sous-onglet « Harmonisation identites » (validation explicite avant application).")),
     # Le bouton d'import n'a pas de sens pour la source « calcul dans
     # l'application » : il lancerait la branche import sur une entree absente.
     conditionalPanel(
@@ -240,6 +245,29 @@ mod_sc_communication_output_ui <- function(id) {
                 DT::dataTableOutput(ns("comm_schema"), height = "380px"),
                 div(class = "small text-muted mt-2", textOutput(ns("comm_schema_note")))),
       nav_panel(i18n$t("Harmonisation identites"),
+                # ── 3E (O28, spéc §2.17) : surface de validation propose/valide ──
+                # DT éditable pré-rempli avec les correspondances exactes et
+                # suggérées (preuve par ligne : rule/distance/status/detail) ;
+                # l'utilisateur édite ou vide « identite validee », puis
+                # applique AVEC confirmation (modal). Rien n'est appliqué
+                # sans cette validation explicite — la voie exact match
+                # historique reste en vigueur tant que rien n'est validé.
+                # (Région disjointe de l'onglet « Limites » — 3D, réservé B2.)
+                div(class = "small text-muted m-2",
+                    textOutput(ns("comm_mapping_hint"))),
+                fluidRow(
+                  column(4, actionButton(ns("comm_propose_identities"),
+                                         i18n$t("Proposer des correspondances"),
+                                         class = "btn-info btn-sm w-100",
+                                         icon = icon("magic"))),
+                  column(4, actionButton(ns("comm_apply_identities"),
+                                         i18n$t("Appliquer le mapping valide"),
+                                         class = "btn-primary btn-sm w-100",
+                                         icon = icon("check")))
+                ),
+                br(),
+                DT::dataTableOutput(ns("comm_proposals"), height = "300px"),
+                hr(),
                 DT::dataTableOutput(ns("comm_mapping"), height = "380px")),
       nav_panel(i18n$t("QC import"),
                 uiOutput(ns("comm_qc"))),
@@ -438,6 +466,10 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
                            selected = character(0))
       updateSelectInput(session, "comm_active_sample", choices = character(0),
                         selected = character(0))
+      # 3E (O28) : aucune proposition de mapping ne survit a un reset d'etat
+      # (elles ne seraient plus a jour face au resultat courant).
+      prop_rv(NULL)
+      .prop_apply_pending_rv(NULL)
       invisible(NULL)
     }
 
@@ -525,6 +557,9 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       updateSelectizeInput(session, "comm_f_receivers",
                            choices = sort(unique(receiver_nodes)),
                            selected = character(0))
+      # 3E (O28) : un nouveau depot invalide les propositions en attente.
+      prop_rv(NULL)
+      .prop_apply_pending_rv(NULL)
     }
 
     # ── Import + validation (orchestration uniquement) ─────────────────────
@@ -675,6 +710,19 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
         }
         comm_status_rv(paste0("[", .status_label(canonical$status), "]\n", msg))
         showNotification(.tr("Import communication valide."), type = "message", duration = 4)
+        # ── 3E (O28) : signal VISIBLE quand l'exact match laisse des labels
+        # non mappés (le constat 3E est que cet échec restait discret) —
+        # notification warning distincte du succès, orientant vers la surface
+        # de validation du sous-onglet « Harmonisation identites ».
+        if (harm$summary$n_labels_unmatched > 0L) {
+          showNotification(
+            sprintf(
+              .tr("Harmonisation : %d label(s) sans correspondance exacte — propositions de correspondance dans le sous-onglet « Harmonisation identites »."),
+              harm$summary$n_labels_unmatched
+            ),
+            type = "warning", duration = 8
+          )
+        }
 
        }, error = function(e) {
          .clear_result_state()
@@ -985,6 +1033,184 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
         page_length = 15L,
         filename_base = "sc_comm_identity_mapping"
       )
+    })
+
+    # ── 3E (O28, spéc §2.17) : surface de validation propose/valide ──────────
+    # Propositions PURES (propose_communication_identity_mapping — aucune
+    # application possible de ce cote) affichées dans un DT éditable pré-rempli ;
+    # application UNIQUEMENT via apply_communication_identity_mapping avec un
+    # mapping explicitement validé (colonne « identite validee » + modal de
+    # confirmation). Aucun effet sans validation : la voie exact match
+    # historique reste en vigueur tant que rien n'est appliqué.
+    prop_rv <- shiny::reactiveVal(NULL)
+    .prop_apply_pending_rv <- shiny::reactiveVal(NULL)
+
+    output$comm_mapping_hint <- renderText({
+      .tr("Propositions pre-remplies (exact + suggerees, preuve par ligne). Editez ou videz la colonne « identite validee », puis appliquez avec confirmation : rien n'est applique sans validation et l'exact match reste en vigueur.")
+    })
+
+    # DT éditable : seule la colonne « identite validee » est éditable —
+    # les colonnes de preuve (rule/distance/status/detail) restent lisibles.
+    output$comm_proposals <- DT::renderDataTable({
+      p <- prop_rv()
+      req(p)
+      ts_datatable(
+        p,
+        page_length = 10L,
+        filename_base = "sc_comm_identity_proposals",
+        editable = list(
+          target = "column",
+          indices = which(colnames(p) == "identity_validee") - 1L
+        )
+      )
+    })
+
+    observeEvent(input$comm_proposals_cell_edit, {
+      info <- input$comm_proposals_cell_edit
+      p <- prop_rv()
+      req(p, info$row, !is.null(info$col))
+      editable_idx <- which(colnames(p) == "identity_validee") - 1L
+      if (!identical(as.integer(info$col), as.integer(editable_idx))) return()
+      val <- trimws(as.character(info$value))
+      p[info$row, "identity_validee"] <- if (nzchar(val)) val else NA_character_
+      prop_rv(p)
+    })
+
+    observeEvent(input$comm_propose_identities, {
+      # Garde explicite (leçon 3C : un req() silencieux n'oriente personne) :
+      # sans résultat importé, la surface n'a rien à proposer — dire-le.
+      if (is.null(comm_state$result)) {
+        showNotification(
+          .tr("Aucun resultat importe — importez d'abord une table de communication."),
+          type = "warning", duration = 6
+        )
+        return()
+      }
+      tryCatch({
+        r <- comm_state$result
+        # Surface limitée aux resultats IMPORTES : la voie calculée dans
+        # l'application (CellChat/LIANA natifs) harmonise déjà sur la colonne
+        # de l'objet lui-même — un re-mapping n'y a pas d'objet.
+        if (!isTRUE(r$provenance$import_only)) {
+          showNotification(
+            .tr("Mapping interactif disponible pour les resultats importes uniquement."),
+            type = "warning", duration = 6
+          )
+          return()
+        }
+        obj <- assert_seurat(global_data$sc_obj,
+                             context = "propositions d'identites communication")
+        identities <- unique(as.character(obj@meta.data[[r$identity_column]]))
+        m <- r$identity_mapping
+        p <- propose_communication_identity_mapping(
+          labels = m$label,
+          seurat_identities = identities,
+          roles = m$roles
+        )
+        # Pré-remplissage : SEULES les suggestions (status "proposed") sont
+        # pré-copiées ; les exact match (déjà en vigueur) et les lignes
+        # ambiguës/non appariées restent vides = ne seront PAS appliquées
+        # sans édition explicite de l'utilisateur.
+        p$identity_validee <- ifelse(p$status == "proposed",
+                                     p$candidate_identity, NA_character_)
+        prop_rv(p)
+      }, error = function(e) {
+        showNotification(
+          paste(.tr("Erreur propositions d'identites :"), conditionMessage(e)),
+          type = "error", duration = 10
+        )
+      })
+    })
+
+    observeEvent(input$comm_apply_identities, {
+      # Garde explicite (leçon 3C) : aucune proposition en attente = rien à
+      # valider — l'exact match reste en vigueur, et c'est DIT.
+      if (is.null(prop_rv())) {
+        showNotification(
+          .tr("Aucune proposition en attente — cliquez d'abord sur « Proposer des correspondances »."),
+          type = "warning", duration = 6
+        )
+        return()
+      }
+      p <- prop_rv()
+      req(comm_state$result)
+      am <- p[!is.na(p$identity_validee) &
+                nzchar(trimws(as.character(p$identity_validee))),
+              c("label", "identity_validee"), drop = FALSE]
+      colnames(am) <- c("label", "identity")
+      if (nrow(am) == 0L) {
+        showNotification(
+          .tr("Aucune correspondance validee — rien a appliquer (l'exact match reste en vigueur)."),
+          type = "warning", duration = 6
+        )
+        return()
+      }
+      .prop_apply_pending_rv(am)
+      # Confirmation EXPLICITE : la modal liste exactement ce qui sera appliqué.
+      showModal(modalDialog(
+        title = .tr("Confirmer le mapping d'identites valide"),
+        tags$p(.tr("Ces paires seront appliquees a la table canonique (aucune autre modification) :")),
+        tags$ul(lapply(seq_len(nrow(am)), function(i) {
+          row <- p[p$label == am$label[i], , drop = FALSE]
+          ev <- if (nrow(row)) sprintf("[%s — %s]", row$rule[1], row$status[1]) else ""
+          tags$li(sprintf("%s -> %s %s", am$label[i], am$identity[i], ev))
+        })),
+        tags$p(.tr("Les identites inconnues de la colonne choisie seront refusees ; une identite vide vaut « laisser non-apparie ».")),
+        footer = tagList(
+          modalButton(.tr("Annuler")),
+          actionButton(ns("comm_apply_confirm"), .tr("Appliquer"),
+                       class = "btn-primary")
+        ),
+        easyClose = TRUE
+      ))
+    })
+
+    observeEvent(input$comm_apply_confirm, {
+      removeModal()
+      am <- .prop_apply_pending_rv()
+      r <- comm_state$result
+      req(am, r)
+      tryCatch({
+        obj <- assert_seurat(global_data$sc_obj,
+                             context = "application du mapping d'identites")
+        .check_fingerprint()
+        identities <- unique(as.character(obj@meta.data[[r$identity_column]]))
+        mapped <- apply_communication_identity_mapping(
+          r$canonical_table, identities, r$identity_column, am
+        )
+        qcr <- communication_import_qc(mapped$table)
+        canonical <- finalize_communication_result(
+          canonical_table = qcr$table,
+          source_method   = unique(qcr$table$source_method)[1L],
+          source_files    = r$input_summary$files,
+          identity_column = r$identity_column,
+          identity_mapping = mapped$mapping,
+          identity_summary = mapped$summary,
+          column_mapping  = r$column_mapping,
+          qc              = qcr$counts,
+          n_input_rows    = r$input_summary$n_rows_input,
+          seurat_obj      = obj,
+          extra_warnings  = c(mapped$warnings, qcr$warnings),
+          external_consensus = isTRUE(r$provenance$is_external_consensus),
+          analysis_id     = "sc-communication-import"
+        )
+        .store_result(canonical, obj)
+        prop_rv(NULL)
+        .prop_apply_pending_rv(NULL)
+        showNotification(
+          sprintf(.tr("Mapping d'identites applique : %d paire(s) validee(s)."),
+                  nrow(am)),
+          type = "message", duration = 5
+        )
+      }, error = function(e) {
+        # validate() (garde de péremption .check_fingerprint) : erreur
+        # silencieuse shiny, déjà notifiée — ne pas doubler la notification.
+        if (inherits(e, "shiny.silent.error")) return()
+        showNotification(
+          paste(.tr("Erreur application du mapping :"), conditionMessage(e)),
+          type = "error", duration = 10
+        )
+      })
     })
 
     output$comm_qc <- renderUI({

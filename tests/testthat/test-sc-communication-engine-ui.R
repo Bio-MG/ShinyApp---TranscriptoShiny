@@ -198,7 +198,10 @@ test_that("both paths store their result in the SAME place (règle des deux voie
           {
   # .store_result() est appele par l'import ET par le calcul : c'est la
   # garantie que les vues et les exports ne divergent pas.
-  expect_identical(.count(.cc_ui_src, ".store_result("), 4L)
+  # 3E (O28, B5) : 5e depot = re-application du mapping d'identites valide
+  # (surface propose/valide du sous-onglet Harmonisation — même depot, mêmes
+  # vues : la règle des deux voies s'étend à la validation interactive).
+  expect_identical(.count(.cc_ui_src, ".store_result("), 5L)
   expect_true(grepl(".store_result(canonical, obj)", .cc_ui_src, fixed = TRUE))
   expect_true(grepl(".store_result(result, obj)", .cc_ui_src, fixed = TRUE))
   expect_true(grepl(".store_result(first_result, obj", .cc_ui_src, fixed = TRUE))

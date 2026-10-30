@@ -1060,14 +1060,23 @@ parse_liana_import <- function(tab, rank_column, aggregation_mode,
 #'   colonne de metadonnees choisie (extrait par le module depuis obj@meta.data).
 #' @param identity_column Nom de la colonne choisie (tracons dans la table).
 #' @param context Contexte cite dans les messages d'erreur.
+#' @param approved_mapping 3E (O28, spéc §2.17) : mapping VALIDE explicitement
+#'   par l'utilisateur — data.frame avec colonnes `label` et `identity`.
+#'   Defaut NULL : comportement HISTORIQUE strict (exact match, aucun autre
+#'   effet). Un mapping fourni ne touche QUE les labels qu'il cite ; chaque
+#'   identite doit exister telle quelle dans la colonne choisie. Les
+#'   propositions de propose_communication_identity_mapping() ne sont JAMAIS
+#'   appliquees ici — seul un mapping explicitement valide entre.
 #' @return list(table = canonique + sender_mapped/receiver_mapped/
 #'   source_cell_identity_level renseignes, mapping = data.frame(label, roles,
-#'   matched_identity, matched), summary = list(...), warnings).
+#'   matched_identity, matched + colonnes additives de provenance
+#'   source/rule/distance), summary = list(...), warnings).
 #' @export
 harmonize_communication_identities <- function(canonical_table,
                                                seurat_identities,
                                                identity_column,
-                                               context = "harmonisation communication") {
+                                               context = "harmonisation communication",
+                                               approved_mapping = NULL) {
   if (!is.data.frame(canonical_table) ||
       !all(c("sender", "receiver") %in% colnames(canonical_table))) {
     .communication_stop(
@@ -1102,6 +1111,26 @@ harmonize_communication_identities <- function(canonical_table,
   }
 
   matched <- labels %in% ids
+
+  # ── 3E (O28, spéc §2.17) : overlay d'un mapping VALIDÉ explicitement ──────
+  # Défaut NULL : comportement HISTORIQUE strict — exact match, rien d'autre
+  # (appelants existants inchangés : module CCC, moteur LIANA, contrats gelés).
+  # Un mapping fourni ne touche QUE les labels qu'il cite ; chaque identité
+  # doit exister telle quelle dans la colonne choisie (aucune cible inventée).
+  approved <- .communication_approved_mapping_clean(
+    approved_mapping, ids = ids, labels = labels,
+    identity_column = identity_column, context = context
+  )
+  user_pairs <- approved$pairs  # character nommé : label -> identité Seurat
+  user_hit <- labels %in% names(user_pairs)
+  user_targets <- unname(user_pairs[match(labels, names(user_pairs))])
+  # Un label déjà en exact match mais re-mappé autrement = décision explicite
+  # (ex. colonne à ambiguïté de casse) — appliqué, mais signalé en warning.
+  user_over_exact <- user_hit & matched & (user_targets != labels)
+  matched_final <- matched | user_hit
+  matched_identity_vec <- ifelse(matched, labels, NA_character_)
+  matched_identity_vec[user_hit] <- user_targets[user_hit]
+
   mapping <- data.frame(
     label = labels,
     roles = vapply(labels, function(l) {
@@ -1110,19 +1139,34 @@ harmonize_communication_identities <- function(canonical_table,
       if (any(canonical_table$receiver == l, na.rm = TRUE)) r <- c(r, "receiver")
       paste(r, collapse = "+")
     }, character(1), USE.NAMES = FALSE),
-    matched_identity = ifelse(matched, labels, NA_character_),
-    matched = matched,
+    matched_identity = matched_identity_vec,
+    matched = matched_final,
+    # 3E : provenance de chaque ligne (colonnes additives ; l'export CSV
+    # historique build_communication_identity_mapping_export n'en sélectionne
+    # que les 4 colonnes d'origine — aucun changement de contrat).
+    source = ifelse(user_hit, "user_approved", ifelse(matched, "exact", "unmatched")),
+    rule = ifelse(user_hit, "user_validated", ifelse(matched, "exact", NA_character_)),
+    distance = ifelse(matched & !user_hit, 0L, NA_integer_),
     stringsAsFactors = FALSE
   )
 
-  map_one <- function(x) ifelse(x %in% ids, x, NA_character_)
+  # Chemin historique conservé à l'identique ; l'overlay n'ajoute que les
+  # paires explicitement validées (aucune proposition automatique ne passe ici).
+  map_one <- function(x) {
+    base <- ifelse(x %in% ids, x, NA_character_)
+    if (!length(user_pairs)) return(base)
+    idx <- match(x, names(user_pairs))
+    hit <- !is.na(idx)
+    base[hit] <- user_pairs[idx[hit]]
+    base
+  }
   canonical_table$sender_mapped <- map_one(canonical_table$sender)
   canonical_table$receiver_mapped <- map_one(canonical_table$receiver)
   canonical_table$source_cell_identity_level <- rep(
     as.character(identity_column)[1L], nrow(canonical_table)
   )
 
-  unmatched_labels <- labels[!matched]
+  unmatched_labels <- labels[!matched_final]
 
   # Ambiguite : identites Seurat (ou labels sources) ne se distinguant que par
   # la casse — l'exact match reste deterministe, mais l'utilisateur doit le
@@ -1163,9 +1207,39 @@ harmonize_communication_identities <- function(canonical_table,
     ))
   }
 
+  # ── 3E : warnings du mapping validé (VOIE HISTORIQUE : jamais émis) ───────
+  if (length(approved$ignored_labels)) {
+    warnings <- c(warnings, sprintf(
+      paste0("Mapping valide : %d paire(s) ignoree(s) — label absent de la ",
+             "table canonique : %s."),
+      length(approved$ignored_labels),
+      paste(utils::head(approved$ignored_labels, 10), collapse = ", ")
+    ))
+  }
+  if (any(user_over_exact)) {
+    warnings <- c(warnings, sprintf(
+      paste0("Mapping valide : %d label(s) DEJA en correspondance exacte ",
+             "re-mapés explicitement vers une autre identite : %s."),
+      sum(user_over_exact),
+      paste(sprintf("%s -> %s", labels[user_over_exact],
+                    user_targets[user_over_exact]), collapse = ", ")
+    ))
+  }
+  if (any(user_hit & !matched)) {
+    warnings <- c(warnings, sprintf(
+      paste0("Mapping valide : %d label(s) sans correspondance exacte ",
+             "apparies explicitement par la validation utilisateur : %s."),
+      sum(user_hit & !matched),
+      paste(sprintf("%s -> %s", labels[user_hit & !matched],
+                    user_targets[user_hit & !matched]), collapse = ", ")
+    ))
+  }
+
   # Un resultat ou AUCUN label ne correspond est bloque : la colonne choisie
-  # ne decrit vraisemblablement pas les populations de la source.
-  if (!any(matched)) {
+  # ne decrit vraisemblablement pas les populations de la source. (Le mapping
+  # valide compte : des paires explicites peuvent resoudre un label sans
+  # correspondance exacte.)
+  if (!any(matched_final)) {
     .communication_stop(
       "invalid_identity_mapping",
       sprintf(
@@ -1189,16 +1263,403 @@ harmonize_communication_identities <- function(canonical_table,
       identity_column = as.character(identity_column)[1L],
       n_identities = length(ids),
       n_labels = length(labels),
-      n_labels_matched = sum(matched),
+      n_labels_matched = sum(matched_final),
       n_labels_unmatched = length(unmatched_labels),
       unmatched_labels = unmatched_labels,
       ambiguous_identities = ambiguous_ids,
       ambiguous_labels = ambiguous_labels,
       n_rows = nrow(canonical_table),
-      n_rows_with_unmatched_role = as.integer(n_rows_partial)
+      n_rows_with_unmatched_role = as.integer(n_rows_partial),
+      # 3E : traçabilité du mapping validé (voie historique : 0 / 0 / NULL).
+      n_user_mapped = as.integer(sum(user_hit)),
+      n_user_over_exact = as.integer(sum(user_over_exact)),
+      user_mapping = if (length(user_pairs)) {
+        data.frame(label = names(user_pairs), identity = unname(user_pairs),
+                   stringsAsFactors = FALSE)
+      } else NULL
     ),
     warnings = warnings
   )
+}
+
+# =============================================================================
+# 3E (O28) — Mapping interactif des identites : proposition + validation
+# ============================================================================
+# Spec §2.17 (V1X_SC_QA_AUDIT_FIXES_PROPOSAL.md) : suggestion automatique de
+# rapprochement par distance d'edition entre les labels de la table importee
+# et les identites Seurat, presentee dans une table de validation interactive ;
+# l'utilisateur valide ou edite CHAQUE paire avant application. Aucune
+# proposition n'est jamais appliquee automatiquement : le chemin historique
+# (harmonize_communication_identities sans approved_mapping) reste le
+# comportement des appelants qui n'ouvrent jamais la surface de validation.
+# ============================================================================
+
+#' Regles de normalisation documentees des identites cellulaires
+#'
+#' Etapes APPLIQUEES DANS CET ORDRE par
+#' propose_communication_identity_mapping() pour comparer un label source aux
+#' identites Seurat : trim (espaces de bord), casefold (casse), strip_punct
+#' (ponctuation et symboles remplaces par un espace — ex. "CD4+ T cells" et
+#' "CD4_T_Cells" convergent vers "cd4 t cells"), collapse_ws (espaces internes
+#' colapses en un espace unique). La normalisation ne sert qu'a PROPOSER :
+#' elle ne modifie jamais la table canonique ni les identites Seurat.
+#'
+#' @return Vecteur character nomme (etape -> description), expose pour
+#'   l'affichage du detail de preuve dans la surface de validation.
+#' @export
+communication_identity_normalisation_rules <- function() {
+  c(
+    trim = "espaces de bord supprimes (trimws)",
+    casefold = "casse uniformisee (tolower)",
+    strip_punct = "ponctuation et symboles remplaces par un espace",
+    collapse_ws = "espaces internes colapses en un espace unique"
+  )
+}
+
+# Normalisation documentee (cf. communication_identity_normalisation_rules()).
+# ⚠️ Classe [[:punct:]] (TRE) et NON perl [^[:alnum:]] : sous une locale C
+# (cas reel de ce depot sous Windows), le motif perl matche chaque OCTET d'un
+# caractere multi-octets ("mémoire" devenait "m moire") ; [[:punct:]] ne
+# matche que la ponctuation ASCII et laisse les lettres accentuees intactes,
+# que la chaine soit flaggee UTF-8 ou non.
+.communication_identity_normalise <- function(x) {
+  out <- trimws(as.character(x))
+  out <- tolower(out)
+  out <- gsub("[[:punct:]]+", " ", out)
+  trimws(gsub("[[:space:]]+", " ", out))
+}
+
+# Distance d'edition de Levenshtein — implementation base R pure (stringdist
+# n'est pas une dependance du depot ; aucune nouvelle dependance au mandat
+# O28). Entrees courtes (labels et identites) : cout O(len(a)*len(b)) negligeable.
+.communication_identity_levenshtein <- function(a, b) {
+  if (identical(a, b)) return(0L)
+  ca <- strsplit(a, "", useBytes = FALSE)[[1L]]
+  cb <- strsplit(b, "", useBytes = FALSE)[[1L]]
+  n <- length(ca)
+  m <- length(cb)
+  if (!n) return(as.integer(m))
+  if (!m) return(as.integer(n))
+  prev <- 0L:m
+  for (i in seq_len(n)) {
+    cur <- integer(m + 1L)
+    cur[1L] <- i
+    for (j in seq_len(m)) {
+      cost <- if (identical(ca[i], cb[j])) 0L else 1L
+      cur[j + 1L] <- min(prev[j] + 1L, cur[j] + 1L, prev[j] + cost)
+    }
+    prev <- cur
+  }
+  as.integer(prev[m + 1L])
+}
+
+#' Proposer un rapprochement labels -> identites Seurat (JAMAIS applique)
+#'
+#' Pour chaque label : (1) correspondance exacte conservee telle quelle
+#' (status "matched_exact", rule "exact") ; (2) egalite apres normalisation
+#' documentee (status "proposed", rule "normalise") si UNE SEULE identite
+#' partage la cle normalisee — sinon "ambiguous" ; (3) distance d'edition de
+#' Levenshtein calculee sur les formes normalisees (status "proposed",
+#' rule "levenshtein") si le meilleur candidat est unique et a distance <=
+#' max_edit_distance — ex-aequo ou au-dela : "ambiguous" / "unmatched".
+#' Chaque ligne porte sa PREUVE (rule, distance, detail). Les propositions ne
+#' produisent AUCUN effet : l'application passe exclusivement par
+#' apply_communication_identity_mapping() ou par harmonize_communication_identities()
+#' avec un approved_mapping explicitement valide par l'utilisateur.
+#'
+#' @param labels Vecteur character de labels sources UNIQUES et non vides
+#'   (typiquement mapping$label issu de harmonize_communication_identities).
+#' @param seurat_identities Vecteur character des identites de la colonne
+#'   de metadonnees choisie (extrait par le module depuis obj@meta.data).
+#' @param roles Optionnel : vecteur character aligne sur labels (roles
+#'   sender/receiver deja calcules par l'harmonisation).
+#' @param max_edit_distance Distance d'edition maximale d'une proposition
+#'   Levenshtein (entier >= 0, defaut 2).
+#' @return data.frame(label, roles, candidate_identity, rule, distance,
+#'   status, detail) — status : matched_exact / proposed / ambiguous /
+#'   unmatched ; rule : exact / normalise / levenshtein / NA ; detail :
+#'   preuve lisible (regles de normalisation, distances, ex-aequo).
+#' @export
+propose_communication_identity_mapping <- function(labels,
+                                                   seurat_identities,
+                                                   roles = NULL,
+                                                   max_edit_distance = 2L) {
+  if (is.null(labels)) {
+    .communication_stop(
+      "invalid_input",
+      paste0("propose_communication_identity_mapping() : vecteur de labels ",
+             "requis (recu : NULL).")
+    )
+  }
+  labels <- as.character(labels)
+  if (anyNA(labels) || any(.communication_is_blank(labels))) {
+    .communication_stop(
+      "invalid_input",
+      paste0("propose_communication_identity_mapping() : labels vides ou NA ",
+             "interdits — filtrer d'abord comme le fait ",
+             "harmonize_communication_identities().")
+    )
+  }
+  if (anyDuplicated(labels)) {
+    .communication_stop(
+      "invalid_input",
+      sprintf(
+        paste0("propose_communication_identity_mapping() : labels uniques ",
+               "requis (dupliques : %s)."),
+        paste(utils::head(labels[duplicated(labels)], 10), collapse = ", ")
+      )
+    )
+  }
+  if (is.null(seurat_identities) || !length(seurat_identities) ||
+      all(is.na(seurat_identities))) {
+    .communication_stop(
+      "invalid_identity_mapping",
+      "propose_communication_identity_mapping() : aucune identite Seurat exploitable (vide ou tout NA)."
+    )
+  }
+  ids <- unique(as.character(
+    seurat_identities[!.communication_is_blank(seurat_identities)]
+  ))
+  if (!length(ids)) {
+    .communication_stop(
+      "invalid_identity_mapping",
+      "propose_communication_identity_mapping() : aucune identite Seurat exploitable (vide ou tout NA)."
+    )
+  }
+  if (!is.null(roles)) {
+    roles <- as.character(roles)
+    if (length(roles) != length(labels)) {
+      .communication_stop(
+        "invalid_input",
+        paste0("propose_communication_identity_mapping() : roles doit etre ",
+               "aligne sur labels (meme longueur) ou NULL.")
+      )
+    }
+  } else {
+    roles <- rep(NA_character_, length(labels))
+  }
+  if (!is.numeric(max_edit_distance) || length(max_edit_distance) != 1L ||
+      !is.finite(max_edit_distance) || max_edit_distance < 0) {
+    .communication_stop(
+      "invalid_input",
+      "propose_communication_identity_mapping() : max_edit_distance doit etre un nombre unique >= 0 (defaut 2)."
+    )
+  }
+  max_d <- as.integer(max_edit_distance)
+
+  keys_ids <- .communication_identity_normalise(ids)
+  keys_lab <- .communication_identity_normalise(labels)
+  rules_txt <- paste(names(communication_identity_normalisation_rules()),
+                     collapse = "/")
+
+  candidate <- rep(NA_character_, length(labels))
+  rule <- rep(NA_character_, length(labels))
+  distance <- rep(NA_integer_, length(labels))
+  status <- character(length(labels))
+  detail <- rep("", length(labels))
+
+  for (i in seq_along(labels)) {
+    if (labels[i] %in% ids) {
+      # (1) exact match : conserve tel quel (comportement historique).
+      status[i] <- "matched_exact"
+      candidate[i] <- labels[i]
+      rule[i] <- "exact"
+      distance[i] <- 0L
+      n_key <- sum(keys_ids == keys_lab[i])
+      if (n_key > 1L) {
+        detail[i] <- sprintf(
+          paste0("exact match conserve, mais cle normalisee partagee par %d ",
+                 "identites (ambiguite de casse/syntaxe) : %s"),
+          n_key, paste(ids[keys_ids == keys_lab[i]], collapse = ", ")
+        )
+      }
+      next
+    }
+    same <- which(keys_ids == keys_lab[i])
+    if (length(same) == 1L) {
+      # (2) egalite apres normalisation documentee.
+      status[i] <- "proposed"
+      candidate[i] <- ids[same]
+      rule[i] <- "normalise"
+      distance[i] <- 0L
+      detail[i] <- sprintf(
+        "egalite apres normalisation (%s) : '%s' vs '%s'",
+        rules_txt, labels[i], ids[same]
+      )
+      next
+    }
+    if (length(same) > 1L) {
+      status[i] <- "ambiguous"
+      detail[i] <- sprintf(
+        paste0("cle normalisee '%s' partagee par %d identites : %s — ",
+               "aucune proposition automatique"),
+        keys_lab[i], length(same), paste(ids[same], collapse = ", ")
+      )
+      next
+    }
+    # (3) Levenshtein sur les formes normalisees : meilleur candidat UNIQUE
+    #     a distance dans [1, max_edit_distance].
+    d <- vapply(keys_ids, function(z) {
+      .communication_identity_levenshtein(keys_lab[i], z)
+    }, integer(1))
+    dmin <- min(d)
+    if (dmin > max_d) {
+      status[i] <- "unmatched"
+      detail[i] <- sprintf(
+        "distance d'edition minimale %d > max_edit_distance (%d)", dmin, max_d
+      )
+      next
+    }
+    winners <- which(d == dmin)
+    if (length(winners) == 1L) {
+      status[i] <- "proposed"
+      candidate[i] <- ids[winners]
+      rule[i] <- "levenshtein"
+      distance[i] <- as.integer(dmin)
+      detail[i] <- sprintf(
+        "distance d'edition %d entre formes normalisees : '%s' vs '%s'",
+        dmin, keys_lab[i], keys_ids[winners]
+      )
+    } else {
+      status[i] <- "ambiguous"
+      detail[i] <- sprintf(
+        paste0("%d identites ex-aequo a la distance d'edition minimale %d : ",
+               "%s — aucune proposition automatique"),
+        length(winners), dmin, paste(ids[winners], collapse = ", ")
+      )
+    }
+  }
+
+  data.frame(
+    label = labels,
+    roles = roles,
+    candidate_identity = candidate,
+    rule = rule,
+    distance = distance,
+    status = status,
+    detail = detail,
+    stringsAsFactors = FALSE
+  )
+}
+
+#' Appliquer un mapping d'identites VALIDÉ explicitement par l'utilisateur
+#'
+#' Point d'entree du 3E (O28, spéc §2.17) pour consommer les paires issues de
+#' la table de validation : refuse tout appel sans mapping explicite (aucune
+#' application automatique des propositions), puis delegue a
+#' harmonize_communication_identities(..., approved_mapping = ...) dont il
+#' partage strictement le contrat de retour (table/mapping/summary/warnings).
+#' Chaque identite validee doit exister telle quelle dans la colonne choisie ;
+#' une identity vide/NA vaut choix explicite « laisser non-apparie » (paire
+#' retiree sans erreur) ; les labels absents de la table sont ignores avec un
+#' warning ; les doublons contradictoires sont bloquants.
+#'
+#' @param canonical_table Table canonique (parse_*_import).
+#' @param seurat_identities Vecteur character des identites de la colonne choisie.
+#' @param identity_column Nom de la colonne choisie (tracé).
+#' @param approved_mapping data.frame colonnes `label` et `identity` issu de
+#'   la validation utilisateur (les colonnes de preuve supplementaires —
+#'   rule, distance, status, detail — sont tolerees et ignorees ici).
+#' @param context Contexte cite dans les messages d'erreur.
+#' @return Meme contrat que harmonize_communication_identities().
+#' @export
+apply_communication_identity_mapping <- function(canonical_table,
+                                                 seurat_identities,
+                                                 identity_column,
+                                                 approved_mapping,
+                                                 context = "application du mapping d'identites valide") {
+  if (is.null(approved_mapping)) {
+    .communication_stop(
+      "invalid_input",
+      paste0("apply_communication_identity_mapping() : un mapping VALIDE ",
+             "explicitement (data.frame label/identity issu de la table de ",
+             "validation) est requis — aucune application automatique des ",
+             "propositions. Pour le comportement exact match historique, ",
+             "appeler harmonize_communication_identities() sans ",
+             "approved_mapping.")
+    )
+  }
+  harmonize_communication_identities(
+    canonical_table = canonical_table,
+    seurat_identities = seurat_identities,
+    identity_column = identity_column,
+    context = context,
+    approved_mapping = approved_mapping
+  )
+}
+
+# Validation et nettoyage du mapping VALIDE explicitement (colonnes label +
+# identity). Retour : pairs (character nomme label -> identite Seurat
+# ORIGINALE — la valeur appliquee reste verbatim, jamais la variante
+# re-saisie/trimmee), ignored_labels (labels absents de la table, a signaler).
+# Stops : structure invalide, identite inconnue de la colonne, doublons
+# contradictoires. Identity vide/NA = « laisser non-apparie » (retire sans
+# erreur). Comparaisons tolerant aux espaces de bord (saisie utilisateur).
+.communication_approved_mapping_clean <- function(approved_mapping, ids, labels,
+                                                  identity_column, context) {
+  if (is.null(approved_mapping)) {
+    return(list(pairs = setNames(character(0), character(0)),
+                ignored_labels = character(0)))
+  }
+  if (!is.data.frame(approved_mapping) ||
+      !all(c("label", "identity") %in% colnames(approved_mapping))) {
+    .communication_stop(
+      "invalid_input",
+      sprintf(
+        paste0("Echec %s : le mapping valide doit etre un data.frame avec ",
+               "les colonnes 'label' et 'identity' (recu : %s)."),
+        context,
+        if (is.null(approved_mapping)) "NULL"
+        else paste(class(approved_mapping), collapse = "/")
+      )
+    )
+  }
+  lab <- trimws(as.character(approved_mapping$label))
+  ident <- trimws(as.character(approved_mapping$identity))
+  keep <- !is.na(lab) & nzchar(lab) & !is.na(ident) & nzchar(ident)
+  lab <- lab[keep]
+  ident <- ident[keep]
+
+  if (length(lab)) {
+    dup <- unique(lab[duplicated(lab) | duplicated(lab, fromLast = TRUE)])
+    for (l in dup) {
+      n_distinct <- length(unique(ident[lab == l]))
+      if (n_distinct > 1L) {
+        .communication_stop(
+          "invalid_input",
+          sprintf(
+            paste0("Echec %s : mapping valide contradictoire pour le label ",
+                   "'%s' (%d identites distinctes validees) — trancher dans ",
+                   "la table de validation."),
+            context, l, n_distinct
+          )
+        )
+      }
+    }
+    known <- match(ident, ids)
+    if (anyNA(known)) {
+      .communication_stop(
+        "invalid_identity_mapping",
+        sprintf(
+          paste0("Echec %s : identite(s) validee(s) absente(s) de la ",
+                 "colonne '%s' : %s (identites disponibles : %s)."),
+          context, identity_column,
+          paste(utils::head(unique(ident[is.na(known)]), 10), collapse = ", "),
+          paste(utils::head(ids, 10), collapse = ", ")
+        )
+      )
+    }
+    # Valeur appliquee = identite Seurat ORIGINALE (verbatim).
+    ident <- ids[known]
+  }
+
+  in_table <- lab %in% labels
+  ignored_labels <- unique(lab[!in_table])
+  lab <- lab[in_table]
+  ident <- ident[in_table]
+  pairs <- setNames(ident, lab)
+  pairs <- pairs[!duplicated(names(pairs))]
+  list(pairs = pairs, ignored_labels = ignored_labels)
 }
 
 # =============================================================================
@@ -1713,6 +2174,10 @@ communication_public_api <- function() {
     # Harmonisation / QC / finalisation
     "harmonize_communication_identities", "communication_import_qc",
     "finalize_communication_result", "communication_result_is_stale",
+    # 3E (O28) : mapping interactif des identites (proposition + validation)
+    "communication_identity_normalisation_rules",
+    "propose_communication_identity_mapping",
+    "apply_communication_identity_mapping",
     # Exports
     "build_communication_import_summary",
     "build_communication_identity_mapping_export",

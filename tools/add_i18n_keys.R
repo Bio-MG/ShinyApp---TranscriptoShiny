@@ -7,6 +7,43 @@ j <- jsonlite::fromJSON(json_path, simplifyVector = FALSE)
 
 # key (fr) -> en
 new_entries <- list(
+  # --- O28 batch B5 (2026-10-30) : item 3E du packet round-7 — surface de
+  # validation propose/valide de l'harmonisation des identites CCC
+  # (mod_sc_communication.R, spéc §2.17) + signal visible des labels sans
+  # correspondance exacte. ⚠️ Application SCOPÉE (leçon B1) : ces clés ont été
+  # appendues via un script à entrées limitées — le tool complet emporterait
+  # ~164 entrées en attente d'autres lots (mesuré 2026-10-30 : run nu =
+  # "entries added: 164", revert immédiat).
+  c("Correspondances proposees : sous-onglet \u00ab Harmonisation identites \u00bb (validation explicite avant application).",
+    "Proposed correspondences: 'Identity harmonisation' sub-tab (explicit validation before applying)."),
+  c("Proposer des correspondances",
+    "Propose correspondences"),
+  c("Appliquer le mapping valide",
+    "Apply the validated mapping"),
+  c("Propositions pre-remplies (exact + suggerees, preuve par ligne). Editez ou videz la colonne \u00ab identite validee \u00bb, puis appliquez avec confirmation : rien n'est applique sans validation et l'exact match reste en vigueur.",
+    "Pre-filled proposals (exact + suggested, per-line evidence). Edit or clear the 'validated identity' column, then apply with confirmation: nothing is applied without validation and the exact match remains in force."),
+  c("Harmonisation : %d label(s) sans correspondance exacte \u2014 propositions de correspondance dans le sous-onglet \u00ab Harmonisation identites \u00bb.",
+    "Harmonisation: %d label(s) without exact match \u2014 correspondence proposals in the 'Identity harmonisation' sub-tab."),
+  c("Mapping interactif disponible pour les resultats importes uniquement.",
+    "Interactive mapping available for imported results only."),
+  c("Erreur propositions d'identites :",
+    "Identity proposal error:"),
+  c("Aucune proposition en attente \u2014 cliquez d'abord sur \u00ab Proposer des correspondances \u00bb.",
+    "No pending proposal \u2014 click 'Propose correspondences' first."),
+  c("Aucune correspondance validee \u2014 rien a appliquer (l'exact match reste en vigueur).",
+    "No validated correspondence \u2014 nothing to apply (the exact match remains in force)."),
+  c("Confirmer le mapping d'identites valide",
+    "Confirm the validated identity mapping"),
+  c("Ces paires seront appliquees a la table canonique (aucune autre modification) :",
+    "These pairs will be applied to the canonical table (no other change):"),
+  c("Les identites inconnues de la colonne choisie seront refusees ; une identite vide vaut \u00ab laisser non-apparie \u00bb.",
+    "Identities unknown to the chosen column will be rejected; an empty identity means 'leave unmapped'."),
+  c("Mapping d'identites applique : %d paire(s) validee(s).",
+    "Identity mapping applied: %d validated pair(s)."),
+  c("Erreur application du mapping :",
+    "Mapping application error:"),
+  c("Aucun resultat importe \u2014 importez d'abord une table de communication.",
+    "No imported result \u2014 import a communication table first."),
   # --- O28 batch B1 (2026-10-29) : items 1C/1D/3C du packet round-7 —
   # badges de synchronisation (mod_sc_trajectory.R, spéc §2.3 ;
   # mod_sc_corr.R, spéc §2.4) et feedback visible du bouton « Ajouter
