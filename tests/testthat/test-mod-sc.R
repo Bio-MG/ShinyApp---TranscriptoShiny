@@ -311,3 +311,38 @@ test_that("2K verrou source : repli via accordion_panel_close au changement de s
   expect_match(src, "\u2705 Pipeline valid\u00e9 \u2014 %s cellules conserv\u00e9es",
                fixed = TRUE)
 })
+
+# ── B4 (O28, 2026-10-30) : 2A — les 17 onglets « Résultats » en 5 nav_menu ───
+# Re-sweep 1920×1080 (RE_SWEEP_1920_2026-10-30.md) : barre 2 lignes / 100 px
+# (couche L2 du goulot 2I) ; après regroupement spéc §2.6 : 1 ligne / 42 px.
+# Les `value` sont INCHANGÉS — l'état active_tab (mod_sc_server:867) et les
+# nav_select existants (3C corr, drive-watcher tabmap) les visent ; le lock
+# drive-watcher `value = "<tab>", mod_sc_<m>_output_ui` reste contigu.
+test_that("2A : les 17 onglets Résultats sont regroupés en 5 nav_menu thématiques (spéc §2.6)", {
+  src <- paste(readLines(file.path(ts_project_root(), .MSCR_FILE),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  # 5 pôles, libellés de la spéc §2.6 (le caret des menus est dessiné par
+  # bslib — pas de « ▾ » dans les clés i18n) :
+  for (grp in c("Exploration", "Différentiel & DA", "Réseaux & Signalisation",
+                "Dynamique", "Contrôle & Rapports")) {
+    expect_match(src, sprintf('nav_menu(i18n$t("%s")', grp), fixed = TRUE, info = grp)
+  }
+  # Exactement 5 nav_menu dans le fichier (pas de regroupement partiel) :
+  expect_identical(lengths(regmatches(src, gregexpr("nav_menu(i18n$t(", src,
+                                                    fixed = TRUE))), 5L)
+  # Le navset Résultats garde son id (état + tests drive-watcher) :
+  expect_match(src, 'id = ns("main_tabs")', fixed = TRUE)
+  # Les 17 `value` sont inchangés — aucun rename silencieux :
+  for (v in c("tab_viz", "tab_table", "tab_pseudobulk", "tab_annotation",
+              "tab_rarity", "tab_correlation", "tab_pathway", "tab_trajectory",
+              "tab_velocity", "tab_communication", "tab_da_design", "tab_da_milo",
+              "tab_da_sccoda", "tab_da_cross", "tab_report_consolide",
+              "tab_qc", "tab_summary")) {
+    expect_match(src, sprintf('value = "%s"', v), fixed = TRUE, info = v)
+  }
+  # Chaque pôle porte son membership de la spéc §2.6 (contigüité value+UI,
+  # même motif que le lock drive-watcher) :
+  expect_match(src, 'value = "tab_viz", mod_sc_viz_output_ui', fixed = TRUE)
+  expect_match(src, 'value = "tab_communication", mod_sc_communication_output_ui', fixed = TRUE)
+  expect_match(src, 'value = "tab_report_consolide", mod_sc_report_consolidated_output_ui', fixed = TRUE)
+})

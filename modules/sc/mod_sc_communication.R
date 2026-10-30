@@ -19,6 +19,15 @@
 # EXACTEMENT comme un import (regle des deux voies : meme forme, donc memes
 # vues et memes exports, sans qu'aucun n'ait eu a changer).
 # =============================================================================
+# ⚠️ Coordination B4/freeze (2026-10-30) : ce fichier ne doit contenir AUCUNE
+# affectation top-level hors ses 3 fonctions d'orchestration — gel
+# test-communication-contract-freeze.R:140-145 (helper :23-35, sans filtre
+# point). La carte des sous-panneaux 2F/2L (`.comm_drawer_groups`) vit donc
+# EN LOCAL de fonction, en DEUX exemplaires jumelles (rendu tiroir dans
+# mod_sc_communication_output_ui, observateurs de saut dans le serveur),
+# égalité verrouillée par test-mod-sc-communication-ui.R — même motif que le
+# defaut `comm_source` « déclaré ici ET repris par le repli serveur » (:34-36).
+# =============================================================================
 
 mod_sc_communication_ui <- function(id) {
   ns <- NS(id)
@@ -180,71 +189,145 @@ mod_sc_communication_ui <- function(id) {
 
 mod_sc_communication_output_ui <- function(id) {
   ns <- NS(id)
+  # 2F (O28, spéc §2.14) + 2L (O28, spéc §2.23 point 2) : carte des 14
+  # sous-panneaux CCC en 4 groupes thématiques — consommée par le tiroir
+  # offcanvas (boutons de saut 2L) ; les mêmes groupes structurent le navset
+  # via les `value` ASCII explicites posés plus bas. ⚠️ JUMELLE : la même
+  # carte est redéclarée EN LOCAL dans mod_sc_communication_server (pas de
+  # constante top-level — gel test-communication-contract-freeze.R:140-145) ;
+  # toute modification doit être faite AUX DEUX endroits — égalité verrouillée
+  # par test-mod-sc-communication-ui.R. Ordre INTERNE du groupe 3 : l'ordre
+  # physique du code est conservé (Schema source → Harmonisation identites →
+  # QC import) — la surface 3E/B5 (« Harmonisation identites ») n'est pas
+  # déplacée.
+  .comm_drawer_groups <- list(
+    "Exploration des interactions" = list(
+      list(value = "ccc_tab_interactions", label = "Table interactions"),
+      list(value = "ccc_tab_table_filtres", label = "Table (filtres)"),
+      list(value = "ccc_tab_dotplot", label = "DotPlot"),
+      list(value = "ccc_tab_heatmap", label = "Heatmap pathways"),
+      list(value = "ccc_tab_reseau", label = "Réseau"),
+      list(value = "ccc_tab_centralite", label = "Centralité")),
+    "Contextes multi-modaux" = list(
+      list(value = "ccc_tab_spatial", label = "Contexte spatial"),
+      list(value = "ccc_tab_trajectoire", label = "Contexte trajectoire"),
+      list(value = "ccc_tab_velocite", label = "Contexte vélocité"),
+      list(value = "ccc_tab_perturbation", label = "Perturbation (in silico)")),
+    "Traçabilité & qualité" = list(
+      list(value = "ccc_tab_schema", label = "Schema source"),
+      list(value = "ccc_tab_harmonisation", label = "Harmonisation identites"),
+      list(value = "ccc_tab_qc_import", label = "QC import")),
+    "Documentation & méthodes" = list(
+      list(value = "ccc_tab_limites", label = "Limites"))
+  )
   card(
     full_screen = TRUE,
-    card_header(i18n$t("Communication cellule-cellule — resultats importes")),
+    # 2L (O28, spéc §2.23 point 2 — re-scopé par le re-sweep 1920×1080 du
+    # 2026-10-30 : la rétractabilité de la sidebar existe déjà en natif bslib,
+    # sonde 420→0→420 px) : pastille ouvrant le tiroir offcanvas secondaire
+    # (navigation panneaux + résumé de filtrage) SANS replier la sidebar ni
+    # dérouler l'accordéon de filtres 2I. Arbitrage avec 2I : les filtres
+    # restent dans l'accordéon (une seule instance), le tiroir ne les duplique
+    # pas — il porte le résumé et l'accès direct aux panneaux.
+    card_header(
+      div(class = "d-flex justify-content-between align-items-center gap-2",
+          tags$span(i18n$t("Communication cellule-cellule — resultats importes")),
+          tags$button(type = "button",
+                      class = "btn btn-sm btn-outline-secondary flex-shrink-0",
+                      `data-bs-toggle` = "offcanvas",
+                      `data-bs-target` = paste0("#", ns("comm_drawer")),
+                      `aria-controls` = ns("comm_drawer"),
+                      icon("list-ul"), " ", i18n$t("Navigation & filtres")))
+    ),
     # ── Filtres d'affichage (operations d'affichage, captures en provenance
     # a l'export — la table canonique du resultat n'est jamais modifiee) ────
-    div(class = "border rounded p-2 m-2", style = "background:#f8f9fa;",
-        fluidRow(
-          column(3, numericInput(ns("comm_f_score_min"), i18n$t("Score minimum (importé)"),
-                                 value = NA, min = 0, width = "100%")),
-          column(3, numericInput(ns("comm_f_pmax"), i18n$t("P-value maximum (importée)"),
-                                 value = NA, min = 0, max = 1, width = "100%")),
-          column(6, selectizeInput(ns("comm_f_pathways"), i18n$t("Pathways"),
-                                   choices = character(0), multiple = TRUE,
-                                   options = list(placeholder = .tr_plain("Tous"))))),
-        fluidRow(
-          column(3, numericInput(ns("comm_f_rank_max"), i18n$t("Rang maximum (importé)"),
-                                 value = NA, min = 0, width = "100%"))),
-        fluidRow(
-          column(4, selectizeInput(ns("comm_f_senders"), i18n$t("Senders"),
-                                   choices = character(0), multiple = TRUE,
-                                   options = list(placeholder = .tr_plain("Tous")))),
-          column(4, selectizeInput(ns("comm_f_receivers"), i18n$t("Receivers"),
-                                   choices = character(0), multiple = TRUE,
-                                   options = list(placeholder = .tr_plain("Tous")))),
-          column(4, checkboxInput(ns("comm_f_include_self"),
-                                  i18n$t("Inclure les auto-interactions"), value = TRUE))),
-        div(class = "small text-muted", textOutput(ns("comm_filter_summary")))),
+    # 2I (O28, spéc §2.20 point 1) : la zone de filtres STATIQUE (couche L4 du
+    # goulot vertical : 276 px mesurés à 1920×1080, re-sweep du 2026-10-30,
+    # bas de pile 754 px) devient un accordéon FERMÉ par défaut — ~276 px
+    # rendus au boot. Les ids des inputs (comm_f_*) sont INCHANGÉS : les
+    # filtres restent des opérations d'affichage, câblées à l'identique côté
+    # serveur (comm_filtered), et les inputs restent lisibles panne replié.
+    div(class = "m-2",
+      accordion(
+        id = ns("comm_filters_accordion"),
+        open = FALSE,
+        accordion_panel(
+          title = tagList(icon("filter"), " ", i18n$t("Filtres d'interaction")),
+          value = "comm_filters_panel",
+          fluidRow(
+            column(3, numericInput(ns("comm_f_score_min"), i18n$t("Score minimum (importé)"),
+                                   value = NA, min = 0, width = "100%")),
+            column(3, numericInput(ns("comm_f_pmax"), i18n$t("P-value maximum (importée)"),
+                                   value = NA, min = 0, max = 1, width = "100%")),
+            column(6, selectizeInput(ns("comm_f_pathways"), i18n$t("Pathways"),
+                                     choices = character(0), multiple = TRUE,
+                                     options = list(placeholder = .tr_plain("Tous"))))),
+          fluidRow(
+            column(3, numericInput(ns("comm_f_rank_max"), i18n$t("Rang maximum (importé)"),
+                                   value = NA, min = 0, width = "100%"))),
+          fluidRow(
+            column(4, selectizeInput(ns("comm_f_senders"), i18n$t("Senders"),
+                                     choices = character(0), multiple = TRUE,
+                                     options = list(placeholder = .tr_plain("Tous")))),
+            column(4, selectizeInput(ns("comm_f_receivers"), i18n$t("Receivers"),
+                                     choices = character(0), multiple = TRUE,
+                                     options = list(placeholder = .tr_plain("Tous")))),
+            column(4, checkboxInput(ns("comm_f_include_self"),
+                                    i18n$t("Inclure les auto-interactions"), value = TRUE))),
+          div(class = "small text-muted", textOutput(ns("comm_filter_summary")))
+        )
+      )
+    ),
+    # ── 2F (O28, spéc §2.14) : les 14 sous-onglets consécutifs (wrap 3 lignes
+    # à 1920×1080, re-sweep du 2026-10-30 — couche L5 du goulot 2I) sont
+    # regroupés en 4 nav_menu thématiques (.comm_drawer_groups, une seule
+    # source de vérité). Les contenus des panneaux sont INCHANGÉS (surfaces
+    # 3E/B5 « Harmonisation identites » et 2G « Limites » respectées verbatim) ;
+    # les `value` ASCII explicites sont consommés par le tiroir 2L.
     navset_tab(
-      nav_panel(i18n$t("Table interactions"),
-                DT::dataTableOutput(ns("comm_table"), height = "520px")),
-      nav_panel(i18n$t("Table (filtres)"),
-                DT::dataTableOutput(ns("comm_table_filtered"), height = "520px")),
-      nav_panel(i18n$t("DotPlot"),
+      id = ns("comm_tabs"),
+      nav_menu(i18n$t("Exploration des interactions"),
+        nav_panel(i18n$t("Table interactions"), value = "ccc_tab_interactions",
+                  DT::dataTableOutput(ns("comm_table"), height = "520px")),
+        nav_panel(i18n$t("Table (filtres)"), value = "ccc_tab_table_filtres",
+                  DT::dataTableOutput(ns("comm_table_filtered"), height = "520px")),
+        nav_panel(i18n$t("DotPlot"), value = "ccc_tab_dotplot",
                 plotOutput(ns("comm_dotplot"), height = "480px"),
                 fluidRow(
                   column(6, downloadButton(ns("dl_comm_dotplot_png"), i18n$t("PNG"), class = "btn-sm btn-outline-secondary")),
                   column(6, downloadButton(ns("dl_comm_dotplot_pdf"), i18n$t("PDF"), class = "btn-sm btn-outline-secondary")))),
-      nav_panel(i18n$t("Heatmap pathways"),
+      nav_panel(i18n$t("Heatmap pathways"), value = "ccc_tab_heatmap",
                 plotOutput(ns("comm_heatmap"), height = "480px"),
                 fluidRow(
                   column(6, downloadButton(ns("dl_comm_heatmap_png"), i18n$t("PNG"), class = "btn-sm btn-outline-secondary")),
                   column(6, downloadButton(ns("dl_comm_heatmap_pdf"), i18n$t("PDF"), class = "btn-sm btn-outline-secondary")))),
-      nav_panel(i18n$t("Réseau"),
+      nav_panel(i18n$t("Réseau"), value = "ccc_tab_reseau",
                 plotOutput(ns("comm_circle"), height = "520px"),
                 fluidRow(
                   column(6, downloadButton(ns("dl_comm_circle_png"), i18n$t("PNG"), class = "btn-sm btn-outline-secondary")),
                   column(6, downloadButton(ns("dl_comm_circle_pdf"), i18n$t("PDF"), class = "btn-sm btn-outline-secondary")))),
-      nav_panel(i18n$t("Centralité"),
+      nav_panel(i18n$t("Centralité"), value = "ccc_tab_centralite",
                 div(class = "small text-muted m-2",
                     i18n$t("Centralité dérivée du réseau, descriptive — ce n'est pas un contrôle biologique.")),
-                DT::dataTableOutput(ns("comm_centrality"), height = "420px")),
+                DT::dataTableOutput(ns("comm_centrality"), height = "420px"))
+      ),
+      nav_menu(i18n$t("Contextes multi-modaux"),
       # ── Contextes V1.x (roadmap CCC avancée : contrainte/ordre/contexte —
       # consommateurs purs, aucun recalcul ; docs/ROADMAP_CCC_ADVANCED.md) ──
-      nav_panel(i18n$t("Contexte spatial"),
+      nav_panel(i18n$t("Contexte spatial"), value = "ccc_tab_spatial",
                 mod_sc_communication_spatial_ui(ns("spatial"))),
-      nav_panel(i18n$t("Contexte trajectoire"),
+      nav_panel(i18n$t("Contexte trajectoire"), value = "ccc_tab_trajectoire",
                 mod_sc_communication_trajectory_ui(ns("trajectory"))),
-      nav_panel(i18n$t("Contexte vélocité"),
+      nav_panel(i18n$t("Contexte vélocité"), value = "ccc_tab_velocite",
                 mod_sc_communication_velocity_ui(ns("velocity_ctx"))),
-      nav_panel(i18n$t("Perturbation (in silico)"),
-                mod_sc_communication_perturbation_ui(ns("perturbation"))),
-      nav_panel(i18n$t("Schema source"),
+      nav_panel(i18n$t("Perturbation (in silico)"), value = "ccc_tab_perturbation",
+                mod_sc_communication_perturbation_ui(ns("perturbation")))
+      ),
+      nav_menu(i18n$t("Traçabilité & qualité"),
+      nav_panel(i18n$t("Schema source"), value = "ccc_tab_schema",
                 DT::dataTableOutput(ns("comm_schema"), height = "380px"),
                 div(class = "small text-muted mt-2", textOutput(ns("comm_schema_note")))),
-      nav_panel(i18n$t("Harmonisation identites"),
+      nav_panel(i18n$t("Harmonisation identites"), value = "ccc_tab_harmonisation",
                 # ── 3E (O28, spéc §2.17) : surface de validation propose/valide ──
                 # DT éditable pré-rempli avec les correspondances exactes et
                 # suggérées (preuve par ligne : rule/distance/status/detail) ;
@@ -269,9 +352,11 @@ mod_sc_communication_output_ui <- function(id) {
                 DT::dataTableOutput(ns("comm_proposals"), height = "300px"),
                 hr(),
                 DT::dataTableOutput(ns("comm_mapping"), height = "380px")),
-      nav_panel(i18n$t("QC import"),
-                uiOutput(ns("comm_qc"))),
-      nav_panel(i18n$t("Limites"),
+      nav_panel(i18n$t("QC import"), value = "ccc_tab_qc_import",
+                uiOutput(ns("comm_qc")))
+      ),
+      nav_menu(i18n$t("Documentation & méthodes"),
+      nav_panel(i18n$t("Limites"), value = "ccc_tab_limites",
                 # 2G (O28) : les 5 bannières `alert-*` empilées (constat 2G,
                 # packet round-7 : 1 warning, 2 info, 2 light) sont regroupées en
                 # UNE carte synthétique à puces thématiques (spéc §2.15).
@@ -304,6 +389,38 @@ mod_sc_communication_output_ui <- function(id) {
                                     tags$span(class = "badge bg-secondary text-white me-2",
                                               "🧬 ", i18n$t("Objets RDS CellChat")),
                                     i18n$t("Objet CellChat (.rds) : extraction de resultats deja calcules uniquement — le mapping ligand-receptor vers pathway n'est pas reconstitue."))))))
+      ),
+    ),
+    # ── 2L (O28, spéc §2.23 point 2) : tiroir offcanvas secondaire (droite) ──
+    # Re-scope du re-sweep 1920×1080 (2026-10-30) : la rétractabilité sidebar
+    # est déjà native (bslib collapse-toggle, sonde 420→0→420 px) — ce que le
+    # constat 2L demande EN PLUS est l'accès aux panneaux SANS replier le
+    # workflow. Tiroir Bootstrap 5 natif (.offcanvas.offcanvas-end, déclenché
+    # par la pastille de l'en-tête de carte) : résumé de filtrage vivant +
+    # sauts directs vers les 14 panneaux groupés comme en 2F. Les filtres eux-
+    # mêmes ne sont PAS dupliqués (instance unique dans l'accordéon 2I).
+    tags$div(
+      id = ns("comm_drawer"), class = "offcanvas offcanvas-end", tabindex = "-1",
+      `aria-labelledby` = ns("comm_drawer_title"),
+      tags$div(class = "offcanvas-header",
+               h5(id = ns("comm_drawer_title"), class = "offcanvas-title",
+                  icon("list-ul"), " ", i18n$t("Navigation CCC")),
+               tags$button(type = "button", class = "btn-close",
+                           `data-bs-dismiss` = "offcanvas", `aria-label` = "Close")),
+      tags$div(class = "offcanvas-body",
+        h6(i18n$t("Filtres d'interaction")),
+        div(class = "small text-muted", textOutput(ns("comm_filter_summary_drawer"))),
+        hr(),
+        lapply(names(.comm_drawer_groups), function(grp) {
+          tags$div(class = "mb-3",
+            h6(i18n$t(grp)),
+            lapply(.comm_drawer_groups[[grp]], function(pn) {
+              actionButton(ns(paste0("comm_jump_", pn$value)),
+                           label = i18n$t(pn$label),
+                           class = "btn btn-link btn-sm text-start p-0 d-block")
+            }))
+        })
+      )
     )
   )
 }
@@ -316,6 +433,33 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       if (is.null(tr)) return(key)
       tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
     }
+
+    # 2L (O28, spéc §2.23 point 2) : carte des sous-panneaux pour les sauts du
+    # tiroir offcanvas. ⚠️ JUMELLE de la carte déclarée en local dans
+    # mod_sc_communication_output_ui (pas de constante top-level — gel
+    # test-communication-contract-freeze.R:140-145) ; toute modification doit
+    # être faite AUX DEUX endroits — égalité verrouillée par
+    # test-mod-sc-communication-ui.R.
+    .comm_drawer_groups <- list(
+      "Exploration des interactions" = list(
+        list(value = "ccc_tab_interactions", label = "Table interactions"),
+        list(value = "ccc_tab_table_filtres", label = "Table (filtres)"),
+        list(value = "ccc_tab_dotplot", label = "DotPlot"),
+        list(value = "ccc_tab_heatmap", label = "Heatmap pathways"),
+        list(value = "ccc_tab_reseau", label = "Réseau"),
+        list(value = "ccc_tab_centralite", label = "Centralité")),
+      "Contextes multi-modaux" = list(
+        list(value = "ccc_tab_spatial", label = "Contexte spatial"),
+        list(value = "ccc_tab_trajectoire", label = "Contexte trajectoire"),
+        list(value = "ccc_tab_velocite", label = "Contexte vélocité"),
+        list(value = "ccc_tab_perturbation", label = "Perturbation (in silico)")),
+      "Traçabilité & qualité" = list(
+        list(value = "ccc_tab_schema", label = "Schema source"),
+        list(value = "ccc_tab_harmonisation", label = "Harmonisation identites"),
+        list(value = "ccc_tab_qc_import", label = "QC import")),
+      "Documentation & méthodes" = list(
+        list(value = "ccc_tab_limites", label = "Limites"))
+    )
 
     # Libelle francais d'un etat de validite (fallback = code d'etat).
     .status_label <- function(st) {
@@ -490,7 +634,9 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
       ))
     })
 
-    output$comm_filter_summary <- renderText({
+    # Résumé de filtrage : UNE source réactive, DEUX sorties (ligne sous les
+    # filtres 2I + tiroir offcanvas 2L) — même texte, aucune divergence.
+    .filter_summary_txt <- reactive({
       req(comm_state$result)
       fs <- comm_filtered()$summary
       sprintf(
@@ -499,6 +645,21 @@ mod_sc_communication_server <- function(id, global_data, shared_rv = NULL) {
         fs$dropped_p_value, fs$dropped_pathway, fs$dropped_sender,
         fs$dropped_receiver, fs$dropped_self
       )
+    })
+
+    output$comm_filter_summary <- renderText({ .filter_summary_txt() })
+    output$comm_filter_summary_drawer <- renderText({ .filter_summary_txt() })
+
+    # ── 2L (O28, spéc §2.23 point 2) : saut direct vers un sous-panneau CCC
+    # depuis le tiroir offcanvas. nav_select vise les `value` ASCII posés par
+    # 2F (indépendants de la traduction) ; le tiroir RESTE OUVERT après le saut
+    # (accès aux panneaux sans replier le workflow — verdict re-sweep).
+    lapply(.comm_drawer_groups, function(grp) {
+      lapply(grp, function(pn) {
+        observeEvent(input[[paste0("comm_jump_", pn$value)]], {
+          nav_select("comm_tabs", selected = pn$value)
+        })
+      })
     })
 
     # Depot d'un resultat canonique : IDENTIQUE pour les deux voies (import =

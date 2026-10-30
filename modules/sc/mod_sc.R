@@ -779,35 +779,52 @@ mod_sc_ui <- function(id, sidebar_width = .sc_sidebar_width()) {
           ))
       )
     ),
+    # ── 2A (O28, spéc §2.6) : les 17 onglets consécutifs de « Résultats »
+    # (wrap 2 lignes à 1920×1080, re-sweep du 2026-10-30 — couche L2 du goulot
+    # 2I) sont regroupés en 5 nav_menu thématiques : la barre tient sur UNE
+    # ligne. Les `value` sont INCHANGÉS (l'état active_tab de mod_sc_server et
+    # les nav_select existants les visent) et les contenus de panneaux sont
+    # intacts ; bslib dessine lui-même le caret des menus (pas de « ▾ » dans
+    # les libellés).
     navset_card_underline(
       id = ns("main_tabs"), title = i18n$t("Résultats"),
-      nav_panel(i18n$t("Graphiques"), value = "tab_viz", mod_sc_viz_output_ui(ns("viz"))),
-      # MAJ 2
-      nav_panel(i18n$t("Table Marqueurs"), value = "tab_table", mod_sc_markers_output_ui(ns("markers"))),
-      nav_panel(i18n$t("Pseudobulk DE"), value = "tab_pseudobulk", mod_sc_pseudobulk_output_ui(ns("pseudobulk"))),
-      nav_panel(i18n$t("Annotation"), value = "tab_annotation", mod_sc_annotation_output_ui(ns("annotation"))),
-      nav_panel(i18n$t("Rareté par population"), value = "tab_rarity", mod_sc_rarity_output_ui(ns("rarity"))),
-      nav_panel(i18n$t("Gènes Corrélés"), value = "tab_correlation", mod_sc_corr_output_ui(ns("corr"))),
-      nav_panel(i18n$t("Pathways"), value = "tab_pathway", mod_sc_pathways_output_ui(ns("pathways"))),
-      nav_panel(i18n$t("Trajectory"), value = "tab_trajectory", mod_sc_trajectory_output_ui(ns("trajectory"))),
-      nav_panel(i18n$t("Velocity"), value = "tab_velocity", mod_sc_velocity_output_ui(ns("velocity"))),
-      nav_panel(i18n$t("Communication"), value = "tab_communication", mod_sc_communication_output_ui(ns("communication"))),
-      nav_panel(i18n$t("DA design"), value = "tab_da_design", mod_sc_da_design_output_ui(ns("da_design"))),
-      nav_panel(i18n$t("Milo DA"), value = "tab_da_milo", mod_sc_da_milo_output_ui(ns("da_milo"))),
-      nav_panel(i18n$t("scCODA DA"), value = "tab_da_sccoda", mod_sc_da_sccoda_output_ui(ns("da_sccoda"))),
-      nav_panel(i18n$t("DA croisées"), value = "tab_da_cross", mod_sc_da_cross_output_ui(ns("da_cross"))),
-      nav_panel(i18n$t("Rapport consolidé"), value = "tab_report_consolide", mod_sc_report_consolidated_output_ui(ns("report_consolide"))),
-      nav_panel(i18n$t("QC"), value = "tab_qc",
-        card(max_height = 750,
-          div(class = "card-header bg-light", h5(i18n$t("Contrôle Qualité"), class = "card-title mb-0")),
-          plotOutput(ns("plot_qc"), height = "650px"),
-          # V1.x UX multi-échantillons : sous-panneau léger, visible seulement
-          # quand >= 2 échantillons (orig.ident) — barplots méta.data +
-          # projections sur réductions EXISTANTES (aucun calcul nouveau).
-          uiOutput(ns("multisample_overview_ui")))),
-      nav_panel(i18n$t("Résumé Pipeline"), value = "tab_summary",
-        card(card_header(i18n$t("Résumé du Pipeline Single-Cell")),
-             uiOutput(ns("pipeline_summary_panel"))))
+      nav_menu(i18n$t("Exploration"),
+        nav_panel(i18n$t("Graphiques"), value = "tab_viz", mod_sc_viz_output_ui(ns("viz"))),
+        # MAJ 2
+        nav_panel(i18n$t("Table Marqueurs"), value = "tab_table", mod_sc_markers_output_ui(ns("markers"))),
+        nav_panel(i18n$t("Annotation"), value = "tab_annotation", mod_sc_annotation_output_ui(ns("annotation"))),
+        nav_panel(i18n$t("Rareté par population"), value = "tab_rarity", mod_sc_rarity_output_ui(ns("rarity")))
+      ),
+      nav_menu(i18n$t("Différentiel & DA"),
+        nav_panel(i18n$t("Pseudobulk DE"), value = "tab_pseudobulk", mod_sc_pseudobulk_output_ui(ns("pseudobulk"))),
+        nav_panel(i18n$t("DA design"), value = "tab_da_design", mod_sc_da_design_output_ui(ns("da_design"))),
+        nav_panel(i18n$t("Milo DA"), value = "tab_da_milo", mod_sc_da_milo_output_ui(ns("da_milo"))),
+        nav_panel(i18n$t("scCODA DA"), value = "tab_da_sccoda", mod_sc_da_sccoda_output_ui(ns("da_sccoda"))),
+        nav_panel(i18n$t("DA croisées"), value = "tab_da_cross", mod_sc_da_cross_output_ui(ns("da_cross")))
+      ),
+      nav_menu(i18n$t("Réseaux & Signalisation"),
+        nav_panel(i18n$t("Gènes Corrélés"), value = "tab_correlation", mod_sc_corr_output_ui(ns("corr"))),
+        nav_panel(i18n$t("Pathways"), value = "tab_pathway", mod_sc_pathways_output_ui(ns("pathways"))),
+        nav_panel(i18n$t("Communication"), value = "tab_communication", mod_sc_communication_output_ui(ns("communication")))
+      ),
+      nav_menu(i18n$t("Dynamique"),
+        nav_panel(i18n$t("Trajectory"), value = "tab_trajectory", mod_sc_trajectory_output_ui(ns("trajectory"))),
+        nav_panel(i18n$t("Velocity"), value = "tab_velocity", mod_sc_velocity_output_ui(ns("velocity")))
+      ),
+      nav_menu(i18n$t("Contrôle & Rapports"),
+        nav_panel(i18n$t("QC"), value = "tab_qc",
+          card(max_height = 750,
+            div(class = "card-header bg-light", h5(i18n$t("Contrôle Qualité"), class = "card-title mb-0")),
+            plotOutput(ns("plot_qc"), height = "650px"),
+            # V1.x UX multi-échantillons : sous-panneau léger, visible seulement
+            # quand >= 2 échantillons (orig.ident) — barplots méta.data +
+            # projections sur réductions EXISTANTES (aucun calcul nouveau).
+            uiOutput(ns("multisample_overview_ui")))),
+        nav_panel(i18n$t("Résumé Pipeline"), value = "tab_summary",
+          card(card_header(i18n$t("Résumé du Pipeline Single-Cell")),
+               uiOutput(ns("pipeline_summary_panel")))),
+        nav_panel(i18n$t("Rapport consolidé"), value = "tab_report_consolide", mod_sc_report_consolidated_output_ui(ns("report_consolide")))
+      )
     )
   )
 }

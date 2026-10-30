@@ -69,3 +69,136 @@ test_that("2G : les 5 textes d'origine sont préservés VERBATIM (coordination 3
   expect_match(src, "Objet CellChat (.rds) : extraction de resultats deja calcules uniquement — le mapping ligand-receptor vers pathway n'est pas reconstitue.",
                fixed = TRUE)
 })
+
+# =============================================================================
+# B4 (O28, 2026-10-30) — items 2F / 2I / 2L sur le même fichier.
+# Preuves mesurées : re-sweep 1920×1080 (RE_SWEEP_1920_2026-10-30.md) —
+# 14 sous-onglets en 3 lignes (124 px), zone filtres statique 276 px (L4),
+# bas de pile 754 px ; cible B4 ≈ 430 px (mesuré après : 392 px).
+# =============================================================================
+
+.B4_CCC_VALUES <- c("ccc_tab_interactions", "ccc_tab_table_filtres", "ccc_tab_dotplot",
+                    "ccc_tab_heatmap", "ccc_tab_reseau", "ccc_tab_centralite",
+                    "ccc_tab_spatial", "ccc_tab_trajectoire", "ccc_tab_velocite",
+                    "ccc_tab_perturbation", "ccc_tab_schema", "ccc_tab_harmonisation",
+                    "ccc_tab_qc_import", "ccc_tab_limites")
+
+test_that("2F : les 14 sous-onglets CCC sont regroupés en 4 nav_menu thématiques (spéc §2.14)", {
+  src <- paste(readLines(file.path(ts_project_root(), .MSCC_UI_FILE),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  # 4 groupes thématiques, libellés de la spéc §2.14 :
+  for (grp in c("Exploration des interactions", "Contextes multi-modaux",
+                "Traçabilité & qualité", "Documentation & méthodes")) {
+    expect_match(src, sprintf('nav_menu(i18n$t("%s")', grp), fixed = TRUE, info = grp)
+  }
+  # Les 14 panneaux portent désormais des `value` ASCII explicites (cibles du
+  # saut 2L, indépendantes de la traduction) :
+  for (v in .B4_CCC_VALUES) {
+    expect_match(src, sprintf('value = "%s"', v), fixed = TRUE, info = v)
+  }
+  # Un seul navset_tab, avec un id (cible nav_select du tiroir 2L) :
+  expect_identical(.n_hits(src, "navset_tab("), 1L)
+  expect_match(src, 'id = ns("comm_tabs")', fixed = TRUE)
+  # Témoin de non-régression 2G : la carte « Limites » reste dans son panel
+  # (déplacé, jamais reformulé — les textes verbatim sont verrouillés plus haut).
+})
+
+# Extrait TOUTES les affectations `.comm_drawer_groups` du module, À TOUTE
+# profondeur (le gel communication interdit toute affectation top-level hors
+# les 3 fonctions d'orchestration — la carte vit donc EN LOCAL de fonction, en
+# deux exemplaires jumelles : rendu tiroir dans output_ui, observateurs de
+# saut dans le serveur).
+.B4_extract_drawer_groups <- function() {
+  p <- ts_ast_parse(.MSCC_UI_FILE)
+  hits <- ts_ast_find_all(p, function(x) {
+    if (!is.call(x) || !identical(x[[1]], as.name("<-"))) return(FALSE)
+    lhs <- tryCatch(ts_ast_deparse(x[[2]]), error = function(e) "")
+    identical(lhs, ".comm_drawer_groups")
+  })
+  lapply(hits, function(h) eval(h[[3]], envir = new.env(parent = baseenv())))
+}
+
+test_that("2F/2L : .comm_drawer_groups (2 jumelles) = 4 groupes, 14 panneaux, valeurs uniques", {
+  twins <- .B4_extract_drawer_groups()
+  # Deux exemplaires (UI + serveur), aucune constante top-level :
+  expect_identical(length(twins), 2L,
+                   info = "attendu : jumelle output_ui + jumelle serveur, rien d'autre")
+  expect_false(is.null(twins[[1]]), info = "jumelle introuvable dans le module")
+  # Identité stricte des deux jumelles (aucun drift possible sans échec) :
+  expect_identical(twins[[1]], twins[[2]],
+                   info = "les deux cartes .comm_drawer_groups divergent")
+  grp <- twins[[1]]
+  expect_identical(length(grp), 4L)
+  vals <- unlist(lapply(grp, function(g) vapply(g, function(p) p$value, character(1))))
+  labs <- unlist(lapply(grp, function(g) vapply(g, function(p) p$label, character(1))))
+  expect_identical(length(vals), 14L)
+  expect_identical(anyDuplicated(vals), 0L)
+  expect_setequal(vals, .B4_CCC_VALUES)
+  # Chaque label a une occurrence nav_panel i18n$t("<label>") dans le navset :
+  src <- paste(readLines(file.path(ts_project_root(), .MSCC_UI_FILE),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  for (lb in labs) {
+    expect_match(src, sprintf('nav_panel(i18n$t("%s")', lb), fixed = TRUE, info = lb)
+  }
+})
+
+test_that("B4/freeze : le module ne définit toujours que ses 3 fonctions top-level", {
+  # Garde de COORDINATION B4 (verrou source : test-communication-contract-freeze.R:140-145,
+  # helper :23-35 — aucune affectation top-level hors les 3 fonctions
+  # d'orchestration ; la carte 2F/2L vit en local de fonction, en jumelles).
+  exprs <- parse(file.path(ts_project_root(), .MSCC_UI_FILE), keep.source = FALSE)
+  nms <- character(0)
+  for (e in exprs) {
+    if (is.call(e) && identical(deparse(e[[1L]]), "<-") && is.symbol(e[[2L]])) {
+      nms <- c(nms, as.character(e[[2L]]))
+    }
+  }
+  expect_setequal(unique(nms),
+                  c("mod_sc_communication_ui", "mod_sc_communication_output_ui",
+                    "mod_sc_communication_server"))
+})
+
+test_that("2I : la zone de filtres statique est un accordéon FERMÉ par défaut (spéc §2.20)", {
+  src <- paste(readLines(file.path(ts_project_root(), .MSCC_UI_FILE),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  # L'accordéon existe, fermé au boot (L4 : 276 px → ~54 px mesurés après) :
+  expect_match(src, 'id = ns("comm_filters_accordion")', fixed = TRUE)
+  expect_match(src, "open = FALSE", fixed = TRUE)
+  expect_match(src, "i18n$t(\"Filtres d'interaction\")", fixed = TRUE)
+  # L'ancien bloc statique a disparu :
+  expect_identical(.n_hits(src, 'class = "border rounded p-2 m-2"'), 0L,
+                   info = "la zone de filtres statique (L4) subsiste")
+  # Les 7 inputs de filtres sont TOUJOURS câblés (mêmes ids, une instance) :
+  for (id in c("comm_f_score_min", "comm_f_pmax", "comm_f_pathways", "comm_f_rank_max",
+               "comm_f_senders", "comm_f_receivers", "comm_f_include_self")) {
+    expect_identical(.n_hits(src, paste0('ns("', id, '")')), 1L,
+                     info = paste0("input filtre ", id, " absent ou dupliqué"))
+  }
+  # Le résumé de filtrage est factorisé : une source réactive, deux sorties
+  # (ligne sous les filtres + tiroir 2L) — une seule source de vérité.
+  expect_match(src, ".filter_summary_txt <- reactive(", fixed = TRUE)
+  expect_identical(.n_hits(src, "renderText({ .filter_summary_txt() })"), 2L)
+})
+
+test_that("2L : tiroir offcanvas secondaire — pastille, .offcanvas, sauts, zéro duplication (spéc §2.23)", {
+  src <- paste(readLines(file.path(ts_project_root(), .MSCC_UI_FILE),
+                         warn = FALSE, encoding = "UTF-8"), collapse = "\n")
+  # Déclencheur (pastille DANS l'en-tête de carte — aucune rangée verticale
+  # ajoutée, le bas de pile 2I ne doit pas regonfler) :
+  expect_match(src, '`data-bs-toggle` = "offcanvas"', fixed = TRUE)
+  expect_match(src, "d-flex justify-content-between align-items-center gap-2", fixed = TRUE)
+  # Le tiroir Bootstrap 5 natif, à droite :
+  expect_match(src, 'id = ns("comm_drawer")', fixed = TRUE)
+  expect_match(src, 'class = "offcanvas offcanvas-end"', fixed = TRUE)
+  # Sauts directs : un observer par panneau, ciblant les `value` posés par 2F ;
+  # le tiroir reste ouvert après le saut (accès aux panneaux sans replier le
+  # workflow — verdict re-sweep 1920).
+  expect_match(src, 'observeEvent(input[[paste0("comm_jump_", pn$value)]], {', fixed = TRUE)
+  expect_match(src, 'nav_select("comm_tabs", selected = pn$value)', fixed = TRUE)
+  # ZÉRO duplication des filtres (arbitrage 2I : instance unique dans
+  # l'accordéon ; le tiroir ne porte que le résumé + la navigation). Compte
+  # mesuré : 1 UI (accordéon) + 2 updateNumericInput (reset état / échantillon)
+  # + 1 input$ (comm_filtered) — toute 5ᵉ occurrence serait un doublon.
+  expect_identical(.n_hits(src, 'comm_f_score_min'), 4L,
+                   info = "occurrences comm_f_score_min (1 UI + 2 updates + 1 input$)")
+})

@@ -11156,6 +11156,50 @@
     {
       "fr": "Aucun resultat importe — importez d'abord une table de communication.",
       "en": "No imported result — import a communication table first."
+    },
+    {
+      "fr": "Exploration",
+      "en": "Exploration"
+    },
+    {
+      "fr": "Différentiel & DA",
+      "en": "Differential & DA"
+    },
+    {
+      "fr": "Réseaux & Signalisation",
+      "en": "Networks & Signalling"
+    },
+    {
+      "fr": "Contrôle & Rapports",
+      "en": "Control & Reports"
+    },
+    {
+      "fr": "Exploration des interactions",
+      "en": "Interaction exploration"
+    },
+    {
+      "fr": "Contextes multi-modaux",
+      "en": "Multi-modal contexts"
+    },
+    {
+      "fr": "Traçabilité & qualité",
+      "en": "Traceability & quality"
+    },
+    {
+      "fr": "Documentation & méthodes",
+      "en": "Documentation & methods"
+    },
+    {
+      "fr": "Filtres d'interaction",
+      "en": "Interaction filters"
+    },
+    {
+      "fr": "Navigation & filtres",
+      "en": "Navigation & filters"
+    },
+    {
+      "fr": "Navigation CCC",
+      "en": "CCC navigation"
     }
   ]
 }
