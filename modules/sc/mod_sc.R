@@ -480,6 +480,31 @@ run_markers <- function(input, global_data, shared_rv, session) {
 .SC_MARKERS_DRIVE_CONVENTION   <- "rows of the marker table (one row per gene x cluster)"
 .SC_ANNOT_DRIVE_CONVENTION     <- "unique levels of the annotation column named in `column`"
 .SC_AP_DRIVE_CONVENTION        <- "number of pipeline artefacts produced (not rows)"
+
+# ── DSTV-1b (§8.4) : lectures SURFACE pour les scalaires business_state ──────
+# Le module possède l'objet : lire ncol() et la colonne méta seurat_clusters
+# (précédent barre de statut, mod_sc.R:1252-1256) est un accès surface —
+# JAMAIS une matrice (pas de GetAssayData/@assays ; clause drive
+# tools/_drive/README.md:108-115 : la couche drive, elle, ne voit jamais
+# l'objet — les scalaires arrivent publiés, décision §8.4). Chaque lecture
+# est défensive : entrée malformée → NULL, jamais une exception (la
+# publication ne peut pas casser le run).
+.sc_feed_ncol <- function(obj) {
+  tryCatch({
+    v <- ncol(obj)
+    if (is.null(v)) NULL else as.numeric(v)[1]
+  }, error = function(e) NULL)
+}
+
+.sc_feed_nclusters <- function(obj) {
+  tryCatch({
+    if (is.null(obj)) return(NULL)
+    meta <- obj@meta.data
+    if (!"seurat_clusters" %in% colnames(meta)) return(NULL)
+    v <- as.numeric(length(unique(meta$seurat_clusters)))[1]
+    if (is.finite(v)) v else NULL
+  }, error = function(e) NULL)
+}
  .sc_markers_drive_view <- function(status, elapsed_s = 0, seq = 0L,                                  n_results = 0L, has_data = FALSE,
                                   ready = FALSE, step = NULL,
                                   descriptor = NULL, convention = NULL) {
@@ -1656,11 +1681,20 @@ mod_sc_server <- function(id, global_data) {
 
     if (!is.null(sc_pipeline_task)) {
       observeEvent(sc_pipeline_task$status(), {
-        st <- sc_pipeline_task$status()
-        ctx <- sc_task_context()
-        if (is.null(ctx)) return()
+      st <- sc_pipeline_task$status()
+      ctx <- sc_task_context()
+      if (is.null(ctx)) return()
 
-        if (identical(st, "success")) {
+      # DSTV-1b (§8.4) : démarrage effectif de la tâche — le pas gelé
+      # « 0_autopipeline » (valeur de panneau, mod_sc.R:714) publié (§8.3 :
+      # l'étape ne figure que lorsque le statut EST une étape). Aucun timer :
+      # observer réactif existant, pas de nouvelle boucle (contrat §6.4).
+      if (identical(st, "running")) {
+        global_data$manual_pipeline <- ts_drive_feed_manual_pipeline(status = "step", step = "0_autopipeline")
+        return()
+      }
+
+      if (identical(st, "success")) {
           drive_run_state("done")
           res <- tryCatch(sc_pipeline_task$result(), error = function(e) e)
           if (inherits(res, "error")) {
@@ -1669,6 +1703,14 @@ mod_sc_server <- function(id, global_data) {
             ts_drive_record_error(clean_msg, module = "sc_pipeline")
             showNotification(paste(.tr("Erreur Pipeline SC:"), err_msg), type = "error", duration = 10)
             drive_run_state("error")
+            # DSTV-1b (§8.4) : terminaison en erreur publiée — même pattern que
+            # le canal O18 ci-dessus (le module publie, la couche drive décide).
+            .obj_pub <- shiny::isolate(global_data$sc_obj)
+            global_data$manual_pipeline <- ts_drive_feed_manual_pipeline(status = "error", step = "")
+            global_data$business_state <- ts_drive_feed_business_state(
+              has_data = !is.null(.obj_pub), object_class = class(.obj_pub)[1],
+              n_elements = .sc_feed_ncol(.obj_pub), n_clusters = .sc_feed_nclusters(.obj_pub),
+              deconv_done = FALSE)
             if (!is.null(ctx$job_id)) {
               .close_sc_ap_drive_job("error", error = clean_msg)
             }
@@ -1718,6 +1760,15 @@ mod_sc_server <- function(id, global_data) {
               }
             }
             state_set(shared_rv, "active_tab", "tab_viz")
+            # DSTV-1b (§8.4) : « done » + rafraîchissement business_state —
+            # le nouvel objet est en place (global_data$sc_obj <- res$obj),
+            # les scalaires surface le reflètent (n_elements, n_clusters).
+            .obj_pub <- shiny::isolate(global_data$sc_obj)
+            global_data$manual_pipeline <- ts_drive_feed_manual_pipeline(status = "done", step = "")
+            global_data$business_state <- ts_drive_feed_business_state(
+              has_data = !is.null(.obj_pub), object_class = class(.obj_pub)[1],
+              n_elements = .sc_feed_ncol(.obj_pub), n_clusters = .sc_feed_nclusters(.obj_pub),
+              deconv_done = FALSE)
             showNotification(.tr("✓ Pipeline Single-Cell terminé avec succès."), type = "message", duration = 8)
             if (!is.null(ctx$job_id)) {
               produced <- .sc_ap_produced(shared_rv)
@@ -1735,6 +1786,14 @@ mod_sc_server <- function(id, global_data) {
           clean_msg <- ts_drive_badge_sanitize(paste0("SC auto-pipeline failed: ", err_msg), 200L)
           ts_drive_record_error(clean_msg, module = "sc_pipeline")
           showNotification(paste(.tr("Erreur Pipeline SC:"), err_msg), type = "error", duration = 10)
+          # DSTV-1b (§8.4) : terminaison en erreur publiée (tâche morte dans le
+          # daemon) — même pattern que le canal O18 ci-dessus.
+          .obj_pub <- shiny::isolate(global_data$sc_obj)
+          global_data$manual_pipeline <- ts_drive_feed_manual_pipeline(status = "error", step = "")
+          global_data$business_state <- ts_drive_feed_business_state(
+            has_data = !is.null(.obj_pub), object_class = class(.obj_pub)[1],
+            n_elements = .sc_feed_ncol(.obj_pub), n_clusters = .sc_feed_nclusters(.obj_pub),
+            deconv_done = FALSE)
           if (!is.null(ctx$job_id)) {
             .close_sc_ap_drive_job("error", error = clean_msg)
           }
@@ -1746,6 +1805,16 @@ mod_sc_server <- function(id, global_data) {
     observeEvent(input$sc_ap_confirm, {
       removeModal()
       req(global_data$sc_obj)
+      # DSTV-1b (§8.4) : « running » publié au lancement — has_data et les
+      # scalaires surface doivent être visibles PENDANT le run (trou T3).
+      # Le module publie, la couche drive décide (gap « idle » seulement,
+      # drive_watcher.R émetteur : manual ne comble que idle).
+      .obj_pub <- shiny::isolate(global_data$sc_obj)
+      global_data$manual_pipeline <- ts_drive_feed_manual_pipeline(status = "running", step = "")
+      global_data$business_state <- ts_drive_feed_business_state(
+        has_data = !is.null(.obj_pub), object_class = class(.obj_pub)[1],
+        n_elements = .sc_feed_ncol(.obj_pub), n_clusters = .sc_feed_nclusters(.obj_pub),
+        deconv_done = FALSE)
       pool_ok <- requireNamespace("mirai", quietly = TRUE) &&
         isTRUE(tryCatch(ensure_app_daemons(), error = function(e) FALSE)) &&
         isTRUE(tryCatch(mirai::daemons_set(), error = function(e) FALSE))
@@ -1763,10 +1832,19 @@ mod_sc_server <- function(id, global_data) {
         # 3A (O28) : capture AVANT le run direct (les mêmes normalisations que
         # le moteur — valeurs identiques à celles que sc_pipeline_qc applique).
         .sc_qc_capture_applied(sc_ap_normalize_params(as.list(input)))
-        tryCatch(
+        .res_sync <- tryCatch(
           run_sc_auto_pipeline(input, global_data, shared_rv, session, sc_log_rv),
-          error = function(e) NULL
+          error = function(e) e
         )
+        # DSTV-1b (§8.4) : la voie synchrone n'a pas de task observer —
+        # terminaison honnête publiée ici (sinon « running » resterait collé).
+        .obj_pub <- shiny::isolate(global_data$sc_obj)
+        global_data$manual_pipeline <- ts_drive_feed_manual_pipeline(
+          status = if (inherits(.res_sync, "error")) "error" else "done", step = "")
+        global_data$business_state <- ts_drive_feed_business_state(
+          has_data = !is.null(.obj_pub), object_class = class(.obj_pub)[1],
+          n_elements = .sc_feed_ncol(.obj_pub), n_clusters = .sc_feed_nclusters(.obj_pub),
+          deconv_done = FALSE)
       }
     })
 
@@ -1803,6 +1881,15 @@ mod_sc_server <- function(id, global_data) {
                                 .close_sc_ap_drive_job, inputs = drive_inputs)
         drive_last_steps$value <- res$steps
         drive_run_state(res$status)
+        # DSTV-1b (§8.4) : voie synchrone drive — terminaison publiée depuis
+        # res$status (« done »/« error », .sc_ap_run_drive) ; pas de task
+        # observer sur ce chemin.
+        .obj_pub <- shiny::isolate(global_data$sc_obj)
+        global_data$manual_pipeline <- ts_drive_feed_manual_pipeline(status = res$status, step = "")
+        global_data$business_state <- ts_drive_feed_business_state(
+          has_data = !is.null(.obj_pub), object_class = class(.obj_pub)[1],
+          n_elements = .sc_feed_ncol(.obj_pub), n_clusters = .sc_feed_nclusters(.obj_pub),
+          deconv_done = FALSE)
       }
     }, ignoreInit = TRUE)
 
