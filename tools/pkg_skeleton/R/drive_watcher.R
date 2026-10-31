@@ -3804,11 +3804,19 @@ ts_drive_detect_pipeline_status <- function(tick_status = NULL, tick_error = NUL
 #' @param pipeline_step Manual-pipeline step value (DSTV-1 A2; default NULL).
 #' @param business_state Named list of the five frozen scalars (DSTV-1 A2;
 #'   default NULL).
+#' @param sessions DSTV-3 (C1, fiche :81-82) — the sessions[] table, SEMANTIC
+#'   fields only (session_id, viewer, module, action, armed per row; default
+#'   NULL). The time-derived `hb_age_s` is deliberately NOT passed here: it is
+#'   a timestamp projection (règle « Deliberately excludes timestamps »,
+#'   :3790-3792) — an armed-but-idle session whose heartbeat legitimately moves
+#'   must not rewrite state.json every beat (O11 + fiche :103, zéro churn).
+#'   Historical calls without the argument keep their behavior.
 #' @return 16-character hexadecimal hash string.
 ts_drive_compute_state_hash <- function(token, active_module, pipeline_status, errors,
                                         active_module_key = NULL,
                                         pipeline_step = NULL,
-                                        business_state = NULL) {
+                                        business_state = NULL,
+                                        sessions = NULL) {
   payload <- list(
     session_token     = as.character(token %||% "")[1],
     active_module     = as.character(active_module %||% "")[1],
@@ -3816,7 +3824,8 @@ ts_drive_compute_state_hash <- function(token, active_module, pipeline_status, e
     errors            = as.list(errors %||% list()),
     active_module_key = as.character(active_module_key %||% "")[1],
     pipeline_step     = as.character(pipeline_step %||% "")[1],
-    business_state    = business_state %||% list()
+    business_state    = business_state %||% list(),
+    sessions          = sessions %||% list()
   )
   digest::digest(payload, algo = "xxhash64")
 }
@@ -3938,6 +3947,213 @@ ts_drive_feed_business_state <- function(has_data = NULL, object_class = NULL,
   )
 }
 
+# =============================================================================
+# sessions[] — the DSTV-3 tracker (fiche :81-87, re-mesure §3 :88)
+# =============================================================================
+# A process-wide table of the LIVE sessions this app process hosts, published
+# in state.json so the panel (C2) and the agent (read-side) can see WHO is
+# connected, WHERE it is and WHAT it does — « l'humain voit le pilote sans
+# toucher à rien ». Lifecycle (fiche :82): `attach` registers
+# (ts_drive_attach), the tick refreshes liveness (tick_fn), the emitter
+# refreshes position/action, `onSessionEnded` removes. Capped at 5 entries,
+# FIFO on NEW registrations — the ring-buffer pattern
+# (TS_DRIVE_MAX_ERRORS :63; refresh-in-place never evicts a live session).
+#
+# The stored row keeps the ABSOLUTE heartbeat time (`hb_at`); the wire row
+# projects it into `hb_age_s` at read time. The digest deliberately excludes
+# that projection (see ts_drive_compute_state_hash `sessions` doc): an
+# armed-but-idle session whose heartbeat legitimately moves must not rewrite
+# state.json every beat.
+
+TS_DRIVE_SESSIONS_MAX <- 5L
+
+#' The SIX fiche-frozen row fields (fiche :81-82, verbatim — the wire shape).
+TS_DRIVE_SESSION_FIELDS <- c("session_id", "viewer", "module", "action",
+                             "hb_age_s", "armed")
+
+#' Register (or refresh IN PLACE) one session row.
+#'
+#' @param token Session token (the table's key).
+#' @param session_id Derived session id (what the panel displays).
+#' @param viewer Client visibility; out-of-set -> "unknown", never a lie
+#'   (rule of ts_drive_viewer, :533-535).
+#' @param module Where the session is (state.json active-module key).
+#' @param action What it last did (drive action label, "" before any).
+#' @param armed Whether an agent holds the session.
+#' @param hb_at ABSOLUTE heartbeat time (numeric). Refresh passes the tick's
+#'   own heartbeat clock so hb_age_s mirrors ready.json, never a private clock.
+#' @return Invisible TRUE (registered or refreshed), FALSE on a bad token.
+ts_drive_sessions_track <- function(token, session_id, viewer,
+                                    module = "", action = "", armed = FALSE,
+                                    hb_at = Sys.time()) {
+  tok <- as.character(token %||% "")[1]
+  if (is.null(tok) || is.na(tok) || !nzchar(tok)) return(invisible(FALSE))
+  if (is.null(.ts_drive_state$sessions)) .ts_drive_state$sessions <- list()
+  if (is.null(.ts_drive_state$sessions_order)) {
+    .ts_drive_state$sessions_order <- character(0)
+  }
+  v <- as.character(viewer %||% "")[1]
+  if (is.na(v) || !v %in% TS_DRIVE_VIEWERS) v <- "unknown"
+  hb <- suppressWarnings(as.numeric(hb_at)[1])
+  if (is.na(hb)) hb <- as.numeric(Sys.time())
+  # Clean at the BOUNDARY (T4 lesson): module/action are machine fields and
+  # upstream labels may be i18n-rendered — never trust them raw.
+  row <- list(
+    session_id = ts_drive_badge_chr(session_id),
+    viewer     = v,
+    module     = .ts_drive_strip_html(ts_drive_badge_chr(module)),
+    action     = .ts_drive_strip_html(ts_drive_badge_chr(action)),
+    armed      = isTRUE(armed),
+    hb_at      = hb
+  )
+  is_new <- !tok %in% .ts_drive_state$sessions_order
+  if (is_new) {
+    .ts_drive_state$sessions_order <- c(.ts_drive_state$sessions_order, tok)
+    .ts_drive_state$sessions[[tok]] <- row
+    # Eviction is FIFO over the LAST-ACTIVITY order (D3): a refresh
+    # re-prioritizes the row (LRU), so a live session refreshing itself must
+    # never be the one evicted — only stale registrations age out.
+    while (length(.ts_drive_state$sessions_order) > TS_DRIVE_SESSIONS_MAX) {
+      evict <- .ts_drive_state$sessions_order[1]
+      .ts_drive_state$sessions_order <- .ts_drive_state$sessions_order[-1]
+      .ts_drive_state$sessions[[evict]] <- NULL
+    }
+  } else {
+    .ts_drive_state$sessions[[tok]] <- row
+    .ts_drive_state$sessions_order <-
+      c(setdiff(.ts_drive_state$sessions_order, tok), tok)
+  }
+  invisible(TRUE)
+}
+
+#' Remove one session row (onSessionEnded / reap side).
+#' @return Invisible TRUE if a row was removed, FALSE otherwise (honest no-op).
+ts_drive_sessions_drop <- function(token) {
+  tok <- as.character(token %||% "")[1]
+  if (is.null(tok) || is.na(tok) || !nzchar(tok)) return(invisible(FALSE))
+  had <- !is.null(.ts_drive_state$sessions[[tok]])
+  .ts_drive_state$sessions[[tok]] <- NULL
+  if (had) {
+    .ts_drive_state$sessions_order <-
+      setdiff(.ts_drive_state$sessions_order, tok)
+  }
+  invisible(had)
+}
+
+#' The INTERNAL row of one token (with the absolute `hb_at`), or NULL.
+.ts_drive_sessions_row <- function(token) {
+  tok <- as.character(token %||% "")[1]
+  if (is.null(tok) || is.na(tok) || !nzchar(tok)) return(NULL)
+  .ts_drive_state$sessions[[tok]]
+}
+
+#' Clear the sessions table (diagnostic reset — the error ring's
+#' `ts_drive_clear_errors()` precedent :3667).
+#' @return Invisible TRUE.
+ts_drive_sessions_clear <- function() {
+  .ts_drive_state$sessions <- list()
+  .ts_drive_state$sessions_order <- character(0)
+  invisible(TRUE)
+}
+
+#' The wire-shaped table: rows in registration order (oldest first), each
+#' carrying EXACTLY the six fiche-frozen fields, `hb_age_s` projected from the
+#' stored absolute `hb_at` at call time (D1).
+ts_drive_sessions <- function() {
+  store <- .ts_drive_state$sessions %||% list()
+  order <- .ts_drive_state$sessions_order %||% character(0)
+  now <- as.numeric(Sys.time())
+  rows <- list()
+  for (tok in order) {
+    r <- store[[tok]]
+    if (is.null(r)) next
+    hb <- suppressWarnings(as.numeric(r$hb_at)[1])
+    if (is.na(hb)) hb <- now
+    rows[[length(rows) + 1L]] <- list(
+      session_id = ts_drive_badge_chr(r$session_id),
+      viewer     = ts_drive_badge_chr(r$viewer),
+      module     = ts_drive_badge_chr(r$module),
+      action     = ts_drive_badge_chr(r$action),
+      hb_age_s   = round(max(0, now - hb), 1),
+      armed      = isTRUE(r$armed)
+    )
+  }
+  rows
+}
+
+# ── C2 — the activity event (hash-change subscription) ──────────────────────
+# The emitter queues ONE event per ACTUAL state.json write (a real content
+# change) and none otherwise — the badge-events discipline (cursor$events,
+# one-shot drained by app.R). No write, no event, no re-render: the zero-churn
+# half of the fiche's « abonné au changement de hash, pas au tick » (:85).
+# Bounded like every other buffer (keep the last 10).
+
+.ts_drive_activity_event_push <- function(ev) {
+  buf <- .ts_drive_state$activity_events %||% list()
+  buf[[length(buf) + 1L]] <- ev
+  n <- length(buf)
+  if (n > 10L) buf <- buf[(n - 9L):n]
+  .ts_drive_state$activity_events <- buf
+  invisible(TRUE)
+}
+
+#' Activity events queued since the last read, then empty (one-shot, precedent
+#' `pending_events()` :4907-4911 — read once, then cleared).
+ts_drive_pending_activity_events <- function() {
+  ev <- .ts_drive_state$activity_events %||% list()
+  .ts_drive_state$activity_events <- list()
+  ev
+}
+
+#' Project an activity event to the ONLY fields the UI may show.
+#'
+#' Whitelist, not blacklist (precedent ts_drive_badge_view,
+#' drive_allowlist.R:2202): token, root, pid and paths are unreachable from
+#' the UI BY CONSTRUCTION. module/action are DECLARED identifiers
+#' (TS_DRIVE_MODULES / TS_DRIVE_ACTIONS) and come back verbatim when members;
+#' anything else goes through the sanitizer's rules (bounded, token-shaped
+#' runs redacted). `session_id` is intentionally NOT displayed by the line
+#' (T5 deferred, D8) and is token-shaped by construction — the sanitizer
+#' redacts such runs, so a leaked id cannot ride the line either.
+#'
+#' @param event One queued activity event (list), or NULL.
+#' @return list(module, action, age_s, viewer, session_id, armed), or NULL.
+ts_drive_activity_view <- function(event) {
+  if (is.null(event) || !is.list(event)) return(NULL)
+  el <- suppressWarnings(as.numeric(event$hb_age_s %||% NA_real_))
+  list(
+    module     = ts_drive_badge_sanitize(ts_drive_badge_chr(event$module_key),
+                                         24L, known = TS_DRIVE_MODULES),
+    action     = ts_drive_badge_sanitize(ts_drive_badge_chr(event$action),
+                                         24L, known = TS_DRIVE_ACTIONS),
+    age_s      = if (length(el) != 1L || is.na(el) || el < 0) 0 else el,
+    viewer     = ts_drive_badge_chr(event$viewer),
+    session_id = ts_drive_badge_sanitize(ts_drive_badge_chr(event$session_id),
+                                         40L),
+    armed      = isTRUE(event$armed)
+  )
+}
+
+#' Should the activity line render for this event?
+#'
+#' Three gates (D5): the protocol gate (`ts_drive_interactive()`, :770-775 —
+#' the ONLY one, a non-interactive child does not tick), the headless
+#' discriminant (fiche :87 « une session headless n'affiche rien de nouveau »
+#' — an "unknown" viewer is NOT headless, the fiche names only headless), and
+#' the agent discriminant (fiche :14-15 — the line says « Agent : », so an
+#' unarmed session's navigation, which is the HUMAN's activity, must not read
+#' as agent activity).
+#'
+#' @param interactive `ts_drive_interactive()` result.
+#' @param viewer The session's viewer field ("headless"/"visible"/"unknown").
+#' @param armed Whether an agent holds the session (event-time truth).
+#' @return Logical scalar.
+ts_drive_activity_visible <- function(interactive, viewer, armed) {
+  isTRUE(interactive) &&
+    !identical(ts_drive_badge_chr(viewer), "headless") &&
+    isTRUE(armed)
+}
+
 #' Conditionally emit state.json if content hash has changed.
 #'
 #' Called on every poller tick (whether armed or unarmed). Computes content hash
@@ -3997,11 +4213,40 @@ ts_drive_emit_passive_state <- function(session = NULL, input = NULL,
   # DSTV-1 (A2) : les cinq scalaires business_state, défauts honnêtes.
   biz_state <- .ts_drive_read_business_state(global_data)
 
+  # DSTV-3 (C1, fiche :82 « tick rafraîchit ») : l'émetteur rafraîchit la
+  # ligne de LA session qui publie — où elle est (module = détection nav ; le
+  # « idle » ne doit PAS écraser une position connue, il ne dit rien) et ce
+  # qu'elle a fait en dernier (action réellement consommée par ce tick, sinon
+  # la dernière connue). hb_at reste la propriété du tick (seul le battement
+  # ready.json fait autorité) ; l'armement vient du tick, pas d'une supposition.
+  row <- .ts_drive_sessions_row(tok)
+  if (!is.null(row)) {
+    act_row <- row$action
+    if (!is.null(tick_out$action) && nzchar(as.character(tick_out$action)[1])) {
+      act_row <- as.character(tick_out$action)[1]
+    }
+    mod_row <- if (!identical(act_mod, "idle")) act_mod else row$module
+    arm_row <- if (!is.null(tick_out)) isTRUE(tick_out$armed) else row$armed
+    ts_drive_sessions_track(tok, session_id = row$session_id,
+                            viewer = row$viewer, module = mod_row,
+                            action = act_row, armed = arm_row,
+                            hb_at = row$hb_at)
+  }
+
   # 3. Compute content hash (xxhash64) over semantic state — DÉSORMAIS les
   #    nouveaux champs (contrat §3.1 : sinon un changement de business_state
-  #    n'émettrait jamais).
+  #    n'émettrait jamais) ET la table sessions[] (DSTV-3 C1 : sinon un
+  #    session qui rejoint/part/change de module n'émettrait jamais). Les
+  #    lignes passées au digest portent leurs champs SÉMANTIQUES seulement —
+  #    hb_age_s est une projection horaire, exclue (zero churn, D2).
+  sess <- ts_drive_sessions()
+  sess_digest <- lapply(sess, function(r) {
+    r[intersect(names(r), c("session_id", "viewer", "module", "action",
+                            "armed"))]
+  })
   content_hash <- ts_drive_compute_state_hash(tok, act_mod, pipe_st, errs,
-                                              act_mod, pipe_step, biz_state)
+                                              act_mod, pipe_step, biz_state,
+                                              sess_digest)
 
   # 4. Check against last emitted hash for this session
   if (is.null(.ts_drive_state$last_state_hash)) {
@@ -4014,7 +4259,9 @@ ts_drive_emit_passive_state <- function(session = NULL, input = NULL,
   }
 
   # 5. Build and write state.json atomically — champs existants intacts et
-  #    sémantiquement stables, champs DSTV-1 strictement additifs (§6.5).
+  #    sémantiquement stables, champs DSTV-1/DSTV-3 strictement additifs (§6.5).
+  #    sessions[] est TOUJOURS présent (éventuellement vide) — défauts
+  #    complets, même discipline que business_state.
   state_doc <- list(
     session_token     = tok,
     content_hash      = content_hash,
@@ -4025,6 +4272,7 @@ ts_drive_emit_passive_state <- function(session = NULL, input = NULL,
     pipeline_status   = pipe_st,
     pipeline_step     = pipe_step,
     business_state    = biz_state,
+    sessions          = sess,
     errors            = as.list(errs),
     recent_errors     = as.list(errs)
   )
@@ -4033,6 +4281,22 @@ ts_drive_emit_passive_state <- function(session = NULL, input = NULL,
   ok <- ts_drive_write_json(state_doc, dest)
   if (isTRUE(ok)) {
     .ts_drive_state$last_state_hash[[tok]] <- content_hash
+    # DSTV-3 (C2) : UN événement d'activité par écriture RÉELLE — jamais sur
+    # un tick inchangé (zéro churn). Le porteur est la ligne de la session
+    # émettrice ; la décision d'affichage (headless, armement) reste à la
+    # porte dédiée (ts_drive_activity_visible), c'est ce qui permet à la
+    # ligne de DISPARAÎTRE au désarmement sans second abonnement.
+    row2 <- .ts_drive_sessions_row(tok)
+    if (!is.null(row2)) {
+      .ts_drive_activity_event_push(list(
+        module_key = row2$module,
+        action     = row2$action,
+        hb_age_s   = round(max(0, as.numeric(Sys.time()) - row2$hb_at), 1),
+        viewer     = row2$viewer,
+        session_id = row2$session_id,
+        armed      = row2$armed
+      ))
+    }
   }
   invisible(isTRUE(ok))
 }
@@ -4700,6 +4964,20 @@ ts_drive_attach <- function(session, input, poll_ms = 800) {
   message(sprintf("[TranscriptoShiny drive] session_token=%s root=%s protocol=%s",
                   token, ts_drive_root(), TS_DRIVE_PROTOCOL))
 
+  # DSTV-3 (C1, fiche :82 « attach enregistre ») : la session entre dans la
+  # table sessions[] dès l'attach — session_id dérivé du MÊME started_at que
+  # ready.json (une seconde lecture d'horloge dériverait et n'identifierait
+  # rien), viewer = la déclaration de visibilité de la session. La ligne
+  # démarre honnêtement vide de position/action ; le tick et l'émetteur la
+  # rafraîchiront (C1).
+  ts_drive_sessions_track(
+    token,
+    session_id = ts_drive_session_id(Sys.getpid(), started_at, token),
+    viewer     = ts_drive_viewer(),
+    module     = "", action = "", armed = FALSE,
+    hb_at      = as.numeric(Sys.time())
+  )
+
   session$onSessionEnded(function() {
     lost <- ts_drive_job_session_lost(token)
     if (identical(.ts_drive_state$selected_token, token)) {
@@ -4708,6 +4986,11 @@ ts_drive_attach <- function(session, input, poll_ms = 800) {
     if (!is.null(.ts_drive_state$last_state_hash)) {
       .ts_drive_state$last_state_hash[[token]] <- NULL
     }
+    # DSTV-3 (C1, fiche :82 « onSessionEnded … retire ») : la ligne de la
+    # session sort de la table AUSSI — le prochain tick d'une session
+    # survivante émettra le retrait (le digest couvre la table). Le retrait
+    # est un no-op honnête si la ligne n'existe déjà plus.
+    try(ts_drive_sessions_drop(token), silent = TRUE)
     if (isTRUE(lost) || !is.null(ts_drive_job_pending())) {
       try(ts_drive_tick(
         session, input, NULL, token,
@@ -4782,6 +5065,22 @@ ts_drive_attach <- function(session, input, poll_ms = 800) {
         # (NULL, cleared), none (NULL).
         cursor$pending <- tick$pending
       cursor$armed <- isTRUE(tick$armed)
+      # DSTV-3 (C1, fiche :82 « tick rafraîchit ») : la LIVENESS de la ligne
+      # sessions[] — hb_at = l'horloge du battement ready.json (cursor$hb_at,
+      # la seule autorité : elle ne bouge que sur les battements réels,
+      # throttlés ~2-5 s, :4841+), armement = l'état du tick. Position/action
+      # restent à la charge de l'émetteur (détection nav / action consommée).
+      # Le refresh ne peut PAS déclencher d'écriture : le digest exclut la
+      # projection horaire (D2).
+      row_now <- .ts_drive_sessions_row(token)
+      if (!is.null(row_now)) {
+        ts_drive_sessions_track(token, session_id = row_now$session_id,
+                                viewer = row_now$viewer,
+                                module = row_now$module,
+                                action = row_now$action,
+                                armed = cursor$armed,
+                                hb_at = cursor$hb_at)
+      }
       if (isTRUE(tick$consumed)) {
         # A navigation plan is a ONE-SHOT effect: it is stored for the caller
         # (which owns `session`, hence bslib) and cleared on read, so a later

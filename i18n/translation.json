@@ -11364,6 +11364,10 @@
     {
       "fr": "Objet CellChat (.rds) : extraction de resultats deja calcules uniquement ; les paires ligand-receptor sont appariées EXACTEMENT sur @LR$LRsig (ligand, receptor, pathway_name) — aucune reconstruction heuristique ; un @LR$LRsig absent est remonté comme « engine_failure » explicite.",
       "en": "CellChat (.rds) object: extraction of pre-computed results only; ligand-receptor pairs are matched EXACTLY against @LR$LRsig (ligand, receptor, pathway_name) — no heuristic reconstruction; a missing @LR$LRsig is reported as an explicit engine_failure."
+    },
+    {
+      "fr": "Agent : module %s — action %s — il y a %s s",
+      "en": "Agent: module %s — action %s — %s s ago"
     }
   ]
 }

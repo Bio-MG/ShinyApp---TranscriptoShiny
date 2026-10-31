@@ -386,7 +386,13 @@ ui <- page_navbar(
     if (isTRUE(ts_drive_interactive())) tagList(
       hr(),
       h6(i18n$t("Contrôle agent (MCP)"), style = "font-weight: bold;"),
-      uiOutput("drive_control_ui")
+      uiOutput("drive_control_ui"),
+      # DSTV-3 (C2, fiche :83-85) : la ligne d'activité du pilote —
+      # « Agent : module X — action A — il y a Ns ». Abonnée au CHANGEMENT DE
+      # HASH de state.json (un événement par écriture réelle, jamais au tick :
+      # zéro churn, même discipline que le badge ci-dessus). Hors headless
+      # uniquement (C3 — la porte vit dans le renderUI, pas ici).
+      uiOutput("drive_activity_line")
     ) else NULL,
     
     
@@ -658,6 +664,12 @@ server <- function(input, output, session) {
   # value is written ONLY on a real protocol transition (see `.drive$events`).
   drive_state <- shiny::reactiveVal(ts_drive_badge_model())
 
+  # DSTV-3 (C2) — the activity line's dedicated reactive state, on the SAME
+  # discipline as the badge above: written ONLY when the emitter actually
+  # wrote state.json (one event per real hash change, drained below in the
+  # poller), never on an idle tick — zero re-render churn (fiche :85/:103).
+  drive_activity <- shiny::reactiveVal(NULL)
+
   # This session is "selected" when ready.json names ITS token. With several
   # tabs open the last one to boot owns the file, so only that tab badges.
   .drive_selected <- function() {
@@ -786,6 +798,33 @@ server <- function(input, output, session) {
     )
   })
 
+  # DSTV-3 (C2/C3) — the agent-activity line: « Agent : module X — action A —
+  # il y a Ns ». The reactive state (`drive_activity`) is written ONLY on a
+  # real state.json write (hash change, drained in the poller above) — the
+  # renderUI NEVER re-runs on an idle tick. The display gates live HERE, not
+  # in the drain: interactive (the protocol gate), the headless discriminant
+  # (fiche :87 « une session headless n'affiche rien de nouveau ») and armed
+  # (the line says « Agent : » — an unarmed session is the human navigating).
+  # The event carries armed, so the DISARM write is what removes the line
+  # without a second subscription. Absent view => NO element at all (the
+  # `sprintf("… : %s", "")` trap, same rule as the session line above).
+  output$drive_activity_line <- shiny::renderUI({
+    global_data$language                      # re-render on language switch
+    view <- drive_activity()
+    if (is.null(view)) return(NULL)
+    if (!isTRUE(ts_drive_activity_visible(
+          interactive = isTRUE(ts_drive_interactive()),
+          viewer      = view$viewer,
+          armed       = isTRUE(view$armed)))) return(NULL)
+    age <- sprintf("%.0f", max(0, suppressWarnings(as.numeric(view$age_s)[1])))
+    shiny::div(
+      id = "ts_drive_activity_line",
+      style = "margin-top:4px; font-size:0.72rem; line-height:1.3;",
+      sprintf(.tr("Agent : module %s \u2014 action %s \u2014 il y a %s s"),
+              view$module, view$action, age)
+    )
+  })
+
   # Arm / disarm. The STATE decides the direction, never the click count: the
   # button label and the write must not be able to disagree.
   observeEvent(input$drive_control_toggle, {
@@ -911,6 +950,17 @@ server <- function(input, output, session) {
         )
       }
       drive_state(st)
+    }
+
+    # Activity line (DSTV-3, C2): drain the ONE-SHOT events the emitter queued
+    # on each real state.json write — the hash-change subscription the fiche
+    # asks for (:85). No write -> empty list -> the reactive state is untouched
+    # -> zero churn. The LAST event is the current truth; the DISPLAY gates
+    # (interactive / headless / armed) live in the renderUI below, so an
+    # unarmed write is what makes the line disappear when the agent lets go.
+    acts <- ts_drive_pending_activity_events()
+    if (length(acts) > 0L) {
+      drive_activity(ts_drive_activity_view(acts[[length(acts)]]))
     }
 
     # Agent control: recompute the projection on every beat, but publish it to
