@@ -41,7 +41,7 @@ Cerberus fournit des environnements modulaires dédiés à trois domaines transc
 | Onglet / zone | Rôle |
 | :--- | :--- |
 | Import Données | Charger des fichiers Single-Cell, Bulk RNA ou Spatial, ou depuis la **Source publique (GEO)** (dernière entrée du menu). Rappel « mapping des IDs » + bouton natif « Aller au mapping des IDs » dans les imports Single-Cell/Bulk/GEO. |
-| Analyse Single-Cell | Cinq sections parent : **Préparation** (mapping, pipeline auto 1 clic, pipeline guidé, datasets SC enregistrés — double jeu), **Analyse** (annotation, rareté par population, visualisation, marqueurs, corrélation, voies), **Dynamique** (trajectoire, vitesse ARN, communication cellule-cellule), **Abondance cellulaire** (pseudobulk ; onglets internes : A. design — B. Milo/scCODA — C. vues croisées), **Livrables** (rapports/exports). |
+| Analyse Single-Cell | Cinq sections parent : **Préparation** (mapping, pipeline auto 1 clic, pipeline guidé, datasets SC enregistrés — multi-jeux), **Analyse** (annotation, rareté par population, visualisation, marqueurs, corrélation, voies), **Dynamique** (trajectoire, vitesse ARN, communication cellule-cellule), **Abondance cellulaire** (pseudobulk ; onglets internes : A. design — B. Milo/scCODA — C. vues croisées), **Livrables** (rapports/exports). |
 | Analyse Bulk RNA | Accordéon de bout en bout : **Pipeline auto (1 clic)**, 0. Mapping IDs, 1. Pipeline Bulk — QC & filtrage (onglets PCA / QC Échantillons / QC Batch ComBat-seq), 2. Design & Contrastes, 3. Pathway Enrichment, panneaux avancés 3b–3g (signatures cellulaires, WGCNA, survie, clustering de profils, dose-réponse, réseau PCSF), « 4. Livrables — Rapport & Script R », puis les panneaux **Multi-jeux** (Datasets enregistrés, Fusion de jeux). |
 | Analyse Spatiale | Conteneur à sidebar : étapes numérotées en accordéon à gauche (une étape ouverte à la fois), résultats à droite ; dataset et statut des démons toujours visibles dans la sidebar. Pipeline spatial, QC, clustering, déconvolution, visualisation, intégration multi-échantillons, niches, rapport/export. |
 | Barre latérale système | Changement de langue, usage mémoire, nettoyage RAM, limites mémoire/upload, état des objets chargés, sauvegarde/chargement de session, aide intégrée. |
@@ -57,8 +57,9 @@ Cerberus fournit des environnements modulaires dédiés à trois domaines transc
 - **Import flexible** : prise en charge des dossiers 10x, ainsi que des formats `.rds`, `.h5`, `.h5ad` et `.loom`, avec conservation de `orig.ident` dans les workflows multi-échantillons.
 - **Mapping des identifiants géniques** : conversion optionnelle et robuste des identifiants Ensembl/Entrez en symboles géniques avant l’analyse.
 > Le mapping d'identifiants dépend de l'espèce, de la version d'annotation et de la qualité des identifiants d'entrée. Les identifiants non résolus, ambigus ou dupliqués doivent être vérifiés avant toute interprétation biologique ; conservez toujours les identifiants originaux dans vos exports.
-- **Pipeline standard** : contrôle qualité, normalisation, sélection de gènes hautement variables, PCA, construction du graphe de voisins, clustering, UMAP et t-SNE optionnel. Disponible en **pipeline automatique 1 clic** (panneau 0 : mapping d'IDs optionnel, QC, normalisation/PCA/clustering/UMAP, t-SNE, puis étapes optionnelles annotation SingleR, marqueurs, corrélation génique, ORA sur top marqueurs, trajectoire) ou en mode guidé panneau par panneau.
+- **Pipeline standard** : contrôle qualité, normalisation, sélection de gènes hautement variables, PCA, construction du graphe de voisins, clustering, UMAP et t-SNE optionnel. Disponible en **pipeline automatique 1 clic** (panneau 0 : mapping d'IDs optionnel, QC, normalisation/PCA/clustering/UMAP, t-SNE, puis étapes optionnelles annotation SingleR, marqueurs, corrélation génique, ORA sur top marqueurs, trajectoire) ou en mode guidé panneau par panneau — le pipeline auto s'exécute de façon asynchrone (ExtendedTask/mirai).
 > L'interface Single-Cell regroupe ses panneaux en cinq sections parent (Préparation / Analyse / Dynamique / Abondance cellulaire / Livrables). Vitesse ARN, communication cellule-cellule et abondance différentielle exigent des prérequis spécifiques et restent hors du pipeline automatique.
+- **Doublets & ARN ambiant (QC)** : détection des doublets et contrôle de contamination ARN ambiant via `scDblFinder` — l'appel tourne une fois, le seuil de score ne pilote que le filtrage (exclusion stricte des cellules appelées doublets).
 - **Correction de batch** : intégration avec Harmony lorsque plusieurs échantillons ou batchs sont présents.
 
 #### Multi-échantillons single-cell
@@ -68,12 +69,12 @@ Le workflow Single-Cell est nativement multi-échantillons (ex: Contrôle vs Tra
 - **Import groupé** : plusieurs dossiers 10x, `.rds` ou `.h5` peuvent être importés dans une même session (Options A et B de l'import Single-Cell). Chaque import devient un échantillon distinct (`orig.ident`) ; dès que ≥ 2 échantillons sont chargés, un aperçu récapitulatif (échantillon, cellules, gènes, condition/batch si détectables) confirme visuellement la reconnaissance des entités.
 - **Correction de batch** : Harmony est appliquée automatiquement sur l'identité d'échantillon (`orig.ident`) dès que ≥ 2 échantillons sont détectés — choisir « Harmony » comme méthode de réduction du pipeline.
 - **Compatibilité aval** : pseudobulk, Milo et scCODA exploitent l'identité d'échantillon pour éviter la pseudo-réplication (l'unité de réplication est l'échantillon, jamais la cellule — voir la validation du plan expérimental dans « Abondance cellulaire »).
-- **Datasets SC enregistrés (double jeu)** : deux jeux single-cell nommés peuvent coexister dans la même session — analyses séparées, paramètres partagés (mode 1) ou distincts (mode 2) — pour exécuter deux traitements en parallèle sans ré-importer.
+- **Datasets SC enregistrés (multi-jeux)** : plusieurs jeux single-cell nommés coexistent dans la même session (capacité du conteneur : 20 jeux, budget RAM 32 Go) — analyses séparées, paramètres partagés (mode 1) ou distincts (mode 2) — pour enchaîner plusieurs traitements sans ré-importer.
 
 - **Scalabilité consciente de la mémoire** : workflows de sketch Seurat v5 (`SketchData` avec LeverageScore, `ProjectData`), gestion compatible BPCells, mise à l’échelle ciblée des variables et sous-échantillonnage stratifié pour les explorations coûteuses.
 - **Annotation et exploration** : annotation automatique des types cellulaires via SingleR (références celldex), recherche de marqueurs (`FindAllMarkers`), corrélation génique, analyse de voies et visualisations variées (embeddings, FeaturePlots, violons, DotPlots, heatmaps, vues ridge/empilées).
 - **Rareté par population (panneau 2b)** : lecture descriptive, mono-condition, de la rareté des populations annotées (parts et effectifs par échantillon) — aucune comparaison inter-conditions, qui passerait par la porte « Abondance différentielle ».
-- **Vitesse ARN** : import strict de données de vélocité pré-préparées (matrices spliced/unspliced et résultats/vecteurs compatibles) alignées sur l'objet Seurat. L'application effectue des contrôles de cohérence multi-états, fournit des visualisations phase-portrait et vectorielles, et exporte PNG/PDF/CSV. Elle visualise des résultats validés sans recalculer silencieusement un modèle de vélocité.
+- **Vitesse ARN** : import strict de données de vélocité pré-préparées (matrices spliced/unspliced et résultats/vecteurs compatibles) alignées sur l'objet Seurat. L'application effectue des contrôles de cohérence multi-états, fournit des visualisations phase-portrait et vectorielles, et exporte PNG/PDF/CSV. Elle visualise des résultats validés sans recalculer silencieusement un modèle de vélocité. L'inférence `scVelo` est disponible en **opt-in explicite** (bannière dédiée) comme seule voie de calcul de vitesse — jamais dans le pipeline automatique.
 - **Communication cellule-cellule (panneau 8b)** : import de résultats externes (table/objet CellChat, means+p-values CellPhoneDB, rangs agrégés LIANA) **ou calcul natif dans l'application** via les moteurs intégrés (moteur CellChat épinglé ; moteur LIANA en rangs agrégés — aucun score reconstitué). Table canonique à 12 champs, appariement exact des identités, QC, vues exploratoires (dotplot, heatmap de pathways, réseau circulaire), centralité descriptive, filtres avec provenance. Vues de contexte **consommatrices pures** (aucun recalcul) : contexte spatial, contexte trajectoire, contexte vélocité, perturbation in silico.
 - **Abondance différentielle (panneaux 8c–8f)** :
 > Prérequis : les analyses d'abondance différentielle exigent des métadonnées identifiant l'unité de réplication biologique (ex. sample_id, donor_id, patient_id) et une condition expérimentale. Un cluster de cellules seul n'est pas un réplica biologique.
@@ -84,11 +85,11 @@ Le workflow Single-Cell est nativement multi-échantillons (ex: Contrôle vs Tra
 - **Trajectoire** : pseudotemps exploratoire sur graphe kNN **plus inférence de lignées Slingshot en option** (quand le paquet est installé). Plafond strict sur le nombre de cellules.
 - **Pseudobulk** et **rapport Single-Cell consolidé** (compilateur d'état canonique + provenance uniquement — ne ré-exécute jamais les analyses ; HTML autonome, bundle d'export avec manifeste, tables fidèles, script R reproductible, sessionInfo).
 - La provenance est enregistrée pour chaque étape d'analyse alimentant un rapport ; les sections sans provenance sont rejetées par le validateur.
-- *Note scientifique* : la trajectoire par défaut reste le pseudotemps léger sur graphe ; Slingshot est proposé comme moteur optionnel quand il est installé. La détection native de doublets et la régression du cycle cellulaire ne sont pas encore intégrées.
+- *Note scientifique* : la trajectoire par défaut reste le pseudotemps léger sur graphe ; Slingshot est proposé comme moteur optionnel quand il est installé. La détection de doublets et le QC ARN ambiant (`scDblFinder`) sont désormais intégrés au QC single-cell ; la régression du cycle cellulaire n'est pas encore intégrée.
 
 ### Bulk RNA-seq
 
-> Pour DESeq2, edgeR et limma-voom, fournissez des comptages bruts au niveau gène, idéalement entiers ou de type entier, issus d'un outil de quantification compatible avec l'analyse sur comptages. N'utilisez pas de TPM, FPKM, CPM, log-counts ni de matrices corrigées du batch en entrée de l'expression différentielle.
+> Pour DESeq2, edgeR et limma-voom, fournissez des comptages bruts au niveau gène, idéalement entiers ou de type entier, issus d'un outil de quantification compatible avec l'analyse sur comptages. N'utilisez pas de TPM, FPKM, CPM, log-counts ni de matrices corrigées du batch en entrée de l'expression différentielle. L'import détecte désormais les matrices TPM/FPKM (ou non entières) et affiche une bannière d'avertissement avant toute analyse.
 
 - **Import intelligent** : prise en charge de matrices de comptages bruts fusionnées ou de fichiers de comptages par échantillon, avec alignement automatique des métadonnées et résolution des doublons de gènes.
 - **Prise en charge de GEO** : parsing hors-ligne de fichiers GEO `series_matrix.txt`, sans accès réseau ni dépendance à `GEOquery`.
@@ -98,6 +99,7 @@ Le workflow Single-Cell est nativement multi-échantillons (ex: Contrôle vs Tra
 - **Garde-fous de design** : contrôles proactifs des covariables confondues, des valeurs manquantes invalidant le modèle et des covariables ne présentant qu’un seul niveau observé.
 - **Gestion des contrastes** : contrastes standards, définis par l’utilisateur et pairwise, avec comparaison multi-méthodes et exploration par consensus de rangs.
 - **Correction de batch** : ComBat-seq optionnel (onglet « QC Batch » de l'étape 1) sur le batch déclaré.
+- **Pipeline auto Bulk** : l'enrichissement de voies du pipeline automatique itère sur **tous** les contrastes définis, avec trois étapes opt-in (PCA, scores ssGSEA, rapport) ; le **Résumé Pipeline Bulk** affiche WGCNA, signatures cellulaires et la mini-matrice des contrastes ; le **Résumé d'import Bulk** porte un badge persistant de concordance counts ↔ métadonnées.
 - **Scores de voies par échantillon (3b. Signatures cellulaires)** : GSVA, ssGSEA, PLAGE et z-score sur jeux de gènes Hallmark, PROGENy, DoRothEA ou RDS local — scores relatifs, interprétés intra-échantillon.
 - **Réseau de co-expression WGCNA (3c)** : mode « safe » sur les échantillons déclarés, avec QC de batch dédié.
 - **Survie & association clinique (3d)** : Kaplan-Meier et Cox appariés aux métadonnées cliniques disponibles.
@@ -130,32 +132,32 @@ Le développement suit une approche testée et orientée reproductibilité : les
 ```text
 Cerberus/
 ├── app.R / global.R
-├── config/          # defaults.R, thresholds.R (single source of truth)
 ├── i18n/            # translation.json (fr/en)
-├── R/
-│   ├── core/        # state, validation, provenance, jobs, caching, io/pathway helpers, error_state, rdata_io, drive (watcher/allowlist)
-│   ├── sc/          # velocity, communication (import + native engines + contexts), abundance (Milo/scCODA/design/cross), rarity, trajectory, pipeline, plotting, bpcells, export
-│   ├── bulk/        # import/report engines, helpers, batch (ComBat-seq), batch_qc, gsva/signatures, gene_sets, wgcna, survival, pattern, dose_response, network (PCSF), multi (+compare), merge, provenance
-│   ├── spatial/     # async (mirai), io, deconv prep/tasks, multi, niche, plotting, report, reference, stats, export
-│   ├── reports/     # collector, validator, render, bundle
-│   └── plotting/    # themes, palettes, exports, heatmap, datatable
+├── tools/
+│   └── pkg_skeleton/  # package tree (DESCRIPTION, NAMESPACE)
+│       └── R/         # ALL domain logic: defaults/thresholds, state, validation, provenance, jobs, memory, io, error_state, rdata_io, drive (watcher/allowlist), cerberus_handoff, plotting/theme, sc_* (pipeline, doublets, communication, abundance, velocity, …), bulk_* (import, batch, signatures, wgcna, survival, PCSF, multi, merge, …), spatial_*, report_*
+├── R/               # frozen source-list manifest (R/.sources_manifest.txt)
 ├── modules/         # import/ (sc, bulk, spatial, geo, rdata picker), sc/, bulk/, bulk_de/, spatial/ (+ deconv sub-modules)
+├── tests/           # testthat + 4-tier opaque-box e2e (tests/e2e/)
 ├── reports/         # Rmd templates (sc, bulk, spatial + child)
-├── scripts/         # renv bootstrap, MCP server, release gates, development/benchmark scripts
+├── scripts/         # renv bootstrap, MCP server, release gates, sources manifest, development/benchmark scripts
 └── renv/            # lock + activate
 ```
 
-L'état inter-modules passe par le `reactiveValues` partagé (`global_data`) ; les calculs lourds spatiaux/async passent par le pool de démons `mirai`. Les modules lisent leurs paramètres dans `config/` et les seuils déclarés — aucune valeur magique en dur.
+L'état inter-modules passe par le `reactiveValues` partagé (`global_data`) ; les calculs lourds (spatial, DE bulk, pipeline auto SC) passent par ExtendedTask et le pool de démons `mirai`. Les modules lisent leurs paramètres dans `defaults.R`/`thresholds.R` de l'arbre du paquet — aucune valeur magique en dur. La liste des `source()` de `app.R` est figée par un manifeste vérifié machine (`R/.sources_manifest.txt`, généré par `tools/sources_manifest.R`).
 
 ## Serveur MCP local et pilotage par agent (optionnel)
 
 Pour le développement et l'audit, Cerberus embarque un **serveur MCP local** (Model Context Protocol) sur stdio — `scripts/mcp_server.R` — qui permet à un agent IA (ZCode, Claude Desktop, VS Code…) d'observer et, de façon strictement contrôlée, de piloter une session **vivante** de l'application :
 
 - **Transport** : JSON-RPC 2.0 natif sur stdio (`jsonlite` uniquement), lancé depuis la racine du projet avec `Rscript --no-init-file scripts/mcp_server.R` — le drapeau est obligatoire (le `.Rprofile` du projet écrirait sinon sur stdout et corromprait le transport). Diagnostic : `Rscript --no-init-file scripts/mcp_server.R --check`.
-- **8 outils** : lecture seule (`transcripto_drive_status`, `transcripto_drive_read_result`), armement contrôlé (`transcripto_drive_set_armed`), snapshot passif (`transcripto_drive_snapshot`), écritures contrôlées (`transcripto_drive_set_inputs`, `transcripto_drive_run`, `transcripto_drive_wait`, `transcripto_drive_export`).
-- **Toute écriture passe par un dépôt de fichiers `tools/_drive/*.json`** (file-drop) sous une allowlist gelée de modules, boutons et entrées — le serveur ne démarre jamais l'application et n'exécute jamais d'analyse lui-même.
+- **11 outils, dont 5 en lecture seule** (identité serveur `cerberus-drive`) : lecture seule (`transcripto_drive_status`, `transcripto_drive_read_result`, `transcripto_drive_read` — lecture bornée de l'artefact exporté courant, `transcripto_drive_state` — digest passif de `state.json`, `transcripto_drive_snapshot` — photo instantanée), armement contrôlé (`transcripto_drive_set_armed`), écritures contrôlées (`transcripto_drive_set_inputs`, `transcripto_drive_run`, `transcripto_drive_wait`, `transcripto_drive_export`, `transcripto_drive_import` — import de données vers un module d'import).
+- **Toute écriture passe par un dépôt de fichiers `tools/_drive/*.json`** (file-drop) sous une allowlist gelée de modules, boutons et entrées — le serveur ne démarre jamais l'application et n'exécute jamais d'analyse lui-même. Les exports lisibles par l'agent sont limités aux **13 routes déclarées** (`TS_DRIVE_EXPORT_ROUTES`).
 - **Deux modes de visibilité, un seul protocole** : `headless` ou `visible` (vrai onglet navigateur) — seul le client change, le contrat IPC reste identique.
-- Gabarits clients dans `mcp.examples/` (formats vérifiés pour les lanceurs actifs) ; plan et documentation détaillée dans `docs/`.
+- Gabarits clients dans `mcp.examples/` (formats vérifiés pour les lanceurs actifs ; répertoire local, non suivi par git) ; plan et documentation détaillée dans `docs/` (local, non suivi).
+
+- **Contrat d'ingestion `cerberus-exchange/v1`** : la CLI headless `tools/cerberus_handoff.R` valide un drop amont (manifeste, matrice de counts, samplesheet) et écrit un `validation.json` — utilisable sans application lancée.
+- **Maîtrise opérateur** : l'application affiche l'état du contrôle par agent, permet de le basculer, montre l'identifiant de session dérivé et permet de reprendre une session armée par une session morte.
 
 > Le pilotage par agent est un outil de développement/validation, local-first : il ne contourne aucune validation de l'application et n'envoie aucune donnée hors de la machine.
 
@@ -211,6 +213,7 @@ BiocManager::install(c("Seurat", "SeuratObject", "SingleR", "celldex",
 | Visium HD (parquet) | arrow | Import HD incomplet (alternative légère : nanoparquet) |
 | Inférence de lignées | slingshot | Trajectoire limitée au pseudotemps graphe |
 | scCODA | Environnement Python + dépendances scCODA | scCODA indisponible (erreur guidée) |
+| Doublets & ARN ambiant (SC) | scDblFinder | QC doublets indisponible |
 | Vues spatiales WebGL | leafgl | Rendu de grands nuages de points dégradé |
 
 *Note : les workflows spatiaux peuvent exiger des packages supplémentaires tels que `BPCells`, `mirai`, `RANN` et `spacexr`. scCODA requiert un environnement **Python 3.13** dédié (`python_env_sccoda/` ou variable `TS_SCCODA_PYTHON`) — sans lui, une erreur classée avec guidance est levée, sans repli silencieux. CellChat (épinglé), LIANA, `drc`, `GSVA` et `WGCNA` sont inclus dans `renv.lock` — aucune installation séparée ; en leur absence (installation manuelle), les moteurs de communication natifs restent indisponibles avec une erreur guidée, l'import de résultats externes restant disponible. Le PDF par domaine requiert TinyTeX ; le rapport consolidé 4F génère un HTML autonome sans pandoc.*
@@ -362,9 +365,10 @@ La reproductibilité et la validité scientifique dépendent également :
 
 ## Qualité logicielle
 
-- **Tests** : suite `testthat` + `shinytest2` e2e (référence mesurée 2026-09-29 : **10 562 PASS / 0 FAIL / 0 ERROR / 1 SKIP** sur **155 fichiers**, ~2 h via `tools/run_full_suite.R` ; l'unique SKIP est le smoke GEO live, réseau). Pendant le développement : tests ciblés du périmètre modifié + gardes ; suite complète en fin de version.
-- **Garde anti-duplication** : `tools/check_duplication.R` (0 erreur).
-- **Garde de conventions** : `tools/check_conventions.R` (règles C1–C16, 0 erreur obligatoire).
+- **Tests** : suite `testthat` + e2e (dernier relevé FULL 2026-10-28, `QC/full_suite_results.txt` : **15 423 PASS / 0 ERROR / 1 SKIP** sur **218 fichiers** ; les 2 FAIL du relevé — `test-pkg-skeleton.R` — sont re-mesurés verts sur HEAD au probe chirurgical ; l'unique SKIP est le smoke GEO live, réseau). Pendant le développement : tests ciblés du périmètre modifié + gardes ; suite complète en fin de version.
+- **E2E opaque-box (4 tiers)** : `tests/e2e/` — 18 fichiers exécutés via `tests/e2e/runner.R` (headless, détection de capacités) ; 614 assertions, 0 FAIL / 0 SKIP (double run vert 2026-10-27).
+- **Garde anti-duplication** : `tools/check_duplication.R` (relevé 0 erreur / 3 avert. au 2026-10-28 — `docs/STATUS.md` §0 ; non re-mesuré depuis les vagues du soir).
+- **Garde de conventions** : `tools/check_conventions.R` (règles C1–C17 + C9b, 0 erreur obligatoire).
 - **Contrats figés** : une trentaine de contrats de résultats (`docs/contracts/`), chacun couvert par un test de gel — toute modification = code + test + doc simultanément.
 - **Gates release** : `scripts/verify_release_gates.R` (lock valide, i18n sans doublon, aucun chemin local dans les fichiers suivis).
 - **Docs release** : `docs/release/` (matrice de durcissement 14 catégories, limitations connues, compatibilité, baseline de performance).
@@ -380,9 +384,10 @@ La reproductibilité et la validité scientifique dépendent également :
 - [x] Multi-jeux : enregistrement, comparaison et fusion de jeux bulk, pont pseudobulk, double jeu SC.
 - [x] Communication cellule-cellule : moteurs natifs CellChat & LIANA (calcul dans l'app) + vues de contexte (spatial, trajectoire, vélocité, perturbation in silico).
 - [x] Rareté par population (analyse descriptive mono-condition).
-- [x] Serveur MCP local (8 outils) + protocole drive de pilotage contrôlé d'une session vivante par un agent.
+- [x] Serveur MCP local (11 outils) + protocole drive de pilotage contrôlé d'une session vivante par un agent ; contrat d'ingestion `cerberus-exchange/v1` (CLI de validation headless).
+- [x] Détection des doublets & QC ARN ambiant (scDblFinder) dans le pipeline single-cell.
+- [x] Exécution asynchrone (ExtendedTask/mirai) pour la DE bulk et le pipeline auto single-cell.
 - [ ] Choix élargis d'intégration single-cell au-delà de Harmony.
-- [ ] Détection dédiée des doublets au sein du pipeline de QC.
 - [ ] Extension continue des workflows spatiaux et des analyses fondées sur des références.
 
 ## Contribuer
@@ -440,7 +445,7 @@ Cerberus provides dedicated, modular environments for three primary transcriptom
 | Tab / area | Role |
 | :--- | :--- |
 | Import Data | Load Single-Cell, Bulk RNA, or Spatial files, or from the **public source (GEO)** (last entry of the menu). ID-mapping reminder + native "Go to ID mapping" jump button in the Single-Cell/Bulk/GEO imports. |
-| Analyse Single-Cell | Five parent sections: **Preparation** (mapping, 1-click auto pipeline, guided pipeline, registered SC datasets — dual dataset), **Analysis** (annotation, population rarity, visualization, markers, correlation, pathways), **Dynamics** (trajectory, RNA velocity, cell–cell communication), **Cell abundance** (pseudobulk; inner tabs: A. design — B. Milo/scCODA — C. cross-views), **Deliverables** (reports/exports). |
+| Analyse Single-Cell | Five parent sections: **Preparation** (mapping, 1-click auto pipeline, guided pipeline, registered SC datasets — multi-dataset), **Analysis** (annotation, population rarity, visualization, markers, correlation, pathways), **Dynamics** (trajectory, RNA velocity, cell–cell communication), **Cell abundance** (pseudobulk; inner tabs: A. design — B. Milo/scCODA — C. cross-views), **Deliverables** (reports/exports). |
 | Analyse Bulk RNA | Full-length accordion: **1-click auto pipeline**, 0. ID mapping, 1. Bulk pipeline — QC & filtering (PCA / sample QC / ComBat-seq batch QC tabs), 2. Design & contrasts, 3. Pathway enrichment, advanced panels 3b–3g (cell signatures, WGCNA, survival, profile clustering, dose-response, PCSF network), "4. Deliverables — Report & R Script", then the **Multi-dataset** panels (Registered datasets, Dataset merge). |
 | Analyse Spatial | Sidebar container: numbered accordion steps on the left (one step open at a time), results on the right; dataset and daemon status always visible in the sidebar. Spatial pipeline, QC, clustering, deconvolution, visualization, multi-sample integration, niches, report/export. |
 | System sidebar | Language switch, memory usage, RAM cleanup, memory/upload limits, loaded objects status, session save/load, built-in help. |
@@ -455,8 +460,9 @@ Cerberus provides dedicated, modular environments for three primary transcriptom
 - **Flexible import**: Supports 10x directories, `.rds`, `.h5`, `.h5ad`, and `.loom` formats, preserving `orig.ident` for multi-sample workflows.
 - **Gene identifier mapping**: Optional, robust conversion of Ensembl/Entrez IDs to gene symbols prior to analysis.
 > Gene ID mapping depends on species, annotation version, and input ID quality. Unresolved, ambiguous, or duplicated IDs must be checked before biological interpretation; always keep original IDs in your exports.
-- **Standard pipeline**: QC, normalization, highly variable feature selection, PCA, neighbor graph construction, clustering, UMAP, and optional t-SNE. Available as a **1-click automatic pipeline** (panel 0: optional ID mapping, QC, normalization/PCA/clustering/UMAP, t-SNE, then optional steps SingleR annotation, markers, gene correlation, ORA on top markers, trajectory) or panel-by-panel in guided mode.
+- **Standard pipeline**: QC, normalization, highly variable feature selection, PCA, neighbor graph construction, clustering, UMAP, and optional t-SNE. Available as a **1-click automatic pipeline** (panel 0: optional ID mapping, QC, normalization/PCA/clustering/UMAP, t-SNE, then optional steps SingleR annotation, markers, gene correlation, ORA on top markers, trajectory) or panel-by-panel in guided mode. The auto pipeline runs asynchronously (ExtendedTask/mirai).
 > The Single-Cell interface groups its panels into five parent sections (Preparation / Analysis / Dynamics / Cell abundance / Deliverables). RNA velocity, cell–cell communication, and differential abundance require specific prerequisites and remain outside the automatic pipeline.
+- **Doublets & ambient RNA (QC)**: doublet detection and ambient-RNA contamination control via `scDblFinder` — calling runs once, the score cutoff only drives filtering (strict exclusion of called doublet cells).
 - **Batch correction**: Harmony-based integration when multiple samples or batches are present.
 
 #### Multi-sample single-cell
@@ -466,12 +472,12 @@ The Single-Cell workflow is natively multi-sample (e.g. Control vs Treatment, Da
 - **Batched import**: multiple 10x folders, `.rds`, or `.h5` files can be imported in one session (Options A and B of the Single-Cell import). Each import becomes a distinct sample (`orig.ident`); as soon as ≥ 2 samples are loaded, a summary overview (sample, cells, genes, condition/batch when detectable) provides immediate visual confirmation that samples are recognized as distinct entities.
 - **Batch correction**: Harmony is automatically applied on sample identity (`orig.ident`) as soon as ≥ 2 samples are detected — select "Harmony" as the pipeline reduction method.
 - **Downstream compatibility**: pseudobulk, Milo, and scCODA leverage sample identity to avoid pseudoreplication (the replication unit is the sample, never the cell — see the experimental-design validation in "Cell abundance").
-- **Registered SC datasets (dual dataset)**: two named single-cell datasets can coexist in the same session — separate analyses with shared (mode 1) or distinct (mode 2) parameters — to run two treatments in parallel without re-importing.
+- **Registered SC datasets (multi-dataset)**: multiple named single-cell datasets coexist in the same session (container capacity: 20 datasets, 32 GB RAM budget) — separate analyses with shared (mode 1) or distinct (mode 2) parameters — to run several treatments in parallel without re-importing.
 
 - **Memory-aware scaling**: Seurat v5 sketch workflows (`SketchData` with LeverageScore, `ProjectData`), BPCells-aware handling, targeted feature scaling, and stratified subsampling for costly exploratory tasks.
 - **Annotation & exploration**: Automatic cell-type annotation via SingleR (celldex references), marker discovery (`FindAllMarkers`), gene correlation, pathway analysis, and diverse visualizations (embeddings, feature plots, violins, dot plots, heatmaps, ridge/stacked views).
 - **Population rarity (panel 2b)**: descriptive, single-condition reading of annotated-population rarity (shares and counts per sample) — no cross-condition comparison, which goes through the "Cell abundance" DA gate.
-- **RNA velocity**: strict import of pre-prepared velocity data (spliced/unspliced matrices and compatible results/vectors) aligned to the Seurat object. The app performs multi-state consistency checks, provides phase-portrait and vector visualizations, and exports PNG/PDF/CSV. It visualizes validated results without silently re-computing a velocity model.
+- **RNA velocity**: strict import of pre-prepared velocity data (spliced/unspliced matrices and compatible results/vectors) aligned to the Seurat object. The app performs multi-state consistency checks, provides phase-portrait and vector visualizations, and exports PNG/PDF/CSV. It visualizes validated results without silently re-computing a velocity model. scVelo inference is available as an **explicit opt-in** (dedicated banner) — the only velocity-computation path, never part of the automatic pipeline.
 - **Cell–cell communication (panel 8b)**: import of external results (CellChat table / object, CellPhoneDB means+p-values, aggregated LIANA ranks) **or native in-app computation** through built-in engines (pinned CellChat engine; LIANA engine on aggregated ranks — no reconstituted scores). Canonical 12-field table, exact identity matching, QC, exploratory views (dotplot, pathway heatmap, circular network), descriptive centrality, filters with provenance. **Pure-consumer** context views (no recomputation): spatial context, trajectory context, velocity context, in-silico perturbation.
 - **Differential abundance (panels 8c–8f)**:
 > Prerequisite: differential abundance analyses require metadata identifying the biological replication unit (e.g. sample_id, donor_id, patient_id) and an experimental condition. A cell cluster alone is not a biological replicate.
@@ -482,10 +488,10 @@ The Single-Cell workflow is natively multi-sample (e.g. Control vs Treatment, Da
 - **Trajectory**: exploratory kNN-graph pseudotime **plus optional Slingshot lineage inference** (when the package is available). Hard cell-count ceiling.
 - **Pseudobulk** utilities and a **consolidated Single-Cell report** (compiler of canonical state + provenance only — never re-executes analyses; HTML autonomous, export bundle with manifest, faithful tables, reproducible R script, sessionInfo).
 - Provenance is recorded for every analysis step that feeds a report; sections lacking provenance are rejected by the validator.
-- *Scientific note*: the default trajectory remains the lightweight graph pseudotime; Slingshot is offered as an optional engine when installed. Built-in doublet detection and cell-cycle regression are not yet integrated.
+- *Scientific note*: the default trajectory remains the lightweight graph pseudotime; Slingshot is offered as an optional engine when installed. Doublet detection and ambient-RNA QC (`scDblFinder`) are now built into the single-cell QC; cell-cycle regression is not yet integrated.
 
 ### Bulk RNA-seq
-> For DESeq2, edgeR, and limma-voom, provide raw gene-level counts, ideally integer or integer-like, from a quantification tool compatible with count-based analysis. Do not use TPM, FPKM, CPM, log-counts, or batch-corrected matrices as input for differential expression.
+> For DESeq2, edgeR, and limma-voom, provide raw gene-level counts, ideally integer or integer-like, from a quantification tool compatible with count-based analysis. Do not use TPM, FPKM, CPM, log-counts, or batch-corrected matrices as input for differential expression. The import now detects TPM/FPKM (or non-integer) matrices and raises a warning banner before any analysis.
 
 - **Smart import**: Handles merged raw count matrices or per-sample count files, with automated metadata alignment and gene duplicate resolution.
 - **GEO support**: Offline parsing of GEO `series_matrix.txt` files without requiring network access or `GEOquery`.
@@ -495,6 +501,7 @@ The Single-Cell workflow is natively multi-sample (e.g. Control vs Treatment, Da
 - **Design safeguards**: Proactive checks for confounding covariates, missing covariate values that invalidate the model, and covariates with only one observed level.
 - **Contrast management**: Standard, user-defined, and pairwise contrasts, alongside multi-method comparison and rank-consensus exploration.
 - **Batch correction**: optional ComBat-seq ("Batch QC" tab of step 1) on the declared batch.
+- **Bulk auto pipeline**: the automatic pipeline's pathway enrichment iterates over **all** declared contrasts, with three opt-in steps (PCA, ssGSEA scores, report); the **Bulk Pipeline Résumé** displays WGCNA, cell signatures, and the contrast mini-matrix; the **Bulk import Résumé** carries a persistent counts ↔ metadata concordance badge.
 - **Per-sample pathway scores (3b. Cell signatures)**: GSVA, ssGSEA, PLAGE, and z-score over Hallmark, PROGENy, DoRothEA, or local RDS gene sets — relative scores, interpreted within-sample.
 - **WGCNA co-expression network (3c)**: safe mode over the declared samples, with a dedicated batch-QC view.
 - **Survival & clinical association (3d)**: Kaplan-Meier and Cox matched to the available clinical metadata.
@@ -526,32 +533,32 @@ Development follows a tested, reproducibility-oriented approach: key analytical 
 ```text
 Cerberus/
 ├── app.R / global.R
-├── config/          # defaults.R, thresholds.R (single source of truth)
 ├── i18n/            # translation.json (fr/en)
-├── R/
-│   ├── core/        # state, validation, provenance, jobs, caching, io/pathway helpers, error_state, rdata_io, drive (watcher/allowlist)
-│   ├── sc/          # velocity, communication (import + native engines + contexts), abundance (Milo/scCODA/design/cross), rarity, trajectory, pipeline, plotting, bpcells, export
-│   ├── bulk/        # import/report engines, helpers, batch (ComBat-seq), batch_qc, gsva/signatures, gene_sets, wgcna, survival, pattern, dose_response, network (PCSF), multi (+compare), merge, provenance
-│   ├── spatial/     # async (mirai), io, deconv prep/tasks, multi, niche, plotting, report, reference, stats, export
-│   ├── reports/     # collector, validator, render, bundle
-│   └── plotting/    # themes, palettes, exports, heatmap, datatable
+├── tools/
+│   └── pkg_skeleton/  # package tree (DESCRIPTION, NAMESPACE)
+│       └── R/         # ALL domain logic: defaults/thresholds, state, validation, provenance, jobs, memory, io, error_state, rdata_io, drive (watcher/allowlist), cerberus_handoff, plotting/theme, sc_* (pipeline, doublets, communication, abundance, velocity, …), bulk_* (import, batch, signatures, wgcna, survival, PCSF, multi, merge, …), spatial_*, report_*
+├── R/               # frozen source-list manifest (R/.sources_manifest.txt)
 ├── modules/         # import/ (sc, bulk, spatial, geo, rdata picker), sc/, bulk/, bulk_de/, spatial/ (+ deconv sub-modules)
+├── tests/           # testthat + 4-tier opaque-box e2e (tests/e2e/)
 ├── reports/         # Rmd templates (sc, bulk, spatial + child)
-├── scripts/         # renv bootstrap, MCP server, release gates, development/benchmark scripts
+├── scripts/         # renv bootstrap, MCP server, release gates, sources manifest, development/benchmark scripts
 └── renv/            # lock + activate
 ```
 
-Cross-module state flows through the shared `reactiveValues` (`global_data`); heavy spatial/async work runs on the `mirai` daemon pool. Modules read their parameters from `config/` and the declared thresholds — no hard-coded magic numbers.
+Cross-module state flows through the shared `reactiveValues` (`global_data`); heavy work (spatial, bulk DE, SC auto pipeline) runs via ExtendedTask and the `mirai` daemon pool. Modules read their parameters from the package tree's `defaults.R`/`thresholds.R` — no hard-coded magic numbers. The `source()` list of `app.R` is frozen by a machine-verified manifest (`R/.sources_manifest.txt`, generated by `tools/sources_manifest.R`).
 
 ## Local MCP server & agent control (optional)
 
 For development and audit purposes, Cerberus ships a **local MCP server** (Model Context Protocol) over stdio — `scripts/mcp_server.R` — that lets an AI agent (ZCode, Claude Desktop, VS Code…) observe and, under strict control, drive a **live** session of the app:
 
 - **Transport**: native JSON-RPC 2.0 over stdio (`jsonlite` only), launched from the repository root with `Rscript --no-init-file scripts/mcp_server.R` — the flag is mandatory (the project `.Rprofile` would otherwise write to stdout and corrupt the transport). Diagnostic: `Rscript --no-init-file scripts/mcp_server.R --check`.
-- **8 tools**: read-only (`transcripto_drive_status`, `transcripto_drive_read_result`), controlled arming (`transcripto_drive_set_armed`), passive snapshot (`transcripto_drive_snapshot`), controlled writes (`transcripto_drive_set_inputs`, `transcripto_drive_run`, `transcripto_drive_wait`, `transcripto_drive_export`).
-- **Every write goes through `tools/_drive/*.json` file drops** under a frozen allowlist of modules, buttons, and inputs — the server never starts the app and never runs analysis code itself.
+- **11 tools, 5 of them read-only** (server identity `cerberus-drive`): read-only (`transcripto_drive_status`, `transcripto_drive_read_result`, `transcripto_drive_read` — bounded read of the current exported artefact, `transcripto_drive_state` — passive `state.json` digest, `transcripto_drive_snapshot` — instant snapshot), controlled arming (`transcripto_drive_set_armed`), controlled writes (`transcripto_drive_set_inputs`, `transcripto_drive_run`, `transcripto_drive_wait`, `transcripto_drive_export`, `transcripto_drive_import` — data import into an importer module).
+- **Every write goes through `tools/_drive/*.json` file drops** under a frozen allowlist of modules, buttons, and inputs — the server never starts the app and never runs analysis code itself. Agent-readable exports are limited to the **13 declared routes** (`TS_DRIVE_EXPORT_ROUTES`).
 - **Two visibility modes, one protocol**: `headless` or `visible` (a real browser tab) — only the client changes, the IPC contract stays identical.
-- Client templates in `mcp.examples/` (formats verified for the active launchers); plan and detailed documentation in `docs/`.
+- Client templates in `mcp.examples/` (formats verified for the active launchers; local directory, not tracked by git); plan and detailed documentation in `docs/` (local, not tracked).
+
+- **`cerberus-exchange/v1` ingestion contract**: the headless CLI `tools/cerberus_handoff.R` validates an upstream drop (manifest, counts matrix, samplesheet) and writes a `validation.json` — usable with no app instance running.
+- **Operator control**: the app displays the agent-control state, lets the operator toggle it, shows the derived session id, and lets them reclaim a session armed by a dead one.
 
 > Agent control is a local-first development/validation tool: it bypasses no application validation and sends no data off the machine.
 
@@ -605,6 +612,7 @@ BiocManager::install(c("Seurat", "SeuratObject", "SingleR", "celldex",
 | Visium HD (parquet) | arrow | Incomplete HD import (lightweight alternative: nanoparquet) |
 | Lineage inference | slingshot | Trajectory limited to graph pseudotime |
 | scCODA | Python env + scCODA deps | scCODA unavailable (guided error) |
+| Doublets & ambient RNA (SC) | scDblFinder | Doublet QC unavailable |
 | Spatial WebGL views | leafgl | Degraded large point-cloud rendering |
 *Note: Spatial workflows may require additional packages such as `BPCells`, `mirai`, `RANN`, and `spacexr`. scCODA requires a dedicated **Python 3.13** environment (`python_env_sccoda/` or the `TS_SCCODA_PYTHON` variable) — without it, a classed error with guidance is raised, with no silent fallback. CellChat (pinned), LIANA, `drc`, `GSVA`, and `WGCNA` are included in `renv.lock` — no separate install; if absent (manual install), the native communication engines remain unavailable with a guided error while external result import stays available. Per-domain PDF requires TinyTeX; the consolidated 4F report produces standalone HTML without pandoc.*
 
@@ -711,9 +719,10 @@ However, true reproducibility and scientific validity also depend on:
 
 ## Software quality
 
-- **Tests**: `testthat` suite + `shinytest2` e2e (measured baseline 2026-09-29: **10,562 PASS / 0 FAIL / 0 ERROR / 1 SKIP** across **155 files**, ~2 h via `tools/run_full_suite.R`; the single SKIP is the live-network GEO smoke test). During development: targeted tests for the changed scope + gates; full suite at version end.
-- **Duplication gate**: `tools/check_duplication.R` (0 errors).
-- **Conventions gate**: `tools/check_conventions.R` (rules C1–C16, 0 errors mandatory).
+- **Tests**: `testthat` suite + e2e (latest full run 2026-10-28, `QC/full_suite_results.txt`: **15,423 PASS / 0 ERROR / 1 SKIP** across **218 files**; the 2 FAILs in that record — `test-pkg-skeleton.R` — re-measured green on HEAD via the surgical probe; the single SKIP is the live-network GEO smoke test). During development: targeted tests for the changed scope + gates; full suite at version end.
+- **4-tier opaque-box e2e**: `tests/e2e/` — 18 files run via `tests/e2e/runner.R` (headless, capability detection); 614 assertions, 0 FAIL / 0 SKIP (double green run 2026-10-27).
+- **Duplication gate**: `tools/check_duplication.R` (recorded 0 errors / 3 warnings as of 2026-10-28 — `docs/STATUS.md` §0; not re-measured since the evening waves).
+- **Conventions gate**: `tools/check_conventions.R` (rules C1–C17 + C9b, 0 errors mandatory).
 - **Frozen contracts**: some thirty result contracts (`docs/contracts/`), each covered by a freeze test — any change = code + test + doc simultaneously.
 - **Release gates**: `scripts/verify_release_gates.R` (valid lockfile, duplicate-free i18n, no local paths in tracked files).
 - **Release docs**: `docs/release/` (14-category hardening matrix, known limitations, compatibility, performance baseline).
@@ -729,9 +738,10 @@ However, true reproducibility and scientific validity also depend on:
 - [x] Multi-dataset: registration, comparison, and merge of bulk datasets, pseudobulk bridge, SC dual dataset.
 - [x] Cell–cell communication: native CellChat & LIANA engines (in-app computation) + context views (spatial, trajectory, velocity, in-silico perturbation).
 - [x] Population rarity (descriptive single-condition analysis).
-- [x] Local MCP server (8 tools) + drive protocol for controlled agent-driven live-session control.
+- [x] Local MCP server (11 tools) + drive protocol for controlled agent-driven live-session control; `cerberus-exchange/v1` ingestion contract (headless validation CLI).
+- [x] Doublet detection & ambient-RNA QC (scDblFinder) in the single-cell pipeline.
+- [x] Asynchronous execution (ExtendedTask/mirai) for bulk DE and the single-cell auto pipeline.
 - [ ] Expanded single-cell integration choices beyond Harmony.
-- [ ] Dedicated doublet-detection support within the QC pipeline.
 - [ ] Continued expansion of spatial workflows and reference-based analyses.
 
 ## Contributing
