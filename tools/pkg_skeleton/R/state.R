@@ -110,6 +110,34 @@ sc_purge_shared_results <- function(state) {
 }
 
 # -----------------------------------------------------------------------------
+# Bump d'epoch des DEUX domaines (F08, revue externe 2026-10-28).
+#
+# L'epoch n'était incrémenté que par les imports et les activations de dataset.
+# Les deux chemins DESTRUCTIFS de `app.R` — `load_session_file` (charger une
+# session) et `confirm_reset` (tout effacer) — remplaçaient `sc_obj` / `bulk_obj`
+# sans bumper : les résultats partagés du jeu précédent survivaient, et le
+# rapport consolidé mélangeait deux jeux.
+#
+# 🔴 Le trou est CROSS-DOMAINE (`sc_obj_epoch` ET `bulk_obj_epoch`) : une seule
+# fonction pour les deux, sinon les deux domaines divergent — c'est précisément
+# le défaut d'origine.
+# -----------------------------------------------------------------------------
+
+#' Incrémenter les epochs SC et Bulk (remplacement de jeu destructif)
+#' @param global_data reactiveValues racine de l'application.
+#' @return L'état, invisible.
+.ts_bump_all_epochs <- function(global_data) {
+  # Base R seule : ce fichier est sourcé AVANT les helpers de domaine, donc
+  # `%||%` n'est pas garanti disponible ici.
+  bump <- function(x) {
+    if (is.null(x) || length(x) != 1L || is.na(x) || !is.numeric(x)) 0L else as.integer(x)
+  }
+  global_data$sc_obj_epoch   <- bump(global_data$sc_obj_epoch)   + 1L
+  global_data$bulk_obj_epoch <- bump(global_data$bulk_obj_epoch) + 1L
+  invisible(global_data)
+}
+
+# -----------------------------------------------------------------------------
 # Domaine BULK — invalidation des résultats au changement de JEU DE DONNÉES
 # (parité SC, audit 2026-09-27 §1.5 transposé au domaine bulk — handoff §4).
 # Le schéma partagé bulk vivait à plat dans mod_bulk.R (shared_rv) ; il est

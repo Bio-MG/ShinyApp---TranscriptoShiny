@@ -1231,6 +1231,11 @@ server <- function(input, output, session) {
       
       global_data$spatial_multi_integration <- snapshot$spatial_multi_integration %||% NULL
       
+      # F08 (revue externe 2026-10-28) : restaurer une session REMPLACE les
+      # jeux SC et Bulk. Sans bump d'epoch, les résultats partagés du jeu
+      # précédent survivent et le rapport consolidé mélange deux jeux.
+      .ts_bump_all_epochs(global_data)
+      
       
       
       saved_label <- if (!is.null(snapshot$saved_at)) {
@@ -1534,6 +1539,11 @@ server <- function(input, output, session) {
     global_data$spatial_reference <- NULL
     
     global_data$spatial_multi_integration <- NULL
+    
+    # F08 (revue externe 2026-10-28) : tout effacer = remplacer les jeux par
+    # rien. Le bump est ce qui déclenche la purge des résultats partagés
+    # (mod_sc.R / mod_bulk.R sur observeEvent(<domaine>_obj_epoch)).
+    .ts_bump_all_epochs(global_data)
     
     clean_mem()
     
