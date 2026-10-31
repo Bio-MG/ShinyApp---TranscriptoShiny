@@ -230,8 +230,7 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
             sep <- if (ext == "csv") "," else "\t"
             df  <- read.delim(path, sep = sep, header = TRUE,
                               check.names = FALSE, stringsAsFactors = FALSE)
-            if (ncol(df) > 1 && !is.numeric(df[[1]])) { rownames(df) <- df[[1]]; df <- df[, -1, drop = FALSE] }
-            df
+            .promote_id_column(df)
           } else NULL
         }
       }, error = function(e) {
@@ -417,6 +416,38 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
        metadata = meta, msg = NULL)
 }
 
+#' Promote the first column to row names when it carries identifiers
+#'
+#' 🔴 Un identifiant n'est pas forcément du TEXTE. Les matrices GEO/Entrez ont
+#' une 1re colonne NUMÉRIQUE d'IDs. La condition historique
+#' `!is.numeric(df[[1]])` ne promouvait donc que les IDs textuels : la colonne
+#' Entrez restait une colonne de données, devenait un « échantillon » de plus,
+#' et `rownames` tombait sur 1..n.
+#'
+#' Discriminant : un ID est ENTIER **et** UNIQUE. Les deux tests doivent passer
+#' ensemble — une colonne de comptages est entière mais RÉPÈTE ses valeurs, et
+#' la promouvoir détruirait un échantillon réel.
+#'
+#' @param df data.frame issu de la lecture d'un fichier.
+#' @return `df` sans sa 1re colonne si elle porte des IDs, sinon `df` inchangé.
+.promote_id_column <- function(df) {
+  if (is.null(df) || ncol(df) < 2L) return(df)
+  x <- df[[1]]
+
+  promote <- FALSE
+  if (is.character(x) || is.factor(x)) {
+    promote <- TRUE
+  } else if (is.numeric(x)) {
+    ok_integer <- all(is.finite(x)) && all(x == round(x))
+    ok_unique  <- anyDuplicated(x) == 0L
+    promote    <- ok_integer && ok_unique
+  }
+
+  if (!promote) return(df)
+  rownames(df) <- make.unique(as.character(x))
+  df[, -1, drop = FALSE]
+}
+
 #' Load a counts file (auto-detect sep, handle .gz)
 .load_counts_file <- function(path, orig_name = NULL) {
   name <- if (!is.null(orig_name)) orig_name else basename(path)
@@ -481,10 +512,9 @@ mod_geo_server <- function(id, global_data) {   # FIXED: was (id, shared_rv)
       stop(errorCondition("Fichier illisible ou vide (0 ligne ou 0 colonne après lecture). Vérifiez que ce fichier est bien une matrice de counts.", class = "geo_import_error"))
     if (anyDuplicated(colnames(df)) > 0) colnames(df) <- make.unique(colnames(df), sep = "_")
 
-    if (ncol(df) > 1 && !is.numeric(df[[1]])) {
-      rownames(df) <- make.unique(as.character(df[[1]]))
-      df <- df[, -1, drop = FALSE]
-    }
+    # 🔴 ID textuel OU numérique (Entrez) : la règle vit dans le helper, pour
+    # que les deux chargeurs (métadonnées + counts) ne divergent pas.
+    df <- .promote_id_column(df)
 
     num_cols <- vapply(df, is.numeric, logical(1))
     if (!all(num_cols)) {

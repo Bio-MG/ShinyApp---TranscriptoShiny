@@ -86,6 +86,54 @@ test_that(".load_counts_file handles .gz with an inner extension (R.utils path)"
   expect_identical(rownames(res$counts), .geo_genes)
 })
 
+# =============================================================================
+# F02 (revue externe 2026-10-28) — la 1re colonne NUMERIQUE d'IDs
+# =============================================================================
+# Une matrice GEO/Entrez a une 1re colonne d'IDs ENTIERS. La condition
+# historique `!is.numeric(df[[1]])` ne promouvait donc que les IDs TEXTUELS :
+# la colonne Entrez restait une colonne de donnees, devenait un « echantillon »
+# de plus, et `rownames` tombait sur 1..n.
+#
+# 🔴 Le discriminant ne peut pas etre « est entier » : une colonne de COMPTAGES
+# est entiere aussi. Il faut les DEUX tests — entier ET unique (un ID ne se
+# repete pas, un comptage si). Le 2e test ci-dessous verrouille ce point : sans
+# lui, le correctif echangerait un bug contre un autre (perte d'un echantillon).
+
+test_that(".load_counts_file promeut une colonne d'IDs NUMERIQUE (Entrez)", {
+  entrez <- data.frame(
+    ID = c(1001L, 1002L, 1003L, 1004L, 1005L),
+    S1 = c(10L, 20L, 30L, 40L, 50L),
+    S2 = c(11L, 21L, 31L, 41L, 51L),
+    S3 = c(12L, 22L, 32L, 42L, 52L),
+    check.names = FALSE
+  )
+  p <- file.path(.geo_tmp, "entrez.tsv")
+  .geo_write_tsv(p, entrez)
+
+  res <- .load_counts_file(p)
+  expect_true(res$ok, info = res$msg)
+  # 3 echantillons, PAS 4 : l'ID n'est pas un echantillon.
+  expect_identical(dim(res$counts), c(5L, 3L))
+  expect_identical(rownames(res$counts), as.character(entrez$ID))
+  expect_identical(colnames(res$counts), c("S1", "S2", "S3"))
+})
+
+test_that(".load_counts_file ne promeut PAS une vraie colonne de comptages", {
+  # Garde anti-sur-correction : entiere mais NON unique => c'est une mesure.
+  df <- data.frame(
+    A = c(10L, 10L, 10L, 20L, 20L),
+    B = c(1L, 2L, 3L, 4L, 5L),
+    check.names = FALSE
+  )
+  p <- file.path(.geo_tmp, "counts_col.tsv")
+  .geo_write_tsv(p, df)
+
+  res <- .load_counts_file(p)
+  expect_true(res$ok, info = res$msg)
+  expect_identical(dim(res$counts), c(5L, 2L))
+  expect_identical(colnames(res$counts), c("A", "B"))
+})
+
 test_that(".load_counts_file sniffs separator for .gz without inner extension", {
   # e.g. GSE123_counts_rpkm.gz — after decompression the name has no extension
   res <- .load_counts_file(gz_noinner)
