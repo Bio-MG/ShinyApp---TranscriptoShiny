@@ -94,3 +94,12 @@ TS_VELOCITY_OVERLAP_MIN    <- 0.80     # min cell overlap fraction (0-1)
 TS_PATHWAY_NETWORK_MAX_TERMS     <- 300L  # hard cap de termes dans le réseau
 TS_PATHWAY_NET_MIN_SIM           <- 0.20  # similarité de Jaccard min pour une arête terme–terme (emap)
 TS_PATHWAY_NETWORK_LAYOUT_SEED   <- 42L   # graine figée — disposition Fruchterman-Reingold DÉTERMINISTE
+
+# --- Biostat wizard — diagnostics actifs (O27, 2026-10-29) -------------------
+# Proposition : docs/proposals/BIOSTAT_DECISION_TREE_PROPOSAL.md · contrat :
+# docs/contracts/BIOSTAT_DECISION_CONTRACT.md. Constantes déclarées dès M1 ;
+# lues par tools/pkg_skeleton/R/biostat_tree.R à partir de M2 — jamais
+# réimprimées ailleurs (frontière « aucun seuil codé en dur hors ce fichier »).
+TS_BIOSTAT_ALPHA_DEFAULT        <- 0.05   # seuil Shapiro / Levene (décision O27 #3)
+TS_BIOSTAT_SHAPIRO_MAX_N        <- 5000L  # shapiro.test() refuse n > 5000 (stats)
+TS_BIOSTAT_LEVENE_MIN_PER_GROUP <- 2L     # plancher par niveau pour leveneTest() (car)
