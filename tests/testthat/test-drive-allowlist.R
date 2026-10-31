@@ -185,7 +185,15 @@ test_that("Spatial drive exposure is exactly THREE owned buttons", {
   spatial_ids <- names(TS_DRIVE_ALLOWLIST)[
     grepl("^(spatial|import_spatial)-", names(TS_DRIVE_ALLOWLIST))
   ]
-  expect_setequal(spatial_ids, buttons)
+  # DSTV-2 B1 (2026-10-31): the namespace grows past the three buttons — the
+  # parent `spatial` module's FIVE declared visualisation inputs
+  # (TS_DRIVE_SPATIAL_INPUTS, fiche B1 :68; measured ids in
+  # mod_spatial_viz.R:22/:47/:78/:90/:91, `spatial-viz-` prefix per
+  # mod_spatial.R:197). The BUTTON claim above is unchanged: still exactly
+  # three owned buttons, none of them a viz input. Every other spatial- key
+  # stays refused at source time (the widened declared set in
+  # ts_drive_allowlist_problems()).
+  expect_setequal(spatial_ids, c(buttons, TS_DRIVE_SPATIAL_INPUTS))
   # A LYING module field buys no extra spatial key: the prefix alone refuses it.
   liar <- list("spatial-qc-btn_cluster" = list(kind = "button", module = "spatial_pipeline"))
   expect_true(any(grepl("out of scope", ts_drive_allowlist_problems(liar, character(0)))))

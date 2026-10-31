@@ -240,7 +240,9 @@ test_that("the export tool dispatches bulk_wgcna and advertises the traits mode"
   expect_match(ex$description, "trait_cor_method", fixed = TRUE)
 
   # La note redaction : 6 entrées indexées désormais.
+  # DSTV-2 B1 (2026-10-31) : 6 -> 8 — les deux selects session-dérivés du
+  # module Spatial (gene, deconv_celltype), adressés par INDEX comme traits.
   idx_ids <- vapply(e$TS_DRIVE_SESSION_INPUTS, function(x) x$module, character(1))
-  expect_length(idx_ids, 6L)
+  expect_length(idx_ids, 8L)
   expect_true("bulk-wgcna-wgcna_traits" %in% names(e$TS_DRIVE_SESSION_INPUTS))
 })

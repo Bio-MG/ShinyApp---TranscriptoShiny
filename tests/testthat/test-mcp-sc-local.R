@@ -1032,15 +1032,19 @@ test_that("the five session-derived inputs are exposed by index, and the vocabul
   # passées de « délibérément non exposées » à « exposées par index ». Slice 4
   # (2026-10-05) : 34 -> 37 — les trois widgets WGCNA (n_genes, power_override,
   # traits) ; 5 -> 6 entrées session-dérivées (traits, par INDEX).
-  expect_length(e$TS_MCP_INPUT_SCHEMA, 37L)
-  expect_length(e$TS_DRIVE_SESSION_INPUTS, 6L)
+  # DSTV-2 B1 (2026-10-31) : 37 -> 42 — les cinq widgets de visualisation
+  # Spatial (fiche B1 :68) ; 6 -> 8 entrées session-dérivées (gene,
+  # deconv_celltype, par INDEX) ; 10 -> 11 modules settable (le parent
+  # `spatial` entre via TS_DRIVE_MODULES).
+  expect_length(e$TS_MCP_INPUT_SCHEMA, 42L)
+  expect_length(e$TS_DRIVE_SESSION_INPUTS, 8L)
   # Le miroir sans drift : les cinq ids sont EXACTEMENT ceux du schéma dont le
   # type est index/index_list, tous selects côté app, clés déclarées.
   expect_length(e$.ts_mcp_vocab_problems(), 0L)
   expect_length(e$.ts_mcp_not_exposed(), 0L)
   types <- vapply(e$TS_DRIVE_SESSION_INPUTS, function(x) x$type, character(1))
   expect_identical(unname(types), c("index", "index_list", "index", "index", "index",
-                                    "index_list"))
+                                    "index_list", "index", "index"))
   # Les nouveaux codes sont bien du domaine (tool result), pas du protocole.
   expect_true(all(c("INPUT_NOT_READY", "VOCAB_STALE", "INDEX_OUT_OF_RANGE")
                   %in% e$.ts_domain_codes))
@@ -1075,10 +1079,13 @@ test_that("indexed inputs are validated against the published vocabulary, and th
   expect_identical(as.character(scn$inputs$`bulk-de-de_engine`), "deseq2")
   # La note de redaction dit `indexed`, plus jamais `not_exposed`.
   # Slice 4 : la sixième entrée indexée (les traits WGCNA) rejoint la note.
+  # DSTV-2 B1 (2026-10-31) : 6 -> 8 — les deux selects session-dérivés du
+  # module Spatial rejoignent la liste indexée (gene, deconv_celltype).
   expect_setequal(as.character(unlist(r1$structuredContent$redaction$indexed$ids)),
                   c("bulk-de-condition_col", "bulk-de-covariates", "bulk-de-group_ref",
                     "bulk-de-group_target", "bulk-pathways-scores_source",
-                    "bulk-wgcna-wgcna_traits"))
+                    "bulk-wgcna-wgcna_traits", "spatial-viz-gene",
+                    "spatial-viz-deconv_celltype"))
   expect_false("not_exposed" %in% names(r1$structuredContent$redaction))
 
   # 3. rev dépassée : VOCAB_STALE — rien n'est écrit.

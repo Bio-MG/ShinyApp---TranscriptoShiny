@@ -1447,6 +1447,40 @@ ts_drive_project_vocabulary <- function(vocab, module) {
   out
 }
 
+#' Read a module's FED vocabulary closure off `global_data` (DSTV-2 B1,
+#' 2026-10-31).
+#'
+#' Vocabulary reaches the drive through TWO declared paths. Path 1 (Slice 3): a
+#' `vocab=` closure on a bound-button token (`ts_drive_publish_token()`), the
+#' pattern every bulk domain uses — the registry cannot carry a module with no
+#' bound button, and `ts_drive_publish_token()` refuses any id outside
+#' `TS_DRIVE_BUTTONS`. Path 2 (B1): the module assigns its closure to
+#' `global_data$ts_drive_vocabulary[[module]]` — the §8.4 feed pattern (the
+#' DSTV-1 packagers: the module publishes on `global_data`, the drive reads
+#' defensively), which the re-measure names as reusable exactly here. The
+#' Spatial visualisation module is the first path-2 publisher
+#' (modules/spatial/mod_spatial_viz.R).
+#'
+#' The CLOSURE is returned, never called — the same object the token path
+#' stores, so the wire block and the apply-time index resolution can never
+#' diverge (the one-closure promise, mod_bulk_pathways.R). The read NEVER
+#' throws and a malformed slot answers NULL (spec S1): the closure is the
+#' module's own and MUST isolate its reactive reads (the state probe rule).
+#' The caller projects the output through the module's keep-set — the same
+#' rule as the token path — so a module cannot widen the wire by returning an
+#' extra key.
+#'
+#' @param global_data Global reactiveValues or list (or NULL).
+#' @param module Scenario module name.
+#' @return The module's vocabulary closure (a function) or NULL.
+.ts_drive_fed_vocabulary_fn <- function(global_data = NULL, module = NULL) {
+  if (is.null(global_data) || is.null(module)) return(NULL)
+  slot <- tryCatch(global_data$ts_drive_vocabulary, error = function(e) NULL)
+  if (!is.list(slot) && !is.environment(slot)) return(NULL)
+  fn <- tryCatch(slot[[module]], error = function(e) NULL)
+  if (is.function(fn)) fn else NULL
+}
+
 #' Resolve SESSION-DERIVED inputs (Slice 3): index -> value, at apply time.
 #'
 #' The scenario carries `{index, vocab_rev}` per session-derived id (the server
@@ -1997,6 +2031,38 @@ ts_drive_snapshot <- function(global_data) {
   # "no bulk object loaded" — the agent could not tell "Step 1 ran" from
   # "Step 1 never ran", because both report the IMPORTED dimensions.
   out$modules <- ts_drive_module_states(global_data)
+
+  # DSTV-2 B1 (2026-10-31): a module with no bound button publishes its
+  # vocabulary through the §8.4 feed slot (`.ts_drive_read_fed_vocabulary`)
+  # instead of a token's `vocab=` closure. It merges here — the WIRE view —
+  # projected through the module's declared keep-set exactly like a probe's
+  # block at the collector's vocabulary branch below, so the agent reads the
+  # same keys either way. The REGISTRY path wins when both exist (a module
+  # with a token publishes through it; the feed slot is the buttonless
+  # fallback), and a module the registry already covers is left untouched.
+  fed_slot <- tryCatch(global_data$ts_drive_vocabulary, error = function(e) NULL)
+  if (is.list(fed_slot) || is.environment(fed_slot)) {
+    fed_names <- if (is.environment(fed_slot)) {
+      tryCatch(ls(fed_slot), error = function(e) character(0))
+    } else {
+      names(fed_slot)
+    }
+    for (mod in fed_names) {
+      if (!mod %in% TS_DRIVE_MODULES) next
+      if (identical(out$modules[[mod]]$vocabulary, NULL) ||
+          length(out$modules[[mod]]$vocabulary) == 0L) {
+        fed_fn <- .ts_drive_fed_vocabulary_fn(global_data, mod)
+        fed <- if (is.function(fed_fn)) {
+          tryCatch(fed_fn(), error = function(e) { ts_log_swallow("drive_watcher.fed_vocabulary", e); NULL })
+        } else NULL
+        proj <- ts_drive_project_vocabulary(fed, mod)
+        if (!is.null(proj) && length(proj)) {
+          if (is.null(out$modules[[mod]])) out$modules[[mod]] <- list()
+          out$modules[[mod]]$vocabulary <- proj
+        }
+      }
+    }
+  }
 
   obj <- state_get(global_data, "bulk_obj")
   if (is.null(obj)) return(out)
@@ -2859,7 +2925,7 @@ ts_drive_injector <- function(session, effects) {
 }
 
 ts_drive_apply <- function(session, input, scn, effects = NULL, owner_token = NULL,
-                           inject = NULL) {
+                           inject = NULL, global_data = NULL) {
   warnings <- character(0)
   errors   <- character(0)
   action   <- scn$action
@@ -3002,6 +3068,15 @@ ts_drive_apply <- function(session, input, scn, effects = NULL, owner_token = NU
       for (nm in names(entries)) {
         e <- entries[[nm]]
         if (is.list(e) && is.function(e$vocab)) { vocab_fn <- e$vocab; break }
+      }
+      # DSTV-2 B1 (2026-10-31): a module with NO bound button publishes its
+      # vocabulary through the §8.4 feed slot (`.ts_drive_fed_vocabulary_fn`)
+      # instead of a token's `vocab=` closure. Same closure, same projection
+      # rule inside the resolver — the rev the agent pinned and the choices
+      # resolved at the application beat still cannot diverge (the tokens
+      # path's own one-closure promise). The registry path keeps priority.
+      if (is.null(vocab_fn)) {
+        vocab_fn <- .ts_drive_fed_vocabulary_fn(global_data, module)
       }
       rv <- ts_drive_resolve_session_inputs(scn$inputs, module, vocab_fn)
       if (!isTRUE(rv$ok)) {
@@ -4140,7 +4215,8 @@ ts_drive_error_ring_push <- ts_drive_record_error
   # sc + spatial + bulk, and the v1 allowlist is bulk-only anyway.
   t0  <- Sys.time()
   res <- ts_drive_apply(session, input, scn, effects = effects,
-                        owner_token = token, inject = inject)
+                        owner_token = token, inject = inject,
+                        global_data = global_data)
 
   message(sprintf("[drive] seq=%s module=%s action=%s status=%s preserve_data=%s",
                   scn$seq, scn$module, scn$action, res$status, preserve))

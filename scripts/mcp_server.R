@@ -1337,7 +1337,22 @@ TS_MCP_INPUT_SCHEMA <- list(
   # honest encoding of the UI's empty input.
   "bulk-wgcna-wgcna_n_genes"        = list(type = "number", min = 2000, max = 5000, integer = TRUE),
   "bulk-wgcna-wgcna_power_override" = list(type = "number", min = 1, max = 20, integer = TRUE),
-  "bulk-wgcna-wgcna_traits"         = list(type = "index_list", max_items = 32L, allow_empty = TRUE)
+  "bulk-wgcna-wgcna_traits"         = list(type = "index_list", max_items = 32L, allow_empty = TRUE),
+  # ── spatial (DSTV-2 B1, 2026-10-31) — the five declared viz inputs ─────────
+  # Measured in modules/spatial/mod_spatial_viz.R (ids `spatial-viz-*`, nested
+  # module): `color_by` has a STATIC domain (the UI's own choices, :24-28) so it
+  # is exposed as `enum` — the raw string is the wire shape, exactly the fiche
+  # criterion #3 payload {color_by: "cluster"}; `gene` (:47, choices NULL until
+  # data, updated :849) and `deconv_celltype` (:78 uiOutput, :963-966) are
+  # SESSION-DERIVED, so they follow the Slice-3 doctrine and are exposed BY
+  # INDEX against the app's published vocabulary (TS_DRIVE_SESSION_INPUTS);
+  # the two sliders carry the MEASURED widget bounds (:90 1-20 step 1,
+  # :91 0.1-1), the same convention as the wgcna entries above.
+  "spatial-viz-color_by"        = list(type = "enum", values = c("qc", "cluster", "deconv", "niche", "gene")),
+  "spatial-viz-gene"            = list(type = "index"),
+  "spatial-viz-deconv_celltype" = list(type = "index"),
+  "spatial-viz-pt_radius"       = list(type = "number", min = 1, max = 20, integer = TRUE),
+  "spatial-viz-pt_opacity"      = list(type = "number", min = 0.1, max = 1)
 )
 
 # Payload bounds.
@@ -1765,7 +1780,9 @@ TS_MCP_MAX_PAYLOAD_BYTES <- 4096L
       # Slice 3: NOTHING is "not exposed" any more — the five session-derived
       # selects are exposed BY INDEX (their wire value is a position in the
       # app's published vocabulary, never the raw name), so the note flips
-      # from `not_exposed` to `indexed`. 29 -> 34 exposed inputs.
+      # from `not_exposed` to `indexed`. 29 -> 34 exposed inputs. DSTV-2 B1
+      # (2026-10-31): 34 -> 39 — the five Spatial viz inputs (one static enum,
+      # two more session-derived indexes, two sliders); 6 -> 8 indexed ids.
       indexed = list(ids = as.list(names(TS_DRIVE_SESSION_INPUTS)),
                      note = paste0("value is {index, vocab_rev}: a position ",
                                    "in the app's published vocabulary and the ",
@@ -1824,6 +1841,12 @@ TS_MCP_RUN_ACTIONS <- c("run_pipeline")
 # that the two agree is test-mcp-sc-local.R, which must be re-run whenever either
 # side changes — a module forgotten HERE would be settable, which is the one
 # failure direction that matters.
+#
+# DSTV-2 B1 (2026-10-31): the parent module `spatial` becomes settable by the
+# setdiff's own default — it joins TS_DRIVE_MODULES (drive_allowlist.R) and is
+# NOT added to the exclusion list below, because its five visualisation inputs
+# (`spatial-viz-*`, TS_MCP_INPUT_SCHEMA) are honest settable widgets, not a
+# frozen parameter set. The pipeline/QC action modules stay excluded.
 TS_MCP_SET_INPUT_MODULES <- setdiff(
   TS_DRIVE_MODULES,
   c("spatial_pipeline", "spatial_qc", "sc_pipeline", "sc_annotation",
@@ -2613,10 +2636,13 @@ TS_MCP_RUN_BUTTONS <- list(
       }
     }
   }
-  # Every drivable module must be reachable. Two ways, not one:
-  #   * it names a run button here, so `transcripto_drive_run` can click it; or
+  # Every drivable module must be reachable. Three ways, not two:
+  #   * it names a run button here, so `transcripto_drive_run` can click it;
   #   * it is a declared IMPORTER, which `import_file` reaches directly and which
-  #     therefore has no button to click.
+  #     therefore has no button to click; or
+  #   * (DSTV-2 B1, 2026-10-31) it is a SETTABLE module of M3b, which
+  #     `transcripto_drive_set_inputs` reaches directly — its five `spatial-viz-*`
+  #     inputs are honest settable widgets, and a write needs no button.
   #
   # ⚠️ The importer exemption is new with `import_sc`, and it is not a loosening
   # done to silence a warning. The human SC entry point is a TWO-STEP flow
@@ -2627,7 +2653,8 @@ TS_MCP_RUN_BUTTONS <- list(
   # "this module exposes no run action". The two existing importers keep their real
   # buttons, so the check below still holds them to the stricter rule.
   missing <- setdiff(TS_DRIVE_MODULES, names(TS_MCP_RUN_BUTTONS))
-  orphans <- setdiff(missing, c(TS_DRIVE_IMPORT_MODULES, TS_DRIVE_EXPORT_MODULES))
+  orphans <- setdiff(missing, c(TS_DRIVE_IMPORT_MODULES, TS_DRIVE_EXPORT_MODULES,
+                                TS_MCP_SET_INPUT_MODULES))
   if (length(orphans)) {
     problems <- c(problems,
                   sprintf("module(s) with no run action and no importer: %s",

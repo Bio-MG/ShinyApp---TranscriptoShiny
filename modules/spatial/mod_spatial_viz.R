@@ -401,13 +401,80 @@ mod_spatial_viz_ui <- function(id) {
 mod_spatial_viz_server <- function(id, global_data, shared_rv) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
-    
+
     # Session-scoped scalar translation (plain strings, never HTML spans).
     .tr <- function(key) {
       tr <- global_data$i18n
       if (is.null(tr)) return(key)
       tryCatch(.strip_i18n_html(tr$t(key)), error = function(e) key)
     }
+
+    # --------------------------------------------------------------------------
+    # DSTV-2 B1 (2026-10-31) — SONDE DE VOCABULAIRE du module Spatial
+    #
+    # Le domaine légal des entrées de visualisation, publié côté module dans le
+    # mécanisme vocab du drive (TS_DRIVE_VOCABULARY_KEYS$spatial, projeté par
+    # ts_drive_project_vocabulary — keep-set fermé, choix verbatim D1). MÊME
+    # closure pour les deux consommateurs (mod_bulk_pathways.R:296-321, le
+    # précédent Slice 3) : le bloc `vocabulary` du fil (fusion snapshot,
+    # drive_watcher) et la résolution d'index de l'applicateur — la rev
+    # épinglée par l'agent et les choix résolus au battement d'application ne
+    # peuvent pas diverger.
+    #
+    # Ce module n'a AUCUN bouton bound (TS_DRIVE_BUTTONS) : la voie registry
+    # (`ts_drive_publish_token(..., vocab =)`) lui est fermée
+    # (drive_watcher.R:2340-2342 refuse tout id hors boutons). La publication
+    # passe donc par la voie §8.4 — les scalaires publiés sur global_data,
+    # lus défensivement par le drive (le pattern DSTV-1b des packagers, nommé
+    # réutilisable pour ce cas par la re-mesure §2) :
+    #   global_data$ts_drive_vocabulary$spatial <- drive_vocabulary
+    #
+    # Lectures réactives (spatial_obj$sketch, shared_rv$deconv_props) sous
+    # isolate() : la sonde est appelée depuis le batteur du poller et doit
+    # suivre la règle des sondes d'état (jamais inscrire ses données dans le
+    # jeu de dépendances du poller). Défauts honnêtes : liste vide = « pas de
+    # données chargées » (même convention que `traits`, mod_bulk_wgcna).
+    #
+    # `color_by` est STATIQUE — exactement les choices de l'UI
+    # (:22-30, les VALUES, jamais les libellés i18n, C13) — publié pour
+    # DÉCLARATION : l'agent lit les valeurs légales sur le fil.
+    #
+    # `vocab_rev` : compteur MONOTONE posé par empreinte (le précédent
+    # pathways) — la sonde est la seule scriptrice, aucun observateur
+    # existant n'est touché, l'UI humaine ne change pas.
+    drive_vocab_state <- new.env(parent = emptyenv())
+    drive_vocab_state$rev <- 0L
+    drive_vocab_state$fp  <- NULL
+    drive_vocabulary <- function() {
+      color_by_vals <- c("qc", "cluster", "deconv", "niche", "gene")
+      genes <- tryCatch(
+        shiny::isolate({
+          g <- rownames(global_data$spatial_obj$sketch)
+          if (is.character(g)) g else character(0)
+        }),
+        error = function(e) character(0))
+      cts <- tryCatch(
+        shiny::isolate({
+          c <- setdiff(colnames(shared_rv$deconv_props), "id")
+          if (is.character(c)) c else character(0)
+        }),
+        error = function(e) character(0))
+      fp <- paste(c(length(color_by_vals), color_by_vals,
+                    length(genes), genes,
+                    length(cts), cts), collapse = "\u0001")
+      if (!identical(fp, drive_vocab_state$fp)) {
+        drive_vocab_state$rev <- drive_vocab_state$rev + 1L
+        drive_vocab_state$fp  <- fp
+      }
+      list(color_by = color_by_vals, gene = genes, deconv_celltype = cts,
+           vocab_rev = drive_vocab_state$rev)
+    }
+    global_data$ts_drive_vocabulary <- shiny::isolate({
+      slot <- global_data$ts_drive_vocabulary %||% list()
+      slot$spatial <- drive_vocabulary
+      slot
+    })
+
     
     # i18n: push translated labels/choices for build-time-frozen inputs on
     # every language change (values NEVER change; selection is preserved).

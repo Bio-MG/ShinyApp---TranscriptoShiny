@@ -728,6 +728,33 @@ TS_DRIVE_ALLOWLIST <- list(
   "bulk-wgcna-wgcna_power_override" = list(kind = "numeric", module = "bulk_wgcna", note = "empty = power kept at step 1 (mod_bulk_wgcna.R:29)"),
   "bulk-wgcna-wgcna_traits"         = list(kind = "select", module = "bulk_wgcna", note = "multi; numeric/binary metadata columns (mod_bulk_wgcna.R:31)"),
 
+  # ── DSTV-2 B1 (2026-10-31): the five Spatial visualisation inputs ──────────
+  # Fiche B1 :68 names them color_by / deconv_celltype / gene / point_size /
+  # point_opacity; the MEASURED DOM ids are the ones below (house doctrine,
+  # header: ids are discovered in the module sources, never guessed). The viz
+  # module is nested (`mod_spatial_viz_ui(ns("viz"))`, mod_spatial.R:197) inside
+  # the top-level `mod_spatial_ui("spatial")` (app.R:552), hence `spatial-viz-`.
+  # The two fiche slider names resolve to the real ids: "point_size" ->
+  # `pt_radius` ("Taille des points", mod_spatial_viz.R:90), "point_opacity" ->
+  # `pt_opacity` (:91); a grep over modules/, R/, scripts/ and this tree
+  # measured ZERO ids named point_size/point_opacity (2026-10-31), and an
+  # allowlist entry for an id that exists nowhere in the DOM is the silent
+  # no-op the doctrine forbids.
+  #
+  # `color_by` carries a STATIC domain (qc/cluster/deconv/niche/gene,
+  # mod_spatial_viz.R:24-28 — the VALUES, never the i18n labels, C13), also
+  # published module-side as the spatial vocabulary (TS_DRIVE_VOCABULARY_KEYS
+  # below). `gene` (:47, choices NULL until data, updated :849) and
+  # `deconv_celltype` (rendered by the uiOutput at :78, :963-966 from the deconv
+  # result columns) are SESSION-DERIVED selects: like the Slice-3 five, they are
+  # addressed BY INDEX against the published vocabulary (TS_DRIVE_SESSION_INPUTS
+  # below), never by raw name.
+  "spatial-viz-color_by"        = list(kind = "select",  module = "spatial", note = "qc|cluster|deconv|niche|gene, static (mod_spatial_viz.R:22)"),
+  "spatial-viz-deconv_celltype" = list(kind = "select",  module = "spatial", note = "cell types of the deconv result; BY INDEX (mod_spatial_viz.R:78/:965)"),
+  "spatial-viz-gene"            = list(kind = "select",  module = "spatial", note = "gene universe of the sketch; BY INDEX (mod_spatial_viz.R:47/:849)"),
+  "spatial-viz-pt_radius"       = list(kind = "numeric", module = "spatial", note = "slider 1-20 step 1 (mod_spatial_viz.R:90)"),
+  "spatial-viz-pt_opacity"      = list(kind = "numeric", module = "spatial", note = "slider 0.1-1 step 0.05 (mod_spatial_viz.R:91)"),
+
   # ── Action buttons exposed to run_pipeline (integer counters) ─────────────
   # Bound through ts_drive_bind_button(); updateActionButton() does NOT click.
   "import_bulk-btn_load"       = list(kind = "button", module = "import_bulk", note = "import confirm (mod_import_bulk.R:253)"),
@@ -887,8 +914,14 @@ TS_DRIVE_SC_10X_V3_FILES <- list(
 #' `bulk_filter` is the nested Step 1 module (`bulk-filter-`), named after the
 #' same convention as `bulk_de` / `bulk_pathways` / `bulk_signatures` /
 #' `bulk_pattern` / `bulk_network`: the DOM prefix with the dash turned into an
-#' underscore. The SC and Spatial action modules follow it for the same reason; the
-#' parent modules `sc` and `spatial` are deliberately NOT members.
+#' underscore. The SC and Spatial action modules follow it for the same reason.
+#' The parent modules `sc` and `spatial` used to be deliberately NOT members;
+#' as of DSTV-2 B1 (2026-10-31) `spatial` IS one — the parent owns five
+#' settable visualisation inputs (`spatial-viz-*`, fiche B1 :68, measured in
+#' modules/spatial/mod_spatial_viz.R) and the M3b set_inputs gate
+#' (mcp_server.R TS_MCP_SET_INPUT_MODULES) admits it through this vector.
+#' `sc` stays out: its action modules publish frozen declared parameter sets
+#' and refuse `set_inputs` (drive_watcher.R, the TS_DRIVE_SC_MODULE guard).
 #' `import_spatial` is the only member that is a top-level `app.R` module rather
 #' than a nested one, and it is the SECOND importer (after `import_bulk`).
 #' `import_sc` is the THIRD, and the first whose payload carries a name the
@@ -901,7 +934,8 @@ TS_DRIVE_MODULES <- c("import_bulk", "import_spatial", TS_DRIVE_SC_IMPORT_MODULE
                       TS_DRIVE_SC_MODULE,
                       TS_DRIVE_SC_ANNOTATION_MODULE, TS_DRIVE_SC_MARKERS_MODULE,
                       TS_DRIVE_SC_PATHWAYS_MODULE,
-                      TS_DRIVE_SC_EMBEDDINGS_MODULE, TS_DRIVE_SC_TRAJECTORY_MODULE)
+                      TS_DRIVE_SC_EMBEDDINGS_MODULE, TS_DRIVE_SC_TRAJECTORY_MODULE,
+                      "spatial")
 
 #' Widget kinds the injector knows how to adapt (spec S5).
 #'
@@ -1086,6 +1120,21 @@ TS_DRIVE_INPUT_STAGES <- list(
 # = un tableau d'entiers distincts). Une valeur STRING reste acceptée par
 # l'APPLICATeur (chemin existant, scénarios internes) — le SERVEUR, lui, ne
 # produit que la forme index : c'est la surface agent qui est indexée.
+
+#' The five DECLARED Spatial visualisation inputs (DSTV-2 B1, 2026-10-31).
+#'
+#' Named HERE as DATA so the closed `spatial-` namespace rule in
+#' `ts_drive_allowlist_problems()` and the tests reference ONE list, and a
+#' seventh `spatial-` key stays a visible edit. The ids are the measured DOM
+#' ids (see the allowlist table section above for the fiche-name mapping).
+TS_DRIVE_SPATIAL_INPUTS <- c(
+  "spatial-viz-color_by",
+  "spatial-viz-deconv_celltype",
+  "spatial-viz-gene",
+  "spatial-viz-pt_radius",
+  "spatial-viz-pt_opacity"
+)
+
 TS_DRIVE_SESSION_INPUTS <- list(
   "bulk-de-condition_col"       = list(module = "bulk_de",       key = "condition_col", type = "index"),
   "bulk-de-covariates"          = list(module = "bulk_de",       key = "covariates",
@@ -1094,7 +1143,14 @@ TS_DRIVE_SESSION_INPUTS <- list(
   "bulk-de-group_target"        = list(module = "bulk_de",       key = "group_levels", type = "index"),
   "bulk-pathways-scores_source" = list(module = "bulk_pathways", key = "scores_source", type = "index"),
   "bulk-wgcna-wgcna_traits"     = list(module = "bulk_wgcna",    key = "traits",
-                                       type = "index_list", max_items = 32L, allow_empty = TRUE)
+                                       type = "index_list", max_items = 32L, allow_empty = TRUE),
+  # DSTV-2 B1 (2026-10-31) : les DEUX selects session-dérivés du module
+  # Spatial. Même contrat que les cinq d'au-dessus — la valeur wire est une
+  # position dans le vocabulaire publié, jamais le nom brut ; le domaine vit
+  # dans le bloc `vocabulary` du module `spatial` (TS_DRIVE_VOCABULARY_KEYS
+  # ci-dessous, publié côté module dans mod_spatial_viz.R).
+  "spatial-viz-gene"            = list(module = "spatial",       key = "gene", type = "index"),
+  "spatial-viz-deconv_celltype" = list(module = "spatial",       key = "deconv_celltype", type = "index")
 )
 
 #' Les clés qu'un bloc `vocabulary` publié peut porter, PAR MODULE.
@@ -1112,7 +1168,16 @@ TS_DRIVE_VOCABULARY_KEYS <- list(
   # until data exists. An agent choosing NOTHING is a VALID choice
   # (allow_empty), and means "correlate against every candidate trait" — the
   # module's own behaviour for an empty selection.
-  bulk_wgcna    = c("traits")
+  bulk_wgcna    = c("traits"),
+  # DSTV-2 B1 (2026-10-31) — le domaine du module Spatial, publié côté module
+  # (mod_spatial_viz.R, closure `drive_vocabulary`). `color_by` est un domaine
+  # STATIQUE (qc/cluster/deconv/niche/gene, mod_spatial_viz.R:24-28) publié pour
+  # DÉCLARATION : l'agent lit les valeurs légales sur le fil, le serveur les
+  # fait respecter en `enum`. `gene` et `deconv_celltype` sont les domaines
+  # session-dérivés des deux entrées indexées (TS_DRIVE_SESSION_INPUTS
+  # ci-dessus) ; liste vide = « pas de données chargées » (honnête, même
+  # convention que `traits`).
+  spatial       = c("color_by", "deconv_celltype", "gene")
 )
 
 #' Borne déclarée du nombre de choix publiés par liste (décision D1 : bornes
@@ -1239,14 +1304,18 @@ ts_drive_allowlist_problems <- function(allowlist = TS_DRIVE_ALLOWLIST,
       problems <- c(problems, sprintf("%s: must declare module '%s'",
                                       id, "spatial_pipeline"))
     }
-    # The `spatial-` / `import_spatial-` namespace is a CLOSED set of THREE declared
-    # actions, for the same reason as the `sc-` set above. The Spatial pipeline,
-    # the Spatial local hotspots and the Spatial import confirm are named; every
-    # other key in either namespace, including every child-module button, stays out
-    # of scope. Widening it is a visible edit here, never a default.
+    # The `spatial-` / `import_spatial-` namespace is a CLOSED set of declared
+    # actions and inputs, for the same reason as the `sc-` set above. The
+    # Spatial pipeline, the Spatial local hotspots and the Spatial import
+    # confirm are named, and since DSTV-2 B1 (2026-10-31) the FIVE declared
+    # visualisation inputs are too (TS_DRIVE_SPATIAL_INPUTS, below); every
+    # other key in either namespace, including every child-module button, stays
+    # out of scope. Widening it is a visible edit here, never a default — B1 is
+    # that edit.
     spatial_buttons <- c("spatial-pipeline-btn_run_all", TS_DRIVE_SPATIAL_QC_BUTTON,
                          TS_DRIVE_SPATIAL_IMPORT_BUTTON)
-    if (grepl("^(spatial|import_spatial)-", id) && !id %in% spatial_buttons) {
+    spatial_declared <- c(spatial_buttons, TS_DRIVE_SPATIAL_INPUTS)
+    if (grepl("^(spatial|import_spatial)-", id) && !id %in% spatial_declared) {
       problems <- c(problems, sprintf(
         "%s: only %s, %s or %s is in scope, every other spatial- key is out of scope",
         id, spatial_buttons[[1L]], spatial_buttons[[2L]], spatial_buttons[[3L]]))
