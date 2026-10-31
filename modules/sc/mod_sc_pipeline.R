@@ -23,6 +23,30 @@
   force(expr)
 }
 
+# Carte de diffusion depuis les embeddings PCA (chemin manuel "dm").
+#
+# 🔴 ORIENTATION : `Seurat::Embeddings()` rend CELLULES x DIMENSIONS, et c'est
+# exactement ce que `destiny::DiffusionMap()` attend — il prend les ECHANTILLONS
+# EN LIGNES et les variables en COLONNES (aide : « vars: Variables (columns) of
+# the data »). Le `t()` historique inversait les axes : la carte portait sur
+# `pca_dim` « echantillons » au lieu des n cellules, puis
+# `CreateDimReducObject()` levait (les noms de lignes ne correspondaient a
+# aucune cellule) et le run entier etait perdu — `sc_obj` n'etant ecrit qu'en
+# fin de pipeline.
+#
+# Le helper existe pour etre TESTABLE sans Shiny : la mesure d'orientation
+# (entree 6x3 => 6 lignes) est faite dans test-sc-pipeline-diffusion-map.R.
+.dm_from_pca <- function(pca_embeddings, npcs = NULL) {
+  emb <- as.matrix(pca_embeddings)
+  if (!is.null(npcs) && length(npcs) == 1L && is.finite(npcs)) {
+    npcs <- as.integer(npcs)
+    if (npcs >= 1L && npcs < ncol(emb)) emb <- emb[, seq_len(npcs), drop = FALSE]
+  }
+  dm <- destiny::DiffusionMap(emb)
+  n_out <- min(2L, ncol(dm@eigenvectors))
+  dm@eigenvectors[, seq_len(n_out), drop = FALSE]
+}
+
 # Audit 2026-09-27 §1.8 : graine DÉCLARÉE pour les étapes stochastiques
 # (UMAP / t-SNE) — restaurée après chaque appel (withr::with_seed), donc deux
 # exécutions du pipeline produisent les mêmes embeddings sans fuiter l'état
@@ -561,9 +585,10 @@ mod_sc_pipeline_server <- function(id, global_data, shared_rv) {
           obj <- .seeded(RunTSNE(obj, dims=1:input$pca_dim, verbose=FALSE))
         } else if (input$reduction_method == "dm") {
           if (requireNamespace("destiny", quietly=TRUE)) {
-            library(destiny)
-            dm <- DiffusionMap(t(Seurat::Embeddings(obj,"pca")[, 1:input$pca_dim]))
-            obj[["dm"]] <- CreateDimReducObject(embeddings=dm@eigenvectors[,1:2],
+            # `library(destiny)` masquait durablement les fonctions homonymes
+            # du reste de la session ; l'appel qualifie suffit.
+            dm_emb <- .dm_from_pca(Seurat::Embeddings(obj, "pca"), npcs = input$pca_dim)
+            obj[["dm"]] <- CreateDimReducObject(embeddings = dm_emb,
                                                 key="DM_", assay=DefaultAssay(obj))
           } else {
             showNotification(.tr("Package 'destiny' introuvable. UMAP utilisé."), type="warning", duration=4)
