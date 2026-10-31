@@ -19,6 +19,7 @@ gets without opening the plan document.
 | `scenario.tmp` | the agent | Staging file — never parsed by the app. |
 | `result.json` | the app | The verdict for one `seq`. **Read this, never stdout.** |
 | `result.tmp` | the app | Staging file. |
+| `state.json` | the app | Passive observation digest (O11/M2, DSTV-1): emitted on **every** poller tick — armed or not — when its content hash changes. One flat declaration: session token, content/state hash, timestamp, `active_module` + `active_module_key` (clean keys — never HTML), `pipeline_status` (`idle`/`running`/`step`/`done`/`error`; the **manual** autopipeline included), `pipeline_step`, `business_state` scalars (`has_data`, `object_class`, `n_elements`, `n_clusters`, `deconv_done`), bounded recent errors. A declaration, never a proof — no `completion_verified` here. Read by the agent through `transcripto_drive_state`. |
 
 ## Why the verdict is a file
 

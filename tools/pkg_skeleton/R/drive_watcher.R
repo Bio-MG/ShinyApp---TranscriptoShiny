@@ -65,6 +65,13 @@ TS_DRIVE_MAX_ERRORS <- 20L
 # pour porter pipeline_status = "error" dans le digest passif. Au-delà,
 # l'erreur reste LISTÉE dans state.json mais ne porte plus le statut courant.
 TS_DRIVE_ERROR_RECENCY_SECS <- 900L
+# DSTV-1 (2026-10-31, contrat §3 A2 / décision §8.2) : vocabulaire du pipeline
+# manuel — extension ADDITIVE de l'ensemble existant {idle, running, error}
+# (détecteur :3659-3670, figé test-drive-passive-state.R:66) : « step » (terme
+# de la fiche :60) et « done » (terminal protocole déjà nommé,
+# tools/_drive/README.md:131-135). Un statut publié hors de cet ensemble est
+# IGNORÉ par l'émetteur — pas de dérive silencieuse de schéma (§6.5).
+TS_DRIVE_MANUAL_STATUSES <- c("idle", "running", "step", "done", "error")
 
 #' Record the app root once, at source time.
 #'
@@ -373,8 +380,18 @@ ts_drive_write_attempt <- function(txt, path, tmp) {
   if (is.null(back)) {
     return(list(ok = FALSE, error = "read-back failed after rename"))
   }
-  if (!identical(ts_drive_norm_text(txt),
-                 ts_drive_norm_text(paste(back, collapse = "\n")))) {
+  # DSTV-1 jalon (2026-10-31) : la comparaison est AU NIVEAU D'OCTET, plus au
+  # niveau chaîne. MESURÉ sur l'arbre propre 8a7476d : une charge portant « é »
+  # faisait échouer l'ancien identical() sous le parse UTF-8 de testthat
+  # (test-drive-passive-state.R:84, « read-back differs after rename » alors
+  # que le disque était identique) — la chaîne écrite était marquée UTF-8, la
+  # relecture marquée natif, et identical() sur chaînes est SENSIBLE au
+  # marqueur d'encodage. charToRaw compare ce qui a réellement atterri sur le
+  # disque ; toute dérive d'octet réelle (écrivain étranger, rename tronqué)
+  # échoue toujours au contrôle.
+  txt_bytes <- charToRaw(ts_drive_norm_text(txt))
+  back_bytes <- charToRaw(ts_drive_norm_text(paste(back, collapse = "\n")))
+  if (!identical(txt_bytes, back_bytes)) {
     return(list(ok = FALSE, error = "read-back differs after rename"))
   }
   list(ok = TRUE, error = NULL)
@@ -3622,7 +3639,31 @@ ts_drive_clear_errors <- function() {
   is.finite(age) && age >= 0 && age <= win
 }
 
+#' Strip render markup from a navigation label (DSTV-1 A1, trou T4).
+#'
+#' MEASURED live (fiche :43) : `input$main_nav` arrive i18n-RENDU dans l'app —
+#' `'<span class="i18n" data-key="Single-Cell">Single-Cell</span>'` — et
+#' l'ancien passthrough du détecteur laissait ce HTML atteindre
+#' `state.json$active_module`. Tout tag est retiré (attributs compris) ; un
+#' libellé sans balise, mappé ou non, traverse inchangé octet pour octet — les
+#' appelés existants gardent leur sémantique (discipline additive, §6.5).
+#'
+#' @param x Raw nav value (or NULL).
+#' @return Character scalar, no `<...>` markup, possibly "".
+.ts_drive_strip_html <- function(x) {
+  s <- as.character(x %||% "")[1]
+  if (is.na(s) || !nzchar(s)) return("")
+  s <- gsub("<[^>]*>", " ", s)
+  s <- trimws(gsub("[[:space:]]+", " ", s))
+  if (is.na(s)) "" else s
+}
+
 #' Detect the active module from Shiny input navigation or tick status.
+#'
+#' DSTV-1 (A1, trou T4) : la navigation est DÉMARQUÉE avant le mapping — un
+#' libellé i18n-rendu se mappe comme son texte nu et une nav non mappée tombe
+#' en texte propre ; plus jamais de HTML dans un champ machine (contrat §3 A1,
+#' critère #2). Tick et job restent la première source, inchangés.
 #'
 #' @param input Shiny input object (or list).
 #' @param job Active job state (or NULL).
@@ -3635,7 +3676,7 @@ ts_drive_detect_active_module <- function(input = NULL, job = NULL, tick_module 
   if (!is.null(job) && is.list(job) && !is.null(job$module) && nzchar(as.character(job$module)[1])) {
     return(as.character(job$module)[1])
   }
-  nav <- tryCatch(as.character(input$main_nav)[1], error = function(e) "")
+  nav <- tryCatch(.ts_drive_strip_html(input$main_nav), error = function(e) "")
   if (is.na(nav) || !nzchar(nav)) return("idle")
 
   switch(nav,
@@ -3672,21 +3713,92 @@ ts_drive_detect_pipeline_status <- function(tick_status = NULL, tick_error = NUL
 #' Compute xxhash64 content digest of passive state payload.
 #'
 #' Deliberately excludes timestamps so unchanged semantic state produces
-#' identical hashes across ticks.
+#' identical hashes across ticks. DSTV-1 (contrat §3.1, conséquence du
+#' « hash-gated inchangé » de la fiche :62) : le digest COUVRE les nouveaux
+#' champs (active_module_key, pipeline_step, business_state) — sinon un
+#' changement de business_state n'émettrait jamais et la propriété « n'écrit
+#' que si le contenu change » serait falsifiée pour le contenu même que DSTV-1
+#' ajoute. Les trois arguments nouveaux valent NULL par défaut : les appels
+#' historiques à 4 arguments gardent leur comportement.
 #'
 #' @param token Session token string.
 #' @param active_module Active module string.
 #' @param pipeline_status Pipeline status string.
 #' @param errors List of error entries.
+#' @param active_module_key Clean module key (DSTV-1 A1; default NULL).
+#' @param pipeline_step Manual-pipeline step value (DSTV-1 A2; default NULL).
+#' @param business_state Named list of the five frozen scalars (DSTV-1 A2;
+#'   default NULL).
 #' @return 16-character hexadecimal hash string.
-ts_drive_compute_state_hash <- function(token, active_module, pipeline_status, errors) {
+ts_drive_compute_state_hash <- function(token, active_module, pipeline_status, errors,
+                                        active_module_key = NULL,
+                                        pipeline_step = NULL,
+                                        business_state = NULL) {
   payload <- list(
-    session_token   = as.character(token %||% "")[1],
-    active_module   = as.character(active_module %||% "")[1],
-    pipeline_status = as.character(pipeline_status %||% "idle")[1],
-    errors          = as.list(errors %||% list())
+    session_token     = as.character(token %||% "")[1],
+    active_module     = as.character(active_module %||% "")[1],
+    pipeline_status   = as.character(pipeline_status %||% "idle")[1],
+    errors            = as.list(errors %||% list()),
+    active_module_key = as.character(active_module_key %||% "")[1],
+    pipeline_step     = as.character(pipeline_step %||% "")[1],
+    business_state    = business_state %||% list()
   )
   digest::digest(payload, algo = "xxhash64")
+}
+
+#' Read the manual-pipeline published scalars off `global_data` (DSTV-1, §8.4).
+#'
+#' The module layer publishes `global_data$manual_pipeline` — scalars only
+#' (`status`, `step`), the published-probe precedent
+#' (`tools/_drive/README.md:453-461`). The drive layer NEVER inspects a Seurat
+#' object or a matrix (`tools/_drive/README.md:110`): anything but a small
+#' list of scalars is ignored, a `status` outside
+#' `TS_DRIVE_MANUAL_STATUSES` is ignored (no silent vocabulary drift, §6.5),
+#' and the read never throws (spec S1).
+#'
+#' @param global_data Global reactiveValues or list (or NULL).
+#' @return list(status =, step =), NULLs when absent or malformed.
+.ts_drive_read_manual_pipeline <- function(global_data = NULL) {
+  out <- list(status = NULL, step = NULL)
+  if (is.null(global_data)) return(out)
+  mp <- tryCatch(global_data$manual_pipeline, error = function(e) NULL)
+  if (!is.list(mp)) return(out)
+  st <- tryCatch(as.character(mp$status)[1], error = function(e) NA_character_)
+  if (!is.na(st) && st %in% TS_DRIVE_MANUAL_STATUSES) out$status <- st
+  stp <- tryCatch(as.character(mp$step)[1], error = function(e) NA_character_)
+  if (!is.na(stp) && nzchar(stp)) out$step <- stp
+  out
+}
+
+#' Read the five fiche-frozen business_state scalars off `global_data` (A2).
+#'
+#' `global_data$business_state` carries the module layer's DECLARATION as
+#' published scalars — `has_data`, `object_class`, `n_elements`, `n_clusters`,
+#' `deconv_done` (fiche :59-62, names frozen verbatim). Defaults are honest:
+#' `has_data`/`deconv_done` FALSE, unknowns NULL. Scalars only — the drive
+#' layer never inspects a Seurat object or a matrix (`README.md:110`) — and
+#' the read never throws (spec S1). No per-transition timestamp here: the
+#' document-level `timestamp` is the single horodatage (décision §8.1).
+#'
+#' @param global_data Global reactiveValues or list (or NULL).
+#' @return Named list of the five scalars, always complete.
+.ts_drive_read_business_state <- function(global_data = NULL) {
+  bs <- list(has_data = FALSE, object_class = NULL, n_elements = NULL,
+             n_clusters = NULL, deconv_done = FALSE)
+  if (is.null(global_data)) return(bs)
+  pub <- tryCatch(global_data$business_state, error = function(e) NULL)
+  if (!is.list(pub)) return(bs)
+  bs$has_data <- isTRUE(pub$has_data)
+  oc <- tryCatch(as.character(pub$object_class)[1], error = function(e) NA_character_)
+  if (!is.na(oc) && nzchar(oc)) bs$object_class <- oc
+  ne <- tryCatch(suppressWarnings(as.numeric(pub$n_elements)[1]),
+                 error = function(e) NA_real_)
+  if (!is.na(ne) && is.finite(ne)) bs$n_elements <- ne
+  nc <- tryCatch(suppressWarnings(as.numeric(pub$n_clusters)[1]),
+                 error = function(e) NA_real_)
+  if (!is.na(nc) && is.finite(nc)) bs$n_clusters <- nc
+  bs$deconv_done <- isTRUE(pub$deconv_done)
+  bs
 }
 
 #' Conditionally emit state.json if content hash has changed.
@@ -3694,6 +3806,17 @@ ts_drive_compute_state_hash <- function(token, active_module, pipeline_status, e
 #' Called on every poller tick (whether armed or unarmed). Computes content hash
 #' in memory (< 50 microseconds) and writes tools/_drive/state.json ONLY when
 #' the hash differs from the last emitted hash for this session.
+#'
+#' DSTV-1 (contrat §3, Axe A) : l'émetteur publie AUSSI l'état du pipeline
+#' MANUEL — A1 : `active_module_key`, clé propre débarquée de tout rendu i18n
+#' (`active_module` lui-même est propre désormais ; le libellé traduit reste
+#' une affaire d'UI, jamais d'un champ machine) ; A2 : `pipeline_status`
+#' reflète l'autopipeline manuel (idle/running/step/done/error) — l'état
+#' manuel NE comble que le gap « idle », la détection drive (job en vol,
+#' récence O18) garde la priorité — `pipeline_step` (valeur de panneau
+#' existante), et `business_state` (cinq scalaires gelés). Le digest couvre
+#' les nouveaux champs (§3.1). `completion_verified` n'existe PAS ici —
+#' state.json est une déclaration horodatée, jamais une preuve (§6.2).
 #'
 #' @param session Shiny session object (or NULL).
 #' @param input Shiny input object (or NULL).
@@ -3710,6 +3833,7 @@ ts_drive_emit_passive_state <- function(session = NULL, input = NULL,
 
   # 1. Resolve active module and pipeline status
   job <- tryCatch(ts_drive_job_state(), error = function(e) NULL)
+  # DSTV-1 (A1) : le détecteur débarque le rendu i18n — clé propre, zéro HTML.
   act_mod <- ts_drive_detect_active_module(input, job, tick_out$module)
   # 2. Retrieve bounded errors (max 20 entries) — lu AVANT le statut : le
   #    tampon alimente désormais AUSSI le détecteur (récence, jalon filets).
@@ -3722,8 +3846,25 @@ ts_drive_emit_passive_state <- function(session = NULL, input = NULL,
     tick_out$status, tick_out$error,
     has_recent_error = .ts_drive_has_recent_error(errs))
 
-  # 3. Compute content hash (xxhash64) over semantic state
-  content_hash <- ts_drive_compute_state_hash(tok, act_mod, pipe_st, errs)
+  # DSTV-1 (A2, T3) : l'état du pipeline manuel — scalaires publiés sur
+  # global_data (décision §8.4) — ne comble que le gap « idle » : la
+  # détection drive ci-dessus garde la priorité (O18 inchangé, §3.3).
+  manual <- .ts_drive_read_manual_pipeline(global_data)
+  if (identical(pipe_st, "idle") && !is.null(manual$status)) {
+    pipe_st <- manual$status
+  }
+  # Décision §8.3 : l'étape porte la valeur de panneau existante, et ne
+  # figure que lorsque le statut EST une étape.
+  pipe_step <- if (identical(pipe_st, "step")) manual$step else NULL
+
+  # DSTV-1 (A2) : les cinq scalaires business_state, défauts honnêtes.
+  biz_state <- .ts_drive_read_business_state(global_data)
+
+  # 3. Compute content hash (xxhash64) over semantic state — DÉSORMAIS les
+  #    nouveaux champs (contrat §3.1 : sinon un changement de business_state
+  #    n'émettrait jamais).
+  content_hash <- ts_drive_compute_state_hash(tok, act_mod, pipe_st, errs,
+                                              act_mod, pipe_step, biz_state)
 
   # 4. Check against last emitted hash for this session
   if (is.null(.ts_drive_state$last_state_hash)) {
@@ -3735,16 +3876,20 @@ ts_drive_emit_passive_state <- function(session = NULL, input = NULL,
     return(invisible(FALSE))  # Zero overhead: no disk I/O when state unchanged
   }
 
-  # 5. Build and write state.json atomically
+  # 5. Build and write state.json atomically — champs existants intacts et
+  #    sémantiquement stables, champs DSTV-1 strictement additifs (§6.5).
   state_doc <- list(
-    session_token   = tok,
-    content_hash    = content_hash,
-    state_hash      = content_hash,
-    timestamp       = ts_drive_now_iso(),
-    active_module   = act_mod,
-    pipeline_status = pipe_st,
-    errors          = as.list(errs),
-    recent_errors   = as.list(errs)
+    session_token     = tok,
+    content_hash      = content_hash,
+    state_hash        = content_hash,
+    timestamp         = ts_drive_now_iso(),
+    active_module     = act_mod,
+    active_module_key = act_mod,
+    pipeline_status   = pipe_st,
+    pipeline_step     = pipe_step,
+    business_state    = biz_state,
+    errors            = as.list(errs),
+    recent_errors     = as.list(errs)
   )
 
   dest <- ts_drive_path("state.json")

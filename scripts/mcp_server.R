@@ -1078,6 +1078,30 @@ ts_drive_boot(.project_root)
   sprintf("%08x%08x", as.integer(h1), as.integer(h2))
 }
 
+#' DSTV-1 (A3, fiche :63) — the passive channel's business_state scalars.
+#'
+#' Reads tools/_drive/state.json (READ-ONLY) and returns the five fiche-frozen
+#' scalars under the SAME closed coercion the producer emits: `has_data` /
+#' `deconv_done` logical, `object_class` character, `n_elements` /
+#' `n_clusters` numeric, unknowns NULL. The redaction policy is unchanged:
+#' scalars only, closed shape, no projection widened (README.md:77-82); the
+#' state document itself is a declaration, so `completion_verified` stays
+#' FALSE upstream of any caller (caveat O11, mcp_server.R:2871-2873).
+.ts_dstv1_passive_business_state <- function() {
+  st <- tryCatch(ts_drive_read_state(), error = function(e) NULL)
+  bs <- if (!is.null(st) && is.list(st$business_state)) st$business_state else list()
+  oc <- tryCatch(as.character(bs$object_class)[1], error = function(e) NA_character_)
+  ne <- tryCatch(suppressWarnings(as.numeric(bs$n_elements)[1]), error = function(e) NA_real_)
+  nc <- tryCatch(suppressWarnings(as.numeric(bs$n_clusters)[1]), error = function(e) NA_real_)
+  list(
+    has_data     = isTRUE(bs$has_data),
+    object_class = if (!is.na(oc) && nzchar(oc)) oc else NULL,
+    n_elements   = if (!is.na(ne) && is.finite(ne)) ne else NULL,
+    n_clusters   = if (!is.na(nc) && is.finite(nc)) nc else NULL,
+    deconv_done  = isTRUE(bs$deconv_done)
+  )
+}
+
 .ts_tool_snapshot <- function(expect = NULL) {
   s <- .ts_session()
   if (!s$ok) return(s$result)
@@ -1121,9 +1145,14 @@ ts_drive_boot(.project_root)
           ack_seq = NULL, age_s = NULL, stale = TRUE, non_terminal = TRUE,
           stale_reason = "no verdict has been published for this session"),
         protocol_state = list(status = NULL, terminal = FALSE, acknowledged = FALSE),
-        business_state = list(
-          active_module = NULL, completion_verified = FALSE,
-          note = "no verdict published yet; nothing to observe"),
+        business_state = c(
+          list(
+            active_module = NULL, completion_verified = FALSE,
+            note = "no verdict published yet; nothing to observe"),
+          # DSTV-1 (A3, trou T3 — le site même de l'aveuglement mesuré) : la
+          # voie passive (state.json) enrichit le business_state ; sous policy
+          # de rédaction inchangée (fiche :63, scalaires clos uniquement).
+          .ts_dstv1_passive_business_state()),
         object         = list(has_data = FALSE, object_class = NULL, n_genes = NULL,
                               n_samples = NULL, error_state = NULL),
         modules        = list(),
@@ -1202,12 +1231,15 @@ ts_drive_boot(.project_root)
       terminal     = terminal,
       acknowledged = TRUE
     ),
-    business_state = list(
-      active_module       = .ts_clean(.as_chr(res$active_module) %|NA|% "", 40L),
-      completion_verified = FALSE,
-      note = paste0("M3a is a PASSIVE read of a published verdict: it cannot verify ",
-                    "that any pipeline finished. `terminal` is a statement about the ",
-                    "PROTOCOL, not about the analysis.")
+    business_state = c(
+      list(
+        active_module       = .ts_clean(.as_chr(res$active_module) %|NA|% "", 40L),
+        completion_verified = FALSE,
+        note = paste0("M3a is a PASSIVE read of a published verdict: it cannot verify ",
+                      "that any pipeline finished. `terminal` is a statement about the ",
+                      "PROTOCOL, not about the analysis.")),
+      # DSTV-1 (A3) : les scalaires passifs enrichissent aussi le cas verdict.
+      .ts_dstv1_passive_business_state()
     ),
     object    = proj$object,
     modules   = proj$modules,
