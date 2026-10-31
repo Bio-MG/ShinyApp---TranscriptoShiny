@@ -3801,6 +3801,68 @@ ts_drive_compute_state_hash <- function(token, active_module, pipeline_status, e
   bs
 }
 
+#' Package the manual-pipeline scalars a module publishes (DSTV-1b, §8.4).
+#'
+#' The MODULE layer publishes `global_data$manual_pipeline` at the pipeline
+#' transition sites (decision §8.4, recorded verbatim in the sibling RED file
+#' header, tests/testthat/test-drive-session-tracker.R:46-56). This packager
+#' is the publication shape's defensive half: ANY input — malformed included —
+#' yields the frozen `list(status=, step=)` shape, never throws, and a status
+#' outside `TS_DRIVE_MANUAL_STATUSES` falls back to "idle" (no silent
+#' vocabulary drift, contract §6.5). It receives SCALARS ONLY: the object
+#' surface reads happen in the module layer, which owns the object — the
+#' drive layer never inspects one (tools/_drive/README.md:108-115).
+#'
+#' @param status Transition status ("running"/"step"/"done"/"error"; any
+#'   malformed or out-of-vocabulary input becomes "idle").
+#' @param step Frozen accordion-panel value while status IS a step, else ""
+#'   (§8.3 — the emitter only surfaces `pipeline_step` when status is "step",
+#'   drive_watcher.R:3858; the reader maps "" to NULL, :3768-3769).
+#' @return Named list(status =, step =), always complete.
+ts_drive_feed_manual_pipeline <- function(status = "idle", step = "") {
+  st <- tryCatch(as.character(status)[1], error = function(e) NA_character_)
+  if (is.na(st) || !st %in% TS_DRIVE_MANUAL_STATUSES) st <- "idle"
+  stp <- tryCatch(as.character(step)[1], error = function(e) NA_character_)
+  list(status = st, step = if (is.na(stp)) "" else stp)
+}
+
+#' Package the five fiche-frozen business_state scalars (DSTV-1b, §8.4).
+#'
+#' Defensive twin of `.ts_drive_read_business_state` on the PUBLISH side: the
+#' module passes the scalars it read off the live object surface (has_data,
+#' object_class, n_elements, n_clusters, deconv_done — names frozen verbatim,
+#' fiche :59-62) and this packager returns the exact honest shape no matter
+#' what arrived (NA / NULL / wrong type / malformed) — it never throws.
+#' Scalars only, zero object inspection here (README.md:110): the module's
+#' surface reads (class(), ncol(), meta.data column) stay in the module.
+#'
+#' @param has_data Data-presence flag (coerced with isTRUE).
+#' @param object_class First class string of the live object (or NULL).
+#' @param n_elements Element count (cells / samples / spots; coerced to a
+#'   single finite number, else NULL).
+#' @param n_clusters Cluster count (same coercion; NULL when unknown).
+#' @param deconv_done Deconvolution-done flag (coerced with isTRUE).
+#' @return Named list of the five scalars, always complete.
+ts_drive_feed_business_state <- function(has_data = NULL, object_class = NULL,
+                                         n_elements = NULL, n_clusters = NULL,
+                                         deconv_done = FALSE) {
+  safe_num <- function(x) tryCatch({
+    v <- suppressWarnings(as.numeric(x)[1])
+    if (is.finite(v)) v else NULL
+  }, error = function(e) NULL)
+  safe_txt <- function(x) tryCatch({
+    v <- as.character(x)[1]
+    if (is.na(v) || !nzchar(v)) NULL else v
+  }, error = function(e) NULL)
+  list(
+    has_data     = isTRUE(has_data),
+    object_class = safe_txt(object_class),
+    n_elements   = safe_num(n_elements),
+    n_clusters   = safe_num(n_clusters),
+    deconv_done  = isTRUE(deconv_done)
+  )
+}
+
 #' Conditionally emit state.json if content hash has changed.
 #'
 #' Called on every poller tick (whether armed or unarmed). Computes content hash

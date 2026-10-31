@@ -426,12 +426,26 @@ mod_bulk_server <- function(id, global_data) {
       }
       fixed_disp <- if (bypass) (input$ap_no_rep_bcv %||% 0.4)^2 else NULL
 
+      # DSTV-1b (§8.4) : « running » au point de non-retour (les validations
+      # au-dessus peuvent sortir tôt sans run — pas de faux « running » collé).
+      # Le module publie, la couche drive décide (gap « idle » seulement).
+      global_data$manual_pipeline <- ts_drive_feed_manual_pipeline(status = "running", step = "")
+      global_data$business_state <- ts_drive_feed_business_state(
+        has_data = !is.null(global_data$bulk_obj), object_class = class(global_data$bulk_obj)[1],
+        n_elements = tryCatch(ncol(counts), error = function(e) NULL),
+        n_clusters = NULL, deconv_done = FALSE)
+
       p <- shiny::Progress$new(); on.exit(p$close())
       ll <- character(0)
       log <- function(msg) {
         ll <<- c(ll, paste0("[", format(Sys.time(), "%H:%M:%S"), "] ", msg))
         auto_log_rv(paste(ll, collapse = "\n"))
       }
+
+      # DSTV-1b (§8.4) : le pas gelé « 0_autopipeline » (valeur de panneau,
+      # mod_bulk.R:24) publié au démarrage du travail proprement dit (§8.3 :
+      # l'étape ne figure que lorsque le statut EST une étape).
+      global_data$manual_pipeline <- ts_drive_feed_manual_pipeline(status = "step", step = "0_autopipeline")
 
       tryCatch({
         if (bypass) {
@@ -719,9 +733,24 @@ mod_bulk_server <- function(id, global_data) {
           else .tr("\u2713 Pipeline termin\u00e9 \u2014 PCA disponible."),
           type="message", duration=6)
 
+        # DSTV-1b (§8.4) : « done » + rafraîchissement business_state —
+        # counts (remappés le cas échéant) et résultats DE posés.
+        global_data$manual_pipeline <- ts_drive_feed_manual_pipeline(status = "done", step = "")
+        global_data$business_state <- ts_drive_feed_business_state(
+          has_data = !is.null(global_data$bulk_obj), object_class = class(global_data$bulk_obj)[1],
+          n_elements = tryCatch(ncol(counts), error = function(e) NULL),
+          n_clusters = NULL, deconv_done = FALSE)
+
       }, error=function(e) {
         log(paste("\u274c", .tr("Erreur:"), e$message))
         showNotification(paste(.tr("Erreur pipeline:"), e$message), type="error", duration=10)
+        # DSTV-1b (§8.4) : terminaison en erreur publiée (le module publie,
+        # la couche drive décide — gap « idle », récence O18 inchangée).
+        global_data$manual_pipeline <- ts_drive_feed_manual_pipeline(status = "error", step = "")
+        global_data$business_state <- ts_drive_feed_business_state(
+          has_data = !is.null(global_data$bulk_obj), object_class = class(global_data$bulk_obj)[1],
+          n_elements = tryCatch(ncol(counts), error = function(e) NULL),
+          n_clusters = NULL, deconv_done = FALSE)
       })
     })
 

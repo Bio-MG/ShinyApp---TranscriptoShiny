@@ -399,6 +399,15 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
 
     .fail_stage <- function(step, message) {
       write_mirai_log(log_file, message, step, TOTAL_STEPS)
+      # DSTV-1b (§8.4) : terminaison en erreur publiée (le module publie, la
+      # couche drive décide — gap « idle », récence O18 inchangée).
+      global_data$manual_pipeline <- ts_drive_feed_manual_pipeline(status = "error", step = "")
+      global_data$business_state <- ts_drive_feed_business_state(
+        has_data = !is.null(global_data$spatial_obj),
+        object_class = class(global_data$spatial_obj)[1],
+        n_elements = tryCatch(nrow(global_data$spatial_obj$coords), error = function(e) NULL),
+        n_clusters = tryCatch(length(unique(shared_rv$cluster_labels)), error = function(e) NULL),
+        deconv_done = !is.null(shared_rv$deconv_props))
       pipeline_state("error")
       .close_drive_job("error", ts_drive_badge_sanitize(message, 200L))
       showNotification(.tr("\u274c Erreur \u2014 voir le journal ci-dessous."),
@@ -406,6 +415,15 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
     }
 
     .finish_pipeline <- function() {
+      # DSTV-1b (§8.4) : « done » + rafraîchissement business_state — clusters
+      # et déconvolution posés par les tâches du run (shared_rv, surface).
+      global_data$manual_pipeline <- ts_drive_feed_manual_pipeline(status = "done", step = "")
+      global_data$business_state <- ts_drive_feed_business_state(
+        has_data = !is.null(global_data$spatial_obj),
+        object_class = class(global_data$spatial_obj)[1],
+        n_elements = tryCatch(nrow(global_data$spatial_obj$coords), error = function(e) NULL),
+        n_clusters = tryCatch(length(unique(shared_rv$cluster_labels)), error = function(e) NULL),
+        deconv_done = !is.null(shared_rv$deconv_props))
       pipeline_state("done")
       .close_drive_job("done")
       showNotification(.tr("\u2705 Pipeline automatique termine."), type = "message", duration = 6)
@@ -777,6 +795,18 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
       reset_log(log_file)
       pipeline_state("running")
 
+      # DSTV-1b (§8.4) : « running » publié au lancement — has_data et les
+      # scalaires surface (coords = éléments ; clusters/déconvolution posés
+      # par un run antérieur le cas échéant) doivent être visibles PENDANT
+      # le run (trou T3). Le module publie, la couche drive décide.
+      global_data$manual_pipeline <- ts_drive_feed_manual_pipeline(status = "running", step = "")
+      global_data$business_state <- ts_drive_feed_business_state(
+        has_data = !is.null(global_data$spatial_obj),
+        object_class = class(global_data$spatial_obj)[1],
+        n_elements = tryCatch(nrow(global_data$spatial_obj$coords), error = function(e) NULL),
+        n_clusters = tryCatch(length(unique(shared_rv$cluster_labels)), error = function(e) NULL),
+        deconv_done = !is.null(shared_rv$deconv_props))
+
       write_mirai_log(log_file, "Etape 1/9 : QC (seuils appliques)...", 1, TOTAL_STEPS)
       qc_metrics <- tryCatch(compute_qc_metrics_fast(global_data$spatial_obj$bpcells_dir),
                              error = function(e) NULL)
@@ -805,6 +835,10 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
       )
 
       write_mirai_log(log_file, "Etape 2/9 : Clustering spatial (BANKSY-lite)...", 2, TOTAL_STEPS)
+      # DSTV-1b (§8.4) : le pas du panneau pipeline (« panel_pipeline »,
+      # mod_spatial.R:130-131) publié au lancement de la première tâche (§8.3 :
+      # l'étape ne figure que lorsque le statut EST une étape).
+      global_data$manual_pipeline <- ts_drive_feed_manual_pipeline(status = "step", step = "panel_pipeline")
       cluster_task$invoke(
         bpcells_dir = global_data$spatial_obj$bpcells_dir, pass_idx = pass_idx,
         coords = global_data$spatial_obj$coords, lambda = input$lambda, k_geom = 18,
