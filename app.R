@@ -559,6 +559,9 @@ ui <- page_navbar(
 
 server <- function(input, output, session) {
   
+  # S-RES-1 (§5 #14 / O30) — le navigateur doit TOUJOURS tenter une reconnexion (veille PC) ; shinyOptions(allowReconnect=) est INERTE sur shiny 1.14.0 (renv.lock:16212), mécanisme effectif = session$allowReconnect (vérifié namespace/client/upstream, 2026-10-31)
+  session$allowReconnect("force")
+  
   # Chantier #5 : sans ce hook, fermer l'app laissait les workers mirai vivants
   # (processus orphelins sur Windows) — stop_spatial_daemons() n'avait AUCUN
   # appelant au shutdown. onStop() est le point de sortie propre de la session ;
