@@ -160,11 +160,16 @@ test_that("M2 semantics: 159 explicit sources, zero hidden sourcing loop", {
   # mod_sc_trajectory_export.R). Les 3 gardes etaient ROUGES sur ce decalage.
   # M4 CERBERUS (2026-10-26) : re-basage 158 -> 159 (+1 moteur
   # sc_qc_doublets.R, source litteral top-level apres sc_batch_metrics.R).
+  # ASR-3 O29 (2026-11-01) : re-basage 159 -> 160 (+1 module
+  # modules/session/mod_session_checkpoint.R, bloc 13 — surface UI des
+  # checkpoints de session ; contrat SESSION_CHECKPOINT_RESTORE_CONTRACT.md
+  # §8 row ASR-3, montage sidebar/header/server dans app.R).
   expect_identical(
-    length(.app_explicit(.app_src)), 159L,
-    info = paste("app.R doit porter exactement 159 source() explicites",
+    length(.app_explicit(.app_src)), 160L,
+    info = paste("app.R doit porter exactement 160 source() explicites",
                  "(M2 : 145 + 10 bulk_de deplies, + 3 export drive M3,",
-                 "+ 1 moteur sc_qc_doublets M4) -- le compte observe differe")
+                 "+ 1 moteur sc_qc_doublets M4, + 1 module session ASR-3 O29)",
+                 "-- le compte observe differe")
   )
   # et plus AUCUNE boucle list.files() de sourcing : M2 a deplie la derniere,
   # le tri alphabetique implicite etait une variable cachee.
@@ -201,17 +206,19 @@ test_that("no stale source() entry points at a missing file", {
   )
 })
 
-test_that("the 12 inline domain blocks mirror the manifest (order frozen)", {
+test_that("the 13 inline domain blocks mirror the manifest (order frozen)", {
+  # ASR-3 O29 (2026-11-01) : re-basage 12 -> 13 blocs (+1 bloc 13
+  # modules/session — surface UI des checkpoints de session).
   lines <- readLines(file.path(ts_project_root(), "app.R"), warn = FALSE)
   blocks <- .app_blocks(lines)
   expect_identical(
-    length(blocks), 12L,
-    info = sprintf("12 blocs de domaine inline attendus (M2), %d trouves",
+    length(blocks), 13L,
+    info = sprintf("13 blocs de domaine inline attendus (M2 + ASR-3), %d trouves",
                    length(blocks))
   )
   expect_identical(
-    names(blocks), sprintf("%02d", 1:12),
-    info = paste("les bandereaux Bloc 01..Bloc 12 doivent etre numerotes",
+    names(blocks), sprintf("%02d", 1:13),
+    info = paste("les bandereaux Bloc 01..Bloc 13 doivent etre numerotes",
                  "consecutivement et dans l'ordre -- observes :",
                  paste(names(blocks), collapse = ", "))
   )

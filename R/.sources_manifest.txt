@@ -157,3 +157,4 @@ modules/spatial/mod_spatial_pipeline.R
 modules/spatial/mod_spatial_export.R
 modules/spatial/mod_spatial_report.R
 modules/spatial/mod_spatial.R
+modules/session/mod_session_checkpoint.R

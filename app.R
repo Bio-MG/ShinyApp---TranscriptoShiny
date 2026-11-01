@@ -306,6 +306,16 @@ source("modules/spatial/mod_spatial_export.R")
 source("modules/spatial/mod_spatial_report.R")
 source("modules/spatial/mod_spatial.R")
 
+# ── Bloc 13 : modules/session (persistance de session) ───────────────────────
+# ASR-3 (O29, SESSION_CHECKPOINT_RESTORE_CONTRACT.md §4/§5/§8 row ASR-3) : la
+# surface UI des checkpoints de session — toggle opt-in (OFF par défaut),
+# bannière de reprise (rend le payload du plan ASR-2, jamais un recalcul),
+# ligne d'état. Module dédié : app.R n'est jamais sourcé par la suite
+# (convention test-app-sourcing.R), le module est la surface testServer-
+# testable (tests/testthat/test-asr3-ui.R) ; app.R n'en fait que le MONTAGE
+# (sidebar + header= + server) et n'appelle jamais le moteur directement.
+source("modules/session/mod_session_checkpoint.R")
+
 
 
 
@@ -346,7 +356,13 @@ ui <- page_navbar(
   # so the layout is byte-identical to before when the protocol is off.
   header = tagList(
     if (I18N_AVAILABLE) .usei18n_fixed(i18n),
-    uiOutput("drive_badge")
+    uiOutput("drive_badge"),
+    # ASR-3 (O29) : bannière de reprise de session — même discipline que le
+    # badge ci-dessus : renderUI() NULL (toggle OFF, aucun checkpoint validé,
+    # offre refusée ou purgée) => conteneur vide, empreinte nulle, layout
+    # inchangé (précédent app.R:341-346). Non intrusive, jamais d'injection
+    # silencieuse : deux boutons explicites (Reprendre / Continuer sans).
+    mod_session_checkpoint_banner_ui("session_ckpt")
   ),
   
   
@@ -471,11 +487,18 @@ ui <- page_navbar(
     
     
     
+    # ASR-3 (O29) — checkpoints de session : toggle opt-in (OFF par défaut)
+    # + ligne d'état du dernier checkpoint. Tant que le toggle est OFF :
+    # AUCUN appel moteur, AUCUN rendu (contrat §4/§7.5 — comportement actuel
+    # byte pour byte). Panneau placé dans la section Session, voisin des
+    # boutons Sauvegarder/Charger Session (même domaine : persistance).
+    mod_session_checkpoint_ui("session_ckpt"),
+
     hr(),
-    
-    
-    
-    actionButton("help_btn", i18n$t("📖 Guide / Aide"), 
+
+
+
+    actionButton("help_btn", i18n$t("📖 Guide / Aide"),
                  
                  icon = icon("question-circle"), 
                  
@@ -1654,6 +1677,14 @@ server <- function(input, output, session) {
     )
     
   })
+  
+  # ── ASR-3 (O29) — checkpoints de session (toggle/bannière/ligne d'état) ───
+  # Monté EN DERNIER : jamais avant la première instruction session$allowReconnect
+  # (garde lexical S-RES-1, test-sres1-allow-reconnect.R). OFF par défaut =>
+  # le module n'appelle AUCUNE fonction du moteur et ne rend rien (contrat
+  # §4/§7.5) ; ON => scan événementiel unique, offre = plan ASR-2 validé,
+  # acceptation = apply() dans global_data, refus = purge de l'offre seule.
+  mod_session_checkpoint_server("session_ckpt", global_data)
   
 }
 

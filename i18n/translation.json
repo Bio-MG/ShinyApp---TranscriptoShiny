@@ -11368,6 +11368,54 @@
     {
       "fr": "Agent : module %s — action %s — il y a %s s",
       "en": "Agent: module %s — action %s — %s s ago"
+    },
+    {
+      "fr": "Checkpoints de session",
+      "en": "Session checkpoints"
+    },
+    {
+      "fr": "Activer les checkpoints de session",
+      "en": "Enable session checkpoints"
+    },
+    {
+      "fr": "Reprendre la session du {ts} ({n} jeu(x) de données)",
+      "en": "Resume the session from {ts} ({n} dataset(s))"
+    },
+    {
+      "fr": "Contenu : {r} élément(s) restaurable(s), {s} sans valeur conservée, {l} perte(s).",
+      "en": "Contents: {r} restorable item(s), {s} with no retained value, {l} loss(es)."
+    },
+    {
+      "fr": "Pertes :",
+      "en": "Losses:"
+    },
+    {
+      "fr": "Reprendre la session",
+      "en": "Resume the session"
+    },
+    {
+      "fr": "Continuer sans restaurer",
+      "en": "Continue without restoring"
+    },
+    {
+      "fr": "Dernier checkpoint : {ts} — portée : {scope}",
+      "en": "Last checkpoint: {ts} — scope: {scope}"
+    },
+    {
+      "fr": "Aucun checkpoint disponible.",
+      "en": "No checkpoint available."
+    },
+    {
+      "fr": "(aucun dataset)",
+      "en": "(no dataset)"
+    },
+    {
+      "fr": "Session restaurée depuis le checkpoint du {ts} — {r} élément(s) restauré(s), {s} ignoré(s), {l} perte(s).",
+      "en": "Session restored from the checkpoint of {ts} — {r} item(s) restored, {s} skipped, {l} loss(es)."
+    },
+    {
+      "fr": "Échec de la restauration du checkpoint : {err}",
+      "en": "Checkpoint restore failed: {err}"
     }
   ]
 }
