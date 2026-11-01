@@ -11440,6 +11440,10 @@
     {
       "fr": "Checkpoint posé à {ts}.",
       "en": "Checkpoint written at {ts}."
+    },
+    {
+      "fr": "Checkpoint : %s",
+      "en": "Checkpoint: %s"
     }
   ]
 }

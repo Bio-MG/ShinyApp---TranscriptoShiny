@@ -80,6 +80,23 @@
 # mécanisme SCOPÉ (leçon B1/B5/DSTV-3 — le tool complet emporterait ~164
 # entrées en attente d'autres lots). Statiques -> i18n$t() au build ; dynamiques
 # -> global_data$i18n + re-render sur global_data$language (motif app.R).
+#
+# ASR-5 — INTÉGRATION DRIVE (contrat SESSION_CHECKPOINT_RESTORE_CONTRACT.md §8
+# row ASR-5 : « santé checkpoint visible côté panneau agent », fiche :122 ;
+# dégivrée O31 après la livraison DSTV-1) : APRÈS CHAQUE résultat de
+# publication (succès id/trigger/horodatage — onFulfilled ; refus §7.1 +
+# raisons — branche synchrone ET onRejected ; saut honnête — raison), ce
+# module alimente la santé drive de LA session qui publie :
+#   ts_drive_sessions_checkpoint(session$userData$drive_token, <résumé borné>)
+# Le champ `checkpoint` de la ligne sessions[] de CE token est le support :
+# AUCUN fichier nouveau (contrat §5.5/§7.6 — la santé atteint tools/_drive
+# par le state.json hash-gated existant au prochain tick), OFF = aucune
+# écriture de santé (la purge du publisher, A1, rend la santé no-op aussi).
+# SEAM du token (D7, en-tête test-asr5-drive.R) : app.R pose
+# session$userData$drive_token au retour de ts_drive_attach — session$token
+# littéral est IMPOSSIBLE sur shiny 1.14.0 (ShinySession lock_objects=TRUE,
+# mesuré). Les résumés sont des textes machine (SANS i18n$t — leçon T4 :
+# jamais de rendu i18n dans un champ machine), bornés par le setter.
 # =============================================================================
 
 `%sc_ckpt_or%` <- function(a, b) if (is.null(a) || length(a) == 0) b else a
@@ -164,6 +181,25 @@ mod_session_checkpoint_server <- function(id, global_data, store_dir = NULL) {
       paste0(format(pt, "%Y-%m-%d %H:%M", tz = "UTC"), " UTC")
     }
 
+    # ── ASR-5 : alimentation de la santé drive (contrat §8 row ASR-5) ────────
+    # Le token de CETTE session est posé par app.R sur userData (D7, en-tête
+    # test-asr5-drive.R — session$token littéral impossible, shiny 1.14.0).
+    # Le résumé est un texte MACHINE (sans i18n$t, leçon T4) relayant le
+    # résultat de publication ; le setter applique strip_html + borne —
+    # jamais de ligne fabriquée pour un token inconnu, jamais d'écriture
+    # disque ici (canal hash-gated au prochain tick).
+    .sc_ckpt_drive_token <- function() {
+      tryCatch(as.character(session$userData$drive_token)[1],
+               error = function(e) NA_character_)
+    }
+    .sc_ckpt_feed_health <- function(summary) {
+      tok <- .sc_ckpt_drive_token()
+      if (is.null(tok) || is.na(tok) || !nzchar(tok)) return(invisible(FALSE))
+      tryCatch(
+        ts_drive_sessions_checkpoint(tok, summary),
+        error = function(e) invisible(FALSE))
+    }
+
     # ── WRITE-SIDE : le helper de publication des points de pose (A1) ────────
     # Enregistré dans global_data À L'ACTIVATION du toggle, purgé à
     # l'extinction. Un appel = UN checkpoint ÉVÉNEMENTIEL (jamais de timer,
@@ -190,6 +226,9 @@ mod_session_checkpoint_server <- function(id, global_data, store_dir = NULL) {
       if (length(l1) == 0L) {
         last_write(list(ok = FALSE, skipped = TRUE,
                         reason = "Aucun objet lourd \u00e0 enregistrer \u2014 checkpoint non pos\u00e9."))
+        # ASR-5 : un saut honnête EST un résultat de publication (raison) —
+        # la santé drive le porte aussi (jamais un mensonge par omission).
+        .sc_ckpt_feed_health(paste0("saut\u00e9 \u00b7 Aucun objet lourd \u00e0 enregistrer \u2014 checkpoint non pos\u00e9."))
         return(invisible(FALSE))
       }
       # Couche 2 (A4) : relais VERBATIM de ce que le producteur DSTV-1 publie
@@ -253,20 +292,38 @@ mod_session_checkpoint_server <- function(id, global_data, store_dir = NULL) {
       if (!isTRUE(res$ok)) {
         last_write(list(ok = FALSE, refused = TRUE, trigger = trigger,
                         reasons = as.character(res$reasons %sc_ckpt_or% "raison inconnue")))
+        # ASR-5 : refus §7.1 (synchrone) — le résumé du refus (raisons moteur
+        # verbatim, texte machine sans i18n) alimente la santé drive.
+        .sc_ckpt_feed_health(paste0(
+          "refus \u00b7 ", trigger, " \u00b7 ",
+          paste(as.character(res$reasons %sc_ckpt_or% "raison inconnue"),
+                collapse = " | ")))
         return(invisible(FALSE))
       }
       promises::then(
         res$deferred,
         onFulfilled = function(val) {
+          ck_id <- tryCatch(as.character(val$id)[1], error = function(e) NA_character_)
+          ck_ts <- tryCatch(as.character(val$manifest$timestamp)[1],
+                            error = function(e) NA_character_)
           last_write(list(ok = TRUE, trigger = trigger,
                           id = tryCatch(val$id, error = function(e) NULL),
                           timestamp = tryCatch(val$manifest$timestamp,
                                                error = function(e) NULL)))
+          # ASR-5 : succès — résumé id/trigger/horodatage (contrat §8 row
+          # ASR-5), texte machine borné par le setter.
+          .sc_ckpt_feed_health(paste0(
+            "ok \u00b7 ", trigger, " \u00b7 ", ck_id %sc_ckpt_or% "?",
+            " \u00b7 ", ck_ts %sc_ckpt_or% "?"))
           invisible(NULL)
         },
         onRejected = function(err) {
           last_write(list(ok = FALSE, refused = TRUE, trigger = trigger,
                           reasons = conditionMessage(err)))
+          # ASR-5 : rejet async de la collection — même discipline que le
+          # refus synchrone (chaque résultat alimente la santé).
+          .sc_ckpt_feed_health(paste0(
+            "refus \u00b7 ", trigger, " \u00b7 ", conditionMessage(err)))
           invisible(NULL)
         })
       invisible(TRUE)

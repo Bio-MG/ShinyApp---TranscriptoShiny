@@ -91,9 +91,12 @@
 #     without a second subscription. One-shot drain, precedent
 #     pending_events() (drive_watcher.R:4907-4911, drained app.R:903-911).
 #   D7 — schema. `sessions[]` is a top-level ADDITIVE field of state.json,
-#     always present (possibly empty), rows carrying EXACTLY the six
-#     fiche-frozen fields {session_id, viewer, module, action, hb_age_s,
-#     armed} (:81-82). module/action are stripped of any HTML at the emitter
+#     always present (possibly empty), rows carrying EXACTLY the fiche-frozen
+#     fields {session_id, viewer, module, action, hb_age_s, armed} (:81-82) —
+#     ÉTENDUE ASR-5 (contrat DSTV §10 évolution, 2026-11-01) d'un septième
+#     champ machine `checkpoint` (santé du dernier checkpoint, "" avant toute
+#     publication ; pin complet : tests/testthat/test-asr5-drive.R).
+#     module/action are stripped of any HTML at the emitter
 #     (T4 lesson — never trust upstream, .ts_drive_strip_html
 #     drive_watcher.R:3752-3760) ; viewer is coerced to TS_DRIVE_VIEWERS,
 #     out-of-set -> "unknown", never a lie (rule of ts_drive_viewer
@@ -142,9 +145,12 @@ if (file.exists(file.path(ts_project_root(), "R", "core", "drive_watcher.R"))) {
 
 .dstv3_or <- function(a, b) if (is.null(a)) b else a
 
-# The frozen C1 row schema (fiche :81-82, verbatim).
+# The frozen C1 row schema (fiche :81-82, verbatim) — ÉTENDUE ASR-5 (contrat
+# DSTV §10 évolution, 2026-11-01) : un septième champ machine `checkpoint`
+# (santé du dernier checkpoint de la session, "" avant toute publication).
+# Le pin C8 de l'évolution est porté par tests/testthat/test-asr5-drive.R T6.
 .dstv3_session_fields <- c("session_id", "viewer", "module", "action",
-                           "hb_age_s", "armed")
+                           "hb_age_s", "armed", "checkpoint")
 
 # The C2 i18n keys (fr source key + en pair) the activity line composes with.
 .dstv3_fr_key <- "Agent : module %s \u2014 action %s \u2014 il y a %s s"
@@ -206,7 +212,7 @@ if (file.exists(file.path(ts_project_root(), "R", "core", "drive_watcher.R"))) {
 
 # ── C1 — sessions[] in state.json : schema, cap, removal, digest ─────────────
 
-test_that("C1 schema: state.json carries sessions[] with EXACTLY the six frozen fields, always present, viewer coerced to TS_DRIVE_VIEWERS (fiche :81-82)", {
+test_that("C1 schema: state.json carries sessions[] with EXACTLY the frozen fields (six DSTV-3 + checkpoint ASR-5, contrat DSTV §10), always present, viewer coerced to TS_DRIVE_VIEWERS (fiche :81-82)", {
   .dstv3_api(c("ts_drive_sessions_track", "ts_drive_sessions",
                "ts_drive_sessions_drop"))
   sb <- .dstv3_sandbox("schema")

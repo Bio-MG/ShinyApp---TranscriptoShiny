@@ -3806,11 +3806,14 @@ ts_drive_detect_pipeline_status <- function(tick_status = NULL, tick_error = NUL
 #'   default NULL).
 #' @param sessions DSTV-3 (C1, fiche :81-82) — the sessions[] table, SEMANTIC
 #'   fields only (session_id, viewer, module, action, armed per row; default
-#'   NULL). The time-derived `hb_age_s` is deliberately NOT passed here: it is
-#'   a timestamp projection (règle « Deliberately excludes timestamps »,
-#'   :3790-3792) — an armed-but-idle session whose heartbeat legitimately moves
-#'   must not rewrite state.json every beat (O11 + fiche :103, zéro churn).
-#'   Historical calls without the argument keep their behavior.
+#'   NULL). ASR-5 (contrat DSTV §10 évolution) : le champ santé `checkpoint`
+#'   est sémantique lui aussi — un changement de santé DOIT émettre (discipline
+#'   hash-gated §3). The time-derived `hb_age_s` is deliberately NOT passed
+#'   here: it is a timestamp projection (règle « Deliberately excludes
+#'   timestamps », :3790-3792) — an armed-but-idle session whose heartbeat
+#'   legitimately moves must not rewrite state.json every beat (O11 + fiche
+#'   :103, zéro churn). Historical calls without the argument keep their
+#'   behavior.
 #' @return 16-character hexadecimal hash string.
 ts_drive_compute_state_hash <- function(token, active_module, pipeline_status, errors,
                                         active_module_key = NULL,
@@ -3967,9 +3970,13 @@ ts_drive_feed_business_state <- function(has_data = NULL, object_class = NULL,
 
 TS_DRIVE_SESSIONS_MAX <- 5L
 
-#' The SIX fiche-frozen row fields (fiche :81-82, verbatim — the wire shape).
+#' The fiche-frozen row fields (fiche :81-82, verbatim — the wire shape).
+#' ASR-5 (contrat SESSION_CHECKPOINT_RESTORE_CONTRACT.md §8 row ASR-5 ; DSTV
+#' contrat §10 évolution) : un SEPTIÈME champ machine `checkpoint` complète
+#' la ligne — la santé du dernier checkpoint de la session ("" avant toute
+#' publication, défaut honnête). Additif, `ts-drive/1` inchangé (DSTV §6.5).
 TS_DRIVE_SESSION_FIELDS <- c("session_id", "viewer", "module", "action",
-                             "hb_age_s", "armed")
+                             "hb_age_s", "armed", "checkpoint")
 
 #' Register (or refresh IN PLACE) one session row.
 #'
@@ -3998,13 +4005,20 @@ ts_drive_sessions_track <- function(token, session_id, viewer,
   if (is.na(hb)) hb <- as.numeric(Sys.time())
   # Clean at the BOUNDARY (T4 lesson): module/action are machine fields and
   # upstream labels may be i18n-rendered — never trust them raw.
+  # ASR-5 : la santé `checkpoint` (posée par le setter dédié
+  # ts_drive_sessions_checkpoint) est PRÉSERVÉE au refresh — un tick qui
+  # rafraîchit position/action ne doit pas effacer la santé ; une ligne
+  # neuve démarre honnêtement à "" (jamais un mensonge, motif
+  # business_state :3670-3671).
+  prev <- .ts_drive_state$sessions[[tok]]
   row <- list(
     session_id = ts_drive_badge_chr(session_id),
     viewer     = v,
     module     = .ts_drive_strip_html(ts_drive_badge_chr(module)),
     action     = .ts_drive_strip_html(ts_drive_badge_chr(action)),
     armed      = isTRUE(armed),
-    hb_at      = hb
+    hb_at      = hb,
+    checkpoint = if (!is.null(prev$checkpoint)) prev$checkpoint else ""
   )
   is_new <- !tok %in% .ts_drive_state$sessions_order
   if (is_new) {
@@ -4056,9 +4070,50 @@ ts_drive_sessions_clear <- function() {
   invisible(TRUE)
 }
 
+# ASR-5 — borne de taille du champ santé `checkpoint` (résumé id/trigger/
+# horodatage ou raison moteur ; une ligne secondaire de panneau n'en porte
+# pas plus). Gelée par tests/testthat/test-asr5-drive.R (T1c).
+TS_DRIVE_CHECKPOINT_MAX_CHARS <- 200L
+
+#' Update the machine `checkpoint` field of ONE session's sessions[] row
+#' (ASR-5 — santé du dernier checkpoint, visible côté panneau agent).
+#'
+#' Contract: docs/contracts/SESSION_CHECKPOINT_RESTORE_CONTRACT.md §8 row
+#' ASR-5 (« santé checkpoint visible côté panneau agent », fiche :122) ;
+#' docs/contracts/DSTV1_SESSION_TRACKER_CONTRACT.md §10 (évolution — champ
+#' additif, discipline hash-gated inchangée : le digest couvre le champ,
+#' sinon un changement de santé n'émettrait jamais). Champ MACHINE : mêmes
+#' disciplines que module/action — `.ts_drive_strip_html` (leçon T4 : une
+#' entrée i18n-rendue ne traverse jamais brute) et borne de taille — mais
+#' PAS la rédaction du sanitize : la ligne garde la machine truth, un token
+#' fuité est rédigé à la VUE (ts_drive_activity_view, règle badge). Le
+#' setter N'ÉCRIT RIEN sur disque : la santé vit dans la ligne sessions[]
+#' existante et n'atteint tools/_drive QUE par le canal hash-gated au
+#' prochain tick (contrat ASR §5.5/§7.6 — jamais de fichier nouveau).
+#'
+#' @param token Session token (the table's key) — the row of THIS token only.
+#' @param summary Bounded health summary (ok : trigger/id/horodatage ; refus :
+#'   raisons moteur ; saut honnête : raison). NULL/NA -> "" (défaut honnête).
+#' @return Invisible TRUE when the row was updated, invisible(FALSE) on an
+#'   unknown/empty token — a row is NEVER fabricated (rule of
+#'   ts_drive_sessions_track).
+ts_drive_sessions_checkpoint <- function(token, summary) {
+  tok <- as.character(token %||% "")[1]
+  if (is.null(tok) || is.na(tok) || !nzchar(tok)) return(invisible(FALSE))
+  if (is.null(.ts_drive_state$sessions[[tok]])) return(invisible(FALSE))
+  s <- .ts_drive_strip_html(summary)
+  if (nchar(s) > TS_DRIVE_CHECKPOINT_MAX_CHARS) {
+    s <- paste0(substr(s, 1L, TS_DRIVE_CHECKPOINT_MAX_CHARS - 1L), "\u2026")
+  }
+  .ts_drive_state$sessions[[tok]]$checkpoint <- s
+  invisible(TRUE)
+}
+
 #' The wire-shaped table: rows in registration order (oldest first), each
-#' carrying EXACTLY the six fiche-frozen fields, `hb_age_s` projected from the
-#' stored absolute `hb_at` at call time (D1).
+#' carrying EXACTLY the fiche-frozen fields — the six DSTV-3 fields, `hb_age_s`
+#' projected from the stored absolute `hb_at` at call time (D1), plus the
+#' ASR-5 machine field `checkpoint` ("" before any publication, honest
+#' default).
 ts_drive_sessions <- function() {
   store <- .ts_drive_state$sessions %||% list()
   order <- .ts_drive_state$sessions_order %||% character(0)
@@ -4075,7 +4130,8 @@ ts_drive_sessions <- function() {
       module     = ts_drive_badge_chr(r$module),
       action     = ts_drive_badge_chr(r$action),
       hb_age_s   = round(max(0, now - hb), 1),
-      armed      = isTRUE(r$armed)
+      armed      = isTRUE(r$armed),
+      checkpoint = ts_drive_badge_chr(r$checkpoint)
     )
   }
   rows
@@ -4117,7 +4173,8 @@ ts_drive_pending_activity_events <- function() {
 #' redacts such runs, so a leaked id cannot ride the line either.
 #'
 #' @param event One queued activity event (list), or NULL.
-#' @return list(module, action, age_s, viewer, session_id, armed), or NULL.
+#' @return list(module, action, age_s, viewer, session_id, armed, checkpoint),
+#'   or NULL.
 ts_drive_activity_view <- function(event) {
   if (is.null(event) || !is.list(event)) return(NULL)
   el <- suppressWarnings(as.numeric(event$hb_age_s %||% NA_real_))
@@ -4130,7 +4187,13 @@ ts_drive_activity_view <- function(event) {
     viewer     = ts_drive_badge_chr(event$viewer),
     session_id = ts_drive_badge_sanitize(ts_drive_badge_chr(event$session_id),
                                          40L),
-    armed      = isTRUE(event$armed)
+    armed      = isTRUE(event$armed),
+    # ASR-5 (D4) : la santé checkpoint est projetée à la vue — whitelist
+    # étendue, règles de rédaction du sanitizer INTACTES (un token fuité
+    # dans un résumé ne monte pas à l'écran ; la machine truth reste sur la
+    # ligne sessions[] et dans l'événement).
+    checkpoint = ts_drive_badge_sanitize(ts_drive_badge_chr(event$checkpoint),
+                                         TS_DRIVE_CHECKPOINT_MAX_CHARS)
   )
 }
 
@@ -4236,13 +4299,16 @@ ts_drive_emit_passive_state <- function(session = NULL, input = NULL,
   # 3. Compute content hash (xxhash64) over semantic state — DÉSORMAIS les
   #    nouveaux champs (contrat §3.1 : sinon un changement de business_state
   #    n'émettrait jamais) ET la table sessions[] (DSTV-3 C1 : sinon un
-  #    session qui rejoint/part/change de module n'émettrait jamais). Les
-  #    lignes passées au digest portent leurs champs SÉMANTIQUES seulement —
-  #    hb_age_s est une projection horaire, exclue (zero churn, D2).
+  #    session qui rejoint/part/change de module n'émettrait jamais). ASR-5
+  #    (contrat DSTV §10 évolution) : le champ santé `checkpoint` entre dans
+  #    les champs sémantiques — sinon un changement de santé n'émettrait
+  #    JAMAIS (discipline hash-gated §3). Les lignes passées au digest
+  #    portent leurs champs SÉMANTIQUES seulement — hb_age_s est une
+  #    projection horaire, exclue (zero churn, D2).
   sess <- ts_drive_sessions()
   sess_digest <- lapply(sess, function(r) {
     r[intersect(names(r), c("session_id", "viewer", "module", "action",
-                            "armed"))]
+                            "armed", "checkpoint"))]
   })
   content_hash <- ts_drive_compute_state_hash(tok, act_mod, pipe_st, errs,
                                               act_mod, pipe_step, biz_state,
@@ -4294,7 +4360,11 @@ ts_drive_emit_passive_state <- function(session = NULL, input = NULL,
         hb_age_s   = round(max(0, as.numeric(Sys.time()) - row2$hb_at), 1),
         viewer     = row2$viewer,
         session_id = row2$session_id,
-        armed      = row2$armed
+        armed      = row2$armed,
+        # ASR-5 (D4) : l'événement porte la santé — c'est le SEUL flux qui
+        # atteint le panneau sans nouveau polling (abonné au changement de
+        # hash, fiche :85) ; la vue applique les règles de rédaction.
+        checkpoint = ts_drive_badge_chr(row2$checkpoint)
       ))
     }
   }

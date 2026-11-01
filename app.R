@@ -683,6 +683,13 @@ server <- function(input, output, session) {
   # counter (spec §2.1).
   global_data$drive_registry <- new.env(parent = emptyenv())
   .drive <- ts_drive_attach(session, input)
+  # ASR-5 (D7, en-tête test-asr5-drive.R) : le token drive est posé sur la
+  # surface userData de la session — un champ littéral session$token est
+  # IMPOSSIBLE sur shiny 1.14.0 (ShinySession R6 lock_objects=TRUE, mesuré).
+  # Le module session_ckpt le lit pour porter la santé checkpoint sur la
+  # ligne sessions[] de CETTE session (aucun fichier nouveau, contrat ASR
+  # §5.5/§7.6).
+  session$userData$drive_token <- .drive$token
 
   # ── DEV-ONLY STATUS BADGE ─────────────────────────────────────────────────
   # A LIGHTWEIGHT, DEDICATED reactive state — deliberately NOT derived from
@@ -845,11 +852,23 @@ server <- function(input, output, session) {
           viewer      = view$viewer,
           armed       = isTRUE(view$armed)))) return(NULL)
     age <- sprintf("%.0f", max(0, suppressWarnings(as.numeric(view$age_s)[1])))
+    # ASR-5 (contrat SESSION_CHECKPOINT_RESTORE_CONTRACT.md §8 row ASR-5) :
+    # la santé checkpoint de la ligne sessions[] est rendue en ligne
+    # secondaire — le champ est déjà rédigé/borné par la vue
+    # (ts_drive_activity_view) ; absent -> AUCUN élément (le piège
+    # sprintf("… : %s", ""), même règle que la ligne d'activité au-dessus).
+    ck_txt <- suppressWarnings(as.character(view$checkpoint)[1])
+    ck_bit <- if (is.null(ck_txt) || is.na(ck_txt) || !nzchar(ck_txt)) NULL else
+      shiny::div(
+        style = "font-size:0.68rem; margin-top:1px; line-height:1.25;",
+        sprintf(.tr("Checkpoint : %s"), ck_txt)
+      )
     shiny::div(
       id = "ts_drive_activity_line",
       style = "margin-top:4px; font-size:0.72rem; line-height:1.3;",
       sprintf(.tr("Agent : module %s \u2014 action %s \u2014 il y a %s s"),
-              view$module, view$action, age)
+              view$module, view$action, age),
+      ck_bit
     )
   })
 
