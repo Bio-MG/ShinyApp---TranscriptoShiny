@@ -88,6 +88,11 @@ source("tools/pkg_skeleton/R/error_state.R")  # <-- §14.1 : ts_error_state(), l
 # d'objet lit ts_error_state().
 source("tools/pkg_skeleton/R/drive_allowlist.R")  # donnees gelees (aucun appel Shiny)
 source("tools/pkg_skeleton/R/drive_watcher.R")    # poller fichier -> session (injecte)
+# ASR (O29, passe points de pose) : moteur des checkpoints de session — PURE R
+# self-contenue ; sans ce source() la voie ON du module session_ckpt est
+# inerte au runtime (symboles moteur absents — gap preexistant ASR-1..3,
+# signalé par la vérification indépendante de la passe câblage 2026-11-01).
+source("tools/pkg_skeleton/R/session_checkpoint.R")
 # Racine applicative capturee UNE fois, au chargement (app.R tourne depuis la
 # racine renv). JAMAIS getwd() au moment du tick : RStudio peut deriver.
 ts_drive_boot(getwd())

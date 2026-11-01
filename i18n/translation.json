@@ -11428,6 +11428,18 @@
     {
       "fr": "Réglages valables pour cette session uniquement.",
       "en": "Settings apply to this session only."
+    },
+    {
+      "fr": "Aucun objet lourd à enregistrer — checkpoint non posé.",
+      "en": "No heavy object to record — no checkpoint written."
+    },
+    {
+      "fr": "Échec de l'écriture du checkpoint : {err}",
+      "en": "Checkpoint write failed: {err}"
+    },
+    {
+      "fr": "Checkpoint posé à {ts}.",
+      "en": "Checkpoint written at {ts}."
     }
   ]
 }

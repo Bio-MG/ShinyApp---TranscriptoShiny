@@ -424,6 +424,7 @@ mod_spatial_pipeline_server <- function(id, global_data, shared_rv) {
         n_elements = tryCatch(nrow(global_data$spatial_obj$coords), error = function(e) NULL),
         n_clusters = tryCatch(length(unique(shared_rv$cluster_labels)), error = function(e) NULL),
         deconv_done = !is.null(shared_rv$deconv_props))
+      if (is.function(global_data$session_checkpoint_publish)) global_data$session_checkpoint_publish("pipeline_step_complete")  # ASR-WIRING : point de pose (contrat SESSION_CHECKPOINT_RESTORE_CONTRACT.md §3.1)
       pipeline_state("done")
       .close_drive_job("done")
       showNotification(.tr("\u2705 Pipeline automatique termine."), type = "message", duration = 6)

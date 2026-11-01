@@ -598,12 +598,24 @@ ts_session_checkpoint_write <- function(layers, dir = NULL, trigger = "manual",
 #' event-driven — the engine owns no polling, contract §6.2).
 #'
 #' @param layers,dir,trigger,dataset_ids,now See [ts_session_checkpoint_write()].
+#' @param retention_n Keep-N per dataset, forwarded to the daemon-side
+#'   [ts_session_checkpoint_write()]. Default: the engine constant
+#'   [TS_SESSION_CHECKPOINT_RETENTION_N] — byte-for-byte prior behaviour for
+#'   any caller that does not pass it (ASR-WIRING pass: the ASR-4 settings
+#'   reach the write through THIS seam; coordinator arbitration 2026-11-01,
+#'   recorded in tests/testthat/test-asr-wiring.R header — defaults are the
+#'   constants, so the pre-existing callers are unaffected and the engine
+#'   suite stays green).
+#' @param disk_cap_bytes Disk cap in bytes, forwarded likewise. Default: the
+#'   engine constant [TS_SESSION_CHECKPOINT_DISK_CAP_BYTES].
 #' @param pool_probe Injectable availability probe (headless tests pass
 #'   `function() FALSE`; the default probes the real mirai pool).
 #' @return With no pool: list(ok = FALSE, refused = TRUE, reasons). With a
 #'   pool: list(ok = TRUE, deferred = <mirai task>, mode = "mirai").
 ts_session_checkpoint_write_async <- function(layers, dir = NULL, trigger = "manual",
                                               dataset_ids = character(0),
+                                              retention_n = TS_SESSION_CHECKPOINT_RETENTION_N,
+                                              disk_cap_bytes = TS_SESSION_CHECKPOINT_DISK_CAP_BYTES,
                                               now = Sys.time(),
                                               pool_probe = ts_session_checkpoint_daemons_active) {
   probe_ok <- tryCatch(isTRUE(pool_probe()), error = function(e) FALSE)
@@ -621,11 +633,14 @@ ts_session_checkpoint_write_async <- function(layers, dir = NULL, trigger = "man
     {
       source(engine_path, local = TRUE)
       ts_session_checkpoint_write(layers = layers, dir = dir, trigger = trigger,
-                                  dataset_ids = dataset_ids, now = now)
+                                  dataset_ids = dataset_ids,
+                                  retention_n = retention_n,
+                                  disk_cap_bytes = disk_cap_bytes, now = now)
     },
     engine_path = engine_path,
     layers = layers, dir = dir, trigger = trigger,
-    dataset_ids = dataset_ids, now = now
+    dataset_ids = dataset_ids,
+    retention_n = retention_n, disk_cap_bytes = disk_cap_bytes, now = now
   )
   list(ok = TRUE, refused = FALSE, deferred = task, mode = "mirai")
 }

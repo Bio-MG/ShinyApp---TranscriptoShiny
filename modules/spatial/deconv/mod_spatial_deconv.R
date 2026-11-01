@@ -197,6 +197,7 @@ mod_spatial_deconv_server <- function(id, global_data, shared_rv) {
     observeEvent(deconv_task$status(), {
       if (deconv_task$status() == "success") {
         shared_rv$deconv_props <- deconv_task$result()
+        if (is.function(global_data$session_checkpoint_publish)) global_data$session_checkpoint_publish("deconv_complete", layer2_extras = list(deconv_props = shared_rv$deconv_props))  # ASR-WIRING : point de pose (contrat SESSION_CHECKPOINT_RESTORE_CONTRACT.md §3.1)
         showNotification(.tr("Deconvolution terminee."), type = "message", duration = 5)
       } else if (deconv_task$status() == "error") {
         ceiling_txt <- switch(last_deconv_mode() %||% "?",

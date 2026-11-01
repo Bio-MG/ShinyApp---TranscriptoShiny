@@ -405,6 +405,7 @@ mod_import_sc_server <- function(id, global_data) {
         prepared <- prepare_seurat_object(obj, "SingleSample")
         global_data$sc_obj <- prepared
         global_data$sc_obj_epoch <- (global_data$sc_obj_epoch %||% 0L) + 1L  # purge résultats partagés (jeu remplacé)
+        if (is.function(global_data$session_checkpoint_publish)) global_data$session_checkpoint_publish("import_complete", obj_name)  # ASR-WIRING : point de pose (contrat SESSION_CHECKPOINT_RESTORE_CONTRACT.md §3.1)
         .register_sc_multi_dataset(prepared)
         add_log(paste(.tr("✅ Import réussi:"), ncol(prepared), .tr("cellules"), "—", obj_name))
         showNotification(paste(.tr("✅ Import réussi:"), ncol(prepared), .tr("cellules")),

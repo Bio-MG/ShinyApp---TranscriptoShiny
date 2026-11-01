@@ -709,6 +709,7 @@ mod_import_spatial_server <- function(id, global_data) {
             global_data$spatial_results_cache <- cache
           }
           global_data$spatial_datasets[[sample_name]] <- spatial_pkg
+          if (is.function(global_data$session_checkpoint_publish)) global_data$session_checkpoint_publish("import_complete", sample_name)  # ASR-WIRING : point de pose (contrat SESSION_CHECKPOINT_RESTORE_CONTRACT.md §3.1)
           # v10 (fix cache multi-echantillons) : NE PLUS ecrire
           # global_data$spatial_obj directement ici -- seul
           # active_spatial_dataset est mis a jour ; c'est l'observer

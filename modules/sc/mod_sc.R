@@ -1769,6 +1769,7 @@ mod_sc_server <- function(id, global_data) {
               has_data = !is.null(.obj_pub), object_class = class(.obj_pub)[1],
               n_elements = .sc_feed_ncol(.obj_pub), n_clusters = .sc_feed_nclusters(.obj_pub),
               deconv_done = FALSE)
+            if (is.function(global_data$session_checkpoint_publish)) global_data$session_checkpoint_publish("pipeline_step_complete")  # ASR-WIRING : point de pose (contrat SESSION_CHECKPOINT_RESTORE_CONTRACT.md §3.1)
             showNotification(.tr("✓ Pipeline Single-Cell terminé avec succès."), type = "message", duration = 8)
             if (!is.null(ctx$job_id)) {
               produced <- .sc_ap_produced(shared_rv)

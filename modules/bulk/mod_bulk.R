@@ -740,6 +740,7 @@ mod_bulk_server <- function(id, global_data) {
           has_data = !is.null(global_data$bulk_obj), object_class = class(global_data$bulk_obj)[1],
           n_elements = tryCatch(ncol(counts), error = function(e) NULL),
           n_clusters = NULL, deconv_done = FALSE)
+        if (is.function(global_data$session_checkpoint_publish)) global_data$session_checkpoint_publish("pipeline_step_complete")  # ASR-WIRING : point de pose (contrat SESSION_CHECKPOINT_RESTORE_CONTRACT.md §3.1)
 
       }, error=function(e) {
         log(paste("\u274c", .tr("Erreur:"), e$message))

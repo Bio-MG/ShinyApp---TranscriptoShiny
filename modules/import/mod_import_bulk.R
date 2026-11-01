@@ -412,6 +412,7 @@ mod_import_bulk_server <- function(id, global_data) {
         return(invisible(NULL))
       }
       global_data$bulk_datasets <- res
+      if (is.function(global_data$session_checkpoint_publish)) global_data$session_checkpoint_publish("import_complete", lbl)  # ASR-WIRING : point de pose (contrat SESSION_CHECKPOINT_RESTORE_CONTRACT.md §3.1)
       add_log(paste(" 📦 Dataset enregistré pour la comparaison multi-jeux :", lbl))
       showNotification(
         sprintf(.tr("📦 Import enregistré pour la comparaison multi-jeux : « %s »."), lbl),

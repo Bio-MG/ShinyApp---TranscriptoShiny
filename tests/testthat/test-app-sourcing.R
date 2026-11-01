@@ -164,11 +164,17 @@ test_that("M2 semantics: 159 explicit sources, zero hidden sourcing loop", {
   # modules/session/mod_session_checkpoint.R, bloc 13 — surface UI des
   # checkpoints de session ; contrat SESSION_CHECKPOINT_RESTORE_CONTRACT.md
   # §8 row ASR-3, montage sidebar/header/server dans app.R).
+  # ASR câblage O29 (2026-11-01) : re-basage 160 -> 161 (+1 moteur
+  # tools/pkg_skeleton/R/session_checkpoint.R, bloc drive/résilience après
+  # drive_watcher.R — la voie ON du module était inerte au runtime sans ce
+  # source() ; gap préexistant ASR-1..3, signalé par la vérification
+  # indépendante de la passe points de pose ; arbitrage T7 coordonnateur).
   expect_identical(
-    length(.app_explicit(.app_src)), 160L,
-    info = paste("app.R doit porter exactement 160 source() explicites",
+    length(.app_explicit(.app_src)), 161L,
+    info = paste("app.R doit porter exactement 161 source() explicites",
                  "(M2 : 145 + 10 bulk_de deplies, + 3 export drive M3,",
-                 "+ 1 moteur sc_qc_doublets M4, + 1 module session ASR-3 O29)",
+                 "+ 1 moteur sc_qc_doublets M4, + 1 module session ASR-3 O29,",
+                 "+ 1 moteur session_checkpoint ASR câblage O29)",
                  "-- le compte observe differe")
   )
   # et plus AUCUNE boucle list.files() de sourcing : M2 a deplie la derniere,

@@ -46,6 +46,36 @@
 # événementiel gelé §3.1 ; la rétention s'appliquera au prochain publish,
 # session_checkpoint.R:577-583). Conversion Gio -> octets EXACTE (x1024^3).
 #
+# WRITE-SIDE (passe ASR-WIRING, 2026-11-01) — le helper de publication des
+# points de pose : à l'ACTIVATION du toggle, ce module enregistre
+#   global_data$session_checkpoint_publish <- function(trigger,
+#     dataset_ids = character(0), layer2_extras = list())
+# et le PURGE à l'extinction (NULL — OFF = byte pour byte, contrat §4). Les
+# 7 sites import/pipeline appellent ce helper DERRIÈRE la garde uniforme
+#   if (is.function(global_data$session_checkpoint_publish))
+#     global_data$session_checkpoint_publish("<trigger>", <ids>)
+# (import* -> "import_complete", pipelines -> "pipeline_step_complete",
+# déconvolution -> "deconv_complete" + layer2_extras). Architecture gelée
+# (en-tête test-asr-wiring.R) : couche 1 = objets PRÉSENTS SEULEMENT, noms
+# verbatim de TS_SESSION_CHECKPOINT_LAYER1_TARGETS, tout absent -> saut
+# honnête (raison à la ligne d'état), jamais de liste vide fabriquée ;
+# couche 2 = relais VERBATIM de global_data$business_state / $manual_pipeline
+# (MÊME source que le producteur DSTV-1, JAMAIS de re-dérivation depuis les
+# objets), pipeline_steps_completed = nommé vide DOCUMENTÉ (aucun flag par
+# étape n'existe aujourd'hui) ; couche 3 = actifs défensifs (bpcells_dir par
+# échantillon, kind dir, fallback = raw_dir source d'import d'origine §5.3 ;
+# raw_bpcells_dir ; manifeste de référence partagé), existed_at_checkpoint
+# stampé moteur ; réglages = retention_n/disk_cap_bytes lus sur
+# global_data$session_checkpoint_settings (absentes -> défauts moteur portés
+# par les formels du seam, arbitrage T7 option a en tête du test) ; dispatch
+# = ts_session_checkpoint_write_async SEUL (refus honnête sans pool §7.1,
+# JAMAIS d'écriture synchrone sur le thread principal), collecte du différé
+# par promises::then (jamais de collection bloquante), résultat ok/refus ->
+# ligne d'état réactive (dernier résultat : horodatage/trigger/id ou raison).
+# Boot pool (A8) : à l'activation, init_spatial_daemons() — idempotent
+# (.spatial_async_env$daemons_ready, spatial_async.R:236), UN SEUL pool
+# (règle §4 ROADMAP) ; échec = honnête, PAS fatal.
+#
 # i18n : clés = chaînes françaises (shiny.i18n), paires fr/en appendues par le
 # mécanisme SCOPÉ (leçon B1/B5/DSTV-3 — le tool complet emporterait ~164
 # entrées en attente d'autres lots). Statiques -> i18n$t() au build ; dynamiques
@@ -97,6 +127,11 @@ mod_session_checkpoint_server <- function(id, global_data, store_dir = NULL) {
     offer <- shiny::reactiveVal(NULL)
     # Ligne d'état : le dernier checkpoint complet du magasin (timestamp/scope).
     last_ckpt <- shiny::reactiveVal(NULL)
+    # WRITE-SIDE : dernier résultat du publisher (ok : id/trigger/horodatage ;
+    # refus §7.1 : raisons du moteur ; saut honnête : raison) — rendu par la
+    # ligne d'état. Les raisons SONT des clés i18n pour le saut, du texte
+    # moteur verbatim pour un refus ; traduites au rendu (re-render langue).
+    last_write <- shiny::reactiveVal(NULL)
 
     # Traduction dynamique (motif .tr app.R) — repli = la clé française.
     .tr_ui <- function(k) {
@@ -127,6 +162,114 @@ mod_session_checkpoint_server <- function(id, global_data, store_dir = NULL) {
                      error = function(e) as.POSIXct(NA))
       if (is.na(pt)) return(s)  # chaîne inattendue : rendue telle quelle
       paste0(format(pt, "%Y-%m-%d %H:%M", tz = "UTC"), " UTC")
+    }
+
+    # ── WRITE-SIDE : le helper de publication des points de pose (A1) ────────
+    # Enregistré dans global_data À L'ACTIVATION du toggle, purgé à
+    # l'extinction. Un appel = UN checkpoint ÉVÉNEMENTIEL (jamais de timer,
+    # §3.1/§7.2) : couches 1+2+3 assemblées puis dispatchées au SEAM mirai
+    # (A7) — le refus honnête sans pool (§7.1) est la seule alternative à une
+    # écriture daemon, jamais d'écriture synchrone sur le thread principal.
+    # La collection du différé est promises::then (JAMAIS de [] bloquant) et
+    # le résultat (ok/refus) est porté à la ligne d'état réactive.
+    .sc_ckpt_publish <- function(trigger, dataset_ids = character(0),
+                                 layer2_extras = list()) {
+      # Couche 1 (A3) : objets PRÉSENTS SEULEMENT, noms VERBATIM du vocabulaire
+      # gelé TS_SESSION_CHECKPOINT_LAYER1_TARGETS. Tout absent -> saut honnête
+      # (raison à la ligne d'état), JAMAIS de liste vide fabriquée (le moteur
+      # refuse une layer1 vide).
+      l1 <- list()
+      for (nm in TS_SESSION_CHECKPOINT_LAYER1_TARGETS) {
+        v <- tryCatch(global_data[[nm]], error = function(e) NULL)
+        if (identical(nm, "spatial_datasets")) {
+          if (is.list(v) && length(v) > 0L) l1[[nm]] <- v
+        } else if (!is.null(v)) {
+          l1[[nm]] <- v
+        }
+      }
+      if (length(l1) == 0L) {
+        last_write(list(ok = FALSE, skipped = TRUE,
+                        reason = "Aucun objet lourd \u00e0 enregistrer \u2014 checkpoint non pos\u00e9."))
+        return(invisible(FALSE))
+      }
+      # Couche 2 (A4) : relais VERBATIM de ce que le producteur DSTV-1 publie
+      # (global_data$business_state / $manual_pipeline — JAMAIS de
+      # re-dérivation depuis les objets). pipeline_steps_completed : nommé
+      # vide DOCUMENTÉ — aucun flag par étape n'existe aujourd'hui. Extras =
+      # layer2_extras ou défauts honnêtes du moteur (NULL normalisé).
+      l2 <- ts_session_checkpoint_layer2(
+        pipeline_steps_completed = character(0),
+        manual_pipeline = global_data$manual_pipeline,
+        business_state = global_data$business_state,
+        deconv_props   = layer2_extras$deconv_props,
+        derived_tables = layer2_extras$derived_tables,
+        banners        = layer2_extras$banners
+      )
+      # Couche 3 (A5) : actifs défensifs — par échantillon spatial
+      # bpcells_dir (kind "dir", fallback_source = raw_dir, la source
+      # d'import d'origine, contrat §5.3) et raw_bpcells_dir ; manifeste de
+      # référence partagé. existed_at_checkpoint est stampé MOTEUR.
+      .pkg_path <- function(pkg, fld) {
+        v <- tryCatch(pkg[[fld]], error = function(e) NULL)
+        if (is.character(v) && length(v) == 1L && nzchar(v)) v else NULL
+      }
+      l3_assets <- list()
+      sd <- tryCatch(global_data$spatial_datasets, error = function(e) NULL)
+      if (is.list(sd)) {
+        for (smp in names(sd)) {
+          pkg <- sd[[smp]]
+          if (!is.list(pkg)) next
+          bpc  <- .pkg_path(pkg, "bpcells_dir")
+          rawb <- .pkg_path(pkg, "raw_bpcells_dir")
+          rawd <- .pkg_path(pkg, "raw_dir")
+          if (!is.null(bpc)) {
+            l3_assets[[paste0(smp, ":bpcells_dir")]] <- list(
+              path = bpc, kind = "dir", fallback_source = rawd)
+          }
+          if (!is.null(rawb)) {
+            l3_assets[[paste0(smp, ":raw_bpcells_dir")]] <- list(path = rawb, kind = "dir")
+          }
+        }
+      }
+      ref <- tryCatch(global_data$spatial_reference$path, error = function(e) NULL)
+      if (is.character(ref) && length(ref) == 1L && nzchar(ref)) {
+        l3_assets[["reference_manifest"]] <- list(path = ref, kind = "file")
+      }
+      l3 <- ts_session_checkpoint_layer3(l3_assets)
+      # Réglages (A6) : lus sur la publication ASR-4 ; absentes -> omis (les
+      # formels du seam portent les défauts = constantes moteur, arbitrage T7
+      # option a — en-tête test-asr-wiring.R).
+      st <- tryCatch(global_data$session_checkpoint_settings, error = function(e) NULL)
+      w_args <- list(layers = list(layer1 = l1, layer2 = l2, layer3 = l3),
+                     dir = store_dir, trigger = trigger,
+                     dataset_ids = as.character(dataset_ids))
+      if (is.list(st) && !is.null(st$retention_n)) w_args$retention_n <- st$retention_n
+      if (is.list(st) && !is.null(st$disk_cap_bytes)) w_args$disk_cap_bytes <- st$disk_cap_bytes
+      # Dispatch (A7) : le SEAM unique — refus structuré sans pool (§7.1),
+      # différé mirai sinon. Aucun [] bloquant sur ce thread.
+      res <- tryCatch(do.call(ts_session_checkpoint_write_async, w_args),
+                      error = function(e) list(ok = FALSE, refused = TRUE,
+                                               reasons = conditionMessage(e)))
+      if (!isTRUE(res$ok)) {
+        last_write(list(ok = FALSE, refused = TRUE, trigger = trigger,
+                        reasons = as.character(res$reasons %sc_ckpt_or% "raison inconnue")))
+        return(invisible(FALSE))
+      }
+      promises::then(
+        res$deferred,
+        onFulfilled = function(val) {
+          last_write(list(ok = TRUE, trigger = trigger,
+                          id = tryCatch(val$id, error = function(e) NULL),
+                          timestamp = tryCatch(val$manifest$timestamp,
+                                               error = function(e) NULL)))
+          invisible(NULL)
+        },
+        onRejected = function(err) {
+          last_write(list(ok = FALSE, refused = TRUE, trigger = trigger,
+                          reasons = conditionMessage(err)))
+          invisible(NULL)
+        })
+      invisible(TRUE)
     }
 
     # ── ASR-4 : publication des réglages — AUCUN appel moteur, AUCUNE I/O ────
@@ -162,6 +305,8 @@ mod_session_checkpoint_server <- function(id, global_data, store_dir = NULL) {
     shiny::observeEvent(input$enabled, {
       if (!isTRUE(input$enabled)) {
         global_data$session_checkpoint_settings <- NULL  # ASR-4 : OFF = empreinte nulle (contrat §4)
+        global_data$session_checkpoint_publish <- NULL   # WRITE-SIDE (A1) : OFF -> publisher purgé,
+        last_write(NULL)                                 #   aucun site ne peut plus déclencher (§4/§7.5)
         offer(NULL)
         last_ckpt(NULL)
         return(invisible(NULL))
@@ -169,6 +314,16 @@ mod_session_checkpoint_server <- function(id, global_data, store_dir = NULL) {
       # ASR-4 : défauts moteur publiés à l'activation (inputs encore absents
       # -> NULL -> défauts). Aucun appel moteur ici (décision ASR-4 n°6).
       .publish_settings(input$retention_n, input$disk_cap_gib)
+      # WRITE-SIDE (A8) : boot du pool mirai partagé — init_spatial_daemons()
+      # est IDEMPOTENTE (garde .spatial_async_env$daemons_ready,
+      # spatial_async.R:236) : UN SEUL pool quel que soit le nombre
+      # d'activations (règle §4 ROADMAP). Un échec est HONNÊTE, PAS fatal :
+      # l'activation continue et les écritures refuseront honnêtement (§7.1).
+      tryCatch(init_spatial_daemons(), error = function(e) invisible(FALSE))
+      # WRITE-SIDE (A1) : le helper de publication n'existe que toggle ON —
+      # sa purge à l'extinction (branche OFF ci-dessus) rend la garde
+      # uniforme des 7 sites no-op (contrat §4 byte pour byte).
+      global_data$session_checkpoint_publish <- .sc_ckpt_publish
       lst <- tryCatch(ts_session_checkpoint_list(dir = store_dir),
                       error = function(e) NULL)
       if (is.null(lst) || !is.data.frame(lst) || nrow(lst) == 0L) {
@@ -217,20 +372,44 @@ mod_session_checkpoint_server <- function(id, global_data, store_dir = NULL) {
     })
 
     # ── Ligne d'état (pendant que le toggle est ON) ───────────────────────────
+    # WRITE-SIDE : enrichie du DERNIER résultat du publisher (saut honnête ->
+    # raison ; refus §7.1 -> raisons du moteur verbatim ; ok -> horodatage,
+    # trigger, id). Traduite au rendu (.tr_ui) — re-render sur la langue.
+    .sc_ckpt_write_line <- function(lw) {
+      if (isTRUE(lw$skipped)) {
+        shiny::div(class = "small text-muted", style = "font-size:0.72rem;",
+                   .tr_ui(lw$reason))
+      } else if (isTRUE(lw$ok)) {
+        shiny::div(class = "small text-muted", style = "font-size:0.72rem;",
+                   .fmt(.tr_ui("Checkpoint pos\u00e9 \u00e0 {ts}."),
+                        ts = .disp_ts(lw$timestamp)),
+                   sprintf(" [%s \u00b7 %s]", lw$trigger %sc_ckpt_or% "?",
+                           lw$id %sc_ckpt_or% "?"))
+      } else {
+        shiny::div(class = "small text-muted", style = "font-size:0.72rem;",
+                   .fmt(.tr_ui("\u00c9chec de l'\u00e9criture du checkpoint : {err}"),
+                        err = paste(lw$reasons %sc_ckpt_or% "raison inconnue",
+                                    collapse = " | ")))
+      }
+    }
     output$status_line <- shiny::renderUI({
       global_data$language          # re-render au changement de langue
       if (!isTRUE(input$enabled)) return(NULL)
       lc <- last_ckpt()
-      if (is.null(lc)) {
+      lw <- last_write()
+      if (is.null(lc) && is.null(lw)) {
         return(shiny::div(class = "small text-muted", style = "font-size:0.72rem;",
                           .tr_ui("Aucun checkpoint disponible.")))
       }
-      scope <- if (length(lc$dataset_ids)) paste(lc$dataset_ids, collapse = ", ")
-               else .tr_ui("(aucun dataset)")
-      shiny::div(id = "asr3_status_line", class = "small text-muted",
-                 style = "font-size:0.72rem; line-height:1.3;",
-                 .fmt(.tr_ui("Dernier checkpoint : {ts} \u2014 port\u00e9e : {scope}"),
-                      ts = .disp_ts(lc$timestamp), scope = scope))
+      ck_bit <- if (is.null(lc)) NULL else {
+        scope <- if (length(lc$dataset_ids)) paste(lc$dataset_ids, collapse = ", ")
+                 else .tr_ui("(aucun dataset)")
+        shiny::div(id = "asr3_status_line", class = "small text-muted",
+                   style = "font-size:0.72rem; line-height:1.3;",
+                   .fmt(.tr_ui("Dernier checkpoint : {ts} \u2014 port\u00e9e : {scope}"),
+                        ts = .disp_ts(lc$timestamp), scope = scope))
+      }
+      shiny::tagList(ck_bit, if (!is.null(lw)) .sc_ckpt_write_line(lw) else NULL)
     })
 
     # ── Bannière de reprise — rend le payload ASR-2, n'applique RIEN ──────────
