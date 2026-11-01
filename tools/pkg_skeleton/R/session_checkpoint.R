@@ -889,3 +889,358 @@ ts_session_checkpoint_retention <- function(dir = NULL, n = TS_SESSION_CHECKPOIN
                                             cap = TS_SESSION_CHECKPOINT_DISK_CAP_BYTES) {
   .sc_apply_retention(ts_session_checkpoint_dir(dir), n, cap)
 }
+
+# =============================================================================
+# Restoration primitives (ASR-2 — contract §5 restauration :87-103, §6
+# honnêteté, §7 comportements REFUSÉS; jalon §8 row ASR-2). PURE R: no shiny,
+# no reactive, no session — the bannière UI that RENDERS the plan payload is
+# ASR-3. The engine never touches a real `global_data` (C17): the caller
+# passes the target container (environment or named list) to apply().
+#
+# ASR-2 open-point decisions (contract §10.4/§10.5 — tranchés
+# conservativement, each documented in the ASR-2 test header
+# test-session-checkpoint-restore.R and summarised here):
+#   * layer-1 rebind naming (fiche couche-1 table :51) — the couche-1 names
+#     ARE the global_data field names, VERBATIM (identity map): sc_obj,
+#     bulk_obj, spatial_obj, spatial_datasets (fiche :51; app.R:572-590). A
+#     layer-1 object outside this frozen vocabulary under an unchanged
+#     schema_version is a foreign/mislabelled producer: the whole restore is
+#     REFUSED (no half-restore, no silent drop) — the ASR-1 layout policy
+#     bumps schema_version exactly when the payload layout changes;
+#   * restore x epochs (F08, contract §5.6 open point) — default BUMP: a
+#     restore rebinds sc_obj/bulk_obj, exactly the destructive dataset
+#     replacement F08 guards (precedent app.R:1289-1291 load_session_file,
+#     app.R:1599 confirm_reset; .ts_bump_all_epochs() state.R:129-137 —
+#     NULL/NA/non-numeric -> 0L then +1L, CROSS-DOMAIN, both epochs together).
+#     Bumping wrongly purges already-stale shared results; preserving wrongly
+#     lets the pre-restore game's results survive into the restored session
+#     (the consolidated report then mixes two games) — the worse failure.
+#     Opt-out: epoch_action = "preserve". The bump is EXECUTED at apply time
+#     from the container's CURRENT values (the plan cannot know them);
+#   * layer-3 asset resolution order (contract §5.3, per asset, first match
+#     wins) — (a) path exists NOW -> "as-is"; (b) path missing AND
+#     fallback_source exists NOW -> "fallback": the plan carries
+#     rematerialize_from and the RE-MATERIALISATION ITSELF (import
+#     conversion, seam mod_import_sc.R:924) stays with the module wiring —
+#     the pure engine plans it, it never runs the import engine; (c) else the
+#     asset is LOST: it enters the losses vector (verbatim from validate(),
+#     the §5.3 honest-refusal list) and apply() skips it. The §5.4 re-staging
+#     of spatial_reference from a present reference manifest (precedent
+#     mod_spatial_deconv_refviz.R:34-45) follows the same per-asset
+#     resolution; the staging itself is module wiring. Resolved assets are
+#     re-bound as a table under the container field `session_checkpoint_assets`.
+#   * layer-2 field map — the six frozen top-level names rebind to container
+#     fields of the SAME name (business_state / manual_pipeline exist verbatim
+#     as global_data fields, drive_watcher.R:3869-3896; the other four are the
+#     module wiring's names, post F08/F02). A NULL payload (nothing retained
+#     at checkpoint) is planned "skipped" — honestly reported, never
+#     fabricated as a restored value, never counted as a loss.
+#
+# Honest refusal (contract §6): ANY validate() refusal — missing/corrupt
+# manifest, schema or environment mismatch — or a corrupt layer payload at
+# plan time returns refused = TRUE with the reasons, plans NOTHING, and
+# leaves the checkpoint conserved byte-for-byte (the restore primitives
+# contain no deletion path whatsoever); apply() on a refused plan is a NO-OP.
+# =============================================================================
+
+TS_SESSION_CHECKPOINT_LAYER1_TARGETS <- c("sc_obj", "bulk_obj", "spatial_obj",
+                                          "spatial_datasets")
+TS_SESSION_CHECKPOINT_LAYER2_TARGETS <- c("pipeline_steps_completed", "manual_pipeline",
+                                          "business_state", "deconv_props",
+                                          "derived_tables", "banners")
+TS_SESSION_CHECKPOINT_ASSETS_TARGET <- "session_checkpoint_assets"
+TS_SESSION_CHECKPOINT_EPOCH_TARGETS <- c("sc_obj_epoch", "bulk_obj_epoch")
+
+.sc_restore_refusal <- function(reasons, id = NULL, dir = NULL) {
+  list(ok = FALSE, refused = TRUE, reasons = as.character(reasons),
+       losses = character(0), items = NULL, assets = NULL,
+       assets_target = TS_SESSION_CHECKPOINT_ASSETS_TARGET, epoch = NULL,
+       banner = NULL, id = id, dir = dir)
+}
+
+#' Build the restoration PLAN from a validated checkpoint (ASR-2 — a PLAN,
+#' never a mutation).
+#'
+#' Reads the checkpoint (contract §5.2: readRDS -> rebinding plan) through the
+#' ASR-1 validate() gate FIRST: on any refusal — manifest missing/corrupt,
+#' schema_version mismatch, environment mismatch — the plan is REFUSED with
+#' the validate() reasons, nothing is planned and the checkpoint is conserved
+#' (contract §6: never a partial silent restore, never a deletion). On a
+#' valid checkpoint the plan carries, per restore ITEM:
+#'   * layer-1 objects -> named payload targets (identity map over the frozen
+#'     couche-1 vocabulary, see the header);
+#'   * layer-2 business state -> the same-name field map (NULL payload ->
+#'     status "skipped", honestly reported);
+#'   * layer-3 assets -> resolutions ("as-is" / "fallback" with
+#'     rematerialize_from / "lost"), the lost ones carrying the losses vector
+#'     VERBATIM from validate();
+#'   * the epoch decision ("bump" default / "preserve", header decision) and
+#'     the bannière payload (timestamp, dataset scope, counts) ASR-3 renders.
+#'
+#' A corrupt layer payload discovered at plan time (valid manifest, unreadable
+#' RDS) refuses the WHOLE restore — a half-plan would invite a half-restore.
+#'
+#' @param id Checkpoint id (strictly `checkpoint_*`).
+#' @param dir Store directory (default: [ts_session_checkpoint_dir()]).
+#' @param expect_schema_version,expect_env Passed to
+#'   [ts_session_checkpoint_validate()].
+#' @param epoch_action "bump" (default, F08 decision) or "preserve".
+#' @return list(ok = TRUE, refused = FALSE, id, dir, schema_version, manifest,
+#'   items, assets, assets_target, losses, epoch, banner) or
+#'   list(ok = FALSE, refused = TRUE, reasons, ...). Never throws, never
+#'   deletes.
+ts_session_checkpoint_restore_plan <- function(id, dir = NULL,
+                                               expect_schema_version = TS_SESSION_CHECKPOINT_SCHEMA_VERSION,
+                                               expect_env = ts_session_checkpoint_env_fingerprint(),
+                                               epoch_action = c("bump", "preserve")) {
+  epoch_action <- match.arg(epoch_action)
+  store <- ts_session_checkpoint_dir(dir)
+  idc <- .sc_scalar_text(id)
+  v <- ts_session_checkpoint_validate(idc, dir = store,
+                                      expect_schema_version = expect_schema_version,
+                                      expect_env = expect_env)
+  if (!isTRUE(v$valid)) {
+    r <- .sc_restore_refusal(
+      .sc_default(v$reasons, "checkpoint validation refused the restoration"),
+      id = idc, dir = store)
+    r$losses <- as.character(.sc_default(v$losses, character(0)))
+    return(r)
+  }
+  man <- v$manifest
+  ck_dir <- file.path(store, idc)
+
+  # --- layer 1: one verified payload per couche-1 named target --------------
+  l1_files <- sort(list.files(ck_dir, pattern = "^layer1_.+\\.rds$", full.names = FALSE))
+  l1_names <- sub("^layer1_(.+)\\.rds$", "\\1", l1_files)
+  foreign <- setdiff(l1_names, TS_SESSION_CHECKPOINT_LAYER1_TARGETS)
+  if (length(foreign)) {
+    return(.sc_restore_refusal(sprintf(
+      paste0("layer-1 object(s) %s are outside the frozen couche-1 rebind ",
+             "vocabulary (%s) under schema_version %s — refusing the whole ",
+             "restore (no half-restore, no silent drop); checkpoint conserved"),
+      paste(foreign, collapse = ", "),
+      paste(TS_SESSION_CHECKPOINT_LAYER1_TARGETS, collapse = ", "),
+      .sc_default(man$schema_version, "NULL")), id = idc, dir = store))
+  }
+  items <- list()
+  for (i in seq_along(l1_files)) {
+    err <- tryCatch({
+      payload <- readRDS(file.path(ck_dir, l1_files[i]))
+      NULL
+    }, error = function(e) conditionMessage(e))
+    if (!is.null(err)) {
+      return(.sc_restore_refusal(sprintf(
+        paste0("layer-1 object '%s' cannot be read (corrupted payload: %s) — ",
+               "the whole restore is refused, nothing partial; checkpoint conserved"),
+        l1_names[i], err), id = idc, dir = store))
+    }
+    items[[l1_names[i]]] <- list(kind = "layer1", target = l1_names[i],
+                                 status = "restored", payload = payload,
+                                 reason = NULL)
+  }
+
+  # --- layer 2: the frozen field map, NULL -> skipped honestly --------------
+  l2_err <- tryCatch({
+    l2 <- readRDS(file.path(ck_dir, "layer2_business_state.rds"))
+    NULL
+  }, error = function(e) conditionMessage(e))
+  if (!is.null(l2_err)) {
+    return(.sc_restore_refusal(sprintf(
+      paste0("layer-2 business state cannot be read (corrupted payload: %s) — ",
+             "the whole restore is refused, nothing partial; checkpoint conserved"),
+      l2_err), id = idc, dir = store))
+  }
+  if (!is.list(l2)) {
+    return(.sc_restore_refusal(
+      "layer-2 payload is not the frozen business-state shape — refusing the whole restore; checkpoint conserved",
+      id = idc, dir = store))
+  }
+  for (f in TS_SESSION_CHECKPOINT_LAYER2_TARGETS) {
+    pay <- l2[[f]]
+    items[[paste0("layer2:", f)]] <- if (is.null(pay)) {
+      list(kind = "layer2", target = f, status = "skipped", payload = NULL,
+           reason = sprintf("nothing was retained at checkpoint for '%s' — skipped honestly, never fabricated", f))
+    } else {
+      list(kind = "layer2", target = f, status = "restored", payload = pay,
+           reason = NULL)
+    }
+  }
+
+  # --- layer 3: per-asset resolution in the contract §5.3 order -------------
+  l3_err <- tryCatch({
+    l3 <- readRDS(file.path(ck_dir, "layer3_assets.rds"))
+    NULL
+  }, error = function(e) conditionMessage(e))
+  if (!is.null(l3_err) || !is.list(l3) || !is.list(l3$assets)) {
+    return(.sc_restore_refusal(sprintf(
+      paste0("layer-3 asset table cannot be read (%s) — the whole restore is ",
+             "refused, nothing partial; checkpoint conserved"),
+      .sc_default(l3_err, "not the frozen asset-table shape")), id = idc, dir = store))
+  }
+  losses <- as.character(.sc_default(v$losses, character(0)))
+  assets_table <- list()
+  n_restored_assets <- 0L
+  for (nm in names(l3$assets)) {
+    a <- .sc_default(v$assets[[nm]], list())
+    p <- .sc_scalar_text(a$path)
+    st <- .sc_scalar_text(a$status)
+    fb <- .sc_scalar_text(a$fallback_source)
+    resolution <- if (identical(st, "present")) "as-is"
+                  else if (isTRUE(a$recoverable)) "fallback" else "lost"
+    reason <- NULL
+    if (identical(resolution, "lost")) {
+      hit <- losses[grepl(sprintf("asset '%s' ", nm), losses, fixed = TRUE)]
+      reason <- .sc_default(hit, sprintf(
+        "asset '%s' (%s) is unrecoverable from this checkpoint", nm, .sc_default(p, "?")))
+    }
+    items[[paste0("asset:", nm)]] <- list(
+      kind = "layer3", target = TS_SESSION_CHECKPOINT_ASSETS_TARGET, asset = nm,
+      status = if (identical(resolution, "lost")) "lost" else "restored",
+      resolution = resolution,
+      path = p, asset_kind = .sc_default(.sc_scalar_text(a$kind), "file"),
+      asset_status = .sc_default(st, "missing"),
+      existed_at_checkpoint = isTRUE(a$existed_at_checkpoint),
+      rematerialize_from = if (identical(resolution, "fallback")) fb else NULL,
+      reason = reason)
+    if (!identical(resolution, "lost")) {
+      n_restored_assets <- n_restored_assets + 1L
+      assets_table[[nm]] <- list(
+        path = p, kind = .sc_default(.sc_scalar_text(a$kind), "file"),
+        status = .sc_default(st, "missing"), resolution = resolution,
+        rematerialize_from = if (identical(resolution, "fallback")) fb else NULL,
+        existed_at_checkpoint = isTRUE(a$existed_at_checkpoint))
+    }
+  }
+
+  # --- epochs (F08 decision) + bannière payload -----------------------------
+  epoch <- list(action = epoch_action, targets = TS_SESSION_CHECKPOINT_EPOCH_TARGETS,
+                precedent = paste0("F08 — a restore REPLACES the sc/bulk games ",
+                                   "(app.R:1289-1291, app.R:1599); bump semantics ",
+                                   ".ts_bump_all_epochs() state.R:129-137"))
+  if (identical(epoch_action, "bump")) {
+    items[["obj_epochs"]] <- list(kind = "epoch", target = "obj_epochs",
+                                  status = "restored", payload = NULL, reason = NULL)
+  }
+  statuses <- vapply(items, function(it) it$status, character(1))
+  counts <- c(restored = sum(statuses == "restored"),
+              skipped = sum(statuses == "skipped"),
+              lost = sum(statuses == "lost"))
+  ds <- as.character(.sc_default(man$dataset_ids, character(0)))
+  banner <- list(
+    timestamp = .sc_default(.sc_scalar_text(man$timestamp), NA_character_),
+    trigger = .sc_default(.sc_scalar_text(man$trigger), NA_character_),
+    dataset_ids = ds,
+    n_datasets = length(ds),
+    counts = counts,
+    losses = losses,
+    epoch_action = epoch_action)
+  list(ok = TRUE, refused = FALSE, id = idc, dir = store,
+       schema_version = man$schema_version, manifest = man,
+       items = items, assets = assets_table,
+       assets_target = TS_SESSION_CHECKPOINT_ASSETS_TARGET,
+       losses = losses, epoch = epoch, banner = banner)
+}
+
+#' Execute a restore PLAN into a CALLER-SUPPLIED container (ASR-2 — pure
+#' rebind, no I/O, no deletion).
+#'
+#' The engine never touches a real `global_data` (C17): the caller passes the
+#' target container — an environment (rebound in place, the caller's explicit
+#' choice) or a named list (rebound in a COPY; the caller must use the
+#' RETURNED container, the input list is never mutated). Items planned
+#' "restored" are written: layer-1 payloads and layer-2 fields to their
+#' same-name targets, the resolved asset table to `session_checkpoint_assets`
+#' (when at least one asset resolved), and — under the F08 "bump" decision —
+#' sc_obj_epoch/bulk_obj_epoch incremented from the container's CURRENT
+#' values. Items planned "skipped" or "lost" are SKIPPED honestly: they enter
+#' no container field, they are reported, and the losses are returned
+#' verbatim.
+#'
+#' A refused (or non-) plan is a NO-OP: refused = TRUE with the plan's
+#' reasons and the container returned untouched — never a partial restore.
+#'
+#' @param plan The result of [ts_session_checkpoint_restore_plan()].
+#' @param container Environment or named list supplied by the caller.
+#' @return list(ok, refused, id, restored, skipped, lost, counts, container,
+#'   epochs, assets_target). restored = the item names written; skipped =
+#'   named list item name -> reason; lost = the plan's losses verbatim;
+#'   counts = c(restored, skipped, lost) over the items (identical to the
+#'   plan's bannière counts).
+ts_session_checkpoint_restore_apply <- function(plan, container) {
+  refuse_apply <- function(reasons) {
+    list(ok = FALSE, refused = TRUE,
+         reasons = as.character(reasons),
+         restored = character(0), skipped = list(), lost = character(0),
+         counts = c(restored = 0L, skipped = 0L, lost = 0L),
+         container = container, epochs = NULL,
+         assets_target = TS_SESSION_CHECKPOINT_ASSETS_TARGET)
+  }
+  if (!is.list(plan) || !isTRUE(plan$ok) || isTRUE(plan$refused) ||
+      is.null(plan$items)) {
+    return(refuse_apply(.sc_default(
+      if (is.list(plan)) plan$reasons else NULL,
+      "apply() refused: the plan is not a valid restoration plan (plan() refused or never ran)")))
+  }
+  is_env <- is.environment(container)
+  is_lst <- is.list(container) && !is_env
+  if (!is_env && !is_lst) {
+    return(refuse_apply(paste0(
+      "apply() refused: the container must be a caller-supplied environment ",
+      "or named list — nothing was rebound, nothing was touched")))
+  }
+  # Normalize: all rebinds go through assign() on ONE working environment —
+  # no <<- (its frame-search semantics would risk touching the caller's own
+  # list). An environment container IS the working env (rebound in place,
+  # the caller's explicit choice); a list container is COPIED in (the
+  # caller's original list is never mutated — the rebinds live in the
+  # returned list, rebuilt at the end).
+  if (is_env) {
+    work <- container
+  } else {
+    work <- new.env(parent = emptyenv())
+    for (fld in names(container)) assign(fld, container[[fld]], envir = work)
+  }
+  restored <- character(0)
+  skipped <- list()
+  asset_rows <- list()
+  epochs_out <- NULL
+  wrote_assets <- FALSE
+  for (nm in names(plan$items)) {
+    it <- plan$items[[nm]]
+    if (!identical(it$status, "restored")) {
+      if (identical(it$status, "skipped")) skipped[[nm]] <- it$reason
+      next  # "lost" items: reported through the losses vector only
+    }
+    if (identical(it$kind, "epoch")) {
+      # F08 bump — executed from the container's CURRENT values, cross-domain
+      # (both epochs together), semantics of .ts_bump_all_epochs (state.R:129).
+      for (fld in TS_SESSION_CHECKPOINT_EPOCH_TARGETS) {
+        cur <- if (exists(fld, envir = work, inherits = FALSE)) {
+          get(fld, envir = work, inherits = FALSE)
+        } else NULL
+        bumped <- if (is.null(cur) || length(cur) != 1L || is.na(cur) ||
+                      !is.numeric(cur)) 1L else as.integer(cur) + 1L
+        assign(fld, bumped, envir = work)
+        epochs_out[[fld]] <- bumped
+      }
+    } else if (identical(it$kind, "layer3")) {
+      asset_rows[[it$asset]] <- list(
+        path = it$path, kind = it$asset_kind, status = it$asset_status,
+        resolution = it$resolution, rematerialize_from = it$rematerialize_from,
+        existed_at_checkpoint = it$existed_at_checkpoint)
+      wrote_assets <- TRUE
+    } else {
+      assign(it$target, it$payload, envir = work)
+    }
+    restored <- c(restored, nm)
+  }
+  if (wrote_assets) assign(plan$assets_target, asset_rows, envir = work)
+  lost <- as.character(.sc_default(plan$losses, character(0)))
+  out <- if (is_env) work else as.list(work)
+  list(ok = TRUE, refused = FALSE, id = plan$id,
+       restored = restored, skipped = skipped, lost = lost,
+       counts = c(restored = length(restored), skipped = length(skipped),
+                  lost = length(lost)),
+       container = out, epochs = epochs_out,
+       assets_target = plan$assets_target)
+}
