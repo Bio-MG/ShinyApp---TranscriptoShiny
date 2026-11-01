@@ -11416,6 +11416,18 @@
     {
       "fr": "Échec de la restauration du checkpoint : {err}",
       "en": "Checkpoint restore failed: {err}"
+    },
+    {
+      "fr": "Checkpoints conservés par dataset",
+      "en": "Checkpoints kept per dataset"
+    },
+    {
+      "fr": "Plafond disque (Gio)",
+      "en": "Disk cap (GiB)"
+    },
+    {
+      "fr": "Réglages valables pour cette session uniquement.",
+      "en": "Settings apply to this session only."
     }
   ]
 }

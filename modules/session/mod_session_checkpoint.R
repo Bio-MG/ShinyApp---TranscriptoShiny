@@ -30,6 +30,22 @@
 # existantes et styles inline seulement — aucun fichier CSS, aucune
 # injection de style dans le head (gardé par test-asr3-ui.R §9, lexical).
 #
+# ASR-4 — Rétention & réglages (contrat §3.4 + §8 row ASR-4) : deux réglages
+# opérateur (N par dataset, plafond disque EN GIBIOCTETS) rendus dans la zone
+# `settings_area` SEULEMENT quand le toggle est ON (OFF byte-pour-byte, §4 :
+# aucun input de réglage n'existe sinon ; l'extinction rétablit l'état OFF
+# exactement) et publiés dans global_data$session_checkpoint_settings =
+# list(retention_n = <entier>, disk_cap_bytes = <octets>) pour le point de
+# pose d'écriture (post F08/F02). Décisions (en-tête test-asr4-settings.R) :
+# réglages SESSION-SCOPÉS sans fichier de persistance (le toggle lui-même est
+# session-scopé, contrat muet) ; défauts = constantes moteur
+# TS_SESSION_CHECKPOINT_RETENTION_N / _DISK_CAP_BYTES (session_checkpoint.R:68-69)
+# ; bornes N<1 / plafond<=0 -> DÉFAUT RÉTABLI — publier ce que le moteur
+# appliquera (il clampe pareil, session_checkpoint.R:832-835) ; changer un
+# réglage n'appelle JAMAIS le moteur (aucune purge immédiate — déclenchement
+# événementiel gelé §3.1 ; la rétention s'appliquera au prochain publish,
+# session_checkpoint.R:577-583). Conversion Gio -> octets EXACTE (x1024^3).
+#
 # i18n : clés = chaînes françaises (shiny.i18n), paires fr/en appendues par le
 # mécanisme SCOPÉ (leçon B1/B5/DSTV-3 — le tool complet emporterait ~164
 # entrées en attente d'autres lots). Statiques -> i18n$t() au build ; dynamiques
@@ -51,6 +67,7 @@ mod_session_checkpoint_ui <- function(id) {
     bslib::input_switch(ns("enabled"),
                         i18n$t("Activer les checkpoints de session"),
                         value = FALSE),
+    uiOutput(ns("settings_area")),
     uiOutput(ns("status_line"))
   )
 }
@@ -112,6 +129,30 @@ mod_session_checkpoint_server <- function(id, global_data, store_dir = NULL) {
       paste0(format(pt, "%Y-%m-%d %H:%M", tz = "UTC"), " UTC")
     }
 
+    # ── ASR-4 : publication des réglages — AUCUN appel moteur, AUCUNE I/O ────
+    # Publie EXACTEMENT ce que le moteur appliquera : N entier (n < 1 -> défaut,
+    # même clamp que .sc_apply_retention, session_checkpoint.R:832-833) et
+    # plafond en octets (Gio -> octets x1024^3 exact ; plafond <= 0 -> défaut,
+    # divergence assumée avec la tolérance de banc du hook moteur, décision T4
+    # en tête de test-asr4-settings.R). La rétention elle-même ne tournera
+    # qu'au prochain publish d'un checkpoint (point de pose post F08/F02).
+    .clamp_retention_n <- function(x) {
+      n <- suppressWarnings(as.integer(x)[1])
+      if (length(n) != 1L || is.na(n) || n < 1L) TS_SESSION_CHECKPOINT_RETENTION_N else n
+    }
+    .clamp_cap_bytes <- function(gib) {
+      g <- suppressWarnings(as.numeric(gib)[1])
+      if (length(g) != 1L || is.na(g) || g <= 0) TS_SESSION_CHECKPOINT_DISK_CAP_BYTES
+      else g * 1024^3
+    }
+    .publish_settings <- function(n_raw, gib_raw) {
+      global_data$session_checkpoint_settings <- list(
+        retention_n    = .clamp_retention_n(n_raw),
+        disk_cap_bytes = .clamp_cap_bytes(gib_raw)
+      )
+      invisible(NULL)
+    }
+
     # ── Le scan événementiel — la SEULE porte du moteur dans ce module ────────
     # OFF (ou pas encore touché) : AUCUN appel, AUCUN rendu (contrat §7.5).
     # ON : un seul balayage du magasin (list -> dernier checkpoint complet ->
@@ -120,10 +161,14 @@ mod_session_checkpoint_server <- function(id, global_data, store_dir = NULL) {
     # d'état, le checkpoint est conservé (contrat §6).
     shiny::observeEvent(input$enabled, {
       if (!isTRUE(input$enabled)) {
+        global_data$session_checkpoint_settings <- NULL  # ASR-4 : OFF = empreinte nulle (contrat §4)
         offer(NULL)
         last_ckpt(NULL)
         return(invisible(NULL))
       }
+      # ASR-4 : défauts moteur publiés à l'activation (inputs encore absents
+      # -> NULL -> défauts). Aucun appel moteur ici (décision ASR-4 n°6).
+      .publish_settings(input$retention_n, input$disk_cap_gib)
       lst <- tryCatch(ts_session_checkpoint_list(dir = store_dir),
                       error = function(e) NULL)
       if (is.null(lst) || !is.data.frame(lst) || nrow(lst) == 0L) {
@@ -143,6 +188,32 @@ mod_session_checkpoint_server <- function(id, global_data, store_dir = NULL) {
         return(invisible(NULL))
       }
       offer(plan)
+    })
+
+    # ── ASR-4 : zone de réglages — rendue SEULEMENT toggle ON (contrat §4) ────
+    # Aucun input de réglage n'existe tant que le toggle est OFF (uiOutput NULL
+    # = empreinte nulle, motif ASR-3). Un changement de réglage re-publie
+    # SANS rappeler le moteur (décision ASR-4 n°6). 0 CSS www/ : primitives
+    # shiny + styles inline seulement.
+    shiny::observeEvent(list(input$retention_n, input$disk_cap_gib), {
+      if (!isTRUE(input$enabled)) return(invisible(NULL))
+      .publish_settings(input$retention_n, input$disk_cap_gib)
+    })
+    output$settings_area <- shiny::renderUI({
+      global_data$language          # re-render au changement de langue
+      if (!isTRUE(input$enabled)) return(NULL)
+      shiny::tagList(
+        shiny::numericInput(session$ns("retention_n"),
+                            .tr_ui("Checkpoints conserv\u00e9s par dataset"),
+                            value = TS_SESSION_CHECKPOINT_RETENTION_N,
+                            min = 1, step = 1),
+        shiny::numericInput(session$ns("disk_cap_gib"),
+                            .tr_ui("Plafond disque (Gio)"),
+                            value = TS_SESSION_CHECKPOINT_DISK_CAP_BYTES / 1024^3,
+                            min = 0.1, step = 1),
+        shiny::div(class = "small text-muted", style = "font-size:0.72rem;",
+                   .tr_ui("R\u00e9glages valables pour cette session uniquement."))
+      )
     })
 
     # ── Ligne d'état (pendant que le toggle est ON) ───────────────────────────
